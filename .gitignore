@@ -87,3 +87,6 @@ test-results/
 /MISSING_*.md
 /REGISTRY_*.md
 /TOOL_INVENTORY.md
+
+# Session scratch (extracted system source, probes) — never committed
+/scratch/
