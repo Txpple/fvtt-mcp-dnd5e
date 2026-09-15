@@ -301,6 +301,47 @@ try {
           })
         );
   }
+
+  // ── 10. dnd5e 6.0 "Rarity Varies": a LIST of rarities is written natively to system.rarities ──
+  {
+    const r = await foundry.call('addItem', {
+      itemType: 'consumable',
+      name: 'ZZ-MCP-ITEM Potion of Healing (varies)',
+      consumableType: 'potion',
+      rarity: ['common', 'uncommon'],
+      folder: 'ZZ-MCP-ITEM Loot',
+    });
+    const wid = r?.item?.id;
+    if (wid) tempWorldItemIds.push(wid);
+    const gi = await foundry.call('getWorldItem', { identifier: wid });
+    const rs = Array.isArray(gi?.system?.rarities) ? gi.system.rarities : [];
+    rs.length === 2 && rs.includes('common') && rs.includes('uncommon')
+      ? pass('world item: rarity list -> system.rarities', JSON.stringify(rs))
+      : fail('world item: rarity list', JSON.stringify(gi?.system?.rarities));
+    // and update-actor-item's 5.x `system.rarity` patch lands in `system.rarities`
+    const npcForRarity = await makeTempNpc('ZZ-MCP-ITEM Rarity NPC');
+    const r2 = await foundry.call('addItem', {
+      itemType: 'wondrous',
+      name: 'ZZ-MCP-ITEM Bauble',
+      equipmentType: 'trinket',
+      actorIdentifier: npcForRarity.id,
+      rarity: 'common',
+      lootCopy: false,
+    });
+    await foundry.call('updateActorItem', {
+      actorIdentifier: npcForRarity.id,
+      itemIdentifier: r2?.item?.id,
+      patch: { 'system.rarity': 'rare' },
+    });
+    const bauble = await foundry.evaluate(
+      ({ actorId, itemId }) =>
+        globalThis.game.actors.get(actorId).items.get(itemId).toObject().system.rarities,
+      { actorId: npcForRarity.id, itemId: r2?.item?.id }
+    );
+    JSON.stringify(bauble) === JSON.stringify(['rare'])
+      ? pass('update-actor-item: system.rarity patch -> system.rarities', JSON.stringify(bauble))
+      : fail('update-actor-item: rarity patch', JSON.stringify(bauble));
+  }
 } catch (e) {
   fail('SUITE', e?.message || String(e));
 } finally {

@@ -76,7 +76,9 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   `scripts/verify-region-effects.mjs` **26/26** — a token entering the pool gets "Poisoned" (origin =
   the behavior), leaving removes it; an authored Web's behaviors persist with their config and
   `createBehaviorData` yields the region behavior.
-- [ ] #8 — rarities
+- [x] #8 — **rarities** (2026-09-15): `add-item` `rarity` takes a string or a LIST; `buildPhysicalItemData`
+  writes `system.rarities` natively (no more shimmed `rarity`); `update-actor-item` maps a
+  `system.rarity` / `system.rarities` patch onto the Set. `verify-item-tooling.mjs` 13/13.
 
 ## Execution discipline
 

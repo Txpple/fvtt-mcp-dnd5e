@@ -102,7 +102,13 @@ const AddItemSchema = z.object({
     })
     .optional()
     .describe('Item weight.'),
-  rarity: RARITY.optional().describe('Magic-item rarity ("" = mundane).'),
+  rarity: z
+    .union([RARITY, z.array(RARITY)])
+    .optional()
+    .describe(
+      'Magic-item rarity ("" = mundane) — or a LIST for a "Rarity Varies" item (dnd5e 6.0 ' +
+        '`system.rarities`, e.g. ["uncommon", "rare"] for a Potion of Healing line). Written natively.'
+    ),
   identified: z
     .boolean()
     .optional()
@@ -472,7 +478,11 @@ export class DnD5eAddItemTool {
     // loot/container can't hold attunement (the page drops it), so don't claim it in the summary.
     const equippable = !['loot', 'container'].includes(params.itemType);
     const bits = [
-      params.rarity && params.rarity !== '' ? params.rarity : null,
+      Array.isArray(params.rarity)
+        ? params.rarity.filter((r: string) => r !== '').join(' / ') || null
+        : params.rarity && params.rarity !== ''
+          ? params.rarity
+          : null,
       params.magicalBonus ? `+${params.magicalBonus}` : null,
       equippable && params.attunement && params.attunement !== ''
         ? `attunement ${params.attunement}`

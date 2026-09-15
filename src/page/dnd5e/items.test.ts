@@ -11,6 +11,7 @@ import {
   wantsLootCopy,
   firstSignificantWord,
   itemTypeToDocumentType,
+  normalizeRarities,
 } from './items.js';
 import { isPlaceholderIcon, resolveAuthoredIcon } from './icons.js';
 
@@ -21,7 +22,8 @@ describe('buildPhysicalItemData — cross-cutting fields', () => {
     expect(doc.system.quantity).toBe(1);
     expect(doc.system.price).toEqual({ value: 0, denomination: 'gp' });
     expect(doc.system.weight).toEqual({ value: 0, units: 'lb' });
-    expect(doc.system.rarity).toBe('');
+    expect(doc.system.rarities).toEqual([]);
+    expect(doc.system).not.toHaveProperty('rarity');
     expect(doc.system.identified).toBe(true);
   });
 
@@ -37,8 +39,20 @@ describe('buildPhysicalItemData — cross-cutting fields', () => {
     });
     expect(doc.system.price).toEqual({ value: 50, denomination: 'gp' });
     expect(doc.system.quantity).toBe(3);
-    expect(doc.system.rarity).toBe('rare');
+    expect(doc.system.rarities).toEqual(['rare']);
     expect(doc.system.type).toEqual({ value: 'gem', subtype: '' });
+  });
+
+  it('writes several rarities natively for a "Rarity Varies" item (dnd5e 6.0 system.rarities)', () => {
+    const doc = buildPhysicalItemData({
+      itemType: 'consumable',
+      name: 'Potion of Healing',
+      rarity: ['common', 'uncommon', '', 'uncommon'],
+    });
+    expect(doc.system.rarities).toEqual(['common', 'uncommon']);
+    expect(normalizeRarities(undefined)).toEqual([]);
+    expect(normalizeRarities('')).toEqual([]);
+    expect(normalizeRarities(' rare ')).toEqual(['rare']);
   });
 
   it('a magic numeric bonus auto-adds the mgc property', () => {

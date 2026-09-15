@@ -38,6 +38,22 @@ describe('add-item tool definition', () => {
 });
 
 describe('handleAddItem', () => {
+  it('accepts a rarity LIST (dnd5e 6.0 "Rarity Varies") and forwards it untouched', async () => {
+    const { tool, calls } = makeTool();
+    const res = await tool.handleAddItem({
+      itemType: 'consumable',
+      name: 'Potion of Healing',
+      consumableType: 'potion',
+      rarity: ['common', 'uncommon'],
+    });
+    const call = calls.find(([n]) => n === 'addItem');
+    expect(call?.[1].rarity).toEqual(['common', 'uncommon']);
+    expect(res.message).toContain('common / uncommon');
+    await expect(
+      tool.handleAddItem({ itemType: 'consumable', name: 'X', rarity: ['mythic'] })
+    ).rejects.toThrow();
+  });
+
   it('forwards a weapon and defaults withAttack=true when damage is given', async () => {
     const { tool, calls } = makeTool();
     await tool.handleAddItem({

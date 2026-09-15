@@ -33,6 +33,7 @@ import {
   normalizeSkill,
   SKILL_ABILITY,
 } from './dnd5e/actor-fields.js';
+import { normalizeRarities } from './dnd5e/items.js';
 import { describeRule, parseConditions } from './effect-changes.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveCreatureIcon, GENERIC_ICON } from './dnd5e/icons.js';
@@ -2201,7 +2202,15 @@ export async function updateActorItem(params: {
     update.img = img;
   }
   if (params.patch && typeof params.patch === 'object') {
-    for (const [k, v] of Object.entries(params.patch)) update[k] = v;
+    for (const [k, v] of Object.entries(params.patch)) {
+      // dnd5e 6.0: the 5.x `system.rarity` string is a migrated shim of the `system.rarities` Set —
+      // write the native field (a string becomes a one-entry list; a list passes through).
+      if (k === 'system.rarity' || k === 'system.rarities') {
+        update['system.rarities'] = normalizeRarities(v as string | string[]);
+        continue;
+      }
+      update[k] = v;
+    }
   }
   if (Array.isArray(params.deletePaths)) {
     for (const p of params.deletePaths) {

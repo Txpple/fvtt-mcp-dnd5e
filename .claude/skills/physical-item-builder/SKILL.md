@@ -178,7 +178,10 @@ them — and **pull an approximating icon from the compendium** (see House rules
   scrolls, ammo, mundane gear are `""`. Set `attuned: true` only if the owner is actively attuned
   (≤ 3-item limit).
 - **Rarity ↔ price sanity** (rough DMG guide): common ~50–100 gp, uncommon ~101–500, rare ~501–5,000,
-  very rare ~5,001–50,000, legendary 50,000+. Mundane gear uses its PHB price and `rarity: ""`.
+  very rare ~5,001–50,000, legendary 50,000+. Mundane gear uses its PHB price and `rarity: ""`. A
+  "Rarity Varies" item (a Potion of Healing line, an Ioun Stone family) takes a LIST —
+  `rarity: ["common", "uncommon"]` — written natively to dnd5e 6.0's `system.rarities`; the same
+  list works as a `system.rarity` / `system.rarities` patch on `update-actor-item`.
 - **Equipped vs carried:** the weapon/armor an NPC uses → `equipped: true`; spare loot → `equipped: false`.
 - **Identified vs mystery loot:** treasure discovered unidentified → `identified: false`.
 - **The weapon a creature fights with must be a real `weapon` item with an attack** so to-hit/damage

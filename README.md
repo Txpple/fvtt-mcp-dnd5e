@@ -57,6 +57,36 @@ What changed at the tool surface:
 
 **1.x** remains the line for dnd5e 5.3.x on Foundry 14.
 
+## 2.1 — tools for what 6.0 introduced
+
+2.0 made the existing tools speak 6.x; **2.1 adds tools for the features dnd5e 6.0 introduced**, so an
+authored monster trait, magic item or map area can express what a 2024 book entry can. Every shape is
+validated against the 6.0.1 source and proven live (`scripts/verify-effects-6.mjs`,
+`scripts/verify-region-effects.mjs`); the plan and status are in
+[`docs/plan-2.1-dnd5e-6-features.md`](docs/plan-2.1-dnd5e-6-features.md).
+
+- **`manage-effect`** — **conditions** (the system's Filter JSON, on the whole effect or on one
+  change: "+2 AC while Bloodied", "only ranged or thrown weapons"), **rules-type changes** that modify
+  a roll at roll time (`dnd5e.advantage` / `dnd5e.bonus` / `dnd5e.minimum` / `dnd5e.maximum` on
+  `attack` / `check` / `d20` / `save`, bonus on `damage` / `healing` — "+1d4 on History checks",
+  "disadvantage on Strength-based d20 tests", "ranged attacks never roll below 10"; key × type ×
+  value validated, and a core-type change on a roll category is refused as a write to nowhere),
+  per-change `replacement` (origin / target), `magical`, and the full **expiry** vocabulary
+  (`turnEnd` … + `shortRest` / `longRest` + `sourceStart` / `sourceEnd` / `targetStart` /
+  `targetEnd`). Read-back (`get-actor`, `manage-effect list`) shows each effect's type, conditions
+  and every rule as a sentence; `content-audit` flags a dead rules change.
+- **`manage-activity`** — a **`duration`** override with expiry the applied effects inherit, an area
+  **`template`** + `affects`, and **`behaviors`** the template carries (`applyActiveEffect`,
+  `difficultTerrain`): an authored Web is a save + a 20-ft cube + `["Restrained"]` + web terrain.
+- **`add-region-behavior`** — `dnd5e.applyActiveEffect` / `dnd5e.difficultTerrain` with
+  `effects` resolved **by name** (a poison pool is `effects: ["Poisoned"]`), `dispositions`,
+  `sizes`, `creatureTypes`, `terrainTypes`, `magical`. Effect names resolve from the system's stock
+  `dnd5e.effects` pack (the one `dnd5e.*` pack that is a permitted source — it holds mechanics,
+  not book content; design.md §2.3), from a world item's effect (`"Item#Effect"`), or a uuid — never
+  an actor's effect (the behavior copies it on entry and removes it on exit).
+- **`add-item`** / **`update-actor-item`** — `rarity` accepts a list for a "Rarity Varies" item and
+  is written natively to `system.rarities`.
+
 ---
 
 > 📐 **Design north star — [`design.md`](design.md).** The mission, scope, the *skills decide, tools

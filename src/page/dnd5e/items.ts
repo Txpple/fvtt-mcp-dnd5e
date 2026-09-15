@@ -65,7 +65,8 @@ export interface PhysicalItemOpts {
   quantity?: number;
   price?: { value?: number; denomination?: string };
   weight?: { value?: number; units?: string };
-  rarity?: string;
+  /** Rarity key, or several ("Rarity Varies" — dnd5e 6.0 `system.rarities`); '' / [] = mundane. */
+  rarity?: string | string[];
   identified?: boolean;
   containerId?: string | null;
   // Equippable + magical
@@ -160,7 +161,9 @@ export function buildPhysicalItemData(opts: PhysicalItemOpts): {
     denomination: opts.price?.denomination ?? 'gp',
   };
   system.weight = { value: opts.weight?.value ?? 0, units: opts.weight?.units ?? 'lb' };
-  system.rarity = opts.rarity ?? '';
+  // dnd5e 6.0: `system.rarities` is the Set (the 5.x `rarity` string is a migrated shim) — write it
+  // natively; one key or several ("Rarity Varies").
+  system.rarities = normalizeRarities(opts.rarity);
   system.identified = opts.identified ?? true;
   if (opts.containerId) system.container = opts.containerId;
 
@@ -345,6 +348,16 @@ async function findApproxIcon(data: any): Promise<string | null> {
 
 // Default folder for the world-Item "loot twin" a magic item gets when placed on an actor (rule 9).
 const DEFAULT_LOOT_FOLDER = 'Loot';
+
+/** The 6.0 `system.rarities` list from a rarity string or list ('' / blanks dropped). Pure. */
+export function normalizeRarities(rarity: string | string[] | undefined | null): string[] {
+  const list = Array.isArray(rarity)
+    ? rarity
+    : rarity === undefined || rarity === null
+      ? []
+      : [rarity];
+  return Array.from(new Set(list.map(r => String(r).trim()).filter(r => r !== '')));
+}
 
 /** True when a built/copied item's system data marks it magic — a rarity (dnd5e 6.0 `rarities`
  * Set/array, or the 5.x `rarity` string), the 'mgc' property, or a numeric +N (weapon
