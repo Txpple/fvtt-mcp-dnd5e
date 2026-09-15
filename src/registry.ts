@@ -27,6 +27,8 @@ import { DnD5eUpdateActorItemTool } from './tools/dnd5e/update-actor-item.js';
 import { DnD5eManageActivityTool } from './tools/dnd5e/manage-activity.js';
 import { DnD5eFreeCastTool } from './tools/dnd5e/free-cast.js';
 import { DnD5eManageEffectTool } from './tools/dnd5e/manage-effect.js';
+import { DnD5eSettingsTool } from './tools/dnd5e/settings.js';
+import { DnD5eCalendarTool } from './tools/dnd5e/calendar.js';
 import { DnD5eConditionTool } from './tools/dnd5e/conditions.js';
 import { DnD5eAddItemTool } from './tools/dnd5e/add-item.js';
 import { DnD5eImportItemTool } from './tools/dnd5e/import-item.js';
@@ -90,6 +92,9 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const dnd5eManageActivityTool = new DnD5eManageActivityTool({ foundry, logger });
   const dnd5eFreeCastTool = new DnD5eFreeCastTool({ foundry, logger });
   const dnd5eManageEffectTool = new DnD5eManageEffectTool({ foundry, logger });
+  // dnd5e 6.0 world switches (allow-listed read + set) and the in-world calendar
+  const dnd5eSettingsTool = new DnD5eSettingsTool({ foundry, logger });
+  const dnd5eCalendarTool = new DnD5eCalendarTool({ foundry, logger });
   const dnd5eConditionTool = new DnD5eConditionTool({ foundry, logger });
   const dnd5eAddItemTool = new DnD5eAddItemTool({ foundry, logger });
   const dnd5eImportItemTool = new DnD5eImportItemTool({ foundry, logger });
@@ -145,6 +150,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     ...dnd5eManageActivityTool.getToolDefinitions(),
     ...dnd5eFreeCastTool.getToolDefinitions(),
     ...dnd5eManageEffectTool.getToolDefinitions(),
+    ...dnd5eSettingsTool.getToolDefinitions(),
+    ...dnd5eCalendarTool.getToolDefinitions(),
     ...dnd5eConditionTool.getToolDefinitions(),
     ...dnd5eAddItemTool.getToolDefinitions(),
     ...dnd5eImportItemTool.getToolDefinitions(),
@@ -225,6 +232,9 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'manage-activity': args => dnd5eManageActivityTool.handleManageActivity(args),
     'add-free-cast': args => dnd5eFreeCastTool.handleAddFreeCast(args),
     'manage-effect': args => dnd5eManageEffectTool.handleManageEffect(args),
+    // dnd5e 6.0 automation settings + calendar
+    'configure-dnd5e-settings': args => dnd5eSettingsTool.handleConfigureDnd5eSettings(args),
+    'manage-calendar': args => dnd5eCalendarTool.handleManageCalendar(args),
     'apply-condition': args => dnd5eConditionTool.handleApplyCondition(args),
     'add-item': args => dnd5eAddItemTool.handleAddItem(args),
     'import-item': args => dnd5eImportItemTool.handleImportItem(args),

@@ -43,7 +43,16 @@ bridge does the rest.
 
 2. **Report the state.** Summarize the result clearly — world title/id, system
    + version, Foundry version, and active users (confirm the `MCP-Claude` GM
-   bridge user is present, which doubles as a bridge-health check).
+   bridge user is present, which doubles as a bridge-health check). On a dnd5e
+   6.x world the same result carries an `automation` block — mention only what
+   matters for the night: the in-world date/time (`calendarNow`, when the
+   calendar is enabled), and any switch that is OFF its default (falling or
+   exhaustion automation disabled, auto-Downed on, players allowed the damage /
+   effects trays, bastions on). Change a switch only when asked —
+   `configure-dnd5e-settings` (it echoes previous → new; a few need a client
+   reload). Advance or set the date with `manage-calendar` ("advance 8 hours",
+   "it's the 3rd of Mirtul, dawn") — advancing time is what triggers dawn /
+   dusk / day recovery and bastion turns.
 
 3. **Light orientation (optional).** If it's useful for what the user is about
    to do, also call `mcp__foundry-molten5e__get-current-scene` and mention the

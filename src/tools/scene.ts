@@ -941,6 +941,8 @@ export class SceneTools {
             name: u.name,
             isGM: u.isGM,
           })) || [],
+      // dnd5e 6.0 automation switches + the calendar (configure-dnd5e-settings / manage-calendar)
+      ...(worldData.automation ? { automation: worldData.automation } : {}),
     };
   }
 

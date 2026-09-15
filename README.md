@@ -87,6 +87,25 @@ validated against the 6.0.1 source and proven live (`scripts/verify-effects-6.mj
 - **`add-item`** / **`update-actor-item`** — `rarity` accepts a list for a "Rarity Varies" item and
   is written natively to `system.rarities`.
 
+2.1.1 rounds out the surface:
+
+- **`manage-activity`** — `type: "teleport"` (`teleportDistance`, self-targeted by default) and
+  `type: "transform"` in all three 6.0 modes: by CR (`profiles` with cr / size / type / movement
+  filters + a `transformPreset`), direct link (`profiles[].actor` by Monster Manual name or uuid),
+  and Select Form (`forms` — the item's own effects are the forms: a lycanthrope's Humanoid / Hybrid
+  / Beast shapes, Disguise Self).
+- **`configure-dnd5e-settings`** *(new)* — read or set the 6.0 automation switches through an
+  allow-list: falling, token-size and vision sync, exhaustion, initiative grouping, auto-Downed,
+  encounter placement, the player damage / effects trays, bastions, and the calendar (enabled,
+  daily recovery mode, which calendar). Every change echoes previous → new; the ones that need a
+  client reload are named. `get-world-info` carries the same block as `automation`.
+- **`manage-calendar`** *(new)* — the in-world date and time on Foundry v14's `game.time` with the
+  dnd5e calendar layer: read it in display terms, advance it (rounds / minutes / hours / days —
+  what triggers dawn / dusk / day recovery and bastion turns), or set a date by month name or number
+  and a time of day.
+- The PC leveling engine applies 6.0's **ModifyItem** advancement (an enchantment placed on an
+  identified item) as a forced step, like ItemGrant.
+
 ---
 
 > 📐 **Design north star — [`design.md`](design.md).** The mission, scope, the *skills decide, tools
@@ -242,7 +261,7 @@ Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your inst
 
 ## Tools
 
-**149 tools total: 139 over the headless bridge (Plane A) + 10 Molten WebDAV file tools (Plane B).**
+**151 tools total: 141 over the headless bridge (Plane A) + 10 Molten WebDAV file tools (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
@@ -255,7 +274,8 @@ roll tables, cards, playlists, **per-scene atmospheric sound sets** (`configure-
 companion [`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape) module — randomized
 one-shots with silence between them, or crossfaded ambient beds, which neither AmbientSound
 placeables nor Playlists can express), ownership,
-folders/organization, macros, combat-tracker config, and 5e-specific helpers (NPC creation,
+folders/organization, macros, combat-tracker config, the dnd5e 6.0 **automation switches** and
+**in-world calendar** (`configure-dnd5e-settings`, `manage-calendar`), and 5e-specific helpers (NPC creation,
 **PC building & leveling**, feature/spell granting, structured inventory/loot
 authoring), **full-fidelity actor JSON export** (`export-actor`), and **per-combat session
 analytics** (`get-combat-stats`, folded from the companion

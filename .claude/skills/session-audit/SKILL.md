@@ -191,6 +191,25 @@ it **feel wrong**, which outranks a **design** note. Include what is working —
 which parts not to touch, and an audit that only lists problems is one they will argue with rather
 than use.
 
+## dnd5e 6.0 automation switches (read them, judge them)
+
+`get-world-info` (dnd5e 6.x) carries an `automation` block — the 6.0 switches the night will run
+under. Fold the ones that change the encounter math or the table's expectations into the report,
+as findings, never as silent changes:
+- `disableFalling: false` (falling automated) on a map with cliffs, pits or balconies but no Levels
+  elevation set up → warn ("falling damage will fire off token elevation — set elevations or disable
+  falling for this map"); `disableFalling: true` on a chasm map → note that falls are manual.
+- `autoApplyDowned`: `none` means the DM applies Unconscious/Dead by hand; `npcs` / `all` change how
+  quickly a fight resolves — say which is on.
+- `initiativeGroupCombatants` / `initiativeGroupRoll`: grouped identical monsters share a turn — a
+  pack of six wolves acts once; note it when the encounter leans on many identical foes.
+- `allowPlayerDamageTray` / `allowPlayerEffectsTray`: whether players can apply their own damage /
+  effects from cards (pace of play).
+- `calendarEnabled` + `calendarNow`: if the plot has a deadline or a dawn/dusk beat, check the
+  in-world date matches the session record; `manage-calendar` sets it when the DM says so.
+Changing any of them is `configure-dnd5e-settings`, on the DM's go — the audit itself stays
+read-only.
+
 ## Boundaries
 
 - **Read-only unless the user says go.** Report first. If they approve fixes, apply each with the

@@ -53,7 +53,7 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 
 - [x] **2.1.0 — effects & areas** (#1 #2 #3 #4 #5 #6 #8 #9) — **shipped 2026-09-15** (`v2.1.0`). The release
   that lets an authored monster or item express what a 2024 book entry can.
-- [ ] **2.1.1 — teleport, settings, ModifyItem, transform, calendar** (#7 #10 #11 #12 #13): ~7 h.
+- [x] **2.1.1 — teleport, settings, ModifyItem, transform, calendar** (#7 #10 #11 #12 #13) — built 2026-09-15.
   (Owner 2026-09-15: #12 and #13 pulled forward; the former "2.2" milestone is empty.)
 
 ### Progress
@@ -92,6 +92,16 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   `advancement.test.ts`. No premium book on disk carries one yet (the books are 5.x builds), so the live
   case is a fixture in `verify-pc-build.mjs` (Test L: a feat with a ModifyItem change enchanting the
   `fighter` class item, applied with the engine's exact call) — **66/66**.
+
+- [x] #10 #13 — **settings + calendar** (2026-09-15): new **`configure-dnd5e-settings`** (allow-list in
+  `utils/dnd5e-settings.ts` — 15 settable keys incl. the bastion / calendar DataModel fields, written
+  whole; `chatCardSummary` reported only, client-scoped; old → new + `reloadRequired`) and new
+  **`manage-calendar`** (read in display terms with localized month names; advance by rounds / minutes /
+  hours / days; set by month name or number + day + time of day); `get-world-info` carries `automation`
+  (switches + `calendarNow`). Live: `scripts/verify-settings-calendar.mjs` **35/35** (restores every
+  switch and the worldTime). Skills: start-session reports them; session-audit judges them. Tool
+  count 149 → **151**.
+- [ ] **2.1.1** — milestone: tag after the regression + the README.
 
 ### 2.1.0 release proof (2026-09-15, sandbox)
 

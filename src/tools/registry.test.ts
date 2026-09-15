@@ -45,7 +45,7 @@ function draft2020Violations(node: unknown, path: string): string[] {
 }
 
 describe('tool registry', () => {
-  it('advertises 149 uniquely-named tools (matches the documented surface)', () => {
+  it('advertises 151 uniquely-named tools (matches the documented surface)', () => {
     const { tools } = build();
     const names = tools.map(t => t.name);
     expect(new Set(names).size).toBe(names.length); // no duplicate names
@@ -93,7 +93,9 @@ describe('tool registry', () => {
     //   stamps — damage/healing/flips/spend economy/Bless margins; read-only, GM-facing,
     //   filtered at call time. The stamps are an external wire format (battleflow ARCH §4),
     //   never a code dependency.)
-    expect(names.length).toBe(149);
+    // + configure-dnd5e-settings (dnd5e 6.0 automation switches — allow-listed read + set, the
+    //   owner's 2026-09-15 decision) + manage-calendar (read / advance / set the in-world date)
+    expect(names.length).toBe(151);
   });
 
   it('registers read-pack (the Node-only scene-pack module reader, tom-cartos-import M1)', () => {

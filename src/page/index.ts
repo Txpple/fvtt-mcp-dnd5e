@@ -166,6 +166,8 @@ import { addFeaturesFromCompendium } from './dnd5e/compendium-features.js';
 import { addItem, importItemFromCompendium } from './dnd5e/items.js';
 import { auditContent } from './dnd5e/content-audit.js';
 import { manageActivity } from './dnd5e/manage-activity.js';
+import { configureDnd5eSettings } from './dnd5e/settings.js';
+import { manageCalendar } from './dnd5e/calendar.js';
 import { addFreeCast } from './dnd5e/free-cast.js';
 import {
   createPcActor,
@@ -339,6 +341,9 @@ const api = {
   auditContent,
   manageActivity,
   addFreeCast,
+  // dnd5e 6.0 world switches + the in-world calendar
+  configureDnd5eSettings,
+  manageCalendar,
   // dnd5e PC authoring (leveling engine: type:character + advancement → @scale resolves natively)
   createPcActor,
   createPcFromPrefab,

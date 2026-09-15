@@ -11,6 +11,19 @@
 // /auth and /setup redirect to /join) or a role-4 GAMEMASTER session — the bridge user is a
 // role-3 ASSISTANT and stays that way by decision. Don't rebuild this without revisiting that.
 
+import { readCalendar } from './dnd5e/calendar.js';
+import { readDnd5eSettings } from './dnd5e/settings.js';
+
+/** The calendar's headline facts for the world summary (date + time strings, enabled). */
+function calendarSummary(): Record<string, unknown> {
+  const c: any = readCalendar();
+  return {
+    calendarNow: c.formatted?.date
+      ? `${c.formatted.date} ${c.formatted.time ?? ''}`.trim()
+      : `${c.year}-${c.month?.number}-${c.day} ${c.hour}:${String(c.minute ?? 0).padStart(2, '0')}`,
+  };
+}
+
 interface WorldUser {
   id: string;
   name: string;
@@ -27,6 +40,8 @@ interface WorldInfo {
   systemVersion: string;
   foundryVersion: string;
   users: WorldUser[];
+  /** dnd5e 6.0 automation switches + the calendar (present on a dnd5e world only). */
+  automation?: Record<string, unknown>;
 }
 
 /**
@@ -38,7 +53,18 @@ interface WorldInfo {
  * string; the Node side rolls users up into counts + an activeUsers list.
  */
 export function getWorldInfo(): WorldInfo {
+  // dnd5e 6.0: the automation switches ride along so start-session / session-audit can reason
+  // about them (falling on, auto-Downed mode, calendar enabled…) without a second call.
+  let automation: Record<string, unknown> | undefined;
+  if (game.system.id === 'dnd5e') {
+    try {
+      automation = { ...readDnd5eSettings(), ...calendarSummary() };
+    } catch {
+      automation = undefined;
+    }
+  }
   return {
+    ...(automation ? { automation } : {}),
     id: game.world.id,
     title: game.world.title,
     description: String((game.world as any).description ?? ''),
