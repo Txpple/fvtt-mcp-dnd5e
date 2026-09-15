@@ -22,6 +22,43 @@ stat block, item, and handout in the VTT.
 
 ---
 
+## 2.0 — built for the D&D 5e system 6.x
+
+**Version 2.0 targets the D&D 5e system 6.x on Foundry VTT 14** (developed and verified against
+dnd5e **6.0.1** / Foundry **14.367**). dnd5e 6.0 is, by the system team's own account, the biggest
+release in the system's history: a ground-up pass that leans on everything new in Foundry v14. The
+Levels feature now drives falling and fall damage; ActiveEffect v2 underpins conditional effects,
+rules-based effects that apply at roll time, region-attached effects, and smarter expiry; chat cards
+were rebuilt on typed message data; armor class became a list of qualifying calculations the sheet
+picks the best of; and the calendar now drives dawn/dusk recovery and bastion turns. (See the
+[dnd5e 6.0 release notes](https://github.com/foundryvtt/dnd5e/releases/tag/release-6.0.0) for the
+full picture.)
+
+A good deal of the **persisted data model moved with it**, so 2.0 is the version of this MCP that
+speaks 6.x natively — armor class, conditions (including leveled exhaustion), Active Effect changes
+and durations, movement, item rarities, and typed chat messages are all read and written in the 6.0
+shapes, and the compendium readers cope with premium book packs that are still built for 5.x. The
+audit behind it, tool by tool, is in
+[`docs/dnd5e-6.0-compat-review.md`](docs/dnd5e-6.0-compat-review.md).
+
+What changed at the tool surface:
+
+- **`update-actor` → `ac`** now speaks the 6.0 model: `override` (a fixed stat-block AC), `natural`
+  (natural armor), `calcs` (the base calculations the actor qualifies for) and `formulas` (custom
+  formulas). The 5.x `calc` / `flat` / `formula` fields are still accepted and translated, but
+  deprecated.
+- **`manage-effect`** writes changes to `system.changes` and takes a v14 `duration`
+  (`{ value, units, expiry }`; the old `rounds` / `turns` / `seconds` keys are translated).
+- **`apply-condition`** sets exhaustion levels 1–6 (0 removes) through the system's own lever; the
+  5.x flag no longer exists.
+- **`get-combat-stats`**, **`list-chat-messages`** and **`export-chat-log`** read 6.0's typed chat
+  messages; card bodies that the system renders on the fly are rendered into the export.
+- **`post-item-card`** reports honestly when a module hook vetoes a use (e.g. a require-target rule).
+
+**1.x** remains the line for dnd5e 5.3.x on Foundry 14.
+
+---
+
 > 📐 **Design north star — [`design.md`](design.md).** The mission, scope, the *skills decide, tools
 > do* contract, and the NPC authoring doctrine all live there; it's the document every skill, tool,
 > and refactor traces back to. **🚧 Still under construction** — actively evolving alongside the
@@ -114,8 +151,9 @@ tests/              gated live integration suites (offline unit tests live besid
   isn't on `PATH`, use the full path to `node.exe` (see wiring below).
 - A **Chromium for Playwright** — `npx playwright install chromium` (Playwright is a devDependency;
   the headless bridge drives this browser).
-- **Foundry VTT 14.x** with the **D&D 5e** system, hosted on **Molten**, plus a dedicated
-  **passwordless Foundry user** for the MCP to join as.
+- **Foundry VTT 14.367+** with the **D&D 5e system 6.0.1+** (2.0 is the dnd5e **6.x** line; use a
+  1.x release for dnd5e 5.3.x), hosted on **Molten**, plus a dedicated **passwordless Foundry user**
+  for the MCP to join as.
 
 ## Build
 

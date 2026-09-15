@@ -23,6 +23,11 @@
    ```sh
    RUN_LIVE=1 npm run test:integration
    ```
+   Against the LOCAL sandbox instead of prod (the house preference — prod stays pure), prefix the
+   profile; the same switch works for every `scripts/verify-*.mjs`:
+   ```sh
+   FOUNDRY_PROFILE=local RUN_LIVE=1 npm run test:integration
+   ```
    Confirm these suites actually ran (not skipped) and passed:
    - `tests/integration/pc.int.test.ts` — PC build + advancement (HP, spell slots, multiclass, subclass,
      **zero unresolved @scale**).
