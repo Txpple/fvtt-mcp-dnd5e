@@ -19,13 +19,13 @@
   section in the owning skill (`stat-block-builder`, `physical-item-builder`, `scene-builder`).
   The tool validates shapes; the skill knows when "advantage on saves while Bloodied" is the right
   model for a trait.
-- **Never SRD — one open question.** 6.0 ships a stock Active Effect compendium, `dnd5e.effects`
-  (the conditions and common buffs as standalone effects, referenced by the new region/activity
+- **Never SRD — resolved.** 6.0 ships a stock Active Effect compendium, `dnd5e.effects` (the
+  conditions and common buffs as standalone effects, referenced by the new region/activity
   behaviors). design.md §2.3 bars every `dnd5e.*` pack as a *content* source; this pack holds
-  mechanics, not book content. **Decision needed (owner):** allow `dnd5e.effects` as a *mechanical*
-  source for effect uuids, recorded as a one-line design.md amendment — or require behaviors to
-  reference effects authored with `manage-effect` (on a world "Effects" item) / effects carried by
-  premium-pack spells. The plan below assumes **allow**, with the alternative costing nothing extra.
+  mechanics, not book content. **Owner decision 2026-09-15: allowed as a mechanical source, by
+  default** — recorded as the §2.3 amendment. Effect resolution accepts a `dnd5e.effects` entry, an
+  effect authored with `manage-effect` (on a world item), or an effect carried by a premium-pack
+  spell/item, all by name or uuid.
 
 ## Feature inventory → work
 
@@ -45,16 +45,16 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 | 9 | **Reading it all back** | as above + effect `type` (`base` \| `condition` \| `enchantment`), `system.magical`, `system.rider.statuses` | `get-actor` / `get-actor-entity`: effect `type`, `magical`, `conditions` (present/JSON), rules changes in the readable form; `content-audit`: flag a rules change whose key×type combo is invalid | session-audit / plot-drift read them | 45 min |
 | 10 | **System automation settings** (all new in 6.0) | `dnd5e` settings `disableFalling`, `tokenSizeSync`, `senseVisionSync`, `disableExhaustion`, `initiativeGroupCombatants`, `initiativeGroupRoll`, `autoApplyDowned`, `allowPlayerDamageTray`, `allowPlayerEffectsTray`, `chatCardSummary`, `encounterPlacementBehavior`, `bastionTurns` | new **`configure-dnd5e-settings`** (GM-only, allow-listed keys, read + set, reports current values) — and `get-world-info` gains an `automation` block | start-session reports them; session-audit can warn ("falling automation is on but this scene has no Levels") | 1.5 h |
 | 11 | **PC builder: Modify Item advancement** | new advancement type `ModifyItem` (uses Enchantments to alter an existing item, #6335) | `planAdvancementApply` currently returns "no player pick" for unknown types — confirm it is applied as a forced step (`initial`), find a PHB item that uses it, add it to `verify-pc-build` | pc-builder: none | 1 h |
-| 12 | **Transform "Select Form" mode** | Transform activity `profiles` with mode `select` — forms defined by the item's own active effects (lycanthropes, Disguise Self) | `manage-activity` `type: 'transform'` builder — the largest new surface (profiles, settings, form effects) | stat-block-builder: shapeshifters | 2–3 h — **defer to 2.2 unless a build needs it** |
-| 13 | **Calendar** (dawn/dusk/day recovery, bastion turns, set date, advance time) | `game.time` + dnd5e calendar settings; recovery is automatic once the calendar is enabled | `advance-time` / `set-calendar-date` are *session* tools (design.md §8 Phase 2). Only the setting toggle rides #10 now | — | Phase 2 |
+| 12 | **Transform "Select Form" mode** | Transform activity `profiles` with mode `select` — forms defined by the item's own active effects (lycanthropes, Disguise Self) | `manage-activity` `type: 'transform'` builder — the largest new surface (profiles, settings, form effects) | stat-block-builder: shapeshifters | 2–3 h — **2.1.1 (owner, 2026-09-15)** |
+| 13 | **Calendar** (dawn/dusk/day recovery, bastion turns, set date, advance time) | `game.time` + dnd5e calendar settings (`dnd5e.calendar` config, four built-in calendars); recovery is automatic once the calendar is enabled | **`manage-calendar`** (read the current date/time · advance time · set the date; GM-only) plus the enable switch via #10 — session-flavoured, but pulled in by the owner so the 6.0 surface ships whole | start-session reports the date; session-scribe stamps it | 1 h — **2.1.1 (owner, 2026-09-15)** |
 | 14 | Falling, senses→token vision, size→token size, bloodied via AE, piety, actor identifiers, group effects tab, welcome dialog, adventure importer | runtime automation or sheet UX | **no tool** — #10 exposes the switches; nothing to author | — | 0 |
 
 ## Milestones
 
 - [ ] **2.1.0 — effects & areas** (#1 #2 #3 #4 #5 #6 #8 #9): ~6.5 h + live proof. The release
   that lets an authored monster or item express what a 2024 book entry can.
-- [ ] **2.1.1 — teleport, settings, ModifyItem** (#7 #10 #11): ~3.5 h.
-- [ ] **2.2 / Phase 2** (#12 #13): when a skill or the session phase needs them.
+- [ ] **2.1.1 — teleport, settings, ModifyItem, transform, calendar** (#7 #10 #11 #12 #13): ~7 h.
+  (Owner 2026-09-15: #12 and #13 pulled forward; the former "2.2" milestone is empty.)
 
 ## Execution discipline
 
@@ -70,12 +70,12 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 - Docs: `docs/RELEASE.md` unchanged; README "2.1" paragraph listing the new tool contracts;
   design.md amendment for the `dnd5e.effects` decision.
 
-## Open decisions (owner)
+## Decisions (owner, 2026-09-15 — all four answered)
 
-1. `dnd5e.effects` as an allowed **mechanical** source (see *Framing*). Recommendation: allow.
-2. `configure-dnd5e-settings`: read + set with an allow-list (recommended), or read-only report.
-3. Calendar tools now (they are ~1 h) or with Phase 2 (recommended — they are session tools).
-4. Transform "Select Form": 2.2, or pull into 2.1.1 if a shapeshifter build is coming up.
+1. `dnd5e.effects` is an allowed **mechanical** source, **by default** (design.md §2.3 amendment).
+2. `configure-dnd5e-settings`: **read + set** with the allow-list; GM-only; every set reports old → new.
+3. Calendar tools: **in this run** (2.1.1) — `manage-calendar`, see row 13.
+4. Transform "Select Form": **2.1.1**.
 
 ## Key gotchas (so the next session can act cold)
 

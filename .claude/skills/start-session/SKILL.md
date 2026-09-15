@@ -75,8 +75,7 @@ order:
   delete world content as part of "starting a session."
 - Don't duplicate launch logic in prose or scripts; the bridge owns it.
 - This skill is just the kickoff. Once the world is up, hand off to whatever the
-  user actually wants to do (or the relevant content skill, e.g. the planned
-  Encounter Builder).
+  user actually wants to do (or the relevant content skill).
 
 ## ⚠️ LIVE GAME sessions: assist-only (owner directive 2026-07-08)
 

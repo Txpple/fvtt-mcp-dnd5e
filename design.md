@@ -73,6 +73,10 @@ These are not aspirations; they are the rules we hold each other to.
    something custom; even then, prefer **copy → modify → rename** (leave the original intact). If
    something genuinely isn't in the books, **STOP and ASK (§2.4) — never fall back to the SRD.** Default
    `sourceRules: "2024"` everywhere.
+   **Amendment (owner, 2026-09-15):** the `dnd5e.effects` **ActiveEffect** compendium — the system's
+   own stock effects (the conditions and common buffs that dnd5e 6.0's region and activity behaviors
+   are built to reference) — is a permitted **mechanical** source for effect uuids. It holds
+   automation, not book content; the SRD *content* packs (`dnd5e.*24`, older `dnd5e.*`) stay barred.
 
 4. **Ask, don't invent.** If we can't find it in the **MM/PHB/DMG books**, we **stop and ask the
    user** — we do **not** silently fall back to the SRD or to 2014, and we do not fabricate values.
@@ -355,7 +359,8 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
   `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-scribe`,
   `session-audit`, `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
-- **Target stack.** Foundry v14, dnd5e 5.3.3, Molten Hosting. D&D-5e-only by design.
+- **Target stack.** Foundry v14, dnd5e 6.x (the 2.x line; 1.x = dnd5e 5.3.x), Molten Hosting.
+  D&D-5e-only by design.
 - **Quality gate.** biome · `tsc --noEmit` · vitest · build · knip, all green before any commit. No
   pre-commit hook — run `biome check --write .` manually.
 

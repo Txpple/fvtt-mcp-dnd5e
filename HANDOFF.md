@@ -34,19 +34,18 @@ tests + a section in the owning skill + a verify-script case.
    `shortRest longRest` + pseudo `sourceStart sourceEnd targetStart targetEnd`), region behavior
    `dnd5e.applyActiveEffect` (effect resolution by name), activity `behaviors[]`, multi-rarity
    (`rarities`), and `get-actor` reading all of it back.
-2. **2.1.1** (~3.5 h): teleport activity builder, `configure-dnd5e-settings` (allow-listed 6.0
-   automation switches), ModifyItem advancement in the PC leveling engine.
-3. **2.2 / Phase 2**: Transform "Select Form", calendar time tools — only when a skill or the
-   session phase needs them.
+2. **2.1.1** (~7 h): teleport activity builder, `configure-dnd5e-settings` (allow-listed 6.0
+   automation switches), ModifyItem advancement in the PC leveling engine, the Transform "Select
+   Form" builder, and `manage-calendar` (read / advance / set the date).
 
-### Open decisions — ask the owner FIRST; defaults if you must proceed
+### Open decisions — ANSWERED by the owner 2026-09-15 (recorded in the plan)
 
-| # | Decision | Default until answered |
+| # | Decision | Answer |
 |---|---|---|
-| 1 | `dnd5e.effects` (6.0's stock Active Effect pack) as an allowed **mechanical** source for behavior effect uuids — design.md §2.3 bars `dnd5e.*` *content* packs | Build effect resolution so it accepts (a) an effect on a world item authored with `manage-effect`, (b) an effect carried by a premium-pack spell/item, (c) `dnd5e.effects` **behind a flag defaulting to off** — flip the default only with the owner's yes + a one-line design.md amendment |
-| 2 | `configure-dnd5e-settings`: read + set (allow-list) vs read-only | Read + set with the allow-list in the plan; GM-only; every set reports old → new |
-| 3 | Calendar tools now or Phase 2 | Phase 2 |
-| 4 | Transform "Select Form" in 2.1.1 or 2.2 | 2.2 |
+| 1 | `dnd5e.effects` as a **mechanical** source for behavior effect uuids | **Allowed by default** — design.md §2.3 carries the amendment; resolution also accepts world-item effects (`manage-effect`) and premium-pack effects |
+| 2 | `configure-dnd5e-settings`: read + set vs read-only | **Read + set**, allow-listed, GM-only, old → new reported |
+| 3 | Calendar tools now or Phase 2 | **Now** — `manage-calendar` in 2.1.1 |
+| 4 | Transform "Select Form" in 2.1.1 or 2.2 | **2.1.1** |
 
 ## First session — exact steps
 
