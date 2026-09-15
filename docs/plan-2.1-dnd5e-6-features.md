@@ -111,8 +111,11 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   2 skipped, effects 47/47, region effects 30/30, activities 27/27, settings + calendar 35/35, items
   13/13, actor 29/29, cast 25/25, region 22/22 (×3 after the kernel order fix), dnd5e-writes 16/16,
   content-audit 8/8, pc-build 66/66, reads 25/25, spellcasting 32/32, free-cast 28/28, placeables
-  34/34 (×2), placeables library 43/43, scene tools 10/10, update-token 11/11. **Maintenance mode
-  resumes** (owner): bug fixes + small dogfood gaps only; Phase 2 stays shelved unless asked.
+  34/34 (×2), placeables library 43/43, scene tools 10/10, update-token 11/11. RELEASE.md step 3
+  done over MCP after the CC restart (sandbox): `configure-dnd5e-settings` read, `manage-calendar`
+  read, `get-world-info` automation block, and a `manage-effect` create → list round trip of a
+  conditional rules effect on a tagged Scout (deleted after). **Maintenance mode resumes** (owner):
+  bug fixes + small dogfood gaps only; Phase 2 stays shelved unless asked.
 
 ### 2.1.0 release proof (2026-09-15, sandbox)
 

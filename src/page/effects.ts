@@ -106,16 +106,15 @@ export async function manageEffect(params: {
           disabled: e.disabled,
           transfer: e.transfer,
           statuses: Array.from(e.statuses ?? []),
-          duration:
-            typeof e.duration?.value === 'number'
-              ? {
-                  value: e.duration.value,
-                  units: e.duration.units ?? 'seconds',
-                  ...(e.duration.expiry ? { expiry: e.duration.expiry } : {}),
-                }
-              : e.duration?.expiry
-                ? { expiry: e.duration.expiry }
-                : null,
+          duration: Number.isFinite(e.duration?.value)
+            ? {
+                value: e.duration.value,
+                units: e.duration.units ?? 'seconds',
+                ...(e.duration.expiry ? { expiry: e.duration.expiry } : {}),
+              }
+            : e.duration?.expiry
+              ? { expiry: e.duration.expiry }
+              : null,
           ...effectExtras(e),
           changes: summarizeChanges(changesOf(e)),
         })),
