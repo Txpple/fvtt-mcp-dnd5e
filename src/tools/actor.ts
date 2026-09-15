@@ -495,19 +495,32 @@ export class ActorTools {
     });
   }
 
+  // Minimal projection: name-level facts plus the dnd5e 6.0 hooks a skill needs to reason about
+  // an effect without get-actor-entity — its type when not a plain "base" effect, whether it is
+  // conditional, and the roll-time rules it carries in readable form.
   private formatEffects(effects: any[]): any[] {
-    return effects.map(effect => ({
-      id: effect.id,
-      name: effect.name,
-      disabled: effect.disabled,
-      duration: effect.duration
-        ? {
-            type: effect.duration.type,
-            remaining: effect.duration.remaining,
-          }
-        : null,
-      hasIcon: !!effect.icon,
-    }));
+    return effects.map(effect => {
+      const rules = (Array.isArray(effect.changes) ? effect.changes : [])
+        .map((c: any) => c?.rule)
+        .filter((r: unknown): r is string => typeof r === 'string');
+      return {
+        id: effect.id,
+        name: effect.name,
+        disabled: effect.disabled,
+        ...(typeof effect.type === 'string' && effect.type !== 'base' ? { type: effect.type } : {}),
+        ...(effect.magical ? { magical: true } : {}),
+        ...(effect.conditions ? { conditional: true } : {}),
+        ...(rules.length > 0 ? { rules } : {}),
+        duration: effect.duration
+          ? {
+              type: effect.duration.type,
+              remaining: effect.duration.remaining,
+              ...(effect.duration.expiry ? { expiry: effect.duration.expiry } : {}),
+            }
+          : null,
+        hasIcon: !!effect.icon,
+      };
+    });
   }
 }
 

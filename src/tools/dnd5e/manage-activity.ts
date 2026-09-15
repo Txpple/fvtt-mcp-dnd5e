@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
+import { ACTIVITY_DURATION_UNITS, EXPIRY_EVENTS } from '../../utils/dnd5e-canonical.js';
 import { FormattedToolError } from '../../utils/error-handler.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
 import { toInputSchema } from '../../utils/schema.js';
@@ -156,6 +157,39 @@ const ManageActivitySchema = z.object({
         'Default "lr" (long rest).'
     ),
 
+  // duration (add + edit) — dnd5e 6.0: the effects an activity applies inherit it, incl. expiry
+  duration: z
+    .object({
+      value: z
+        .union([z.number().min(0), z.string()])
+        .optional()
+        .describe('Amount for a scalar unit — a number or a deterministic formula ("@prof").'),
+      units: z
+        .enum(ACTIVITY_DURATION_UNITS)
+        .optional()
+        .describe(
+          'Time period: inst (instantaneous) · spec (special) · turn round minute hour day week month ' +
+            'year (scalar — give value) · disp / dstr (until dispelled / dispelled or triggered) · perm.'
+        ),
+      expiry: z
+        .enum(EXPIRY_EVENTS)
+        .nullable()
+        .optional()
+        .describe(
+          'When the effects this activity applies lapse: core combat events (turnStart / turnEnd / ' +
+            'roundEnd …, need a scalar duration too), shortRest / longRest, or the source/target turn ' +
+            'pseudo-expiries — "until the end of the target\'s next turn" = targetEnd, "until the start ' +
+            'of your next turn" = sourceStart. null clears.'
+        ),
+      concentration: z.boolean().optional().describe('Requires concentration.'),
+    })
+    .optional()
+    .describe(
+      "Duration OVERRIDE for the activity (sets duration.override so it beats the item's). dnd5e 6.0: " +
+        'effects the activity applies inherit it, including `expiry` — e.g. {value: 1, units: "minute"} ' +
+        'or {expiry: "targetEnd"} for "until the end of the target\'s next turn".'
+    ),
+
   // edit
   patch: z
     .record(z.string(), z.any())
@@ -273,6 +307,7 @@ export class DnD5eManageActivityTool {
       level: parsed.castLevel,
       charges: parsed.charges,
       recoveryPeriod: parsed.recoveryPeriod,
+      duration: parsed.duration,
     };
 
     this.logger.info('manage-activity', {

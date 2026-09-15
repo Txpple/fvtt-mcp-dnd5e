@@ -64,7 +64,20 @@ If the exact item isn't in a compendium but a close base IS (the common case for
      add `system.uses` (charges, e.g. 1/day at dawn), edit the description, set rarity/price.
    - `manage-activity` — add/edit a rollable activity (an extra damage rider, a utility action).
    - `manage-effect` — model a passive bonus a wondrous item grants (a Cloak of Protection's +1 AC/saves
-     has no numeric field; it MUST be an ActiveEffect).
+     has no numeric field; it MUST be an ActiveEffect). **dnd5e 6.0:** a bonus that only exists when a
+     die is rolled is a RULES change — `{key:"attack"|"check"|"d20"|"save"|"damage"|"healing",
+     type:"dnd5e.bonus"|"dnd5e.advantage"|"dnd5e.minimum"|"dnd5e.maximum", value}` — narrowed by a
+     change `conditions` Filter on the `roll.*` keys: a Bracer of Archery-style "+2 damage with bows" is
+     `{key:"damage", type:"dnd5e.bonus", value:"2", conditions:{k:"roll.attack.type", v:"ranged"}}`; a
+     Luckstone-style "advantage on saves" is `{key:"save", type:"dnd5e.advantage", value:"+1"}`; a
+     Flame Tongue-style "+2d6 fire" is `{key:"damage", type:"dnd5e.bonus", value:"2d6[fire]",
+     conditions:{k:"roll.item.name", v:"Flame Tongue"}}` — a transferred item effect's rule applies to
+     ALL the wearer's rolls in that category, so gate "with this weapon only" on `roll.item.name` (the
+     item making the roll; the top-level `item.*` is the item that carries the effect). An enchantment
+     that fits only some weapons uses the
+     effect-level `conditions` over `item.*` (`{o:"OR", v:[{k:"item.type.value", o:"in",
+     v:["simpleR","martialR"]}, {k:"item.properties", o:"has", v:"thr"}]}`). Set `magical: true` on a
+     magic item's effect. Full recipes + the Filter grammar: [[stat-block-builder]] Step 7.
 3. **Rename** to the custom name (`import-item`'s `name` on copy, or `update-actor-item`).
 
 > **If `import-item` reports `unresolvedScale`** (rare — a magic-item feature rider whose damage/uses

@@ -102,6 +102,11 @@ export class DnD5eContentAuditTool {
           'gm-leak',
           '🤫 Rule 12 — GM note / spoiler in a player-visible description (rewrite innocuous; move the note to a GM-only journal)',
         ],
+        [
+          0,
+          'dead-rule',
+          '⚙️ Dead dnd5e 6.0 rules change — key × type mismatch, a silent no-op in play (re-author the change with manage-effect)',
+        ],
       ];
       const sections = groups
         .map(([rule, , heading]) => {

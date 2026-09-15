@@ -11,10 +11,16 @@
 //            "fill in the …", "ready-made hook", "to suit your table") — players can read an item's
 //            description on sight, so a secret/meta-note there is a silent spoiler. ITEM descriptions
 //            only (an NPC biography is GM-facing, so its GM notes are fine — not scanned for rule 12).
+//   rule 0  — (correctness, not a policy rule) a DEAD dnd5e 6.0 rules change on an effect: a rules type
+//            (dnd5e.advantage / bonus / minimum / maximum) whose key is not a roll category, a damage /
+//            healing key with a non-bonus type, an advantage value outside the vocabulary, or a core type
+//            on a roll category — all silent no-ops in play. manage-effect refuses to write them; this
+//            catches hand edits and imported data.
 // The scanners (findFudgeLanguage / findGmLeakLanguage + the imported isPlaceholderIcon / isMagicItemDoc)
 // are PURE and unit-tested in content-audit.test.ts; auditContent gathers the live docs and applies them.
 
 import { resolveActorFuzzy, toSource } from '../_shared.js';
+import { ruleChangeProblem } from '../effect-changes.js';
 import { isPlaceholderIcon } from './icons.js';
 import { isMagicItemDoc } from './items.js';
 
@@ -70,8 +76,14 @@ export function findGmLeakLanguage(text: string | null | undefined): string[] {
 const LOOTABLE_TYPES = new Set(['weapon', 'equipment', 'consumable', 'tool', 'loot', 'container']);
 
 export interface AuditFinding {
-  rule: 7 | 8 | 9 | 12;
-  issue: 'placeholder-icon' | 'fudge-language' | 'unlootable-magic' | 'gm-note-leak';
+  /** Authoring-policy rule, or 0 for a correctness finding (a dead dnd5e 6.0 rules change). */
+  rule: 0 | 7 | 8 | 9 | 12;
+  issue:
+    | 'placeholder-icon'
+    | 'fudge-language'
+    | 'unlootable-magic'
+    | 'gm-note-leak'
+    | 'dead-rules-change';
   docType: 'actor' | 'item';
   id: string;
   name: string;
@@ -142,6 +154,28 @@ export async function auditContent(args?: AuditArgs): Promise<unknown> {
   const worldItemNames = new Set<string>();
   for (const it of game.items ?? []) worldItemNames.add((it.name ?? '').toLowerCase());
 
+  // rule 0 — a dead rules change on any of the doc's effects (source changes; the prepared doc's
+  // change conditions are Filter instances, irrelevant here).
+  const flagEffects = (doc: any, docType: 'actor' | 'item', owner?: string) => {
+    for (const effect of doc.effects ?? []) {
+      const changes = toSource(effect)?.system?.changes;
+      if (!Array.isArray(changes)) continue;
+      for (const change of changes) {
+        const problem = ruleChangeProblem(change ?? {});
+        if (!problem) continue;
+        findings.push({
+          rule: 0,
+          issue: 'dead-rules-change',
+          docType,
+          id: doc.id ?? '',
+          name: doc.name ?? '',
+          ...(owner ? { owner } : {}),
+          detail: `effect "${effect.name}" change {key: "${change?.key}", type: "${change?.type}"}: ${problem}`,
+        });
+      }
+    }
+  };
+
   const flagDoc = (
     doc: any,
     docType: 'actor' | 'item',
@@ -149,6 +183,7 @@ export async function auditContent(args?: AuditArgs): Promise<unknown> {
     itemType?: string,
     owner?: string
   ) => {
+    flagEffects(doc, docType, owner);
     if (isPlaceholderIcon(doc.img)) {
       findings.push({
         rule: 8,
@@ -220,7 +255,7 @@ export async function auditContent(args?: AuditArgs): Promise<unknown> {
     flagDoc(item, 'item', toSource(item).system?.description?.value, item.type);
   }
 
-  const byRule = { 7: 0, 8: 0, 9: 0, 12: 0 } as Record<number, number>;
+  const byRule = { 0: 0, 7: 0, 8: 0, 9: 0, 12: 0 } as Record<number, number>;
   for (const fnd of findings) byRule[fnd.rule]++;
 
   return {
@@ -232,6 +267,7 @@ export async function auditContent(args?: AuditArgs): Promise<unknown> {
       rule8_icon: byRule[8],
       rule9_loot: byRule[9],
       rule12_leak: byRule[12],
+      effects_dead_rule: byRule[0],
     },
     findings,
     ...(notFound.length > 0 ? { notFound } : {}),

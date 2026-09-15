@@ -56,6 +56,20 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 - [ ] **2.1.1 — teleport, settings, ModifyItem, transform, calendar** (#7 #10 #11 #12 #13): ~7 h.
   (Owner 2026-09-15: #12 and #13 pulled forward; the former "2.2" milestone is empty.)
 
+### Progress
+
+- [x] #1 #2 #3 #4 #9 — **effects** (2026-09-15): `manage-effect` conditions (effect + change Filter JSON),
+  the four rules types with key × type × value validation, `replacement`, `magical`, the 12-event
+  `duration.expiry` enum (core / rest / source-target); `manage-activity` `duration` override with
+  expiry; `get-actor` / `manage-effect list` read back type · magical · parsed conditions · readable
+  rules; `content-audit` `dead-rules-change` (rule 0). Pure layer `effect-changes.ts` (+44 tests);
+  vocabularies in `utils/dnd5e-canonical.ts`. Live: `scripts/verify-effects-6.mjs` **47/47** on the
+  sandbox — a ranged-only `+1d4` lands in the longbow's `rollAttack` (`1d20min10 + 2 + 2 + 1d4`), a
+  melee-only advantage flips the shortsword's mode (`2d20advmin10 …`), `1d4[fire]` lands in
+  `rollDamage`, the conditional +2 AC toggles with HP.
+- [ ] #5 #6 — areas (region + activity behaviors)
+- [ ] #8 — rarities
+
 ## Execution discipline
 
 - One feature = one commit: tool + `effect-changes.ts`-style pure validator with unit tests +

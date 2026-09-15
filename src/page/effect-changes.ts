@@ -1,10 +1,10 @@
 // Pure, offline-tested helpers for dnd5e / Foundry-v14 ActiveEffect `changes[]` + duration mapping.
 // Extracted from the live effects.ts orchestrator (mirroring the activities.ts ↔ manage-activity.ts
 // split) so the version-coupled field math — the legacy numeric `mode` → v14 string `type`
-// migration, the change shape, the v14 duration shape — is unit-tested OFFLINE. A Foundry/dnd5e
-// schema bump that renumbers the modes or moves these fields then fails effect-changes.test.ts
-// here, instead of silently mis-authoring effects in a live world (which the seam-mocked /
-// verify-script paths would not catch).
+// migration, the change shape, the v14 duration shape, the 6.0 Filter / rules / expiry vocabularies —
+// is unit-tested OFFLINE. A Foundry/dnd5e schema bump that renumbers the modes or moves these fields
+// then fails effect-changes.test.ts here, instead of silently mis-authoring effects in a live world
+// (which the seam-mocked / verify-script paths would not catch).
 //
 // Foundry 14.367 / dnd5e 6.0.1 facts (read from the core + system source; locked by the tests):
 //  - `changes[]` lives at `effect.system.changes` (core ActiveEffectTypeDataModel). The top-level
@@ -12,9 +12,37 @@
 //  - A change is { key, value, type, phase, priority? }: `type` is a STRING (override/add/subtract/
 //    multiply/upgrade/downgrade/custom); the legacy numeric `mode` (CONST.ACTIVE_EFFECT_MODES) is
 //    normalized to it. `value` is stored as a string; `phase` defaults to "initial". dnd5e adds
-//    per-change `_id` / `conditions` / `replacement` with defaults — nothing to author.
+//    per-change `_id` (defaulted), `conditions` (a Filter JSON string) and `replacement`
+//    ('' | origin | target).
+//  - dnd5e 6.0 RULES changes: type ∈ dnd5e.advantage | dnd5e.bonus | dnd5e.maximum | dnd5e.minimum
+//    (CONFIG.DND5E.activeEffectChangeTypes). Their `key` is a roll CATEGORY (attack / check / d20 /
+//    save for every type; damage / healing for bonus only — AppliedRules + the wiki), NOT a data
+//    path: a core-type change on `key: "attack"` is a pruned write to nowhere, and a rules type on a
+//    real data path never fires. They carry `skipConditions: true`, so their per-change `conditions`
+//    are evaluated at ROLL time (RulesIterator#filterWith) — the only place `roll.*` keys exist.
+//  - Effect-level conditions (`system.conditions`) and per-change conditions are the system's Filter
+//    JSON (module/filter.mjs): a comparison { k, v, o? } (o ∈ COMPARISON_FUNCTIONS, default exact),
+//    an operator { o: AND|NAND|OR|NOR|XOR, v: Filter[] } / { o: NOT, v: Filter }, or an array
+//    (implicit AND). FiltersField extends JSONField (initial "{}") — persisted as a STRING.
 //  - Duration is { value, units, expiry? }: units ∈ seconds | minutes | hours | days | rounds |
 //    turns; the 5.x `{ rounds | turns | seconds: N }` keys are translated (core migrates them too).
+//    Expiry ∈ core CONST.ACTIVE_EFFECT_EXPIRY_EVENTS (combatStart roundStart turnStart combatEnd
+//    roundEnd turnEnd — need a finite value: core only expires when the duration is ALSO reached),
+//    dnd5e's registered shortRest / longRest, and the pseudo sourceStart / sourceEnd / targetStart /
+//    targetEnd (ActiveEffect5e.PSEUDO_EXPIRIES) — the last six are DURATION-LESS (the system nulls
+//    `duration.value` on create/update), so a value given with them is dropped here.
+
+import {
+  ADVANTAGE_VALUES,
+  DND5E_EXPIRY_EVENTS,
+  EFFECT_REPLACEMENTS,
+  EXPIRY_EVENTS,
+  FILTER_COMPARISONS,
+  FILTER_OPERATORS,
+  RULE_KEYS,
+  RULE_TYPES,
+  type RuleType,
+} from '../utils/dnd5e-canonical.js';
 
 /** Legacy numeric ActiveEffect mode → v14 string type (CONST.ACTIVE_EFFECT_MODES). */
 const MODE_NUM_TO_TYPE: Record<number, string> = {
@@ -26,7 +54,313 @@ const MODE_NUM_TO_TYPE: Record<number, string> = {
   5: 'override',
 };
 
-/** Normalize an authored change to the v14 { key, value(string), type, phase } shape. */
+// ---------------------------------------------------------------------------------------------
+// Filters (dnd5e 6.0 `module/filter.mjs`) — the condition vocabulary
+// ---------------------------------------------------------------------------------------------
+
+/** Comparisons whose `v` must be a list. */
+const LIST_COMPARISONS = new Set(['in', 'hasany', 'hasall', 'subsetof']);
+/** Comparisons whose `v` must be a number. */
+const NUMERIC_COMPARISONS = new Set(['gt', 'gte', 'lt', 'lte']);
+
+/** Where a Filter is being authored — `roll.*` keys only exist at roll time (change scope). */
+export type FilterScope = 'effect' | 'change';
+
+/** The persisted form of "no conditions" (FiltersField initial). */
+export const EMPTY_CONDITIONS = '{}';
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * Validate + normalize an authored Filter (object, array, or JSON string) into the persisted JSON
+ * string. `null` / `undefined` / `''` / `{}` / `[]` mean "no conditions" → "{}". Throws a message
+ * naming the offending node for an unknown operator/comparison, a comparison without a key, an
+ * operator with the wrong `v` shape, a list/number comparison with the wrong value type, or a
+ * `roll.*` key in effect scope. Only `k` / `o` / `v` survive normalization.
+ */
+export function normalizeConditions(input: unknown, scope: FilterScope): string {
+  let def: unknown = input;
+  if (typeof def === 'string') {
+    const trimmed = def.trim();
+    if (trimmed === '') return EMPTY_CONDITIONS;
+    try {
+      def = JSON.parse(trimmed);
+    } catch {
+      throw new Error(`conditions is not valid Filter JSON: ${trimmed.slice(0, 80)}`);
+    }
+  }
+  if (def === undefined || def === null) return EMPTY_CONDITIONS;
+  if (Array.isArray(def) && def.length === 0) return EMPTY_CONDITIONS;
+  if (isPlainObject(def) && Object.keys(def).length === 0) return EMPTY_CONDITIONS;
+  return JSON.stringify(normalizeFilterNode(def, scope, 'conditions'));
+}
+
+function normalizeFilterNode(node: unknown, scope: FilterScope, path: string): unknown {
+  if (Array.isArray(node)) {
+    if (node.length === 0) throw new Error(`${path}: an empty filter list matches nothing useful.`);
+    return node.map((n, i) => normalizeFilterNode(n, scope, `${path}[${i}]`));
+  }
+  if (!isPlainObject(node)) {
+    throw new Error(`${path}: a filter must be an object { k, v, o? } or an operator { o, v }.`);
+  }
+  const o = node.o;
+  if (o !== undefined && typeof o !== 'string') {
+    throw new Error(`${path}.o: must be a string (operator or comparison name).`);
+  }
+  if (o !== undefined && (FILTER_OPERATORS as readonly string[]).includes(o)) {
+    if (o === 'NOT') {
+      if (!isPlainObject(node.v)) {
+        throw new Error(`${path}: NOT takes a single filter object as v.`);
+      }
+      return { o, v: normalizeFilterNode(node.v, scope, `${path}.v`) };
+    }
+    if (!Array.isArray(node.v) || node.v.length === 0) {
+      throw new Error(`${path}: ${o} takes a non-empty array of filters as v.`);
+    }
+    return { o, v: node.v.map((n, i) => normalizeFilterNode(n, scope, `${path}.v[${i}]`)) };
+  }
+  const op = o ?? 'exact';
+  if (!(FILTER_COMPARISONS as readonly string[]).includes(op)) {
+    throw new Error(
+      `${path}.o: unknown operator "${op}". Comparisons: ${FILTER_COMPARISONS.join(' ')}; ` +
+        `operators: ${FILTER_OPERATORS.join(' ')}.`
+    );
+  }
+  const k = node.k;
+  if (typeof k !== 'string' || k.trim() === '') {
+    throw new Error(`${path}.k: a comparison needs a key path (e.g. "statuses.bloodied").`);
+  }
+  if (scope === 'effect' && /^roll\./.test(k)) {
+    throw new Error(
+      `${path}.k: "${k}" — roll.* keys are only available on a CHANGE's conditions (rules are ` +
+        'evaluated at roll time); an effect-level condition cannot see the roll.'
+    );
+  }
+  let v = node.v;
+  if (op === 'empty') {
+    if (v === undefined) v = true;
+    else if (typeof v !== 'boolean') throw new Error(`${path}.v: "empty" takes true/false.`);
+  } else if (v === undefined) {
+    throw new Error(`${path}.v: a "${op}" comparison needs a value.`);
+  }
+  if (LIST_COMPARISONS.has(op) && !Array.isArray(v)) {
+    throw new Error(`${path}.v: "${op}" takes a list of values.`);
+  }
+  if (NUMERIC_COMPARISONS.has(op) && typeof v !== 'number') {
+    throw new Error(`${path}.v: "${op}" takes a number.`);
+  }
+  if (op === 'has' && isPlainObject(v)) v = normalizeFilterNode(v, scope, `${path}.v`);
+  const out: Record<string, unknown> = { k: k.trim() };
+  if (o !== undefined) out.o = op;
+  out.v = v;
+  return out;
+}
+
+/** Parse a persisted Filter JSON string for read-back; null when absent, empty, or unparseable. */
+export function parseConditions(json: unknown): unknown | null {
+  if (json === undefined || json === null) return null;
+  if (typeof json !== 'string') return isEmptyFilter(json) ? null : json;
+  const trimmed = json.trim();
+  if (trimmed === '' || trimmed === EMPTY_CONDITIONS) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return isEmptyFilter(parsed) ? null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+const isEmptyFilter = (v: unknown): boolean =>
+  (Array.isArray(v) && v.length === 0) || (isPlainObject(v) && Object.keys(v).length === 0);
+
+const COMPARISON_WORDS: Record<string, string> = {
+  exact: '=',
+  contains: 'contains',
+  icontains: 'contains (any case)',
+  startswith: 'starts with',
+  istartswith: 'starts with (any case)',
+  endswith: 'ends with',
+  iendswith: 'ends with (any case)',
+  has: 'has',
+  hasany: 'has any of',
+  hasall: 'has all of',
+  subsetof: 'is a subset of',
+  in: 'in',
+  gt: '>',
+  gte: '>=',
+  lt: '<',
+  lte: '<=',
+};
+
+/** Render a Filter (parsed) as a short human-readable clause, e.g. `roll.ability = str`. */
+export function describeFilter(node: unknown): string {
+  if (Array.isArray(node)) {
+    const parts = node.map(describeFilter);
+    return parts.length === 1 ? parts[0] : `(${parts.join(' AND ')})`;
+  }
+  if (!isPlainObject(node)) return String(node);
+  const o = typeof node.o === 'string' ? node.o : 'exact';
+  if ((FILTER_OPERATORS as readonly string[]).includes(o)) {
+    if (o === 'NOT') return `NOT ${describeFilter(node.v)}`;
+    const parts = Array.isArray(node.v) ? node.v.map(describeFilter) : [];
+    return `(${parts.join(` ${o} `)})`;
+  }
+  const k = String(node.k ?? '?');
+  if (o === 'empty') return node.v === false ? `${k} is not empty` : `${k} is empty`;
+  return `${k} ${COMPARISON_WORDS[o] ?? o} ${describeFilterValue(node.v)}`;
+}
+
+function describeFilterValue(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(describeFilterValue).join(', ')}]`;
+  if (isPlainObject(v)) return describeFilter(v);
+  return String(v);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Rules-type changes (dnd5e 6.0 CONFIG.DND5E.activeEffectChangeTypes)
+// ---------------------------------------------------------------------------------------------
+
+/** Categories that accept every rule type; damage / healing accept `dnd5e.bonus` only. */
+const D20_RULE_KEYS = new Set(['attack', 'check', 'd20', 'save']);
+
+const ADVANTAGE_ALIASES: Record<string, string> = { '1': '+1', '=1': '=+1' };
+
+export const isRuleType = (type: unknown): type is RuleType =>
+  typeof type === 'string' && (RULE_TYPES as readonly string[]).includes(type);
+
+const CATEGORY_LABEL: Record<string, string> = {
+  attack: 'attack rolls',
+  check: 'ability checks',
+  d20: 'd20 tests',
+  save: 'saving throws',
+  damage: 'damage rolls',
+  healing: 'healing rolls',
+};
+
+/** A dice term (`1d4`, `d20`, `2d6[fire]`) — not allowed in a deterministic min/max formula. */
+const DICE_TERM = /\d*d(\d+|%)/i;
+
+/**
+ * Validate a rules change's key × type × value. Returns the normalized value (advantage aliases
+ * folded to the canonical spelling). Throws on a non-category key, a damage/healing key with a
+ * non-bonus type, an unknown advantage value, an empty bonus, or a dice term in a min/max.
+ */
+export function validateRuleChange(type: RuleType, key: string, value: string): string {
+  if (!(RULE_KEYS as readonly string[]).includes(key)) {
+    throw new Error(
+      `change type "${type}" is a rule: its key must be a roll category (${RULE_KEYS.join(' ')}), ` +
+        `not "${key}".`
+    );
+  }
+  if (!D20_RULE_KEYS.has(key) && type !== 'dnd5e.bonus') {
+    throw new Error(
+      `key "${key}" only supports dnd5e.bonus (advantage / minimum / maximum are d20-only).`
+    );
+  }
+  const v = value.trim();
+  if (type === 'dnd5e.advantage') {
+    const canon = ADVANTAGE_ALIASES[v] ?? v;
+    if (!(ADVANTAGE_VALUES as readonly string[]).includes(canon)) {
+      throw new Error(
+        `dnd5e.advantage value must be one of ${ADVANTAGE_VALUES.join(' ')} (got "${value}").`
+      );
+    }
+    return canon;
+  }
+  if (v === '') throw new Error(`change type "${type}" needs a value (e.g. "1d4", "2", "@prof").`);
+  if ((type === 'dnd5e.minimum' || type === 'dnd5e.maximum') && DICE_TERM.test(v)) {
+    throw new Error(
+      `${type} takes a deterministic formula (a number or @prof), not dice ("${value}").`
+    );
+  }
+  return v;
+}
+
+/**
+ * Why a PERSISTED change is a dead rule — a rules type on a non-category key / a damage-healing
+ * key with a non-bonus type / an advantage value outside the vocabulary, or a core type on a roll
+ * category (a write to nowhere). Undefined when the change is fine. Used by content-audit.
+ */
+export function ruleChangeProblem(c: {
+  type?: unknown;
+  mode?: unknown;
+  key?: unknown;
+  value?: unknown;
+}): string | undefined {
+  const type =
+    typeof c?.type === 'string'
+      ? c.type
+      : typeof c?.mode === 'number'
+        ? (MODE_NUM_TO_TYPE[c.mode] ?? 'add')
+        : 'add';
+  const key = String(c?.key ?? '');
+  if (isRuleType(type)) {
+    try {
+      validateRuleChange(type, key, String(c?.value ?? ''));
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+    return undefined;
+  }
+  if ((RULE_KEYS as readonly string[]).includes(key)) {
+    return (
+      `key "${key}" is a roll category but type "${type}" is a core change type — it writes to ` +
+      `nowhere; use ${RULE_TYPES.join(' / ')}.`
+    );
+  }
+  return undefined;
+}
+
+/** Human-readable rendering of a rules change (+ its condition clause), for read-back. */
+export function describeRule(c: {
+  type?: unknown;
+  key?: unknown;
+  value?: unknown;
+  conditions?: unknown;
+}): string | undefined {
+  if (!isRuleType(c.type)) return undefined;
+  const on = CATEGORY_LABEL[String(c.key)] ?? `${String(c.key)} rolls`;
+  const v = String(c.value ?? '').trim();
+  let text: string;
+  switch (c.type) {
+    case 'dnd5e.advantage': {
+      const canon = ADVANTAGE_ALIASES[v] ?? v;
+      const words: Record<string, string> = {
+        '+1': 'advantage',
+        '-1': 'disadvantage',
+        '=+1': 'forced advantage',
+        '=-1': 'forced disadvantage',
+        '>=0': 'immune to disadvantage',
+        '<=0': 'immune to advantage',
+      };
+      text = `${words[canon] ?? `advantage mode ${v}`} on ${on}`;
+      break;
+    }
+    case 'dnd5e.bonus':
+      text = `${v.startsWith('-') ? v : `+${v}`} to ${on}`;
+      break;
+    case 'dnd5e.minimum':
+      text = `d20 minimum ${v} on ${on}`;
+      break;
+    default:
+      text = `d20 maximum ${v} on ${on}`;
+  }
+  const cond = parseConditions(c.conditions);
+  return cond ? `${text} when ${describeFilter(cond)}` : text;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Changes
+// ---------------------------------------------------------------------------------------------
+
+const REPLACEMENTS = new Set<string>(['', ...EFFECT_REPLACEMENTS]);
+
+/**
+ * Normalize an authored change to the v14 { key, value(string), type, phase } shape, plus the
+ * dnd5e 6.0 extras when given: `conditions` (validated Filter → JSON string, change scope),
+ * `replacement` (origin | target), `priority`. Rules types are validated (key × type × value).
+ */
 export function normalizeChange(c: any): Record<string, unknown> {
   const type =
     typeof c?.type === 'string'
@@ -34,31 +368,73 @@ export function normalizeChange(c: any): Record<string, unknown> {
       : typeof c?.mode === 'number'
         ? (MODE_NUM_TO_TYPE[c.mode] ?? 'add')
         : 'add';
-  return {
-    key: String(c?.key ?? ''),
-    value: c?.value === undefined || c?.value === null ? '' : String(c.value),
+  const key = String(c?.key ?? '');
+  let value = c?.value === undefined || c?.value === null ? '' : String(c.value);
+  if (isRuleType(type)) {
+    value = validateRuleChange(type, key, value);
+  } else if ((RULE_KEYS as readonly string[]).includes(key)) {
+    throw new Error(
+      `key "${key}" is a roll category — it only works with a rules change type ` +
+        `(${RULE_TYPES.join(' ')}), not "${type}" (which writes to a data path).`
+    );
+  }
+  const out: Record<string, unknown> = {
+    key,
+    value,
     type,
     phase: typeof c?.phase === 'string' ? c.phase : 'initial',
   };
+  if (typeof c?.priority === 'number' && Number.isFinite(c.priority)) out.priority = c.priority;
+  if (c?.conditions !== undefined) {
+    const conditions = normalizeConditions(c.conditions, 'change');
+    if (conditions !== EMPTY_CONDITIONS) out.conditions = conditions;
+  }
+  if (c?.replacement !== undefined && c?.replacement !== null) {
+    const r = String(c.replacement);
+    if (!REPLACEMENTS.has(r)) {
+      throw new Error(`change.replacement must be "origin" or "target" (got "${r}").`);
+    }
+    if (r !== '') out.replacement = r;
+  }
+  return out;
 }
 
-/** Summarize an effect's changes for list/read output (surfacing type from legacy mode if needed). */
+/**
+ * Summarize an effect's changes for list/read output (surfacing type from legacy mode if needed).
+ * dnd5e 6.0 extras appear only when present: parsed `conditions`, `replacement`, and for a rules
+ * change a readable `rule` ("+1d4 to attack rolls when roll.attack.type = ranged").
+ */
 export function summarizeChanges(changes: any[]): Array<Record<string, unknown>> {
-  return (changes ?? []).map((c: any) => ({
-    key: c?.key,
-    value: c?.value,
-    type: typeof c?.type === 'string' ? c.type : (MODE_NUM_TO_TYPE[c?.mode] ?? undefined),
-  }));
+  return (changes ?? []).map((c: any) => {
+    const type = typeof c?.type === 'string' ? c.type : (MODE_NUM_TO_TYPE[c?.mode] ?? undefined);
+    const out: Record<string, unknown> = { key: c?.key, value: c?.value, type };
+    const conditions = parseConditions(c?.conditions);
+    if (conditions) out.conditions = conditions;
+    if (typeof c?.replacement === 'string' && c.replacement !== '') out.replacement = c.replacement;
+    const rule = describeRule({ ...c, type });
+    if (rule) out.rule = rule;
+    return out;
+  });
 }
+
+// ---------------------------------------------------------------------------------------------
+// Duration + expiry
+// ---------------------------------------------------------------------------------------------
 
 /** v14 duration units (CONST.ACTIVE_EFFECT_DURATION_UNITS) accepted as `duration.units`. */
 const DURATION_UNITS = new Set(['seconds', 'minutes', 'hours', 'days', 'rounds', 'turns']);
 
+/** The dnd5e rest / source / target expiries carry no duration (the system nulls the value). */
+const DURATIONLESS_EXPIRIES = new Set<string>(DND5E_EXPIRY_EVENTS);
+
 /**
  * Normalize an authored duration to the v14 { value, units[, expiry] } shape. Accepts the native
  * shape as-is (unknown keys pass through) and translates the 5.x { rounds | turns | seconds: N }
- * keys — first one wins, matching core's own #migrateDuration. Returns undefined when nothing
- * usable was given.
+ * keys — first one wins, matching core's own #migrateDuration. Validates `expiry` against the
+ * 6.0 vocabulary: a core combat event needs a finite value (core only expires when the duration
+ * is also reached); the dnd5e rest / source / target expiries are duration-less, so any value
+ * given with them is dropped (the system nulls it anyway). Returns undefined when nothing usable
+ * was given.
  */
 export function normalizeDuration(d: any): Record<string, unknown> | undefined {
   if (!d || typeof d !== 'object') return undefined;
@@ -79,6 +455,25 @@ export function normalizeDuration(d: any): Record<string, unknown> | undefined {
   }
   if (typeof out.units === 'string' && !DURATION_UNITS.has(out.units)) {
     delete out.units; // let the field default (seconds) stand rather than fail validation
+  }
+  if (out.expiry !== undefined && out.expiry !== null) {
+    const expiry = String(out.expiry);
+    if (!(EXPIRY_EVENTS as readonly string[]).includes(expiry)) {
+      throw new Error(
+        `duration.expiry "${expiry}" is not an expiry event. Use one of: ${EXPIRY_EVENTS.join(' ')}.`
+      );
+    }
+    if (DURATIONLESS_EXPIRIES.has(expiry)) {
+      delete out.value;
+      delete out.units;
+    } else if (typeof out.value !== 'number' || !Number.isFinite(out.value)) {
+      throw new Error(
+        `duration.expiry "${expiry}" is a combat event that only fires once the duration has ALSO ` +
+          'elapsed — give value + units too (e.g. { value: 1, units: "rounds", expiry: "turnEnd" }), ' +
+          'or use a duration-less expiry (targetEnd / sourceEnd / shortRest / longRest).'
+      );
+    }
+    out.expiry = expiry;
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

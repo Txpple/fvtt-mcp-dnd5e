@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildActivity, damagePartToActivity } from './activities.js';
+import { buildActivity, damagePartToActivity, normalizeActivityDuration } from './activities.js';
 
 describe('damagePartToActivity', () => {
   it('maps a raw part to the dnd5e activity-part shape', () => {
@@ -259,5 +259,69 @@ describe('buildActivity — lean types (heal / check / utility / damage)', () =>
 
   it('throws on an unknown activity type', () => {
     expect(() => buildActivity('bogus', { id: 'X' })).toThrow(/Unknown activity type/);
+  });
+});
+
+describe('normalizeActivityDuration + buildActivity duration override (dnd5e 6.0)', () => {
+  it('returns undefined for nothing, and the DurationField shape for a scalar duration', () => {
+    expect(normalizeActivityDuration(undefined)).toBeUndefined();
+    expect(normalizeActivityDuration({})).toBeUndefined();
+    expect(normalizeActivityDuration({ value: 1, units: 'minute' })).toEqual({
+      value: '1',
+      units: 'minute',
+    });
+    expect(
+      normalizeActivityDuration({ value: '@prof', units: 'round', concentration: true })
+    ).toEqual({
+      value: '@prof',
+      units: 'round',
+      concentration: true,
+    });
+  });
+
+  it('drops the value for a special / permanent unit and keeps a lone expiry', () => {
+    expect(normalizeActivityDuration({ value: 3, units: 'inst' })).toEqual({ units: 'inst' });
+    expect(normalizeActivityDuration({ value: 3, units: 'perm' })).toEqual({ units: 'perm' });
+    expect(normalizeActivityDuration({ expiry: 'targetEnd' })).toEqual({ expiry: 'targetEnd' });
+    expect(normalizeActivityDuration({ expiry: null })).toEqual({ expiry: null });
+  });
+
+  it('rejects an unknown unit, a scalar unit without a value, and an unknown expiry', () => {
+    expect(() => normalizeActivityDuration({ units: 'fortnight' })).toThrow(
+      /not a dnd5e time period/
+    );
+    expect(() => normalizeActivityDuration({ units: 'minute' })).toThrow(/needs a duration\.value/);
+    expect(() => normalizeActivityDuration({ expiry: 'nextDawn' })).toThrow(/not an expiry event/);
+  });
+
+  it('buildActivity merges the duration over the type default and sets override:true', () => {
+    const act = buildActivity('utility', {
+      id: 'ACT0000000000000',
+      name: 'Frightful Presence',
+      duration: { value: 1, units: 'minute', expiry: 'targetEnd' },
+    });
+    expect(act.duration).toEqual({
+      value: '1',
+      units: 'minute',
+      expiry: 'targetEnd',
+      override: true,
+    });
+    const save = buildActivity('save', {
+      id: 'ACT0000000000001',
+      saveAbility: 'wis',
+      saveDC: 13,
+      duration: { expiry: 'sourceStart' },
+    });
+    expect(save.duration).toEqual({
+      units: 'inst',
+      concentration: false,
+      expiry: 'sourceStart',
+      override: true,
+    });
+  });
+
+  it('leaves the duration untouched when none is given (no drift on the pinned shapes)', () => {
+    const act = buildActivity('utility', { id: 'ACT0000000000000' });
+    expect(act).not.toHaveProperty('duration');
   });
 });

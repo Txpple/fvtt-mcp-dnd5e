@@ -197,6 +197,61 @@ For ongoing derived modifiers that aren't a base-stat value (a permanent +1 AC a
 resistances, a fixed AC) on the actor via `update-actor`; reserve effects for toggleable/derived bonuses.
 Conditions the creature *starts* with (rare) → `apply-condition`.
 
+### dnd5e 6.0 effects — when a trait is really a rule, a condition, or a timer
+
+A copied MM creature already carries its 6.0 effects. These recipes are for the AUTHORED path — a
+custom trait the books don't have. The tool validates every shape (it refuses a bad key × type, an
+unknown Filter operator, a `roll.*` key in the wrong place); you choose the model.
+
+- **Roll-time modifiers = RULES changes, never a data path.** "Advantage on saving throws", "+1d4 to
+  attack rolls", "attacks can't roll below 10" have NO field on the sheet — they are `changes[]` with a
+  rules `type` and a roll CATEGORY as the `key`: `key` ∈ `attack | check | d20 | save` (all four types)
+  or `damage | healing` (`dnd5e.bonus` only). Evaluated when the die is rolled, on that roll only.
+  - `dnd5e.advantage` — `value` `+1` (add advantage) / `-1` (add disadvantage) / `=+1` `=-1` (force) /
+    `>=0` (ignore disadvantage) / `<=0` (ignore advantage).
+  - `dnd5e.bonus` — `"1d4"`, `"2"`, `"@prof"`; on `damage` a type tag changes the damage type:
+    `"1d4[fire]"`.
+  - `dnd5e.minimum` / `dnd5e.maximum` — a deterministic d20 floor / ceiling (`"10"`, `"@prof"`).
+- **Narrow a rule with a CHANGE condition** (`changes[].conditions`, a Filter) — the only place the
+  `roll.*` keys exist: `roll.ability` (`str` …), `roll.skill` (`his`, `med` …), `roll.type` (`attack`,
+  `skill`, `save` …), `roll.attack.type` (`melee` | `ranged`), `roll.attack.mode` (`thrown`,
+  `offhand` …), `roll.attack.classification` (`weapon` | `spell` | `unarmed`), `roll.damage.type`,
+  `roll.proficient`, `roll.tool`. The worked recipes:
+  - ranged attacks never roll below 10 → `{key:"attack", type:"dnd5e.minimum", value:"10",
+    conditions:{k:"roll.attack.type", v:"ranged"}}`
+  - +1d4 damage with thrown weapons → `{key:"damage", type:"dnd5e.bonus", value:"1d4",
+    conditions:{k:"roll.attack.mode", o:"startswith", v:"thrown"}}`
+  - +proficiency to all fire damage → `{key:"damage", type:"dnd5e.bonus", value:"@prof",
+    conditions:{k:"roll.damage.type", v:"fire"}}`
+  - disadvantage on Strength-based d20 tests → `{key:"d20", type:"dnd5e.advantage", value:"-1",
+    conditions:{k:"roll.ability", v:"str"}}`
+  - +1d4 on History and Medicine checks → `{key:"check", type:"dnd5e.bonus", value:"1d4",
+    conditions:{o:"OR", v:[{o:"AND", v:[{k:"roll.ability", v:"int"}, {k:"roll.skill", v:"his"}]},
+    {o:"AND", v:[{k:"roll.ability", v:"wis"}, {k:"roll.skill", v:"med"}]}]}}`
+  - +1d4 on Charisma (Deception / Intimidation / Persuasion) → `conditions: [{k:"roll.skill", o:"in",
+    v:["dec","itm","per"]}, {k:"roll.ability", v:"cha"}]` (a bare array = AND)
+- **A trait that only applies in a state = an EFFECT condition** (top-level `conditions`, a Filter over
+  the actor's roll data — `statuses.*`, `attributes.*`, `abilities.*`, `details.*`, `item.*` on an
+  item effect). "+2 AC while Bloodied" → `conditions: {k:"statuses.bloodied", v:1}` with a normal
+  `{key:"system.attributes.ac.bonus", value:"2", type:"add"}` change. (`roll.*` is NOT visible here —
+  the effect is evaluated before any roll; put roll gates on the change.) Filter grammar: `{k, v, o?}`
+  with `o` ∈ `exact` (default) `in has hasany hasall contains icontains startswith endswith empty gt gte
+  lt lte subsetof`; combine with `{o:"AND"|"OR"|"NAND"|"NOR"|"XOR", v:[…]}` / `{o:"NOT", v:{…}}`.
+- **Timers = `duration.expiry`.** "Until the end of the target's next turn" → `duration: {expiry:
+  "targetEnd"}`; "until the start of its next turn" → `sourceStart`; "until it finishes a short/long
+  rest" → `shortRest` / `longRest` — these need no value. A core combat event (`turnEnd`, `roundEnd`,
+  `combatEnd` …) fires only once a duration has ALSO elapsed, so pair it: `{value: 1, units:
+  "rounds", expiry: "turnEnd"}`. On an activity, `manage-activity` `duration: {…, expiry}` does the
+  same and the effects it applies inherit it ("Frightful Presence: frightened until the end of the
+  target's next turn").
+- **`replacement: "origin"`** on a change freezes `@attribute` strings to the APPLYING actor's numbers
+  (a curse that deals the caster's `@abilities.cha.mod`); `"target"` uses the receiver's.
+- **`magical: true`** marks the effect as magical (dispellable / suppressed in an antimagic field).
+- **Read it back.** `manage-effect` `list` and `get-actor` show each effect's `type`, `magical`,
+  `conditions` (parsed) and every rules change as a sentence ("+1d4 to attack rolls when
+  roll.attack.type = ranged"). `content-audit` flags a dead rule (a rules type on a data path, or a core
+  type on a roll category) — a silent no-op in play.
+
 ## Step 8 — Inventory, gear & loot (compendium-first via `import-item`)
 
 Build the rest of what the creature carries and drops — COPY from the 2024 PHB/DMG compendiums first;

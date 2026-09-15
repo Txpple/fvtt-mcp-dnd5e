@@ -89,3 +89,133 @@ describe('manage-effect tool', () => {
     );
   });
 });
+
+// dnd5e 6.0 — the contract advertises the rules types, the expiry vocabulary and the Filter
+// shapes, and forwards them untouched to the page (which validates against the 6.0.1 source).
+describe('manage-effect tool — dnd5e 6.0 surface', () => {
+  it('advertises the four rules change types, the expiry events and the Filter union', () => {
+    const { tool } = makeTool();
+    const schema: any = tool.getToolDefinitions()[0].inputSchema;
+    const changeType = schema.properties.changes.items.properties.type;
+    for (const t of ['dnd5e.advantage', 'dnd5e.bonus', 'dnd5e.minimum', 'dnd5e.maximum']) {
+      expect(changeType.enum).toContain(t);
+    }
+    expect(changeType.enum).toContain('add');
+    const expiry = schema.properties.duration.properties.expiry;
+    const expiryEnum = JSON.stringify(expiry);
+    for (const e of ['turnEnd', 'shortRest', 'longRest', 'targetEnd', 'sourceStart']) {
+      expect(expiryEnum).toContain(e);
+    }
+    expect(schema.properties.conditions).toBeDefined();
+    expect(schema.properties.changes.items.properties.conditions).toBeDefined();
+    expect(schema.properties.changes.items.properties.replacement.enum).toEqual([
+      'origin',
+      'target',
+    ]);
+    expect(schema.properties.magical.type).toBe('boolean');
+  });
+
+  it('forwards a rules change with its condition, an effect-level condition, magical and expiry', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'create',
+      effectId: 'E9',
+      name: 'Keen Aim',
+      actor: { id: 'a1', name: 'Archer' },
+    });
+    await tool.handleManageEffect({
+      action: 'create',
+      actorIdentifier: 'Archer',
+      name: 'Keen Aim',
+      conditions: { k: 'statuses.bloodied', v: 1 },
+      magical: true,
+      duration: { expiry: 'targetEnd' },
+      changes: [
+        {
+          key: 'attack',
+          value: '1d4',
+          type: 'dnd5e.bonus',
+          conditions: { k: 'roll.attack.type', v: 'ranged' },
+          replacement: 'origin',
+        },
+        { key: 'd20', value: '-1', type: 'dnd5e.advantage' },
+      ],
+    });
+    const call = calls.find(([n]) => n === 'manageEffect');
+    expect(call?.[1].effect.conditions).toEqual({ k: 'statuses.bloodied', v: 1 });
+    expect(call?.[1].effect.magical).toBe(true);
+    expect(call?.[1].effect.duration).toEqual({ expiry: 'targetEnd' });
+    expect(call?.[1].effect.changes[0]).toMatchObject({
+      key: 'attack',
+      value: '1d4',
+      type: 'dnd5e.bonus',
+      conditions: { k: 'roll.attack.type', v: 'ranged' },
+      replacement: 'origin',
+    });
+    expect(call?.[1].effect.changes[1]).toMatchObject({ type: 'dnd5e.advantage', value: '-1' });
+  });
+
+  it('accepts a JSON-string Filter and a null (clear) on edit; rejects an unknown expiry / replacement', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'edit',
+      effectId: 'E1',
+      actor: { id: 'a1', name: 'X' },
+    });
+    await tool.handleManageEffect({
+      action: 'edit',
+      actorIdentifier: 'X',
+      effectId: 'E1',
+      conditions: '{"k":"item.properties","o":"has","v":"thr"}',
+    });
+    expect(calls.find(([n]) => n === 'manageEffect')?.[1].effect.conditions).toBe(
+      '{"k":"item.properties","o":"has","v":"thr"}'
+    );
+    calls.length = 0;
+    await tool.handleManageEffect({
+      action: 'edit',
+      actorIdentifier: 'X',
+      effectId: 'E1',
+      conditions: null,
+    });
+    expect(calls.find(([n]) => n === 'manageEffect')?.[1].effect.conditions).toBeNull();
+    await expect(
+      tool.handleManageEffect({
+        action: 'edit',
+        actorIdentifier: 'X',
+        effectId: 'E1',
+        duration: { expiry: 'nextDawn' },
+      })
+    ).rejects.toThrow();
+    await expect(
+      tool.handleManageEffect({
+        action: 'create',
+        actorIdentifier: 'X',
+        name: 'Y',
+        changes: [{ key: 'k', value: '1', replacement: 'caster' }],
+      })
+    ).rejects.toThrow();
+  });
+
+  it('summarizes a list with conditional + rule tags', async () => {
+    const { tool } = makeTool({
+      success: true,
+      actor: { id: 'a1', name: 'Archer' },
+      effects: [
+        {
+          id: 'E1',
+          name: 'Keen Aim',
+          disabled: false,
+          conditions: { k: 'statuses.bloodied', v: 1 },
+          changes: [
+            { key: 'attack', value: '1d4', type: 'dnd5e.bonus', rule: '+1d4 to attack rolls' },
+          ],
+        },
+        { id: 'E2', name: 'Plain', disabled: true, changes: [] },
+      ],
+    });
+    const res = await tool.handleManageEffect({ action: 'list', actorIdentifier: 'Archer' });
+    expect(res.summary).toContain('"Keen Aim" (conditional; +1d4 to attack rolls)');
+    expect(res.summary).toContain('"Plain" (disabled)');
+  });
+});

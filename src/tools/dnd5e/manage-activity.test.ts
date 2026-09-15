@@ -179,3 +179,45 @@ describe('manage-activity tool', () => {
     ).rejects.toThrow(/saveDC OR attackBonus/);
   });
 });
+
+describe('manage-activity — duration override (dnd5e 6.0 expiry)', () => {
+  it('advertises duration.units + duration.expiry enums and forwards a duration on add and edit', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'add',
+      activityId: 'A1',
+      type: 'utility',
+      item: { id: 'i1', name: 'Roar', type: 'feat' },
+    });
+    const schema: any = tool.getToolDefinitions()[0].inputSchema;
+    expect(schema.properties.duration.properties.units.enum).toContain('minute');
+    expect(JSON.stringify(schema.properties.duration.properties.expiry)).toContain('targetEnd');
+    await tool.handleManageActivity({
+      action: 'add',
+      itemIdentifier: 'Roar',
+      type: 'utility',
+      name: 'Frightful Presence',
+      duration: { value: 1, units: 'minute', expiry: 'targetEnd' },
+    });
+    const call = calls.find(([n]) => n === 'manageActivity');
+    expect(call?.[1].activity.duration).toEqual({ value: 1, units: 'minute', expiry: 'targetEnd' });
+    calls.length = 0;
+    await tool.handleManageActivity({
+      action: 'edit',
+      itemIdentifier: 'Roar',
+      activityId: 'A1',
+      duration: { expiry: 'sourceStart' },
+    });
+    expect(calls.find(([n]) => n === 'manageActivity')?.[1].activity.duration).toEqual({
+      expiry: 'sourceStart',
+    });
+    await expect(
+      tool.handleManageActivity({
+        action: 'edit',
+        itemIdentifier: 'Roar',
+        activityId: 'A1',
+        duration: { expiry: 'nextDawn' },
+      })
+    ).rejects.toThrow();
+  });
+});

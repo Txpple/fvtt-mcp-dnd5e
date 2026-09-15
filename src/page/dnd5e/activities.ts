@@ -8,6 +8,12 @@
 // builder with no behavioral change (activities.test.ts pins the equivalence). The heal/check/utility/
 // damage shapes are lean — dnd5e's DataModel fills every other field on create (live-spiked).
 
+import {
+  ACTIVITY_DURATION_SCALAR_UNITS,
+  ACTIVITY_DURATION_UNITS,
+  EXPIRY_EVENTS,
+} from '../../utils/dnd5e-canonical.js';
+
 export interface RawDamagePart {
   number: number;
   denomination: number;
@@ -26,12 +32,27 @@ export function damagePartToActivity(p: RawDamagePart): Record<string, unknown> 
   };
 }
 
+/** An authored activity duration (dnd5e 6.0 DurationField: value formula, units, expiry). */
+export interface ActivityDurationOpts {
+  /** Amount for a scalar unit — a number or a deterministic formula ("@prof"). */
+  value?: number | string;
+  units?: string;
+  /** Effect expiry the activity's applied effects inherit (6.0): core combat / rest / source-target. */
+  expiry?: string | null;
+  concentration?: boolean;
+}
+
 export interface BuildActivityOpts {
   /** Activity id (caller generates via foundry.utils.randomID(16)). */
   id: string;
   name?: string;
   activationType?: string;
   sort?: number;
+  /**
+   * Duration OVERRIDE for the activity (6.0: effects it applies inherit it, incl. `expiry`). When
+   * given, `override: true` is set so the activity's own duration wins over the item's.
+   */
+  duration?: ActivityDurationOpts;
   // attack
   attackType?: 'melee' | 'ranged';
   attackBonus?: number;
@@ -73,8 +94,61 @@ export interface BuildActivityOpts {
   recoveryPeriod?: string;
 }
 
+/**
+ * Normalize an authored activity duration to the dnd5e DurationField shape { value (string formula),
+ * units, expiry, concentration }. Validates units (CONFIG.DND5E.timePeriods) and expiry (the core +
+ * dnd5e effect expiry events); a scalar unit needs a value, a special / permanent unit drops it.
+ * Returns undefined when nothing was given.
+ */
+export function normalizeActivityDuration(
+  d: ActivityDurationOpts | undefined
+): Record<string, unknown> | undefined {
+  if (!d || typeof d !== 'object') return undefined;
+  const out: Record<string, unknown> = {};
+  if (d.units !== undefined) {
+    if (!(ACTIVITY_DURATION_UNITS as readonly string[]).includes(d.units)) {
+      throw new Error(
+        `duration.units "${d.units}" is not a dnd5e time period. Use one of: ${ACTIVITY_DURATION_UNITS.join(' ')}.`
+      );
+    }
+    out.units = d.units;
+  }
+  const scalar =
+    typeof out.units === 'string' &&
+    (ACTIVITY_DURATION_SCALAR_UNITS as readonly string[]).includes(out.units);
+  if (d.value !== undefined && d.value !== null && String(d.value).trim() !== '') {
+    if (typeof out.units === 'string' && !scalar) {
+      // inst / spec / perm … carry no amount; the system would null it anyway
+    } else {
+      out.value = String(d.value).trim();
+    }
+  }
+  if (scalar && out.value === undefined) {
+    throw new Error(
+      `duration.units "${out.units}" needs a duration.value (e.g. 1 for "1 ${out.units}").`
+    );
+  }
+  if (d.expiry !== undefined) {
+    if (d.expiry !== null && !(EXPIRY_EVENTS as readonly string[]).includes(d.expiry)) {
+      throw new Error(
+        `duration.expiry "${d.expiry}" is not an expiry event. Use one of: ${EXPIRY_EVENTS.join(' ')}.`
+      );
+    }
+    out.expiry = d.expiry;
+  }
+  if (typeof d.concentration === 'boolean') out.concentration = d.concentration;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Build one dnd5e activity object of the given type. */
 export function buildActivity(type: string, opts: BuildActivityOpts): Record<string, any> {
+  const act = buildActivityOfType(type, opts);
+  const duration = normalizeActivityDuration(opts.duration);
+  if (duration) act.duration = { ...(act.duration ?? {}), ...duration, override: true };
+  return act;
+}
+
+function buildActivityOfType(type: string, opts: BuildActivityOpts): Record<string, any> {
   switch (type) {
     case 'attack':
       return buildAttackActivity(opts);

@@ -7,23 +7,49 @@
 //  - changes[] lives at effect.system.changes; the top-level effect.changes is only a deprecated
 //    shim (until v16). We write and read system.changes.
 //  - A change is { key, value, type, phase }: `type` is a STRING (override/add/multiply/upgrade/
-//    downgrade/custom) — the legacy numeric `mode` is still accepted and normalized to `type`.
-//    `phase` defaults to "initial". `value` is stored as a string.
-//  - duration is { value, units, expiry? }; the 5.x rounds/turns/seconds keys are translated.
+//    downgrade/custom, or a 6.0 rules type dnd5e.advantage/bonus/minimum/maximum whose key is a roll
+//    category) — the legacy numeric `mode` is still accepted and normalized to `type`. `phase`
+//    defaults to "initial". `value` is stored as a string. A change may carry `conditions` (Filter
+//    JSON string, roll.* allowed) and `replacement` (origin | target).
+//  - system.conditions (effect-level Filter JSON string) suppresses the whole effect while false;
+//    system.magical marks a magical effect. On a PREPARED document both `system.conditions` and a
+//    change's `conditions` are `Filter` instances — read them from the SOURCE (toObject), never
+//    the live document.
+//  - duration is { value, units, expiry? }; the 5.x rounds/turns/seconds keys are translated and
+//    `expiry` is validated against the core + dnd5e event vocabulary.
 //  - `transfer` (item effects) makes the effect apply to the owning actor; default true for items.
-//  - An effect created without `type` is dnd5e's "base" type (system.conditions / magical / rider
-//    default empty); "condition" effects are the system's own (apply-condition), not authored here.
+//  - An effect created without `type` is dnd5e's "base" type; "condition" effects are the system's
+//    own (apply-condition) and "enchantment" effects belong to enchant activities — not authored here.
 
-import { resolveActorFuzzy, resolveActorItem, resolveWorldItem } from './_shared.js';
+import { resolveActorFuzzy, resolveActorItem, resolveWorldItem, toSource } from './_shared.js';
 import {
+  EMPTY_CONDITIONS,
   normalizeChange,
+  normalizeConditions,
   normalizeDuration,
   normalizePatch,
+  parseConditions,
   summarizeChanges,
 } from './effect-changes.js';
 
-/** An effect's changes off the 6.0 home, tolerating a pre-migration top-level array. */
-const changesOf = (e: any): any[] => e?.system?.changes ?? e?.changes ?? [];
+/** An effect's SOURCE changes off the 6.0 home, tolerating a pre-migration top-level array. */
+const changesOf = (e: any): any[] => {
+  const src = toSource(e);
+  return src?.system?.changes ?? src?.changes ?? [];
+};
+
+/** The 6.0 read-back extras of one effect (from its source): type, conditions, magical, riders. */
+function effectExtras(e: any): Record<string, unknown> {
+  const src = toSource(e);
+  const conditions = parseConditions(src?.system?.conditions);
+  const riders = src?.system?.rider?.statuses;
+  return {
+    type: typeof e?.type === 'string' ? e.type : 'base',
+    ...(conditions ? { conditions } : {}),
+    ...(src?.system?.magical === true ? { magical: true } : {}),
+    ...(Array.isArray(riders) && riders.length > 0 ? { riderStatuses: riders } : {}),
+  };
+}
 
 export async function manageEffect(params: {
   action: 'create' | 'edit' | 'delete' | 'list';
@@ -82,18 +108,30 @@ export async function manageEffect(params: {
           statuses: Array.from(e.statuses ?? []),
           duration:
             typeof e.duration?.value === 'number'
-              ? { value: e.duration.value, units: e.duration.units ?? 'seconds' }
-              : null,
+              ? {
+                  value: e.duration.value,
+                  units: e.duration.units ?? 'seconds',
+                  ...(e.duration.expiry ? { expiry: e.duration.expiry } : {}),
+                }
+              : e.duration?.expiry
+                ? { expiry: e.duration.expiry }
+                : null,
+          ...effectExtras(e),
           changes: summarizeChanges(changesOf(e)),
         })),
       };
 
     case 'create': {
       const eff = params.effect ?? {};
+      const conditions = normalizeConditions(eff.conditions, 'effect');
       const data: Record<string, any> = {
         name: eff.name ?? 'Effect',
         img: eff.img ?? 'icons/svg/aura.svg',
-        system: { changes: Array.isArray(eff.changes) ? eff.changes.map(normalizeChange) : [] },
+        system: {
+          changes: Array.isArray(eff.changes) ? eff.changes.map(normalizeChange) : [],
+          ...(conditions !== EMPTY_CONDITIONS ? { conditions } : {}),
+          ...(typeof eff.magical === 'boolean' ? { magical: eff.magical } : {}),
+        },
         disabled: eff.disabled ?? false,
         // Item effects must transfer to apply to the owning actor; actor effects apply directly.
         transfer: eff.transfer ?? kind === 'item',
@@ -119,6 +157,11 @@ export async function manageEffect(params: {
       if (typeof e.transfer === 'boolean') update.transfer = e.transfer;
       // replace the whole changes list
       if (Array.isArray(e.changes)) update['system.changes'] = e.changes.map(normalizeChange);
+      // an explicit null / {} / "" CLEARS the effect-level conditions (writes the "{}" initial)
+      if (e.conditions !== undefined) {
+        update['system.conditions'] = normalizeConditions(e.conditions, 'effect');
+      }
+      if (typeof e.magical === 'boolean') update['system.magical'] = e.magical;
       if (Array.isArray(e.statuses)) update.statuses = e.statuses;
       const duration = normalizeDuration(e.duration);
       if (duration) for (const [k, v] of Object.entries(duration)) update[`duration.${k}`] = v;

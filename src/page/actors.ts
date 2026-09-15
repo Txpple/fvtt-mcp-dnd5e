@@ -33,6 +33,7 @@ import {
   normalizeSkill,
   SKILL_ABILITY,
 } from './dnd5e/actor-fields.js';
+import { describeRule, parseConditions } from './effect-changes.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveCreatureIcon, GENERIC_ICON } from './dnd5e/icons.js';
 import {
@@ -433,16 +434,38 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
       const dur = effect.duration;
       // Foundry v14: changes live at system.changes (plain data { key, value, type, phase }); the
       // top-level `changes` is only a deprecated shim. Surface them so effects are inspectable
-      // from get-actor (the shared sanitizer also preserves changes[].key — see R2).
+      // from get-actor (the shared sanitizer also preserves changes[].key — see R2). dnd5e 6.0
+      // extras ride along from the SOURCE (on the prepared doc `conditions` is a Filter instance):
+      // the effect `type` (base | condition | enchantment), `magical`, effect-level `conditions`
+      // (parsed), rider statuses, and per change its parsed `conditions` + a readable `rule` for
+      // the roll-time rules types (dnd5e.advantage / bonus / minimum / maximum).
       const source = toSource(effect);
-      const changes = source?.system?.changes ?? source?.changes;
+      const rawChanges = source?.system?.changes ?? source?.changes;
+      const changes = Array.isArray(rawChanges)
+        ? rawChanges.map((c: any) => {
+            const { _id: _ignored, conditions: rawConditions, replacement, ...rest } = c ?? {};
+            const conditions = parseConditions(rawConditions);
+            const rule = describeRule(c ?? {});
+            return {
+              ...rest,
+              ...(conditions ? { conditions } : {}),
+              ...(typeof replacement === 'string' && replacement ? { replacement } : {}),
+              ...(rule ? { rule } : {}),
+            };
+          })
+        : [];
+      const conditions = parseConditions(source?.system?.conditions);
+      const riders = source?.system?.rider?.statuses;
       return {
         id: effect.id,
         name: effect.name || effect.label || 'Unknown Effect',
         ...(effect.img ? { icon: effect.img } : {}),
         disabled: effect.disabled,
-        ...(typeof effect.type === 'string' && effect.type !== 'base' ? { type: effect.type } : {}),
-        ...(Array.isArray(changes) && changes.length > 0 ? { changes } : {}),
+        type: typeof effect.type === 'string' ? effect.type : 'base',
+        ...(source?.system?.magical === true ? { magical: true } : {}),
+        ...(conditions ? { conditions } : {}),
+        ...(Array.isArray(riders) && riders.length > 0 ? { riderStatuses: riders } : {}),
+        ...(changes.length > 0 ? { changes } : {}),
         ...(dur && typeof dur.value === 'number'
           ? {
               duration: {
@@ -453,7 +476,9 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
                 remaining: dur.remaining,
               },
             }
-          : {}),
+          : dur?.expiry
+            ? { duration: { expiry: dur.expiry } }
+            : {}),
       };
     }),
   };

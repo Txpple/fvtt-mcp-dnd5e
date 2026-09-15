@@ -17,7 +17,7 @@ import {
   toDeletionKey,
   toSource,
 } from '../_shared.js';
-import { buildActivity } from './activities.js';
+import { buildActivity, normalizeActivityDuration } from './activities.js';
 import { resolveCastSpell, settleCachedSpellCopies } from './cast-spells.js';
 
 /**
@@ -123,11 +123,18 @@ export async function manageActivity(params: {
       if (typeof params.activity?.name === 'string') {
         data[`system.activities.${id}.name`] = params.activity.name;
       }
+      // a duration override (6.0: applied effects inherit it, incl. expiry) — validated shape
+      const duration = normalizeActivityDuration(params.activity?.duration);
+      if (duration) {
+        for (const [k, v] of Object.entries(duration))
+          data[`system.activities.${id}.duration.${k}`] = v;
+        data[`system.activities.${id}.duration.override`] = true;
+      }
       for (const [k, v] of Object.entries(params.patch ?? {})) {
         data[`system.activities.${id}.${k}`] = v;
       }
       if (Object.keys(data).length === 0) {
-        throw new Error('Provide a `patch` (and/or activity.name) to edit.');
+        throw new Error('Provide a `patch`, a `duration`, and/or activity.name to edit.');
       }
       await applyUpdate(data);
       return { ...base, action: 'edit', activityId: id, editedKeys: Object.keys(data) };
