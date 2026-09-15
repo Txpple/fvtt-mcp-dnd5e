@@ -27,6 +27,68 @@ import {
 } from './activities.js';
 import { resolveCastSpell, settleCachedSpellCopies } from './cast-spells.js';
 import { type ResolvedEffect, resolveEffectRefs } from './effect-refs.js';
+import { assertNoSrdPacks, isPremiumBookPack } from '../../utils/compendium-sources.js';
+
+/**
+ * Resolve a transform profile's `actor` — an Actor uuid (compendium or world; SRD packs refused) or
+ * the exact name of a premium Monster Manual creature — to the uuid the profile stores.
+ */
+async function resolveTransformActor(ref: string): Promise<{ uuid: string; name: string }> {
+  const r = String(ref ?? '').trim();
+  if (!r) throw new Error('a transform profile `actor` must be a creature name or an Actor uuid.');
+  if (/^(Compendium\..+\.Actor|Actor)\.[A-Za-z0-9]{16}$/.test(r)) {
+    const doc = await (globalThis as any).fromUuid(r);
+    if (doc?.documentName !== 'Actor') throw new Error(`"${r}" does not resolve to an Actor.`);
+    if (doc.pack) assertNoSrdPacks(doc.pack, `transform profile "${r}"`);
+    return { uuid: doc.uuid, name: doc.name };
+  }
+  // Every premium Actor pack is a valid source; when a creature is in several (the DMG ships a few
+  // of the MM's beasts), the Monster Manual wins — it is the stat-block library (design.md §6).
+  const hits: Array<{ uuid: string; name: string; packId: string }> = [];
+  for (const pack of game.packs) {
+    if (pack.documentName !== 'Actor' || !isPremiumBookPack(pack.metadata.id)) continue;
+    const idx = await pack.getIndex();
+    const hit = idx.find((e: any) => e.name === r);
+    if (hit) {
+      hits.push({
+        uuid: `Compendium.${pack.metadata.id}.Actor.${hit._id}`,
+        name: hit.name,
+        packId: pack.metadata.id,
+      });
+    }
+  }
+  const best = hits.find(h => h.packId.startsWith('dnd-monster-manual.')) ?? hits[0];
+  if (best) return { uuid: best.uuid, name: best.name };
+  throw new Error(
+    `transform profile actor "${r}" is not a premium-book creature (searched the MM / premium Actor ` +
+      'packs by exact name) — pass an Actor uuid, or check the name with search-compendium-creatures.'
+  );
+}
+
+/** Resolve Select-Form `forms` (effect names on the ITEM) to the item's effect ids. */
+function resolveFormEffects(item: any, forms: unknown): string[] {
+  if (!Array.isArray(forms) || forms.length === 0) return [];
+  const effects: any[] = Array.from(item?.effects ?? []);
+  return forms.map(f => {
+    const name = String(f ?? '')
+      .trim()
+      .toLowerCase();
+    const hit = effects.find(
+      e =>
+        String(e.name ?? '')
+          .trim()
+          .toLowerCase() === name
+    );
+    if (!hit) {
+      throw new Error(
+        `form "${f}" is not an effect on "${item.name}" — it carries: ` +
+          `${effects.map(e => `"${e.name}"`).join(', ') || '(none)'}. Author each form as an effect on ` +
+          'the item with manage-effect first.'
+      );
+    }
+    return hit.id;
+  });
+}
 
 /**
  * Resolve the `effects` names / refs of each authored behavior into ActiveEffect uuids (the page's
@@ -151,6 +213,25 @@ export async function manageActivity(params: {
       // Area behaviors name their effects; resolve them to uuids before the pure build.
       const behaviors = await resolveBehaviors(rest.behaviors);
       if (rest.behaviors) rest.behaviors = behaviors.opts;
+      // Transform: profile actors (MM name / uuid) → uuids; Select-Form `forms` → the item's effect ids.
+      const transformActors: Array<{ name: string; uuid: string }> = [];
+      if (type === 'transform') {
+        if (Array.isArray(rest.profiles)) {
+          rest.profiles = await Promise.all(
+            rest.profiles.map(async (p: any) => {
+              const { actor, ...profile } = p ?? {};
+              if (actor === undefined || actor === null || actor === '') return profile;
+              const resolved = await resolveTransformActor(actor);
+              transformActors.push(resolved);
+              return { ...profile, actorUuid: resolved.uuid, name: profile.name ?? resolved.name };
+            })
+          );
+        }
+        if (rest.forms !== undefined) {
+          rest.formEffectIds = resolveFormEffects(item, rest.forms);
+          rest.forms = undefined;
+        }
+      }
       const act = buildActivity(type, { id, ...rest });
       await applyUpdate({ [`system.activities.${id}`]: act });
       // Embedded cast: dnd5e async-mints the "Additional Spells" cached copy (and multi-mints
@@ -169,6 +250,7 @@ export async function manageActivity(params: {
         ...(cachedSpell ? { cachedSpell } : {}),
         ...(behaviors.resolved.length > 0 ? { effects: behaviors.resolved } : {}),
         ...(behaviors.warnings.length > 0 ? { warnings: behaviors.warnings } : {}),
+        ...(transformActors.length > 0 ? { transformActors } : {}),
       };
     }
 

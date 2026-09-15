@@ -233,3 +233,12 @@ export const TARGET_AFFECTS_TYPES = [
 
 /** Token dispositions a region behavior filters on (CONST.TOKEN_DISPOSITIONS minus SECRET). */
 export const BEHAVIOR_DISPOSITIONS = ['hostile', 'neutral', 'friendly'] as const;
+
+/** Transform activity profile modes (transform-sheet.mjs): direct link '' · by CR 'cr' · select form 'form'. */
+export const TRANSFORM_MODES = ['direct', 'cr', 'form'] as const;
+
+/** Transform settings presets (CONFIG.DND5E.transformation.presets). */
+export const TRANSFORM_PRESETS = ['wildshape', 'polymorph', 'polymorphSelf'] as const;
+
+/** Movement types a CR-mode transform profile can restrict (CONFIG.DND5E.movementTypes keys). */
+export const MOVEMENT_TYPES = ['walk', 'burrow', 'climb', 'fly', 'swim'] as const;

@@ -759,6 +759,79 @@ try {
     srdRefused = /non-premium|SRD|premium/i.test(e?.message || '');
   }
   assert(srdRefused, 'K1: copying from an SRD pack (dnd5e.heroes) is refused (premium-only guard)');
+
+  // ---- Test L: dnd5e 6.0 ModifyItem advancement is applied by the engine's FORCED step ----
+  // No premium book on disk carries a ModifyItem yet (5.x builds), so the fixture is authored here on
+  // the Test-B Fighter: a feat with a ModifyItem advancement whose change enchants every item with
+  // the class identifier "fighter" (the class item itself), applied with the exact call the leveling
+  // engine makes for a forced advancement — apply(level, {}, { initial: true }).
+  console.log('\n--- Test L: ModifyItem (dnd5e 6.0) ---');
+  const modify = await withNodeTimeout(
+    f.evaluate(async actorId => {
+      const a = globalThis.game.actors.get(actorId);
+      // A change with no `uuid` resolves its enchantment as item.effects.get(change._id) — the
+      // change id IS the embedded effect's id.
+      const effectId = globalThis.foundry.utils.randomID();
+      const changeId = effectId;
+      const [feat] = await a.createEmbeddedDocuments('Item', [
+        {
+          name: 'ZZ-PC-IT Runed Training',
+          type: 'feat',
+          effects: [
+            {
+              _id: effectId,
+              name: 'Runed',
+              type: 'enchantment',
+              img: 'icons/svg/aura.svg',
+              system: { changes: [{ key: 'name', type: 'override', value: 'Runed {}' }] },
+            },
+          ],
+          system: {
+            advancement: [
+              {
+                _id: globalThis.foundry.utils.randomID(),
+                type: 'ModifyItem',
+                title: 'Rune the class',
+                level: 1,
+                configuration: { changes: [{ _id: changeId, uuid: '', identifiers: ['fighter'] }] },
+                value: { modified: [] },
+              },
+            ],
+          },
+        },
+      ]);
+      const adv = feat.advancement?.byType?.ModifyItem?.[0];
+      if (!adv) return { error: 'no ModifyItem advancement on the fixture feat' };
+      const targets = Array.from(a.identifiedItems.get('fighter') ?? []).map(i => i.id);
+      await adv.apply(1, {}, { initial: true });
+      const modified = adv.value?.modified ?? [];
+      const classItem = a.items.find(i => i.type === 'class');
+      const enchant = classItem?.effects.find(e => e.type === 'enchantment');
+      return {
+        targets,
+        modified: modified.map(m => ({ item: m.item, effect: m.effect })),
+        classItemId: classItem?.id ?? null,
+        classHasEnchantment: !!enchant,
+        enchantmentOrigin: enchant?.flags?.dnd5e?.advancementOrigin ?? null,
+        featId: feat.id,
+      };
+    }, built.actor.id),
+    60_000,
+    'modifyItem'
+  );
+  console.log(JSON.stringify(modify, null, 2));
+  assert(
+    !modify?.error && modify?.targets?.length === 1,
+    'L1: identifiedItems resolves "fighter" to the class item'
+  );
+  assert(
+    modify?.modified?.length === 1 && modify.modified[0].item === modify.classItemId,
+    'L2: apply({initial:true}) records the class item as modified (value.modified)'
+  );
+  assert(
+    modify?.classHasEnchantment === true && /\./.test(modify?.enchantmentOrigin ?? ''),
+    'L3: the enchantment effect landed on the class item with an advancementOrigin flag'
+  );
 } catch (e) {
   fails++;
   console.log(`\n[verify-pc] FATAL: ${e?.message || String(e)}`);

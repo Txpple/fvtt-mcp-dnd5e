@@ -297,3 +297,97 @@ describe('manage-activity — area template + behaviors (dnd5e 6.0)', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('manage-activity — teleport + transform (dnd5e 6.0)', () => {
+  it('advertises the two types and forwards a teleport distance', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'add',
+      activityId: 'A1',
+      type: 'teleport',
+      item: { id: 'i1', name: 'Misty Step', type: 'spell' },
+    });
+    const schema: any = tool.getToolDefinitions()[0].inputSchema;
+    expect(schema.properties.type.enum).toContain('teleport');
+    expect(schema.properties.type.enum).toContain('transform');
+    expect(schema.properties.transformMode.enum).toEqual(['direct', 'cr', 'form']);
+    expect(schema.properties.transformPreset.enum).toEqual([
+      'wildshape',
+      'polymorph',
+      'polymorphSelf',
+    ]);
+    await tool.handleManageActivity({
+      action: 'add',
+      itemIdentifier: 'Misty Step',
+      type: 'teleport',
+      activationType: 'bonus',
+      teleportDistance: 30,
+    });
+    const call = calls.find(([n]) => n === 'manageActivity');
+    expect(call?.[1].activity).toMatchObject({
+      type: 'teleport',
+      activationType: 'bonus',
+      teleportDistance: 30,
+    });
+  });
+
+  it('forwards transform profiles / forms and reports resolved form actors; guards the modes', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'add',
+      activityId: 'A2',
+      type: 'transform',
+      item: { id: 'i1', name: 'Wild Shape', type: 'feat' },
+      transformActors: [
+        {
+          name: 'Giant Wolf Spider',
+          uuid: 'Compendium.dnd-monster-manual.actors.Actor.aaaaaaaaaaaaaaaa',
+        },
+      ],
+    });
+    const res = await tool.handleManageActivity({
+      action: 'add',
+      itemIdentifier: 'Wild Shape',
+      type: 'transform',
+      transformMode: 'direct',
+      transformPreset: 'wildshape',
+      profiles: [{ actor: 'Giant Wolf Spider' }],
+    });
+    const call = calls.find(([n]) => n === 'manageActivity');
+    expect(call?.[1].activity).toMatchObject({
+      type: 'transform',
+      transformMode: 'direct',
+      transformPreset: 'wildshape',
+      profiles: [{ actor: 'Giant Wolf Spider' }],
+    });
+    expect(res.summary).toContain('✦ form "Giant Wolf Spider"');
+    await expect(
+      tool.handleManageActivity({
+        action: 'add',
+        itemIdentifier: 'X',
+        type: 'transform',
+        transformMode: 'form',
+      })
+    ).rejects.toThrow(/requires `forms`/);
+    await expect(
+      tool.handleManageActivity({ action: 'add', itemIdentifier: 'X', type: 'transform' })
+    ).rejects.toThrow(/at least one profiles/);
+    await expect(
+      tool.handleManageActivity({
+        action: 'add',
+        itemIdentifier: 'X',
+        type: 'transform',
+        transformMode: 'direct',
+        profiles: [{ cr: 1 }],
+      })
+    ).rejects.toThrow(/need an `actor`/);
+    await expect(
+      tool.handleManageActivity({
+        action: 'add',
+        itemIdentifier: 'X',
+        type: 'transform',
+        profiles: [{ name: 'no cr' }],
+      })
+    ).rejects.toThrow(/need a `cr`/);
+  });
+});

@@ -9,7 +9,10 @@ import {
   CREATURE_TYPE_KEYS,
   DIFFICULT_TERRAIN_TYPES,
   EXPIRY_EVENTS,
+  MOVEMENT_TYPES,
   TARGET_AFFECTS_TYPES,
+  TRANSFORM_MODES,
+  TRANSFORM_PRESETS,
 } from '../../utils/dnd5e-canonical.js';
 import { FormattedToolError } from '../../utils/error-handler.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -61,11 +64,14 @@ const ManageActivitySchema = z.object({
 
   // add — activity definition
   type: z
-    .enum(['attack', 'damage', 'save', 'heal', 'check', 'utility', 'cast'])
+    .enum(['attack', 'damage', 'save', 'heal', 'check', 'utility', 'cast', 'teleport', 'transform'])
     .optional()
     .describe(
       'Activity type. Required for add. "utility" = descriptive action (e.g. Multiattack). ' +
-        '"cast" = link & cast a real compendium spell (e.g. a wand/staff) — see spellUuid.'
+        '"cast" = link & cast a real compendium spell (e.g. a wand/staff) — see spellUuid. ' +
+        'dnd5e 6.0: "teleport" moves the target up to teleportDistance (Misty Step); "transform" ' +
+        'changes the actor into another creature or one of its own forms (Wild Shape, Polymorph, a ' +
+        "lycanthrope's Shape-Shift) — see transformMode / profiles / forms."
     ),
   name: z
     .string()
@@ -164,6 +170,88 @@ const ManageActivitySchema = z.object({
     .describe(
       'Cast activity with charges on a poolless item: when the activity-side pool recovers. ' +
         'Default "lr" (long rest).'
+    ),
+
+  // teleport (dnd5e 6.0)
+  teleportDistance: z
+    .union([z.number().min(0), z.string()])
+    .optional()
+    .describe(
+      'Teleport activity: how far the target may be moved, in feet (a number or a deterministic ' +
+        'formula like "@prof * 10"). Omit for ANY distance. Targets default to self — pass `affects` ' +
+        '({type: "willing", count: 1}) for "you and one willing creature".'
+    ),
+
+  // transform (dnd5e 6.0)
+  transformMode: z
+    .enum(TRANSFORM_MODES)
+    .optional()
+    .describe(
+      'Transform activity: "cr" (default) = pick any creature up to a CR (Wild Shape, Polymorph — ' +
+        'profiles carry the max CR + size / type / movement filters); "direct" = a fixed list of ' +
+        'creatures (profiles carry an `actor`); "form" = Select Form — the forms are EFFECTS on the item ' +
+        "(a lycanthrope's Humanoid / Hybrid / Beast forms, Disguise Self) named in `forms`."
+    ),
+  transformPreset: z
+    .enum(TRANSFORM_PRESETS)
+    .optional()
+    .describe(
+      'Transform activity (cr / direct): the transformation settings preset — wildshape (keep mental ' +
+        'stats, merge features), polymorph (full replacement), polymorphSelf (appearance only).'
+    ),
+  formless: z
+    .boolean()
+    .optional()
+    .describe('Transform activity (form mode): may the actor revert to "no form" from the prompt.'),
+  profiles: z
+    .array(
+      z.object({
+        name: z.string().optional().describe('Display name in the transform prompt.'),
+        cr: z
+          .union([z.number().min(0), z.string()])
+          .optional()
+          .describe('cr mode: the maximum challenge rating (e.g. 0.25, 1, or a formula).'),
+        actor: z
+          .string()
+          .optional()
+          .describe(
+            'direct mode: the creature — an exact Monster Manual name ("Giant Wolf Spider") or an Actor uuid.'
+          ),
+        sizes: z.array(z.enum(ACTOR_SIZES)).optional().describe('cr mode: allowed sizes.'),
+        creatureTypes: z
+          .array(z.enum(CREATURE_TYPE_KEYS))
+          .optional()
+          .describe('cr mode: allowed creature types (e.g. ["beast"]).'),
+        restrictMovement: z
+          .array(z.enum(MOVEMENT_TYPES))
+          .optional()
+          .describe(
+            'cr mode: creatures WITH these movement types are excluded (e.g. ["fly"], ["swim"]).'
+          ),
+        level: z
+          .object({
+            min: z.number().int().min(0).optional(),
+            max: z.number().int().min(0).optional(),
+          })
+          .optional()
+          .describe(
+            'Only offered when the transform level (class level via the identifier, else character level) is within [min, max].'
+          ),
+      })
+    )
+    .optional()
+    .describe(
+      'Transform activity (cr / direct modes): the profiles offered. Wild Shape 2024 = cr profiles ' +
+        '[{cr: 0.25, creatureTypes: ["beast"], restrictMovement: ["fly", "swim"], level: {max: 3}}, ' +
+        '{cr: 0.5, creatureTypes: ["beast"], restrictMovement: ["fly"], level: {min: 4, max: 7}}, …].'
+    ),
+  forms: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      'Transform activity (form mode): the names of effects ON THIS ITEM, one per form — author them ' +
+        'first with manage-effect (actorIdentifier + itemIdentifier), e.g. ["Humanoid Form", "Hybrid ' +
+        'Form", "Tiger Form"]. Each form\'s changes ARE the transformation.'
     ),
 
   // duration (add + edit) — dnd5e 6.0: the effects an activity applies inherit it, incl. expiry
@@ -347,7 +435,7 @@ export class DnD5eManageActivityTool {
     if (parsed.action === 'add') {
       if (!parsed.type) {
         throw new FormattedToolError(
-          'action "add" requires `type` (attack/damage/save/heal/check/utility).'
+          'action "add" requires `type` (attack/damage/save/heal/check/utility/cast/teleport/transform).'
         );
       }
       // Per-type required mechanics — without these the built activity would be malformed
@@ -362,6 +450,25 @@ export class DnD5eManageActivityTool {
         throw new FormattedToolError(
           'activity type "damage" requires at least one damageParts entry.'
         );
+      }
+      if (parsed.type === 'transform') {
+        const mode = parsed.transformMode ?? 'cr';
+        if (mode === 'form' && !parsed.forms?.length) {
+          throw new FormattedToolError(
+            'activity type "transform" in form mode requires `forms` (effect names on the item).'
+          );
+        }
+        if (mode !== 'form' && !parsed.profiles?.length) {
+          throw new FormattedToolError(
+            `activity type "transform" in ${mode} mode requires at least one profiles[] entry.`
+          );
+        }
+        if (mode === 'direct' && parsed.profiles?.some(p => !p.actor)) {
+          throw new FormattedToolError('direct-mode transform profiles each need an `actor`.');
+        }
+        if (mode === 'cr' && parsed.profiles?.some(p => p.cr === undefined)) {
+          throw new FormattedToolError('cr-mode transform profiles each need a `cr`.');
+        }
       }
       if (parsed.type === 'cast') {
         if (!parsed.spellUuid) {
@@ -417,6 +524,13 @@ export class DnD5eManageActivityTool {
       template: parsed.template,
       affects: parsed.affects,
       behaviors: parsed.behaviors,
+      // teleport / transform (dnd5e 6.0)
+      teleportDistance: parsed.teleportDistance,
+      transformMode: parsed.transformMode,
+      transformPreset: parsed.transformPreset,
+      formless: parsed.formless,
+      profiles: parsed.profiles,
+      forms: parsed.forms,
     };
 
     this.logger.info('manage-activity', {
@@ -448,6 +562,9 @@ export class DnD5eManageActivityTool {
     }
     for (const e of (result?.effects ?? []) as any[]) {
       summary += `\n    ✦ effect "${e.name}" (${e.source}) → ${e.uuid}`;
+    }
+    for (const a of (result?.transformActors ?? []) as any[]) {
+      summary += `\n    ✦ form "${a.name}" → ${a.uuid}`;
     }
     for (const w of (result?.warnings ?? []) as string[]) summary += `\n    ⚠ ${w}`;
     return { summary, success: true, ...result, message: summary };

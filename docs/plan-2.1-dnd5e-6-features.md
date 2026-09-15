@@ -80,6 +80,19 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   writes `system.rarities` natively (no more shimmed `rarity`); `update-actor-item` maps a
   `system.rarity` / `system.rarities` patch onto the Set. `verify-item-tooling.mjs` 13/13.
 
+- [x] #7 #12 — **teleport + transform** (2026-09-15): `manage-activity` `type: "teleport"`
+  (`teleportDistance`, self-targeted by default, `affects` widens) and `type: "transform"` in all three
+  modes — `cr` (profiles with cr / sizes / creatureTypes / restrictMovement / level + a preset), `direct`
+  (profile `actor` by MM name — the MM wins a tie with the DMG's copies — or uuid, SRD refused) and
+  `form` (Select Form: `forms` = the item's own effect names → `effects[]` ids, `formless`). Live:
+  `scripts/verify-activities-6.mjs` **25/25**. Skill: stat-block-builder Step 7 (teleport, shapeshifters).
+- [x] #11 — **ModifyItem** (2026-09-15): confirmed against the 6.0.1 source — `ModifyItemAdvancement#apply`
+  takes no player data and ignores `initial`, so the engine's forced `apply({initial:true})` step (the
+  same one ItemGrant / ScaleValue get) applies it; `summarizeChoice` reports no pick. Unit-tested in
+  `advancement.test.ts`. No premium book on disk carries one yet (the books are 5.x builds), so the live
+  case is a fixture in `verify-pc-build.mjs` (Test L: a feat with a ModifyItem change enchanting the
+  `fighter` class item, applied with the engine's exact call) — **66/66**.
+
 ### 2.1.0 release proof (2026-09-15, sandbox)
 
 Offline gate green (biome · tsc · 1601 tests · build · knip). Live: `verify-effects-6` 47/47,

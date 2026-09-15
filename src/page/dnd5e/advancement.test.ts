@@ -147,8 +147,15 @@ describe('summarizeChoice', () => {
     expect(c?.count).toBe(1);
   });
 
-  it('non-choice advancement types carry no player pick → null', () => {
-    for (const type of ['HitPoints', 'ScaleValue', 'ItemGrant', 'AbilityScoreImprovement']) {
+  it('non-choice advancement types carry no player pick → null (incl. dnd5e 6.0 ModifyItem)', () => {
+    for (const type of [
+      'HitPoints',
+      'ScaleValue',
+      'ItemGrant',
+      'AbilityScoreImprovement',
+      'ModifyItem',
+      'Size',
+    ]) {
       expect(
         summarizeChoice({ id: 'x', type, title: type, configuration: {} }, 1, 'class')
       ).toBeNull();
@@ -207,6 +214,17 @@ describe('planAdvancementApply (the pure apply-sequencing decision)', () => {
     isOriginalClass: false,
     hpMode: 'avg',
   };
+
+  it('dnd5e 6.0 ModifyItem (enchant an identified item) is a forced step — apply({initial:true}), no pick', () => {
+    // ModifyItemAdvancement#apply ignores `initial` and takes no player data: a single forced apply
+    // (the same call the engine makes for ItemGrant / ScaleValue) enchants the identified items.
+    expect(planAdvancementApply({ ...base, type: 'ModifyItem' })).toEqual([
+      { kind: 'apply', data: {}, initial: true },
+    ]);
+    expect(
+      planAdvancementApply({ ...base, type: 'ModifyItem', choiceData: { selected: ['x'] } })
+    ).toEqual([{ kind: 'apply', data: {}, initial: true }]);
+  });
 
   it('skips an advancement whose classRestriction excludes this role (2024 multiclass subset)', () => {
     expect(

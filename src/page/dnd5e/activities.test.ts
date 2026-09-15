@@ -476,3 +476,134 @@ describe('buildActivity — template / affects / behaviors (an authored Web)', (
     ).toThrow(/ride on an AREA TEMPLATE/);
   });
 });
+
+describe("buildActivity('teleport') — dnd5e 6.0", () => {
+  it('always overrides the distance (a self range would mean 0) and targets self by default', () => {
+    const act = buildActivity('teleport', {
+      id: 'ACT0000000000000',
+      name: 'Misty Step',
+      activationType: 'bonus',
+      teleportDistance: 30,
+    });
+    expect(act).toEqual({
+      _id: 'ACT0000000000000',
+      type: 'teleport',
+      name: 'Misty Step',
+      sort: 0,
+      activation: { type: 'bonus', value: 1, override: false },
+      range: { units: 'self', override: false },
+      target: { affects: { type: 'self', count: '' }, override: true },
+      teleport: { override: true, units: 'ft', value: '30' },
+    });
+  });
+
+  it('a blank distance = any distance; a formula is kept as a string; affects can widen the target', () => {
+    expect(buildActivity('teleport', { id: 'A' }).teleport).toEqual({
+      override: true,
+      units: 'ft',
+      value: '',
+    });
+    expect(
+      buildActivity('teleport', { id: 'A', teleportDistance: '@prof * 10' }).teleport.value
+    ).toBe('@prof * 10');
+    const dd = buildActivity('teleport', {
+      id: 'A',
+      teleportDistance: 500,
+      affects: { type: 'willing', count: 1 },
+    });
+    expect(dd.target.affects).toEqual({ type: 'willing', count: '1' });
+    expect(() => buildActivity('teleport', { id: 'A', teleportDistance: '30 ft!' })).toThrow(
+      /not a deterministic formula/
+    );
+  });
+});
+
+describe("buildActivity('transform') — dnd5e 6.0", () => {
+  it('cr mode: profiles with cr + filters, mode "cr", preset, no effects', () => {
+    const act = buildActivity('transform', {
+      id: 'ACT0000000000000',
+      name: 'Wild Shape',
+      transformMode: 'cr',
+      transformPreset: 'wildshape',
+      profiles: [
+        {
+          cr: 0.25,
+          creatureTypes: ['beast'],
+          restrictMovement: ['fly', 'swim'],
+          level: { max: 3 },
+        },
+        { name: 'CR 1', cr: '1', creatureTypes: ['beast'], level: { min: 8 } },
+      ],
+    });
+    expect(act.transform).toEqual({
+      mode: 'cr',
+      preset: 'wildshape',
+      customize: false,
+      formless: false,
+    });
+    expect(act.effects).toEqual([]);
+    expect(act.profiles).toHaveLength(2);
+    expect(act.profiles[0]).toEqual({
+      _id: 'ACT0000000000b00',
+      name: '',
+      cr: '0.25',
+      level: { max: 3 },
+      movement: ['fly', 'swim'],
+      sizes: [],
+      types: ['beast'],
+      uuid: null,
+    });
+    expect(act.profiles[1]).toMatchObject({ name: 'CR 1', cr: '1', level: { min: 8 } });
+  });
+
+  it('direct mode: mode "" with resolved actor uuids; form mode: the item effect ids + formless', () => {
+    const direct = buildActivity('transform', {
+      id: 'A',
+      transformMode: 'direct',
+      profiles: [
+        { name: 'Wolf', actorUuid: 'Compendium.dnd-monster-manual.actors.Actor.aaaaaaaaaaaaaaaa' },
+      ],
+    });
+    expect(direct.transform.mode).toBe('');
+    expect(direct.profiles[0]).toMatchObject({
+      uuid: 'Compendium.dnd-monster-manual.actors.Actor.aaaaaaaaaaaaaaaa',
+      cr: '',
+    });
+    const form = buildActivity('transform', {
+      id: 'A',
+      transformMode: 'form',
+      formless: true,
+      formEffectIds: ['effectid00000001', 'effectid00000002'],
+    });
+    expect(form.transform).toEqual({ mode: 'form', preset: '', customize: false, formless: true });
+    expect(form.profiles).toEqual([]);
+    expect(form.effects).toEqual([
+      { _id: 'effectid00000001', level: {} },
+      { _id: 'effectid00000002', level: {} },
+    ]);
+  });
+
+  it('refuses an unknown mode / preset / vocab, a cr profile without cr, a direct profile without an actor, a form transform without forms', () => {
+    expect(() => buildActivity('transform', { id: 'A', transformMode: 'shape' })).toThrow(
+      /transformMode "shape"/
+    );
+    expect(() =>
+      buildActivity('transform', { id: 'A', transformPreset: 'lycanthrope', profiles: [{ cr: 1 }] })
+    ).toThrow(/transformPreset "lycanthrope"/);
+    expect(() => buildActivity('transform', { id: 'A', profiles: [{ sizes: ['med'] }] })).toThrow(
+      /needs a `cr`/
+    );
+    expect(() =>
+      buildActivity('transform', { id: 'A', transformMode: 'direct', profiles: [{ name: 'x' }] })
+    ).toThrow(/needs an `actor`/);
+    expect(() => buildActivity('transform', { id: 'A', transformMode: 'form' })).toThrow(
+      /needs `forms`/
+    );
+    expect(() => buildActivity('transform', { id: 'A', profiles: [] })).toThrow(
+      /at least one profile/
+    );
+    expect(() =>
+      buildActivity('transform', { id: 'A', profiles: [{ cr: 1, restrictMovement: ['teleport'] }] })
+    ).toThrow(/movement type "teleport"/);
+  });
+});

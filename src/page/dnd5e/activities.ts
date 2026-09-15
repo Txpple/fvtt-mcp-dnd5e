@@ -17,7 +17,10 @@ import {
   CREATURE_TYPE_KEYS,
   DIFFICULT_TERRAIN_TYPES,
   EXPIRY_EVENTS,
+  MOVEMENT_TYPES,
   TARGET_AFFECTS_TYPES,
+  TRANSFORM_MODES,
+  TRANSFORM_PRESETS,
 } from '../../utils/dnd5e-canonical.js';
 
 export interface RawDamagePart {
@@ -82,6 +85,18 @@ export interface ActivityBehaviorOpts {
   terrainTypes?: string[];
 }
 
+/** A transform profile (direct link: `actorUuid`; by CR: `cr` + the filters). */
+export interface TransformProfileOpts {
+  name?: string;
+  cr?: number | string;
+  sizes?: string[];
+  creatureTypes?: string[];
+  /** Movement types the chosen creature must NOT have (e.g. ['fly'] for low-level Wild Shape). */
+  restrictMovement?: string[];
+  level?: { min?: number; max?: number };
+  actorUuid?: string;
+}
+
 export interface BuildActivityOpts {
   /** Activity id (caller generates via foundry.utils.randomID(16)). */
   id: string;
@@ -98,6 +113,18 @@ export interface BuildActivityOpts {
   affects?: ActivityAffectsOpts;
   /** Area behaviors the template carries (needs a template to ever fire). */
   behaviors?: ActivityBehaviorOpts[];
+  // teleport (dnd5e 6.0): how far the target may be moved; omit for any distance
+  teleportDistance?: number | string;
+  teleportUnits?: string;
+  // transform (dnd5e 6.0)
+  transformMode?: string;
+  transformPreset?: string;
+  /** form mode: may the actor revert to "no form" from the prompt. */
+  formless?: boolean;
+  /** direct / cr profiles — `actorUuid` ALREADY resolved by the page orchestrator. */
+  profiles?: TransformProfileOpts[];
+  /** form mode: the ITEM's own effect ids, one per form — resolved by name by the orchestrator. */
+  formEffectIds?: string[];
   // attack
   attackType?: 'melee' | 'ranged';
   attackBonus?: number;
@@ -330,11 +357,130 @@ function buildActivityOfType(type: string, opts: BuildActivityOpts): Record<stri
       return buildUtilityActivity(opts);
     case 'cast':
       return buildCastActivity(opts);
+    case 'teleport':
+      return buildTeleportActivity(opts);
+    case 'transform':
+      return buildTransformActivity(opts);
     default:
       throw new Error(
-        `Unknown activity type "${type}". Use attack, damage, save, heal, check, utility, or cast.`
+        `Unknown activity type "${type}". Use attack, damage, save, heal, check, utility, cast, teleport, or transform.`
       );
   }
+}
+
+// --- teleport (dnd5e 6.0) ------------------------------------------------------
+// BaseTeleportActivityData: `teleport: { override, units, value }` — with override:false the distance
+// FOLLOWS the range (a "self" range → 0 = cannot teleport), so the builder always overrides with an
+// explicit distance; a blank value = any distance (prepareFinalData: "" → Infinity). `value` is a
+// deterministic FormulaField — a STRING ("30"). Targets default to self (Misty Step); pass `affects`
+// for "you and one willing creature" (Dimension Door → {type: "willing", count: 1}).
+function buildTeleportActivity(opts: BuildActivityOpts): Record<string, any> {
+  const distance =
+    opts.teleportDistance === undefined || opts.teleportDistance === null
+      ? ''
+      : String(opts.teleportDistance).trim();
+  if (distance !== '' && !/^[\d@+\-*/(). a-zA-Z]+$/.test(distance)) {
+    throw new Error(
+      `teleportDistance "${distance}" is not a deterministic formula (e.g. 30 or "@prof * 10").`
+    );
+  }
+  return {
+    _id: opts.id,
+    type: 'teleport',
+    name: opts.name ?? '',
+    sort: opts.sort ?? 0,
+    activation: { type: opts.activationType ?? 'action', value: 1, override: false },
+    range: { units: 'self', override: false },
+    target: { affects: { type: 'self', count: '' }, override: true },
+    teleport: { override: true, units: opts.teleportUnits ?? 'ft', value: distance },
+  };
+}
+
+// --- transform (dnd5e 6.0) -----------------------------------------------------
+// BaseTransformActivityData: `transform.mode` '' (direct link — profiles carry actor uuids) | 'cr'
+// (profiles carry a max CR + size / type / movement filters) | 'form' (Select Form — the ITEM's own
+// effects are the forms, referenced through `effects[]` by their ids; no profiles, no settings tab);
+// `transform.preset` picks the transformation settings (customize:false ⇒ the preset's settings).
+export function buildTransformProfile(
+  p: TransformProfileOpts,
+  id: string,
+  mode: string
+): Record<string, any> {
+  const level: Record<string, number> = {};
+  if (typeof p.level?.min === 'number') level.min = p.level.min;
+  if (typeof p.level?.max === 'number') level.max = p.level.max;
+  assertKeys(p.sizes, ACTOR_SIZES, 'size');
+  assertKeys(p.creatureTypes, CREATURE_TYPE_KEYS, 'creature type');
+  assertKeys(p.restrictMovement, MOVEMENT_TYPES, 'movement type');
+  if (mode === 'direct' && !p.actorUuid) {
+    throw new Error(
+      'a direct-link transform profile needs an `actor` (a Monster Manual creature).'
+    );
+  }
+  if (mode === 'cr' && (p.cr === undefined || p.cr === null || String(p.cr).trim() === '')) {
+    throw new Error(
+      'a by-CR transform profile needs a `cr` (the maximum challenge rating, e.g. 0.25 or "@prof / 3").'
+    );
+  }
+  return {
+    _id: id,
+    name: p.name ?? '',
+    cr: p.cr === undefined || p.cr === null ? '' : String(p.cr).trim(),
+    level,
+    movement: [...(p.restrictMovement ?? [])],
+    sizes: [...(p.sizes ?? [])],
+    types: [...(p.creatureTypes ?? [])],
+    uuid: p.actorUuid ?? null,
+  };
+}
+
+function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
+  const mode = opts.transformMode ?? 'cr';
+  if (!(TRANSFORM_MODES as readonly string[]).includes(mode)) {
+    throw new Error(
+      `transformMode "${mode}" is unknown. Use one of: ${TRANSFORM_MODES.join(' ')}.`
+    );
+  }
+  const preset = opts.transformPreset ?? '';
+  if (preset !== '' && !(TRANSFORM_PRESETS as readonly string[]).includes(preset)) {
+    throw new Error(
+      `transformPreset "${preset}" is unknown. Use one of: ${TRANSFORM_PRESETS.join(' ')}.`
+    );
+  }
+  const act: Record<string, any> = {
+    _id: opts.id,
+    type: 'transform',
+    name: opts.name ?? '',
+    sort: opts.sort ?? 0,
+    activation: { type: opts.activationType ?? 'action', value: 1, override: false },
+    transform: {
+      mode: mode === 'direct' ? '' : mode,
+      preset,
+      customize: false,
+      formless: mode === 'form' ? !!opts.formless : false,
+    },
+    profiles: [],
+    effects: [],
+  };
+  if (mode === 'form') {
+    if (!opts.formEffectIds?.length) {
+      throw new Error(
+        'a Select-Form transform needs `forms` — the names of effects on the item, one per form ' +
+          '(author them with manage-effect on the item first).'
+      );
+    }
+    act.effects = opts.formEffectIds.map(id => ({ _id: id, level: {} }));
+  } else {
+    if (!opts.profiles?.length) {
+      throw new Error(
+        `a ${mode === 'cr' ? 'by-CR' : 'direct-link'} transform needs at least one profile.`
+      );
+    }
+    act.profiles = opts.profiles.map((p, i) =>
+      buildTransformProfile(p, behaviorId(opts.id, i), mode)
+    );
+  }
+  return act;
 }
 
 // --- attack (byte-for-byte the addAttackToActor inline shape) -----------------

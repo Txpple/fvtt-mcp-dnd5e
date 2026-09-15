@@ -275,6 +275,39 @@ and **`behaviors`** the template carries while it stands:
   list` shows each activity's `template` + `behaviors`. A copied PHB spell already carries its own
   behaviors when the book ships a 6.0 build — copy first, author only when the books don't have it.
 
+### dnd5e 6.0 teleport — Misty Step-style traits
+
+A trait that moves the creature is a `manage-activity` `type: "teleport"`: `teleportDistance: 30`
+(feet; a formula like `"@prof * 10"` works; omit it for "any distance" — a plane shift), the action
+economy on `activationType` (Misty Step / Blink Step = `"bonus"`), and who moves on `affects` —
+the default is self; Dimension Door-style "you and one willing creature" = `affects: {type:
+"willing", count: 1}`. In play the system prompts for the destination inside the distance and moves
+the token(s). Pair with `duration` / effects as usual (a shadow that teleports and gains advantage
+until its next turn = a teleport activity + a rules effect with `expiry: "sourceStart"`).
+
+### dnd5e 6.0 transform — shapeshifters, Wild Shape, Polymorph
+
+A creature that changes into something else is a `manage-activity` `type: "transform"`; pick the
+mode by how the block reads:
+- **A fixed list of forms that are OTHER creatures** ("can transform into a wolf, a bear, or its
+  true form") → `transformMode: "direct"`, `profiles: [{actor: "Wolf"}, {actor: "Brown Bear"}]` —
+  actor by exact Monster Manual name (the MM wins a tie with the DMG's copies) or uuid; the SRD is
+  refused. `transformPreset: "wildshape"` keeps the mind (Int / Wis / Cha, class features merge),
+  `"polymorph"` replaces everything, `"polymorphSelf"` changes only the appearance.
+- **"Any beast of CR ½ or lower"** → `transformMode: "cr"`, `profiles: [{cr: 0.5, creatureTypes:
+  ["beast"], restrictMovement: ["fly"]}]`; the player picks from the compendium browser at use time.
+  Level-gate tiers with `level: {min, max}` (2024 Wild Shape: CR ¼ no fly/swim to L3, CR ½ no fly
+  L4–7, CR 1 from L8) — the transform level is the creature's level, or the class identifier's.
+- **A lycanthrope's Humanoid / Hybrid / Beast forms, or Disguise Self** — the forms are the ITEM's
+  OWN effects, not other actors → author each form as an effect on the trait item first
+  (`manage-effect` with `actorIdentifier` + `itemIdentifier`, `transfer: false`, its changes ARE
+  the form: AC, speed, size, senses, a `dnd5e.bonus` damage rule for the beast's bite), then
+  `transformMode: "form"`, `forms: ["Humanoid Form", "Hybrid Form", "Wolf Form"]`, `formless:
+  true` when "no form" is a valid state. Bites and claws that only exist in a form stay as attack
+  activities on the same item (gate them with an effect condition on `statuses`/the form if needed).
+- Reading: `manage-activity list` names the profiles; the DM reverts a transformed actor from the
+  sheet header. Copy the MM's shapeshifter first — author only when the block is custom.
+
 ## Step 8 — Inventory, gear & loot (compendium-first via `import-item`)
 
 Build the rest of what the creature carries and drops — COPY from the 2024 PHB/DMG compendiums first;
