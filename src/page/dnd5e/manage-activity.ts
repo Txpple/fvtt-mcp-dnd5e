@@ -17,8 +17,40 @@ import {
   toDeletionKey,
   toSource,
 } from '../_shared.js';
-import { buildActivity, normalizeActivityDuration } from './activities.js';
+import {
+  type ActivityBehaviorOpts,
+  behaviorId,
+  buildActivity,
+  buildActivityBehavior,
+  normalizeActivityDuration,
+  normalizeActivityTarget,
+} from './activities.js';
 import { resolveCastSpell, settleCachedSpellCopies } from './cast-spells.js';
+import { type ResolvedEffect, resolveEffectRefs } from './effect-refs.js';
+
+/**
+ * Resolve the `effects` names / refs of each authored behavior into ActiveEffect uuids (the page's
+ * job — see effect-refs.ts), returning the builder-ready opts plus what was resolved for the report.
+ */
+async function resolveBehaviors(
+  behaviors: any[] | undefined
+): Promise<{ opts: ActivityBehaviorOpts[]; resolved: ResolvedEffect[]; warnings: string[] }> {
+  const opts: ActivityBehaviorOpts[] = [];
+  const resolved: ResolvedEffect[] = [];
+  const warnings: string[] = [];
+  for (const b of behaviors ?? []) {
+    const { effects, ...rest } = b ?? {};
+    const o: ActivityBehaviorOpts = { ...rest };
+    if (Array.isArray(effects) && effects.length > 0) {
+      const r = await resolveEffectRefs(effects);
+      o.effectUuids = r.uuids;
+      resolved.push(...r.resolved);
+      warnings.push(...r.warnings);
+    }
+    opts.push(o);
+  }
+  return { opts, resolved, warnings };
+}
 
 /**
  * Add / edit / remove / list dnd5e Activities on an item — embedded on an actor (pass
@@ -72,6 +104,26 @@ export async function manageActivity(params: {
           id: a._id,
           type: a.type,
           name: a.name ?? '',
+          ...(a.target?.template?.type
+            ? {
+                template: {
+                  type: a.target.template.type,
+                  size: a.target.template.size,
+                  units: a.target.template.units,
+                },
+              }
+            : {}),
+          ...(Array.isArray(a.behaviors) && a.behaviors.length > 0
+            ? {
+                behaviors: a.behaviors.map((b: any) => ({
+                  type: b.type,
+                  ...(b.name ? { name: b.name } : {}),
+                  ...(b.config?.effects?.length ? { effects: b.config.effects } : {}),
+                  ...(b.config?.types?.length ? { types: b.config.types } : {}),
+                  ...(b.config?.sizes?.length ? { sizes: b.config.sizes } : {}),
+                })),
+              }
+            : {}),
         })),
       };
 
@@ -96,6 +148,9 @@ export async function manageActivity(params: {
           rest.usesOn = typeof parentMax === 'string' && parentMax !== '' ? 'item' : 'activity';
         }
       }
+      // Area behaviors name their effects; resolve them to uuids before the pure build.
+      const behaviors = await resolveBehaviors(rest.behaviors);
+      if (rest.behaviors) rest.behaviors = behaviors.opts;
       const act = buildActivity(type, { id, ...rest });
       await applyUpdate({ [`system.activities.${id}`]: act });
       // Embedded cast: dnd5e async-mints the "Additional Spells" cached copy (and multi-mints
@@ -112,6 +167,8 @@ export async function manageActivity(params: {
         type,
         ...(type === 'cast' ? { spell: rest.spellUuid } : {}),
         ...(cachedSpell ? { cachedSpell } : {}),
+        ...(behaviors.resolved.length > 0 ? { effects: behaviors.resolved } : {}),
+        ...(behaviors.warnings.length > 0 ? { warnings: behaviors.warnings } : {}),
       };
     }
 
@@ -130,14 +187,47 @@ export async function manageActivity(params: {
           data[`system.activities.${id}.duration.${k}`] = v;
         data[`system.activities.${id}.duration.override`] = true;
       }
+      // an area template / affects override
+      const target = normalizeActivityTarget(params.activity?.template, params.activity?.affects);
+      if (target) {
+        for (const [group, fields] of Object.entries(target)) {
+          for (const [k, v] of Object.entries(fields as Record<string, unknown>)) {
+            data[`system.activities.${id}.target.${group}.${k}`] = v;
+          }
+        }
+        data[`system.activities.${id}.target.override`] = true;
+      }
+      // behaviors REPLACE the list (like an effect's changes); effects resolved by name first
+      const behaviors = await resolveBehaviors(params.activity?.behaviors);
+      if (Array.isArray(params.activity?.behaviors)) {
+        const hasTemplate =
+          target?.template !== undefined || !!activities[id]?.target?.template?.type;
+        if (behaviors.opts.length > 0 && !hasTemplate) {
+          throw new Error(
+            'behaviors ride on an AREA TEMPLATE — this activity has none; pass `template` ({type, size}) too.'
+          );
+        }
+        data[`system.activities.${id}.behaviors`] = behaviors.opts.map((b, i) =>
+          buildActivityBehavior(b, behaviorId(id, i))
+        );
+      }
       for (const [k, v] of Object.entries(params.patch ?? {})) {
         data[`system.activities.${id}.${k}`] = v;
       }
       if (Object.keys(data).length === 0) {
-        throw new Error('Provide a `patch`, a `duration`, and/or activity.name to edit.');
+        throw new Error(
+          'Provide a `patch`, a `duration`, a `template`/`affects`, `behaviors`, and/or activity.name to edit.'
+        );
       }
       await applyUpdate(data);
-      return { ...base, action: 'edit', activityId: id, editedKeys: Object.keys(data) };
+      return {
+        ...base,
+        action: 'edit',
+        activityId: id,
+        editedKeys: Object.keys(data),
+        ...(behaviors.resolved.length > 0 ? { effects: behaviors.resolved } : {}),
+        ...(behaviors.warnings.length > 0 ? { warnings: behaviors.warnings } : {}),
+      };
     }
 
     case 'remove': {

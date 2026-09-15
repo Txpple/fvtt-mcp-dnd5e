@@ -41,6 +41,29 @@ wrong teleporter is fixed by `delete-region` + rebuild. For arbitrary regions/be
 import; those keep whatever `choice` the pack authored. The `create-*` tools are for authoring new
 ones.)
 
+**Areas that DO something (dnd5e 6.0).** A region can carry the system's own behaviors — the map
+itself applies the rules, no macro:
+- **`dnd5e.applyActiveEffect`** — every token that ENTERS gets a copy of the named effects, and loses
+  them on EXIT. `create-region` the shape (a rectangle / ellipse / polygon over the pool, the
+  cloud, the altar), then **`add-region-behavior`** with `effects: ["Poisoned"]` — names come from
+  the stock `dnd5e.effects` pack (every condition — Poisoned, Prone, Restrained, Blinded,
+  Frightened, Invisible…; every damage Resistance / Immunity / Vulnerability; skill and ability
+  Advantage / Disadvantage; Climb / Swim / Burrow Speed), or from an effect you authored on a world
+  item with `manage-effect` (by name, or `"Item name#Effect name"`), or a premium spell's effect
+  (`"<Item uuid>#<effect>"`). Filter with `dispositions` (`["hostile"]` = enemies only, e.g.
+  consecrated ground that burns the undead: add `creatureTypes: ["undead"]`), `sizes`. Recipes:
+  a poison pool → `effects: ["Poisoned"]`; brambles → `effects: ["Restrained"]`; a fog bank →
+  `effects: ["Blinded"]`; a shrine → `effects: ["Frightened Immunity"]` for `dispositions:
+  ["friendly"]`; lava has no "damage per turn" effect — that is `executeMacro` or a Battle Flow
+  emanation, not this behavior.
+- **`dnd5e.difficultTerrain`** — `terrainTypes: ["web" | "plants" | "ice" | "mud" | "sand" |
+  "snow" | "rocks" | "slope" | "liquid"]` (a creature that ignores that kind — a spider in webs — walks
+  freely), `magical: true` for a spell's terrain, `dispositions` = who IGNORES it. Movement cost
+  doubles while the token plans a path through it.
+- Effects the behavior applies live in a compendium or on a world item — never on an actor; the
+  tool refuses an actor's effect (it would be duplicated on entry and deleted on exit). Wrong
+  behavior = `delete-region` + rebuild (no behavior editing).
+
 ## Step 0 — Get a map (don't proceed without one)
 
 A scene without a background is rarely what the user wants. If no image was given:

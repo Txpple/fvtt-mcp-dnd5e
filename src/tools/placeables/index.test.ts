@@ -977,3 +977,66 @@ describe('teleporter special ops', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
+  it('advertises effects / dispositions / sizes / creatureTypes / terrainTypes / magical and forwards them', async () => {
+    const { tools, calls } = build({
+      success: true,
+      sceneId: 's1',
+      sceneName: 'Crypt',
+      regionId: 'r1',
+      regionName: 'Poison Pool',
+      behavior: { id: 'b1', type: 'dnd5e.applyActiveEffect' },
+      effects: [
+        {
+          ref: 'Poisoned',
+          uuid: 'Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa',
+          name: 'Poisoned',
+          source: 'dnd5e.effects',
+        },
+      ],
+    });
+    const def = tools
+      .getToolDefinitions()
+      .find((d: any) => d.name === 'add-region-behavior') as any;
+    const props = def.inputSchema.properties;
+    expect(props.effects.items.type).toBe('string');
+    expect(props.dispositions.items.enum).toEqual(['hostile', 'neutral', 'friendly']);
+    expect(props.terrainTypes.items.enum).toContain('web');
+    expect(props.sizes.items.enum).toContain('grg');
+    expect(props.creatureTypes.items.enum).toContain('undead');
+    const out = await tools.handle('add-region-behavior', {
+      sceneIdentifier: 'Crypt',
+      regionIdentifier: 'Poison Pool',
+      type: 'dnd5e.applyActiveEffect',
+      effects: ['Poisoned'],
+      dispositions: ['hostile'],
+    });
+    const call = calls.find(([n]) => n === 'addRegionBehavior');
+    expect(call?.[1]).toMatchObject({ effects: ['Poisoned'], dispositions: ['hostile'] });
+    expect(out).toContain('Added dnd5e.applyActiveEffect behavior b1');
+    expect(out).toContain(
+      '✦ effect "Poisoned" (dnd5e.effects) → Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa'
+    );
+  });
+
+  it('rejects an unknown disposition / terrain type at the contract', async () => {
+    const { tools } = build({ success: true });
+    await expect(
+      tools.handle('add-region-behavior', {
+        sceneIdentifier: 'Crypt',
+        regionIdentifier: 'X',
+        type: 'dnd5e.applyActiveEffect',
+        dispositions: ['secret'],
+      })
+    ).rejects.toThrow();
+    await expect(
+      tools.handle('add-region-behavior', {
+        sceneIdentifier: 'Crypt',
+        regionIdentifier: 'X',
+        type: 'dnd5e.difficultTerrain',
+        terrainTypes: ['lava'],
+      })
+    ).rejects.toThrow();
+  });
+});

@@ -162,3 +162,74 @@ export const ACTIVITY_DURATION_UNITS = [
   'dstr',
   'perm',
 ] as const;
+
+// ---------------------------------------------------------------------------------------------
+// dnd5e 6.0.1 area + behavior vocabularies (CONFIG.DND5E.*; read from the 6.0.1 source)
+// ---------------------------------------------------------------------------------------------
+
+/** Behaviors an activity's area template can carry (CONFIG.DND5E.activityBehaviorTypes). */
+export const ACTIVITY_BEHAVIOR_TYPES = ['applyActiveEffect', 'difficultTerrain'] as const;
+
+/** Creature sizes (CONFIG.DND5E.actorSizes keys). */
+export const ACTOR_SIZES = ['tiny', 'sm', 'med', 'lg', 'huge', 'grg'] as const;
+
+/** Creature types (CONFIG.DND5E.creatureTypes keys). */
+export const CREATURE_TYPE_KEYS = [
+  'aberration',
+  'beast',
+  'celestial',
+  'construct',
+  'dragon',
+  'elemental',
+  'fey',
+  'fiend',
+  'giant',
+  'humanoid',
+  'monstrosity',
+  'ooze',
+  'plant',
+  'undead',
+] as const;
+
+/** Difficult-terrain kinds (CONFIG.DND5E.difficultTerrainTypes) — a creature may ignore some. */
+export const DIFFICULT_TERRAIN_TYPES = [
+  'ice',
+  'liquid',
+  'mud',
+  'plants',
+  'rocks',
+  'sand',
+  'slope',
+  'snow',
+  'web',
+] as const;
+
+/** Area template shapes (CONFIG.DND5E.areaTargetTypes keys). */
+export const AREA_TEMPLATE_TYPES = [
+  'circle',
+  'cone',
+  'cube',
+  'cylinder',
+  'line',
+  'radius',
+  'ring',
+  'sphere',
+  'square',
+  'wall',
+] as const;
+
+/** Who an activity affects (CONFIG.DND5E.individualTargetTypes keys). */
+export const TARGET_AFFECTS_TYPES = [
+  'self',
+  'ally',
+  'enemy',
+  'creature',
+  'object',
+  'space',
+  'creatureOrObject',
+  'any',
+  'willing',
+] as const;
+
+/** Token dispositions a region behavior filters on (CONST.TOKEN_DISPOSITIONS minus SECRET). */
+export const BEHAVIOR_DISPOSITIONS = ['hostile', 'neutral', 'friendly'] as const;

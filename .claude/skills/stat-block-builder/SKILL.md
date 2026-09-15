@@ -252,6 +252,29 @@ unknown Filter operator, a `roll.*` key in the wrong place); you choose the mode
   roll.attack.type = ranged"). `content-audit` flags a dead rule (a rules type on a data path, or a core
   type on a roll category) — a silent no-op in play.
 
+### dnd5e 6.0 areas — a trait that lays down a zone (Web, Grease, Spike Growth, a cloud)
+
+An authored area action is a `manage-activity` activity with a **`template`** (the measured
+template the DM places — `{type: "cube"|"sphere"|"cone"|"line"|"cylinder"|"radius", size}` in feet)
+and **`behaviors`** the template carries while it stands:
+- `{type: "applyActiveEffect", effects: ["Restrained"]}` — every creature inside gets the effect,
+  removed when it leaves. Effect names come from the stock `dnd5e.effects` pack (the conditions,
+  resistances, advantages), a world item's effect (`"Item#Effect"` — author it with `manage-effect`
+  on a world "Effects" item first), or a premium spell's effect (`"<Item uuid>#<effect>"`). Narrow
+  with `sizes` / `creatureTypes`; `affects: {type: "enemy"}` on the activity makes it hostile-only.
+- `{type: "difficultTerrain", terrainTypes: ["web"]}` — difficult terrain of that kind (spiders
+  ignore web; `plants` for Spike Growth / Entangle, `ice`, `mud`, `liquid` …).
+- Recipes: **Web** → `type: "save"`, `saveAbility: "dex"`, `template: {type: "cube", size: 20}`,
+  `behaviors: [{type: "applyActiveEffect", effects: ["Restrained"]}, {type: "difficultTerrain",
+  terrainTypes: ["web"]}]`, `duration: {value: 1, units: "hour"}`; **Grease** → `save` dex +
+  `template: {type: "square", size: 10}` + `[{type: "applyActiveEffect", effects: ["Prone"]},
+  {type: "difficultTerrain", terrainTypes: ["liquid"]}]`; **Stinking Cloud** → `template: {type:
+  "sphere", size: 20}` + `effects: ["Poisoned"]`; **Spike Growth** → `difficultTerrain` `plants`
+  (the 2d4 per 5 ft is the activity's own damage, not a behavior).
+- Behaviors ride on the template: the tool refuses `behaviors` without one. Reading: `manage-activity
+  list` shows each activity's `template` + `behaviors`. A copied PHB spell already carries its own
+  behaviors when the book ships a 6.0 build — copy first, author only when the books don't have it.
+
 ## Step 8 — Inventory, gear & loot (compendium-first via `import-item`)
 
 Build the rest of what the creature carries and drops — COPY from the 2024 PHB/DMG compendiums first;

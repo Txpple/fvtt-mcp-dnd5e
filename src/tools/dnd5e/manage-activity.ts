@@ -1,7 +1,16 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
-import { ACTIVITY_DURATION_UNITS, EXPIRY_EVENTS } from '../../utils/dnd5e-canonical.js';
+import {
+  ACTIVITY_BEHAVIOR_TYPES,
+  ACTIVITY_DURATION_UNITS,
+  ACTOR_SIZES,
+  AREA_TEMPLATE_TYPES,
+  CREATURE_TYPE_KEYS,
+  DIFFICULT_TERRAIN_TYPES,
+  EXPIRY_EVENTS,
+  TARGET_AFFECTS_TYPES,
+} from '../../utils/dnd5e-canonical.js';
 import { FormattedToolError } from '../../utils/error-handler.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
 import { toInputSchema } from '../../utils/schema.js';
@@ -190,6 +199,98 @@ const ManageActivitySchema = z.object({
         'or {expiry: "targetEnd"} for "until the end of the target\'s next turn".'
     ),
 
+  // area (add + edit) — a measured template + who it affects; behaviors ride on the template
+  template: z
+    .object({
+      type: z
+        .enum(AREA_TEMPLATE_TYPES)
+        .describe('Shape: sphere / cube / cone / line / cylinder / radius (emanation) / wall / …'),
+      size: z
+        .union([z.number().min(0), z.string()])
+        .describe(
+          'Primary size in units — radius (sphere/cylinder), length (cone/line), width (cube).'
+        ),
+      width: z
+        .union([z.number().min(0), z.string()])
+        .optional()
+        .describe('line / wall width.'),
+      height: z
+        .union([z.number().min(0), z.string()])
+        .optional()
+        .describe('cylinder / wall height.'),
+      units: z.string().optional().describe('Default "ft".'),
+      count: z
+        .union([z.number().int().min(1), z.string()])
+        .optional()
+        .describe('Templates placed.'),
+    })
+    .optional()
+    .describe(
+      'Area template the activity places (sets target.override). Required for any `behaviors` — ' +
+        'e.g. Web = {type: "cube", size: 20}, Spike Growth = {type: "sphere", size: 20}.'
+    ),
+  affects: z
+    .object({
+      type: z
+        .enum(TARGET_AFFECTS_TYPES)
+        .optional()
+        .describe(
+          'Who the activity affects: creature (default for areas) / ally / enemy / … — ' +
+            'applyActiveEffect / difficultTerrain behaviors honour ally / enemy as a disposition filter.'
+        ),
+      count: z.union([z.number().int().min(1), z.string()]).optional(),
+      choice: z.boolean().optional().describe('The user picks which targets inside the area.'),
+    })
+    .optional()
+    .describe('Target affects (with or without a template).'),
+  behaviors: z
+    .array(
+      z.object({
+        type: z
+          .enum(ACTIVITY_BEHAVIOR_TYPES)
+          .describe(
+            'applyActiveEffect — the area applies `effects` to tokens inside it (and removes them on ' +
+              'exit); difficultTerrain — the area is difficult terrain while the template stands.'
+          ),
+        name: z.string().optional().describe('Behavior label.'),
+        level: z
+          .object({
+            min: z.number().int().min(0).optional(),
+            max: z.number().int().min(0).optional(),
+          })
+          .optional()
+          .describe('Only active when the item / cast level is within [min, max] (upcast tiers).'),
+        effects: z
+          .array(z.string().min(1))
+          .optional()
+          .describe(
+            'applyActiveEffect (required): effect NAMES from the stock dnd5e.effects pack ("Restrained", ' +
+              '"Poisoned", "Prone" …) or a world item\'s effects, ActiveEffect uuids, or an Item uuid + ' +
+              '"#<effect name>" (a premium-pack spell\'s effect). Resolved and echoed back.'
+          ),
+        sizes: z
+          .array(z.enum(ACTOR_SIZES))
+          .optional()
+          .describe('applyActiveEffect: only these sizes.'),
+        creatureTypes: z
+          .array(z.enum(CREATURE_TYPE_KEYS))
+          .optional()
+          .describe('applyActiveEffect: only these creature types.'),
+        terrainTypes: z
+          .array(z.enum(DIFFICULT_TERRAIN_TYPES))
+          .optional()
+          .describe(
+            'difficultTerrain: the terrain kind(s) — web, plants, ice, mud … (some creatures ignore some).'
+          ),
+      })
+    )
+    .optional()
+    .describe(
+      'dnd5e 6.0 area behaviors carried by the template (needs `template`). On edit this REPLACES the ' +
+        'list. E.g. an authored Web: type "save", template {type:"cube", size:20}, behaviors ' +
+        '[{type:"applyActiveEffect", effects:["Restrained"]}, {type:"difficultTerrain", terrainTypes:["web"]}].'
+    ),
+
   // edit
   patch: z
     .record(z.string(), z.any())
@@ -238,6 +339,11 @@ export class DnD5eManageActivityTool {
 
     // Cross-field guards: throw FormattedToolError so the message surfaces verbatim (the central
     // error mapper would otherwise flatten a plain Error to a generic "unexpected error").
+    if (parsed.behaviors?.length && !parsed.template && parsed.action === 'add') {
+      throw new FormattedToolError(
+        'behaviors ride on an area template — pass `template` ({type, size}) with them.'
+      );
+    }
     if (parsed.action === 'add') {
       if (!parsed.type) {
         throw new FormattedToolError(
@@ -308,6 +414,9 @@ export class DnD5eManageActivityTool {
       charges: parsed.charges,
       recoveryPeriod: parsed.recoveryPeriod,
       duration: parsed.duration,
+      template: parsed.template,
+      affects: parsed.affects,
+      behaviors: parsed.behaviors,
     };
 
     this.logger.info('manage-activity', {
@@ -337,6 +446,10 @@ export class DnD5eManageActivityTool {
     } else {
       summary = `✅ Removed activity \`${result?.activityId}\` from "${where}"`;
     }
+    for (const e of (result?.effects ?? []) as any[]) {
+      summary += `\n    ✦ effect "${e.name}" (${e.source}) → ${e.uuid}`;
+    }
+    for (const w of (result?.warnings ?? []) as string[]) summary += `\n    ⚠ ${w}`;
     return { summary, success: true, ...result, message: summary };
   }
 }

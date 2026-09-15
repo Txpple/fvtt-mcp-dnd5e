@@ -8,6 +8,9 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  APPLY_EFFECT_BEHAVIOR,
+  DIFFICULT_TERRAIN_BEHAVIOR,
+  dnd5eBehaviorSystem,
   dumpRegion,
   rectContainsSnappedCenter,
   regionDescriptor,
@@ -283,5 +286,62 @@ describe('regionDescriptor.buildPatch', () => {
       changed: boolean;
     };
     expect(r.changed).toBe(false);
+  });
+});
+
+describe('dnd5eBehaviorSystem (dnd5e 6.0 region behavior conveniences → system)', () => {
+  const UUID = 'Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa';
+
+  it("returns {} when no convenience was given (verbatim system stays the caller's)", () => {
+    expect(dnd5eBehaviorSystem('teleportToken', {}, [])).toEqual({});
+    expect(dnd5eBehaviorSystem(APPLY_EFFECT_BEHAVIOR, {}, [])).toEqual({});
+  });
+
+  it('shapes applyActiveEffect: effect uuids, disposition words → numbers, sizes, types', () => {
+    expect(
+      dnd5eBehaviorSystem(
+        APPLY_EFFECT_BEHAVIOR,
+        {
+          effects: ['Poisoned'],
+          dispositions: ['hostile', 'neutral'],
+          sizes: ['med'],
+          creatureTypes: ['undead'],
+        },
+        [UUID]
+      )
+    ).toEqual({ effects: [UUID], dispositions: [-1, 0], sizes: ['med'], types: ['undead'] });
+    expect(dnd5eBehaviorSystem(APPLY_EFFECT_BEHAVIOR, { effects: ['Poisoned'] }, [UUID])).toEqual({
+      effects: [UUID],
+    });
+  });
+
+  it('shapes difficultTerrain: types, magical, ignoredDispositions', () => {
+    expect(
+      dnd5eBehaviorSystem(
+        DIFFICULT_TERRAIN_BEHAVIOR,
+        { terrainTypes: ['web', 'plants'], magical: true, dispositions: ['friendly'] },
+        []
+      )
+    ).toEqual({ types: ['web', 'plants'], magical: true, ignoredDispositions: [1] });
+  });
+
+  it('rejects a convenience on the wrong type, an applyActiveEffect without effects, and unknown keys', () => {
+    expect(() =>
+      dnd5eBehaviorSystem(APPLY_EFFECT_BEHAVIOR, { terrainTypes: ['web'] }, [UUID])
+    ).toThrow(/only apply to dnd5e\.difficultTerrain/);
+    expect(() => dnd5eBehaviorSystem(DIFFICULT_TERRAIN_BEHAVIOR, { sizes: ['med'] }, [])).toThrow(
+      /only apply to dnd5e\.applyActiveEffect/
+    );
+    expect(() => dnd5eBehaviorSystem(APPLY_EFFECT_BEHAVIOR, { sizes: ['med'] }, [])).toThrow(
+      /needs at least one effect/
+    );
+    expect(() =>
+      dnd5eBehaviorSystem(APPLY_EFFECT_BEHAVIOR, { effects: ['x'], dispositions: ['secret'] }, [
+        UUID,
+      ])
+    ).toThrow(/disposition "secret" is unknown/);
+    expect(() => dnd5eBehaviorSystem('executeMacro', { effects: ['Poisoned'] }, [UUID])).toThrow(
+      /only valid with type dnd5e\.applyActiveEffect or dnd5e\.difficultTerrain/
+    );
   });
 });

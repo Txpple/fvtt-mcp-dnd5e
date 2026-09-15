@@ -8,7 +8,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildActivity, damagePartToActivity, normalizeActivityDuration } from './activities.js';
+import {
+  behaviorId,
+  buildActivity,
+  buildActivityBehavior,
+  damagePartToActivity,
+  normalizeActivityDuration,
+  normalizeActivityTarget,
+} from './activities.js';
 
 describe('damagePartToActivity', () => {
   it('maps a raw part to the dnd5e activity-part shape', () => {
@@ -323,5 +330,149 @@ describe('normalizeActivityDuration + buildActivity duration override (dnd5e 6.0
   it('leaves the duration untouched when none is given (no drift on the pinned shapes)', () => {
     const act = buildActivity('utility', { id: 'ACT0000000000000' });
     expect(act).not.toHaveProperty('duration');
+  });
+});
+
+describe('normalizeActivityTarget (area template + affects, dnd5e 6.0 areas)', () => {
+  it('returns undefined for nothing and the TargetField shape (string formulas, ft default)', () => {
+    expect(normalizeActivityTarget(undefined, undefined)).toBeUndefined();
+    expect(normalizeActivityTarget({ type: 'cube', size: 20 }, undefined)).toEqual({
+      template: { type: 'cube', size: '20', units: 'ft' },
+    });
+    expect(
+      normalizeActivityTarget(
+        { type: 'line', size: 60, width: 5, units: 'ft', count: 2 },
+        { type: 'enemy', count: 1, choice: true }
+      )
+    ).toEqual({
+      template: { type: 'line', size: '60', width: '5', units: 'ft', count: '2' },
+      affects: { type: 'enemy', count: '1', choice: true },
+    });
+  });
+
+  it('rejects an unknown shape, a missing size, and an unknown affects type', () => {
+    expect(() => normalizeActivityTarget({ type: 'blob', size: 5 }, undefined)).toThrow(
+      /not an area shape/
+    );
+    expect(() => normalizeActivityTarget({ type: 'sphere', size: '' }, undefined)).toThrow(
+      /template\.size is required/
+    );
+    expect(() => normalizeActivityTarget(undefined, { type: 'foes' })).toThrow(/not a target type/);
+  });
+});
+
+describe('buildActivityBehavior (dnd5e 6.0 activity.behaviors[] — AppliedBehaviorField)', () => {
+  it('builds an applyActiveEffect entry with type + config written together', () => {
+    expect(
+      buildActivityBehavior(
+        {
+          type: 'applyActiveEffect',
+          name: 'Webbed',
+          effectUuids: ['Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa'],
+          sizes: ['med', 'lg'],
+          creatureTypes: ['humanoid'],
+          level: { min: 2 },
+        },
+        'ACT000000000000b00'.slice(0, 16)
+      )
+    ).toEqual({
+      _id: 'ACT000000000000b',
+      type: 'applyActiveEffect',
+      name: 'Webbed',
+      level: { min: 2 },
+      config: {
+        effects: ['Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa'],
+        sizes: ['med', 'lg'],
+        types: ['humanoid'],
+      },
+    });
+  });
+
+  it('builds a difficultTerrain entry (types only) and defaults the lists', () => {
+    expect(buildActivityBehavior({ type: 'difficultTerrain', terrainTypes: ['web'] }, 'B')).toEqual(
+      {
+        _id: 'B',
+        type: 'difficultTerrain',
+        name: '',
+        level: {},
+        config: { types: ['web'] },
+      }
+    );
+    expect(buildActivityBehavior({ type: 'difficultTerrain' }, 'B').config).toEqual({ types: [] });
+  });
+
+  it('rejects an unknown type, an applyActiveEffect without effects, and unknown vocab keys', () => {
+    expect(() => buildActivityBehavior({ type: 'lava' }, 'B')).toThrow(/behavior type "lava"/);
+    expect(() => buildActivityBehavior({ type: 'applyActiveEffect' }, 'B')).toThrow(
+      /needs at least one effect/
+    );
+    expect(() =>
+      buildActivityBehavior(
+        { type: 'applyActiveEffect', effectUuids: ['x'], sizes: ['giant'] },
+        'B'
+      )
+    ).toThrow(/size "giant" is unknown/);
+    expect(() =>
+      buildActivityBehavior(
+        { type: 'applyActiveEffect', effectUuids: ['x'], creatureTypes: ['robot'] },
+        'B'
+      )
+    ).toThrow(/creature type "robot"/);
+    expect(() =>
+      buildActivityBehavior({ type: 'difficultTerrain', terrainTypes: ['lava'] }, 'B')
+    ).toThrow(/terrain type "lava"/);
+  });
+
+  it('behaviorId derives a 16-char alphanumeric id per behavior of an activity', () => {
+    expect(behaviorId('ACT0000000000000', 0)).toBe('ACT0000000000b00');
+    expect(behaviorId('ACT0000000000000', 0)).toHaveLength(16);
+    expect(behaviorId('ACT0000000000000', 1)).toMatch(/^[A-Za-z0-9]{16}$/);
+    expect(behaviorId('ACT0000000000000', 1)).not.toBe(behaviorId('ACT0000000000000', 0));
+    expect(behaviorId('x', 3)).toMatch(/^[A-Za-z0-9]{16}$/);
+  });
+});
+
+describe('buildActivity — template / affects / behaviors (an authored Web)', () => {
+  it('merges the template + affects over the save default with target.override and carries behaviors', () => {
+    const act = buildActivity('save', {
+      id: 'ACT0000000000000',
+      saveAbility: 'dex',
+      saveDC: 13,
+      template: { type: 'cube', size: 20 },
+      affects: { type: 'creature' },
+      behaviors: [
+        {
+          type: 'applyActiveEffect',
+          effectUuids: ['Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa'],
+        },
+        { type: 'difficultTerrain', terrainTypes: ['web'] },
+      ],
+    });
+    expect(act.target.override).toBe(true);
+    expect(act.target.template).toMatchObject({ type: 'cube', size: '20', units: 'ft' });
+    expect(act.target.affects).toMatchObject({ type: 'creature', count: '1' });
+    expect(act.behaviors).toHaveLength(2);
+    expect(act.behaviors[0]).toMatchObject({
+      type: 'applyActiveEffect',
+      config: {
+        effects: ['Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa'],
+        sizes: [],
+        types: [],
+      },
+    });
+    expect(act.behaviors[1]).toMatchObject({
+      type: 'difficultTerrain',
+      config: { types: ['web'] },
+    });
+    expect(act.behaviors[0]._id).not.toBe(act.behaviors[1]._id);
+  });
+
+  it('refuses behaviors without an area template', () => {
+    expect(() =>
+      buildActivity('utility', {
+        id: 'ACT0000000000000',
+        behaviors: [{ type: 'difficultTerrain' }],
+      })
+    ).toThrow(/ride on an AREA TEMPLATE/);
   });
 });

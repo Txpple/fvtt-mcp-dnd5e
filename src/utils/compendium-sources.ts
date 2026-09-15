@@ -20,6 +20,19 @@
 export const SRD_PACK_PREFIX = 'dnd5e.';
 
 /**
+ * The ONE `dnd5e.*` pack that IS a permitted source — design.md §2.3 amendment (owner, 2026-09-15):
+ * the system's stock ActiveEffect compendium (the conditions, immunities, resistances and
+ * advantage effects that dnd5e 6.0's region / activity behaviors are built to reference). It holds
+ * MECHANICS, not book content; every other `dnd5e.*` pack (the SRD content) stays barred.
+ */
+export const EFFECTS_PACK = 'dnd5e.effects';
+
+/** True if a pack id is the stock mechanical effects pack (the §2.3 amendment). */
+export function isMechanicalPack(packId: string): boolean {
+  return packId === EFFECTS_PACK;
+}
+
+/**
  * The premium published books that ARE our authoring library (design.md §2.3).
  * EXTENSIBLE — add a new book's pack-id prefix here when it ships and is brought into scope.
  * Never add an SRD (`dnd5e.*`) pack here.
@@ -34,9 +47,11 @@ export const PREMIUM_BOOK_PREFIXES = [
   'dnd-ravenloft-horrors-within.', // Ravenloft: The Horrors Within
 ] as const;
 
-/** True if a pack id is an SRD (`dnd5e.*`) pack — never an authoring source. */
+/** True if a pack id is an SRD (`dnd5e.*`) CONTENT pack — never an authoring source. `dnd5e.effects` is exempt. */
 export function isSrdPack(packId: string): boolean {
-  return typeof packId === 'string' && packId.startsWith(SRD_PACK_PREFIX);
+  return (
+    typeof packId === 'string' && packId.startsWith(SRD_PACK_PREFIX) && !isMechanicalPack(packId)
+  );
 }
 
 /** True if a pack id is one of the in-scope premium book packs. */

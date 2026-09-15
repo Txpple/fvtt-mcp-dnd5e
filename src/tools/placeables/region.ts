@@ -6,6 +6,12 @@
 // underneath.
 
 import { z } from 'zod';
+import {
+  ACTOR_SIZES,
+  BEHAVIOR_DISPOSITIONS,
+  CREATURE_TYPE_KEYS,
+  DIFFICULT_TERRAIN_TYPES,
+} from '../../utils/dnd5e-canonical.js';
 import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
@@ -173,8 +179,10 @@ const AddRegionBehaviorSchema = z.object({
     .describe(
       'Behavior type key, validated against the live registry — core v14: teleportToken, ' +
         'executeMacro, executeScript, adjustDarknessLevel, changeLevel, displayScrollingText, ' +
-        'modifyMovementCost, pauseGame, suppressWeather, toggleBehavior, defineSurface, plus system ' +
-        'ones like dnd5e.difficultTerrain.'
+        'modifyMovementCost, pauseGame, suppressWeather, toggleBehavior, defineSurface; dnd5e 6.0: ' +
+        'dnd5e.applyActiveEffect (an area that applies effects to tokens inside it — lava, a poison ' +
+        'cloud, consecrated ground; use `effects`), dnd5e.difficultTerrain (use `terrainTypes` / ' +
+        '`magical`), dnd5e.rotateArea.'
     ),
   name: z.string().optional().describe("Behavior label (defaults to the type's standard name)."),
   disabled: z.boolean().optional().describe('Create the behavior disabled (default false).'),
@@ -185,6 +193,44 @@ const AddRegionBehaviorSchema = z.object({
     .describe(
       'Behavior system data carried verbatim (the v14 shape for the type) — e.g. executeMacro ' +
         '{uuid}, adjustDarknessLevel {mode, modifier}.'
+    ),
+  // dnd5e 6.0 conveniences — names / words in, uuids / numbers out (resolved on the page)
+  effects: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      'dnd5e.applyActiveEffect: the effects applied on entry and removed on exit. Each is a NAME from ' +
+        'the stock dnd5e.effects pack ("Poisoned", "Prone", "Fire Resistance", "Blinded" …) or from ' +
+        'a world item\'s effects, an ActiveEffect uuid, or an Item uuid + "#<effect name>" (a ' +
+        "premium-pack spell's effect). Never an effect on an actor. Resolved and echoed back."
+    ),
+  dispositions: z
+    .array(z.enum(BEHAVIOR_DISPOSITIONS))
+    .optional()
+    .describe(
+      'applyActiveEffect: only tokens with these dispositions are affected (omit = all). ' +
+        'difficultTerrain: these dispositions IGNORE the terrain.'
+    ),
+  sizes: z
+    .array(z.enum(ACTOR_SIZES))
+    .optional()
+    .describe('applyActiveEffect: only creatures of these sizes (omit = all).'),
+  creatureTypes: z
+    .array(z.enum(CREATURE_TYPE_KEYS))
+    .optional()
+    .describe('applyActiveEffect: only these creature types (omit = all).'),
+  terrainTypes: z
+    .array(z.enum(DIFFICULT_TERRAIN_TYPES))
+    .optional()
+    .describe(
+      'difficultTerrain: what kind of terrain it is (a creature may ignore some kinds — e.g. web, ' +
+        'plants, ice). Omit for generic difficult terrain.'
+    ),
+  magical: z
+    .boolean()
+    .optional()
+    .describe(
+      'difficultTerrain: magical terrain (Spike Growth) vs mundane (rubble). Default false.'
     ),
   teleportTo: z
     .object({
@@ -355,6 +401,9 @@ export const regionToolModule: PlaceableModuleFactory = foundry => ({
           `(${result?.regionId}) on "${result?.sceneName}" (${result?.sceneId}).`,
       ];
       for (const d of b.destinations ?? []) lines.push(`    → ${d}`);
+      for (const e of (result?.effects ?? []) as any[]) {
+        lines.push(`    ✦ effect "${e.name}" (${e.source}) → ${e.uuid}`);
+      }
       const warnings: string[] = Array.isArray(result?.warnings) ? result.warnings : [];
       for (const w of warnings) lines.push(`  ⚠ ${w}`);
       return lines.join('\n');

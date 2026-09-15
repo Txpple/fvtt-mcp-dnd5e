@@ -67,7 +67,15 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   sandbox — a ranged-only `+1d4` lands in the longbow's `rollAttack` (`1d20min10 + 2 + 2 + 1d4`), a
   melee-only advantage flips the shortsword's mode (`2d20advmin10 …`), `1d4[fire]` lands in
   `rollDamage`, the conditional +2 AC toggles with HP.
-- [ ] #5 #6 — areas (region + activity behaviors)
+- [x] #5 #6 — **areas** (2026-09-15): `add-region-behavior` `effects` / `dispositions` / `sizes` /
+  `creatureTypes` (dnd5e.applyActiveEffect) + `terrainTypes` / `magical` (dnd5e.difficultTerrain);
+  `manage-activity` `template` / `affects` / `behaviors[]` (applyActiveEffect · difficultTerrain).
+  Effect refs resolve by NAME from the stock `dnd5e.effects` pack (the §2.3 amendment, now encoded in
+  `compendium-sources.ts` as the one exempt `dnd5e.*` pack), a world item (`"Item#Effect"`), or a
+  uuid — never an actor's effect (`src/page/dnd5e/effect-refs.ts`). Live:
+  `scripts/verify-region-effects.mjs` **26/26** — a token entering the pool gets "Poisoned" (origin =
+  the behavior), leaving removes it; an authored Web's behaviors persist with their config and
+  `createBehaviorData` yields the region behavior.
 - [ ] #8 — rarities
 
 ## Execution discipline

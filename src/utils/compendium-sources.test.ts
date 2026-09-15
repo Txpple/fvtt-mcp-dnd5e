@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  EFFECTS_PACK,
+  isMechanicalPack,
   isSrdPack,
   isPremiumBookPack,
   packPriority,
@@ -30,6 +32,17 @@ describe('compendium-sources — library policy (design.md §2.3: books only, ne
       'some-module.items',
     ])('does not flag %s as SRD', pack => {
       expect(isSrdPack(pack)).toBe(false);
+    });
+
+    it('exempts dnd5e.effects — the stock mechanical effects pack (design.md §2.3 amendment)', () => {
+      expect(EFFECTS_PACK).toBe('dnd5e.effects');
+      expect(isMechanicalPack('dnd5e.effects')).toBe(true);
+      expect(isMechanicalPack('dnd5e.spells24')).toBe(false);
+      expect(isSrdPack('dnd5e.effects')).toBe(false);
+      expect(() => assertNoSrdPacks('dnd5e.effects')).not.toThrow();
+      expect(excludeSrdPacks(['dnd5e.effects', 'dnd5e.spells24'], p => p)).toEqual([
+        'dnd5e.effects',
+      ]);
     });
   });
 

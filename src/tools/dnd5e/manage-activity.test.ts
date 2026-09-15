@@ -221,3 +221,79 @@ describe('manage-activity — duration override (dnd5e 6.0 expiry)', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('manage-activity — area template + behaviors (dnd5e 6.0)', () => {
+  it('advertises template / affects / behaviors and forwards an authored Web', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'add',
+      activityId: 'A1',
+      type: 'save',
+      item: { id: 'i1', name: 'Web', type: 'feat' },
+      effects: [
+        {
+          ref: 'Restrained',
+          uuid: 'Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa',
+          name: 'Restrained',
+          source: 'dnd5e.effects',
+        },
+      ],
+    });
+    const schema: any = tool.getToolDefinitions()[0].inputSchema;
+    expect(schema.properties.template.properties.type.enum).toContain('cube');
+    expect(schema.properties.affects.properties.type.enum).toContain('enemy');
+    expect(schema.properties.behaviors.items.properties.type.enum).toEqual([
+      'applyActiveEffect',
+      'difficultTerrain',
+    ]);
+    const res = await tool.handleManageActivity({
+      action: 'add',
+      itemIdentifier: 'Web',
+      type: 'save',
+      saveAbility: 'dex',
+      saveDC: 13,
+      template: { type: 'cube', size: 20 },
+      affects: { type: 'creature' },
+      behaviors: [
+        { type: 'applyActiveEffect', effects: ['Restrained'] },
+        { type: 'difficultTerrain', terrainTypes: ['web'] },
+      ],
+    });
+    const call = calls.find(([n]) => n === 'manageActivity');
+    expect(call?.[1].activity.template).toEqual({ type: 'cube', size: 20 });
+    expect(call?.[1].activity.affects).toEqual({ type: 'creature' });
+    expect(call?.[1].activity.behaviors).toEqual([
+      { type: 'applyActiveEffect', effects: ['Restrained'] },
+      { type: 'difficultTerrain', terrainTypes: ['web'] },
+    ]);
+    expect(res.summary).toContain('✦ effect "Restrained" (dnd5e.effects)');
+  });
+
+  it('refuses behaviors without a template on add, and an unknown terrain / shape at the contract', async () => {
+    const { tool } = makeTool({ success: true });
+    await expect(
+      tool.handleManageActivity({
+        action: 'add',
+        itemIdentifier: 'Web',
+        type: 'utility',
+        behaviors: [{ type: 'difficultTerrain' }],
+      })
+    ).rejects.toThrow(/ride on an area template/);
+    await expect(
+      tool.handleManageActivity({
+        action: 'add',
+        itemIdentifier: 'Web',
+        type: 'utility',
+        template: { type: 'blob', size: 5 },
+      })
+    ).rejects.toThrow();
+    await expect(
+      tool.handleManageActivity({
+        action: 'edit',
+        itemIdentifier: 'Web',
+        activityId: 'A1',
+        behaviors: [{ type: 'difficultTerrain', terrainTypes: ['lava'] }],
+      })
+    ).rejects.toThrow();
+  });
+});

@@ -24,7 +24,94 @@ import {
   type PlaceableCtx,
   type PlaceableDescriptor,
 } from '../_placeables.js';
+import {
+  ACTOR_SIZES,
+  BEHAVIOR_DISPOSITIONS,
+  CREATURE_TYPE_KEYS,
+  DIFFICULT_TERRAIN_TYPES,
+} from '../../utils/dnd5e-canonical.js';
+import { resolveEffectRefs, type ResolvedEffect } from '../dnd5e/effect-refs.js';
+import { TOKEN_DISPOSITION } from '../dnd5e/token-defaults.js';
 import { gridRectShape, resolveSceneStrict, sceneGrid, TOM_CARTOS_FLAG_SCOPE } from '../scenes.js';
+
+// --- dnd5e 6.0 behavior conveniences (pure) --------------------------------------
+
+/** The dnd5e 6.0 behavior types the typed conveniences below know how to shape. */
+export const APPLY_EFFECT_BEHAVIOR = 'dnd5e.applyActiveEffect';
+export const DIFFICULT_TERRAIN_BEHAVIOR = 'dnd5e.difficultTerrain';
+
+export interface Dnd5eBehaviorOpts {
+  /** Names / uuids / "Item uuid#Effect" refs — resolved to ActiveEffect uuids (applyActiveEffect). */
+  effects?: string[];
+  /** Token dispositions the behavior applies to (applyActiveEffect) / ignores (difficultTerrain). */
+  dispositions?: string[];
+  sizes?: string[];
+  creatureTypes?: string[];
+  /** difficultTerrain: what kind of terrain (a creature may ignore some kinds). */
+  terrainTypes?: string[];
+  /** difficultTerrain: magical terrain (Spike Growth) vs mundane (rubble). */
+  magical?: boolean;
+}
+
+const assertKeys = (values: string[] | undefined, vocab: readonly string[], label: string) => {
+  for (const v of values ?? []) {
+    if (!vocab.includes(v))
+      throw new Error(`${label} "${v}" is unknown. Use one of: ${vocab.join(' ')}.`);
+  }
+};
+
+/**
+ * Shape the typed conveniences into the behavior's `system` (merged OVER a verbatim `system`).
+ * `effectUuids` are already resolved. Pure — unit-tested. Throws on a convenience given for a
+ * behavior type it does not belong to, an unknown disposition / size / creature / terrain key, or
+ * an applyActiveEffect without an effect.
+ */
+export function dnd5eBehaviorSystem(
+  type: string,
+  opts: Dnd5eBehaviorOpts,
+  effectUuids: string[]
+): Record<string, unknown> {
+  const given = (
+    ['effects', 'dispositions', 'sizes', 'creatureTypes', 'terrainTypes', 'magical'] as const
+  ).filter(k => opts[k] !== undefined);
+  if (given.length === 0) return {};
+  assertKeys(opts.dispositions, BEHAVIOR_DISPOSITIONS, 'disposition');
+  const dispositionNumbers = (opts.dispositions ?? []).map(
+    d => TOKEN_DISPOSITION[d as keyof typeof TOKEN_DISPOSITION]
+  );
+  if (type === APPLY_EFFECT_BEHAVIOR) {
+    const bad = given.filter(k => k === 'terrainTypes' || k === 'magical');
+    if (bad.length)
+      throw new Error(`${bad.join(', ')} only apply to ${DIFFICULT_TERRAIN_BEHAVIOR}.`);
+    if (effectUuids.length === 0) {
+      throw new Error(
+        `${APPLY_EFFECT_BEHAVIOR} needs at least one effect (effects: ["Poisoned"] …).`
+      );
+    }
+    assertKeys(opts.sizes, ACTOR_SIZES, 'size');
+    assertKeys(opts.creatureTypes, CREATURE_TYPE_KEYS, 'creature type');
+    return {
+      effects: [...effectUuids],
+      ...(opts.dispositions ? { dispositions: dispositionNumbers } : {}),
+      ...(opts.sizes ? { sizes: [...opts.sizes] } : {}),
+      ...(opts.creatureTypes ? { types: [...opts.creatureTypes] } : {}),
+    };
+  }
+  if (type === DIFFICULT_TERRAIN_BEHAVIOR) {
+    const bad = given.filter(k => k === 'effects' || k === 'sizes' || k === 'creatureTypes');
+    if (bad.length) throw new Error(`${bad.join(', ')} only apply to ${APPLY_EFFECT_BEHAVIOR}.`);
+    assertKeys(opts.terrainTypes, DIFFICULT_TERRAIN_TYPES, 'terrain type');
+    return {
+      ...(opts.terrainTypes ? { types: [...opts.terrainTypes] } : {}),
+      ...(typeof opts.magical === 'boolean' ? { magical: opts.magical } : {}),
+      ...(opts.dispositions ? { ignoredDispositions: dispositionNumbers } : {}),
+    };
+  }
+  throw new Error(
+    `${given.join(', ')} are dnd5e behavior conveniences — only valid with type ` +
+      `${APPLY_EFFECT_BEHAVIOR} or ${DIFFICULT_TERRAIN_BEHAVIOR} (got "${type}").`
+  );
+}
 
 // --- teleport-behavior helpers (pure) -----------------------------------------
 
@@ -384,15 +471,17 @@ export async function createSceneTeleporter(args: {
  * teleport destination is then geometry-checked (teleportPlacementWarning) so the half-cell-offset
  * silent no-op is caught at authoring time, not at the table.
  */
-export async function addRegionBehavior(args: {
-  sceneIdentifier: string;
-  regionIdentifier: string;
-  type: string;
-  name?: string;
-  disabled?: boolean;
-  system?: Record<string, unknown>;
-  teleportTo?: { sceneIdentifier: string; regionIdentifier: string };
-}): Promise<Record<string, unknown>> {
+export async function addRegionBehavior(
+  args: {
+    sceneIdentifier: string;
+    regionIdentifier: string;
+    type: string;
+    name?: string;
+    disabled?: boolean;
+    system?: Record<string, unknown>;
+    teleportTo?: { sceneIdentifier: string; regionIdentifier: string };
+  } & Dnd5eBehaviorOpts
+): Promise<Record<string, unknown>> {
   if (!args?.sceneIdentifier) throw new Error('sceneIdentifier is required');
   if (!args?.regionIdentifier) throw new Error('regionIdentifier is required');
   if (!args?.type) throw new Error('type is required');
@@ -411,6 +500,36 @@ export async function addRegionBehavior(args: {
   }
 
   const system: Record<string, unknown> = { ...(args.system ?? {}) };
+  // dnd5e 6.0 conveniences: names → effect uuids, disposition words → numbers, vocab checks.
+  let resolvedEffects: ResolvedEffect[] = [];
+  const warnings: string[] = [];
+  {
+    const { effects, dispositions, sizes, creatureTypes, terrainTypes, magical } = args;
+    const opts: Dnd5eBehaviorOpts = {
+      ...(effects !== undefined ? { effects } : {}),
+      ...(dispositions !== undefined ? { dispositions } : {}),
+      ...(sizes !== undefined ? { sizes } : {}),
+      ...(creatureTypes !== undefined ? { creatureTypes } : {}),
+      ...(terrainTypes !== undefined ? { terrainTypes } : {}),
+      ...(magical !== undefined ? { magical } : {}),
+    };
+    let uuids: string[] = [];
+    if (Array.isArray(effects) && effects.length > 0) {
+      const r = await resolveEffectRefs(effects);
+      uuids = r.uuids;
+      resolvedEffects = r.resolved;
+      warnings.push(...r.warnings);
+    }
+    Object.assign(system, dnd5eBehaviorSystem(args.type, opts, uuids));
+  }
+  if (args.type === APPLY_EFFECT_BEHAVIOR) {
+    const effects = system.effects;
+    if (!Array.isArray(effects) || effects.length === 0) {
+      throw new Error(
+        `${APPLY_EFFECT_BEHAVIOR} needs at least one effect — pass effects: ["Poisoned"] (a name, an ActiveEffect uuid, or "Item uuid#Effect").`
+      );
+    }
+  }
   if (args.teleportTo) {
     if (args.type !== 'teleportToken') {
       throw new Error('teleportTo is only valid with type "teleportToken"');
@@ -446,7 +565,6 @@ export async function addRegionBehavior(args: {
   const [behavior] = await region.createEmbeddedDocuments('RegionBehavior', [doc]);
 
   // Teleport-destination geometry check — the silent-no-op guard.
-  const warnings: string[] = [];
   for (const dest of teleportDestinationsOf(behavior.system)) {
     const m = dest.match(TELEPORT_DEST_RE);
     if (!m) continue;
@@ -467,6 +585,7 @@ export async function addRegionBehavior(args: {
     regionId: region.id,
     regionName: region.name,
     behavior: dumpBehavior(behavior),
+    ...(resolvedEffects.length > 0 ? { effects: resolvedEffects } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
 }

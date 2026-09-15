@@ -9,9 +9,15 @@
 // damage shapes are lean — dnd5e's DataModel fills every other field on create (live-spiked).
 
 import {
+  ACTIVITY_BEHAVIOR_TYPES,
   ACTIVITY_DURATION_SCALAR_UNITS,
   ACTIVITY_DURATION_UNITS,
+  ACTOR_SIZES,
+  AREA_TEMPLATE_TYPES,
+  CREATURE_TYPE_KEYS,
+  DIFFICULT_TERRAIN_TYPES,
   EXPIRY_EVENTS,
+  TARGET_AFFECTS_TYPES,
 } from '../../utils/dnd5e-canonical.js';
 
 export interface RawDamagePart {
@@ -42,6 +48,40 @@ export interface ActivityDurationOpts {
   concentration?: boolean;
 }
 
+/** An authored area template (dnd5e TargetField.template). */
+export interface ActivityTemplateOpts {
+  type: string;
+  /** Primary size in `units` (radius / length / width per shape) — a number or deterministic formula. */
+  size: number | string;
+  width?: number | string;
+  height?: number | string;
+  units?: string;
+  /** Number of templates placed (e.g. Fire Bolt-style multi-placement). */
+  count?: number | string;
+}
+
+/** Who the activity affects (dnd5e TargetField.affects). */
+export interface ActivityAffectsOpts {
+  type?: string;
+  count?: number | string;
+  choice?: boolean;
+}
+
+/**
+ * An authored area BEHAVIOR (dnd5e 6.0 `activity.behaviors[]`): a region behavior the activity's
+ * measured template carries while it stands. `effectUuids` are ALREADY-RESOLVED ActiveEffect uuids
+ * (the page orchestrator resolves names / item refs first — see effect-refs.ts).
+ */
+export interface ActivityBehaviorOpts {
+  type: string;
+  name?: string;
+  level?: { min?: number; max?: number };
+  effectUuids?: string[];
+  sizes?: string[];
+  creatureTypes?: string[];
+  terrainTypes?: string[];
+}
+
 export interface BuildActivityOpts {
   /** Activity id (caller generates via foundry.utils.randomID(16)). */
   id: string;
@@ -53,6 +93,11 @@ export interface BuildActivityOpts {
    * given, `override: true` is set so the activity's own duration wins over the item's.
    */
   duration?: ActivityDurationOpts;
+  /** Area template + who it affects — sets `target.override: true` so the activity's own target wins. */
+  template?: ActivityTemplateOpts;
+  affects?: ActivityAffectsOpts;
+  /** Area behaviors the template carries (needs a template to ever fire). */
+  behaviors?: ActivityBehaviorOpts[];
   // attack
   attackType?: 'melee' | 'ranged';
   attackBonus?: number;
@@ -140,12 +185,133 @@ export function normalizeActivityDuration(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+const formula = (v: number | string | undefined): string | undefined =>
+  v === undefined || v === null || String(v).trim() === '' ? undefined : String(v).trim();
+
+/**
+ * Normalize an authored area template + affects to the dnd5e TargetField shape. Validates the
+ * template type (CONFIG.DND5E.areaTargetTypes) and the affects type (individualTargetTypes).
+ * Returns undefined when neither was given.
+ */
+export function normalizeActivityTarget(
+  template: ActivityTemplateOpts | undefined,
+  affects: ActivityAffectsOpts | undefined
+): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  if (template) {
+    if (!(AREA_TEMPLATE_TYPES as readonly string[]).includes(template.type)) {
+      throw new Error(
+        `template.type "${template.type}" is not an area shape. Use one of: ${AREA_TEMPLATE_TYPES.join(' ')}.`
+      );
+    }
+    const size = formula(template.size);
+    if (size === undefined)
+      throw new Error('template.size is required (in template.units, default ft).');
+    const t: Record<string, unknown> = { type: template.type, size, units: template.units ?? 'ft' };
+    const width = formula(template.width);
+    const height = formula(template.height);
+    const count = formula(template.count);
+    if (width !== undefined) t.width = width;
+    if (height !== undefined) t.height = height;
+    if (count !== undefined) t.count = count;
+    out.template = t;
+  }
+  if (affects) {
+    const a: Record<string, unknown> = {};
+    if (affects.type !== undefined) {
+      if (
+        affects.type !== '' &&
+        !(TARGET_AFFECTS_TYPES as readonly string[]).includes(affects.type)
+      ) {
+        throw new Error(
+          `affects.type "${affects.type}" is not a target type. Use one of: ${TARGET_AFFECTS_TYPES.join(' ')}.`
+        );
+      }
+      a.type = affects.type;
+    }
+    const count = formula(affects.count);
+    if (count !== undefined) a.count = count;
+    if (typeof affects.choice === 'boolean') a.choice = affects.choice;
+    if (Object.keys(a).length > 0) out.affects = a;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+const assertKeys = (values: string[] | undefined, vocab: readonly string[], label: string) => {
+  for (const v of values ?? []) {
+    if (!vocab.includes(v))
+      throw new Error(`${label} "${v}" is unknown. Use one of: ${vocab.join(' ')}.`);
+  }
+};
+
+/**
+ * Build one persisted `activity.behaviors[]` entry (AppliedBehaviorField): `{ _id, type, name,
+ * level, config }` where `config` is the TypeDataField keyed by `type` — written TOGETHER with the
+ * type, or the clean step drops it. applyActiveEffect config = { effects, sizes, types };
+ * difficultTerrain config = { types }. Validates the vocabularies; requires an effect for
+ * applyActiveEffect.
+ */
+export function buildActivityBehavior(b: ActivityBehaviorOpts, id: string): Record<string, any> {
+  if (!(ACTIVITY_BEHAVIOR_TYPES as readonly string[]).includes(b.type)) {
+    throw new Error(
+      `behavior type "${b.type}" is unknown. Use one of: ${ACTIVITY_BEHAVIOR_TYPES.join(' ')}.`
+    );
+  }
+  const level: Record<string, number> = {};
+  if (typeof b.level?.min === 'number') level.min = b.level.min;
+  if (typeof b.level?.max === 'number') level.max = b.level.max;
+  let config: Record<string, unknown>;
+  if (b.type === 'applyActiveEffect') {
+    if (!b.effectUuids?.length) {
+      throw new Error('an applyActiveEffect behavior needs at least one effect.');
+    }
+    assertKeys(b.sizes, ACTOR_SIZES, 'size');
+    assertKeys(b.creatureTypes, CREATURE_TYPE_KEYS, 'creature type');
+    config = { effects: [...b.effectUuids], sizes: b.sizes ?? [], types: b.creatureTypes ?? [] };
+  } else {
+    assertKeys(b.terrainTypes, DIFFICULT_TERRAIN_TYPES, 'terrain type');
+    config = { types: b.terrainTypes ?? [] };
+  }
+  return { _id: id, type: b.type, name: b.name ?? '', level, config };
+}
+
 /** Build one dnd5e activity object of the given type. */
 export function buildActivity(type: string, opts: BuildActivityOpts): Record<string, any> {
   const act = buildActivityOfType(type, opts);
   const duration = normalizeActivityDuration(opts.duration);
   if (duration) act.duration = { ...(act.duration ?? {}), ...duration, override: true };
+  const target = normalizeActivityTarget(opts.template, opts.affects);
+  if (target) {
+    const prior = act.target ?? {};
+    act.target = {
+      ...prior,
+      ...(target.template
+        ? { template: { ...(prior.template ?? {}), ...(target.template as object) } }
+        : {}),
+      ...(target.affects
+        ? { affects: { ...(prior.affects ?? {}), ...(target.affects as object) } }
+        : {}),
+      override: true,
+    };
+  }
+  if (opts.behaviors?.length) {
+    if (!act.target?.template?.type) {
+      throw new Error(
+        'behaviors ride on an AREA TEMPLATE — give `template` ({type, size}) too, or the behavior never fires.'
+      );
+    }
+    act.behaviors = opts.behaviors.map((b, i) => buildActivityBehavior(b, behaviorId(opts.id, i)));
+  }
   return act;
+}
+
+/** A deterministic 16-char id for the i-th behavior of an activity (ids must be 16 alphanumerics). */
+export function behaviorId(activityId: string, i: number): string {
+  const base = `${activityId}`
+    .replace(/[^A-Za-z0-9]/g, '')
+    .padEnd(16, 'b')
+    .slice(0, 13);
+  return `${base}b${String(i).padStart(2, '0')}`.slice(0, 16);
 }
 
 function buildActivityOfType(type: string, opts: BuildActivityOpts): Record<string, any> {

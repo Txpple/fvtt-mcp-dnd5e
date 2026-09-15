@@ -63,6 +63,11 @@ If the exact item isn't in a compendium but a close base IS (the common case for
    - `update-actor-item` (dot-path patch) — bump `system.armor.magicalBonus`/weapon `magicalBonus`,
      add `system.uses` (charges, e.g. 1/day at dawn), edit the description, set rarity/price.
    - `manage-activity` — add/edit a rollable activity (an extra damage rider, a utility action).
+     **dnd5e 6.0:** an item that lays down a ZONE (a Bead of Force sphere, a Dust of Dryness pool, a
+     net that webs an area) is an activity with `template: {type, size}` + `behaviors` —
+     `[{type: "applyActiveEffect", effects: ["Restrained"]}, {type: "difficultTerrain",
+     terrainTypes: ["web"]}]` — effect names from the stock `dnd5e.effects` pack or an effect you
+     authored on the item (`"<item name>#<effect>"`). Recipes: [[stat-block-builder]] Step 7.
    - `manage-effect` — model a passive bonus a wondrous item grants (a Cloak of Protection's +1 AC/saves
      has no numeric field; it MUST be an ActiveEffect). **dnd5e 6.0:** a bonus that only exists when a
      die is rolled is a RULES change — `{key:"attack"|"check"|"d20"|"save"|"damage"|"healing",
