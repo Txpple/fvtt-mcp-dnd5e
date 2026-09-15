@@ -51,7 +51,7 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 
 ## Milestones
 
-- [ ] **2.1.0 — effects & areas** (#1 #2 #3 #4 #5 #6 #8 #9): ~6.5 h + live proof. The release
+- [x] **2.1.0 — effects & areas** (#1 #2 #3 #4 #5 #6 #8 #9) — **shipped 2026-09-15** (`v2.1.0`). The release
   that lets an authored monster or item express what a 2024 book entry can.
 - [ ] **2.1.1 — teleport, settings, ModifyItem, transform, calendar** (#7 #10 #11 #12 #13): ~7 h.
   (Owner 2026-09-15: #12 and #13 pulled forward; the former "2.2" milestone is empty.)
@@ -79,6 +79,16 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 - [x] #8 — **rarities** (2026-09-15): `add-item` `rarity` takes a string or a LIST; `buildPhysicalItemData`
   writes `system.rarities` natively (no more shimmed `rarity`); `update-actor-item` maps a
   `system.rarity` / `system.rarities` patch onto the Set. `verify-item-tooling.mjs` 13/13.
+
+### 2.1.0 release proof (2026-09-15, sandbox)
+
+Offline gate green (biome · tsc · 1601 tests · build · knip). Live: `verify-effects-6` 47/47,
+`verify-region-effects` 26/26, `verify-item-tooling` 13/13, and the regression — integration suite
+84 passed / 2 skipped (86), `verify-actor-tooling` 29/29, `verify-cast-activity` 25/25,
+`verify-region-tooling` 22/22, `verify-dnd5e-writes` 16/16, `verify-content-audit` 8/8,
+`verify-pc-build` 63/63, `verify-placeables-tooling` 34/34 (timing-flaky when run straight after a
+heavy session — re-run standalone). RELEASE.md step 3 (the MCP-level smoke) needs the CC restart.
+`HANDOFF.md` retired with this release, as it asked.
 
 ## Execution discipline
 
