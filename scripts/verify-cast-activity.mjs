@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -64,14 +65,7 @@ async function expectThrow(label, fn, re) {
   }
 }
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const f = new Foundry(bridgeConfig(env));
 
 let worldItemId; // created world item (cleaned up in finally)
 
@@ -148,17 +142,22 @@ try {
     'fireball pulled V/S/M (has material)'
   );
   assert(
-    fb?.spell?.challenge?.override === true && fb?.spell?.challenge?.attack === null,
-    'fireball challenge override:true, attack:null (save spell; save DC is sanitized from read-back)'
+    fb?.spell?.challenge?.override === true &&
+      !fb?.spell?.challenge?.attack &&
+      fb?.spell?.challenge?.save === '15',
+    'fireball challenge override:true, save "15", no attack (dnd5e 6.0 FormulaField strings)'
   );
   assert(
     fb?.consumption?.spellSlot === false,
     'fireball spellSlot:false (item, not a caster slot)'
   );
   assert(
-    fb?.consumption?.targets?.[0]?.type === 'itemUses' &&
-      fb?.consumption?.targets?.[0]?.value === '1',
-    'fireball consumes 1 itemUses charge'
+    // A base WEAPON has no uses pool of its own, so `charges` lands as an activity-owned pool
+    // (usesOn "activity", inferred since b523ce6) — an itemUses target would never cast.
+    fb?.consumption?.targets?.[0]?.type === 'activityUses' &&
+      fb?.consumption?.targets?.[0]?.value === '1' &&
+      fb?.uses?.max === '1',
+    'fireball consumes 1 charge from an activity-owned pool of 1'
   );
   assert(
     fb?.target?.override === false,
@@ -173,7 +172,7 @@ try {
   // Witch Bolt (spell-attack, level defaulted)
   assert(wb?.spell?.level === 1, 'witch bolt level defaulted to 1 from the spell');
   assert(
-    wb?.spell?.challenge?.attack === 5 && wb?.spell?.challenge?.override === true,
+    wb?.spell?.challenge?.attack === '5' && wb?.spell?.challenge?.override === true,
     'witch bolt fixed spell-attack +5, override:true'
   );
   assert(wb?.name === 'Cast Witch Bolt', 'witch bolt default name "Cast Witch Bolt"');
@@ -181,7 +180,7 @@ try {
   // Magic Missile (defer + at-will + V/S component resolution)
   assert(mm?.spell?.level === 1, 'magic missile level defaulted to 1');
   assert(
-    mm?.spell?.challenge?.attack === null && mm?.spell?.challenge?.override === false,
+    !mm?.spell?.challenge?.attack && mm?.spell?.challenge?.override === false,
     'magic missile defers DC/attack to the caster (override:false)'
   );
   assert(

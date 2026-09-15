@@ -55,6 +55,7 @@ function setPath(obj: any, path: string, value: unknown): void {
 function buildAdvancement(spec: AdvBehaviorSpec, actor: MockActor): any {
   return {
     id: spec.id,
+    name: spec.title, // dnd5e 6.0 field (title is the deprecated getter)
     title: spec.title,
     levels: spec.levels,
     classRestriction: spec.classRestriction ?? '',

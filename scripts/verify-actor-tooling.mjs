@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 import { extractActorStats, extractActorBasicInfo } from '../dist/tools/dnd5e/actor-stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,14 +23,7 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
-const foundry = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const foundry = new Foundry(bridgeConfig(env));
 
 const results = [];
 const pass = (n, s) => {
@@ -54,28 +48,47 @@ async function makeTempNpc(name) {
 try {
   // =========================================================================
   // PHASE 0 — R1: get-actor surfaces real derived modifiers (end-to-end).
+  // A tagged world copy of the Monster Manual's Barbed Devil (the sandbox mirror carries no
+  // hand-placed world actors we can rely on); the checks are for internal consistency between
+  // the page's derived block and the Node extractors, not for one creature's numbers.
   // =========================================================================
   {
-    const info = await foundry.call('getCharacterInfo', { characterName: 'Barbed Devil' });
+    const devil = await foundry.call('createActorFromCompendium', {
+      packId: 'dnd-monster-manual.actors',
+      itemId: await foundry.evaluate(async () => {
+        const pack = globalThis.game.packs.get('dnd-monster-manual.actors');
+        const idx = await pack.getIndex();
+        return idx.find(e => e.name === 'Barbed Devil')?._id ?? null;
+      }),
+      customNames: ['ZZ-MCP-AT Barbed Devil'],
+      quantity: 1,
+      addToScene: false,
+    });
+    const devilId = devil?.actors?.[0]?.id;
+    if (devilId) tempActorIds.push(devilId);
+    const info = await foundry.call('getCharacterInfo', { characterName: devilId });
     const basic = extractActorBasicInfo(info);
     const stats = extractActorStats(info);
+    const strScore = info?.system?.abilities?.str?.value;
     const okDerived =
-      info?.derived?.abilities?.str?.mod === 5 &&
-      info?.derived?.ac?.value === 15 &&
+      typeof strScore === 'number' &&
+      info?.derived?.abilities?.str?.mod === Math.floor((strScore - 10) / 2) &&
+      typeof info?.derived?.ac?.value === 'number' &&
+      info.derived.ac.value > 10 &&
       typeof info?.derived?.skills?.prc?.passive === 'number';
     okDerived
       ? pass(
           'R1 page derived block',
-          `str.mod=${info.derived.abilities.str.mod}, ac=${info.derived.ac.value}`
+          `str.mod=${info.derived.abilities.str.mod}, ac=${info.derived.ac.value} (${info.derived.ac.calc ?? '?'})`
         )
       : fail('R1 page derived block', JSON.stringify(info?.derived));
 
     const okStats =
-      basic.armorClass === 15 &&
-      stats.armorClass === 15 &&
-      stats.abilities?.str?.modifier === 5 &&
-      stats.skills?.prc?.modifier === 8 &&
-      stats.skills?.prc?.passive === 18;
+      basic.armorClass === info?.derived?.ac?.value &&
+      stats.armorClass === info?.derived?.ac?.value &&
+      stats.abilities?.str?.modifier === info?.derived?.abilities?.str?.mod &&
+      stats.skills?.prc?.modifier === info?.derived?.skills?.prc?.total &&
+      stats.skills?.prc?.passive === info?.derived?.skills?.prc?.passive;
     okStats
       ? pass(
           'R1 extractor consumes derived',
@@ -145,8 +158,10 @@ try {
       strMod: stats.abilities?.str?.modifier === 8, // STR 26 -> +8 (derived)
       ac: stats.armorClass === 19,
       hpFormula: sys?.attributes?.hp?.formula === '24d10 + 168' && sys?.attributes?.hp?.max === 300,
-      walkStr: sys?.attributes?.movement?.walk === '30', // FormulaField -> string
-      fly: sys?.attributes?.movement?.fly === '60',
+      // dnd5e 6.0 stores speeds under movement.speeds.* (movement.walk is a deprecated getter)
+      walkStr:
+        (sys?.attributes?.movement?.speeds?.walk ?? sys?.attributes?.movement?.walk) === '30', // FormulaField -> string
+      fly: (sys?.attributes?.movement?.speeds?.fly ?? sys?.attributes?.movement?.fly) === '60',
       darkvision: sys?.attributes?.senses?.ranges?.darkvision === 120,
       di:
         JSON.stringify([...(sys?.traits?.di?.value ?? [])].sort()) ===
@@ -228,24 +243,35 @@ try {
       ? pass('apply-condition remove', `now ${off.statuses.join(',') || '(none)'}`)
       : fail('apply-condition remove', JSON.stringify(off));
 
-    // Exhaustion level via the dnd5e.exhaustionLevel flag (derives system.attributes.exhaustion).
+    // Exhaustion level: dnd5e 6.0 keeps it in the condition effect's system.level (the actor's
+    // attributes.exhaustion is the persisted lever that syncs it). Set 4, then remove.
     await foundry.call('applyCondition', {
       actorIdentifier: npc.id,
       conditions: ['exhaustion'],
       exhaustionLevel: 4,
     });
-    const exh = await foundry.evaluate(id => {
+    const readExh = id => {
       const a = game.actors.get(id);
       const eff = a.effects.find(e => e.statuses?.has?.('exhaustion'));
       return {
         sys: a.system?.attributes?.exhaustion,
-        flag: eff?.flags?.dnd5e?.exhaustionLevel,
-        name: eff?.name,
+        level: eff?.system?.level ?? eff?.flags?.dnd5e?.exhaustionLevel ?? null,
+        name: eff?.name ?? null,
       };
-    }, npc.id);
-    exh?.sys === 4 && exh?.flag === 4
+    };
+    const exh = await foundry.evaluate(readExh, npc.id);
+    exh?.sys === 4 && exh?.level === 4
       ? pass('apply-condition exhaustion level', `${exh.name} (sys=${exh.sys})`)
       : fail('apply-condition exhaustion level', JSON.stringify(exh));
+    await foundry.call('applyCondition', {
+      actorIdentifier: npc.id,
+      conditions: ['exhaustion'],
+      active: false,
+    });
+    const exhOff = await foundry.evaluate(readExh, npc.id);
+    exhOff?.sys === 0 && exhOff?.name === null
+      ? pass('apply-condition exhaustion remove', 'effect gone, sys=0')
+      : fail('apply-condition exhaustion remove', JSON.stringify(exhOff));
 
     // unknown condition warns, not throws
     const bad = await foundry.call('applyCondition', {

@@ -20,7 +20,8 @@ interface InspectedItem {
 interface Inspected {
   cr?: number;
   hpMax?: number;
-  acFlat?: number;
+  acOverride?: number | null;
+  acValue?: number;
   spellAbility?: string;
   spell1?: { liveMax?: number; srcValue?: number; srcOverride?: number };
   spell3?: { liveMax?: number; srcValue?: number; srcOverride?: number };
@@ -200,7 +201,9 @@ describe.skipIf(!LIVE)('dnd5e authoring + data model (live)', () => {
       return {
         cr: a.system?.details?.cr,
         hpMax: a.system?.attributes?.hp?.max,
-        acFlat: a.system?.attributes?.ac?.flat,
+        // dnd5e 6.0: a fixed stat-block AC is `override`; `value` is derived on the live actor
+        acOverride: a.system?.attributes?.ac?.override,
+        acValue: live.system?.attributes?.ac?.value,
         spellAbility: live.system?.attributes?.spellcasting ?? a.system?.attributes?.spellcasting,
         spell1: sp('spell1'),
         spell3: sp('spell3'),
@@ -211,11 +214,12 @@ describe.skipIf(!LIVE)('dnd5e authoring + data model (live)', () => {
     expect(inspect).toBeTruthy();
   });
 
-  it('NPC system data: cr=5, hp=76, ac flat=18', ctx => {
+  it('NPC system data: cr=5, hp=76, ac override=18', ctx => {
     if (!inspect) return ctx.skip();
     expect(inspect.cr).toBe(5);
     expect(inspect.hpMax).toBe(76);
-    expect(inspect.acFlat).toBe(18);
+    expect(inspect.acOverride).toBe(18);
+    expect(inspect.acValue).toBe(18);
   });
 
   it('attack item has an attack activity with damage', ctx => {

@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -29,14 +30,7 @@ const EXPECTED = {
   'Thomas A. Invictus': { pp: 0, gp: 30, ep: 0, sp: 4, cp: 4 },
 };
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const f = new Foundry(bridgeConfig(env));
 
 let fails = 0;
 const assert = (cond, msg) => {

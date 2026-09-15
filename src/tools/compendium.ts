@@ -863,11 +863,13 @@ export class CompendiumTools {
         if (system.armor?.value) parts.push(`AC ${system.armor.value}`);
         break;
       case 'equipment':
-      case 'item':
-        if (system.rarity) parts.push(system.rarity);
+      case 'item': {
+        const rarity = firstRarity(system);
+        if (rarity) parts.push(rarity);
         if (system.price?.value)
           parts.push(`${system.price.value} ${system.price.denomination || 'gp'}`);
         break;
+      }
     }
 
     return parts.join(' • ');
@@ -927,13 +929,14 @@ export class CompendiumTools {
       if (Object.keys(abilities).length > 0) stats.abilities = abilities;
     }
 
-    // Speed
+    // Speed (dnd5e 6.0 movement.speeds.*; 5.x source data kept movement.walk etc.)
     if (system.attributes?.movement) {
       const movement = system.attributes.movement;
+      const sp = movement.speeds ?? movement;
       const speeds: string[] = [];
-      if (movement.walk) speeds.push(`${movement.walk} ft`);
-      if (movement.fly) speeds.push(`fly ${movement.fly} ft`);
-      if (movement.swim) speeds.push(`swim ${movement.swim} ft`);
+      if (sp.walk) speeds.push(`${sp.walk} ft`);
+      if (sp.fly) speeds.push(`fly ${sp.fly} ft`);
+      if (sp.swim) speeds.push(`swim ${sp.swim} ft`);
       if (speeds.length > 0) stats.speed = speeds.join(', ');
     }
 
@@ -944,8 +947,9 @@ export class CompendiumTools {
     const system = item.system || {};
     const properties: any = {};
 
-    // Common properties across different item types
-    if (system.rarity) properties.rarity = system.rarity;
+    // Common properties across different item types (dnd5e 6.0 `rarities` array, else 5.x `rarity`)
+    const rarity = firstRarity(system);
+    if (rarity) properties.rarity = rarity;
     if (system.price) properties.price = system.price;
     if (system.weight) properties.weight = system.weight;
     if (system.quantity) properties.quantity = system.quantity;
@@ -1034,4 +1038,12 @@ export class CompendiumTools {
     }
     return `${text.substring(0, maxLength - 3)}...`;
   }
+}
+
+/** First rarity off sanitized system data — dnd5e 6.0 `rarities` (array once sanitized), else 5.x `rarity`. */
+function firstRarity(system: any): string {
+  const rs = system?.rarities;
+  const first = Array.isArray(rs) ? rs[0] : rs instanceof Set ? Array.from(rs)[0] : undefined;
+  if (typeof first === 'string' && first) return first;
+  return typeof system?.rarity === 'string' ? system.rarity : '';
 }

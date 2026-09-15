@@ -135,6 +135,13 @@ describe('toMessageRecord', () => {
     });
     expect(r.rolls).toBeUndefined();
   });
+
+  it('carries the core v14 title (dnd5e 6.0 cards: "Item - Activity") and omits it when blank', () => {
+    expect(
+      toMessageRecord(raw({ title: 'Longsword - Attack' }), { contentMode: 'none' }).title
+    ).toBe('Longsword - Attack');
+    expect(toMessageRecord(raw({ title: '' }), { contentMode: 'none' }).title).toBeUndefined();
+  });
 });
 
 describe('transcript builders', () => {

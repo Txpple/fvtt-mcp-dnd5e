@@ -151,7 +151,7 @@ const UpdateActorSchema = z.object({
       rules: z.enum(['2014', '2024']).optional(),
     })
     .optional()
-    .describe('Source metadata (book / page / rules edition).'),
+    .describe('[NPC] Source metadata (book / page / rules edition) — system.source.'),
 
   // abilities / saves / skills
   abilities: z
@@ -220,19 +220,62 @@ const UpdateActorSchema = z.object({
     .describe('Hit points (value / max / temp / tempmax / formula).'),
   ac: z
     .object({
+      override: z
+        .number()
+        .int()
+        .min(0)
+        .nullable()
+        .optional()
+        .describe(
+          'FIXED AC that replaces every calculation (a stat block "AC 17"; armor/shield ' +
+            'no longer matter). null clears it so the calculations apply again.'
+        ),
+      natural: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe(
+          'Natural armor: AC = this value (+ shield, bonuses, cover). Sets calcs to ["natural"] ' +
+            'and clears any override.'
+        ),
+      calcs: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Base calculations the actor QUALIFIES for — the sheet uses the best: unarmored (10 + DEX), ' +
+            'armored (worn armor), mage, draconic, unarmoredMonk, unarmoredBarb, unarmoredBard, ' +
+            'natural. Replaces the list; default is ["unarmored","armored"].'
+        ),
+      formulas: z
+        .array(
+          z.object({
+            formula: z.string().min(1),
+            label: z.string().optional(),
+            armored: z.boolean().nullable().optional(),
+            shielded: z.boolean().nullable().optional(),
+          })
+        )
+        .optional()
+        .describe(
+          'Custom AC formulas, e.g. [{formula:"13 + @abilities.dex.mod", label:"Mage Armor"}]; ' +
+            'armored/shielded = only qualifies when (not) wearing armor / a shield. Replaces the list.'
+        ),
       calc: z
         .string()
         .optional()
-        .describe('AC calculation: flat, natural, default, mage, draconic, unarmoredMonk, ...'),
-      flat: z
-        .number()
-        .int()
-        .optional()
-        .describe('Flat AC value (used by calc "flat" / "natural").'),
-      formula: z.string().optional(),
+        .describe(
+          'DEPRECATED dnd5e 5.x alias, still translated: "flat" (+flat → override), "natural" ' +
+            '(+flat), "default" (reset calcs), "custom" (+formula), or a calcs key. Prefer the fields above.'
+        ),
+      flat: z.number().int().optional().describe('DEPRECATED 5.x alias — see calc.'),
+      formula: z.string().optional().describe('DEPRECATED 5.x alias — see calc.'),
     })
     .optional()
-    .describe('Armor class.'),
+    .describe(
+      'Armor class (dnd5e 6.0 model): override = fixed AC; natural = natural armor; calcs / ' +
+        'formulas = what the sheet may calculate from.'
+    ),
   initiative: z
     .object({
       bonus: z.number().optional(),
@@ -249,11 +292,14 @@ const UpdateActorSchema = z.object({
       swim: z.number().min(0).optional(),
       climb: z.number().min(0).optional(),
       burrow: z.number().min(0).optional(),
+      jump: z.number().min(0).optional(),
       units: z.string().optional(),
       hover: z.boolean().optional(),
     })
     .optional()
-    .describe('Movement speeds (in the given units, default feet).'),
+    .describe(
+      'Movement speeds (in the given units, default feet). Stored under movement.speeds.*.'
+    ),
   senses: z
     .object({
       darkvision: z.number().min(0).optional(),

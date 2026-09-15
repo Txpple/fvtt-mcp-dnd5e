@@ -20,6 +20,7 @@ import {
   findUnresolvedScaleTokens,
 } from '../_shared.js';
 import { buildActivity } from './activities.js';
+import { AC_DEFAULT_CALCS } from './actor-fields.js';
 import { createWorldItems } from '../items.js';
 import { searchCompendiumFaceted } from '../compendium-facets.js';
 import { resolveAuthoredIcon, isPlaceholderIcon } from './icons.js';
@@ -345,10 +346,15 @@ async function findApproxIcon(data: any): Promise<string | null> {
 // Default folder for the world-Item "loot twin" a magic item gets when placed on an actor (rule 9).
 const DEFAULT_LOOT_FOLDER = 'Loot';
 
-/** True when a built/copied item's system data marks it magic — rarity set, the 'mgc' property, or a
- * numeric +N (weapon system.magicalBonus or armor system.armor.magicalBonus). PURE — unit-tested. */
+/** True when a built/copied item's system data marks it magic — a rarity (dnd5e 6.0 `rarities`
+ * Set/array, or the 5.x `rarity` string), the 'mgc' property, or a numeric +N (weapon
+ * system.magicalBonus or armor system.armor.magicalBonus). PURE — unit-tested. */
 export function isMagicItemDoc(system: any): boolean {
   if (!system || typeof system !== 'object') return false;
+  const rarities = system.rarities;
+  const rarityCount =
+    rarities instanceof Set ? rarities.size : Array.isArray(rarities) ? rarities.length : 0;
+  if (rarityCount > 0) return true;
   if (typeof system.rarity === 'string' && system.rarity !== '') return true;
   if (Array.isArray(system.properties) && system.properties.includes('mgc')) return true;
   const bonus = system.magicalBonus ?? system.armor?.magicalBonus;
@@ -502,12 +508,16 @@ export async function addItem(data: any): Promise<unknown> {
       throw new Error(`Failed to create item "${data.name}" on actor "${actor.name}"`);
     }
 
-    // Optional armor→AC wiring: switch the actor to the default (armor-derived) AC calc so worn
-    // BODY armor actually changes AC. Opt-in (GM's call — an NPC may use natural-armor AC). A shield
-    // is excluded: its +2 already applies under any calc, so switching calc would only clobber an
-    // authored natural/flat AC.
+    // Optional armor→AC wiring: put the actor back on the default (armor-derived) AC calculations
+    // and clear any fixed override so worn BODY armor actually changes AC. Opt-in (GM's call — an
+    // NPC may use natural-armor AC). A shield is excluded: its +2 already applies under any calc, so
+    // switching would only clobber an authored natural/fixed AC. dnd5e 6.0: `calcs` is the persisted
+    // Set (the old `calc:"default"` write is pruned as non-persisted and does nothing).
     if (data.wireAc && data.itemType === 'armor' && doc.system.equipped !== false) {
-      await actor.update({ 'system.attributes.ac.calc': 'default' });
+      await actor.update({
+        'system.attributes.ac.calcs': [...AC_DEFAULT_CALCS],
+        'system.attributes.ac.override': null,
+      });
     }
 
     const result: any = {

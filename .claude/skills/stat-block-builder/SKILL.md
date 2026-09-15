@@ -205,9 +205,12 @@ defer item judgment to [[physical-item-builder]]:
   gear|weapon|armor|consumable, `rarity`, `itemType`, `magical`, `name` — premium books only, never the
   `dnd5e.*` SRD, so no pack-id reasoning) → `import-item` the chosen hit (`packId` = its `pack`,
   `itemId` = its `id`, plus `actorIdentifier`). Copies bring correct stats AND art.
-- **Worn armor / shield** → `import-item` the real armor/shield. Copied armor doesn't auto-drive AC; set
-  the actor's AC with `update-actor` if needed (a shield's bonus applies under any calc). When you must
-  AUTHOR body armor via `add-item`, pass `wireAc: true` to switch the actor to armor-based AC.
+- **Worn armor / shield** → `import-item` the real armor/shield. A stat block's fixed AC is
+  `ac: {override: N}` on `update-actor` (author-npc `acMode: "flat"` does the same); a creature whose
+  AC should come from worn armor needs the override cleared (`ac: {override: null}` — the default
+  calcs then use the armor) and natural armor is `ac: {natural: N}`. A shield's +2 applies under
+  every calculation except an override. When you must AUTHOR body armor via `add-item`, pass
+  `wireAc: true` to put the actor back on armor-based AC.
 - **Carried gear, consumables, loot** → `import-item` potions/scrolls, magic trinkets, tools, gems. Use
   `equipped: false` for stowed items, `identified: false` for mystery loot.
 - **Custom magic gear** → copy the closest base, then modify (`update-actor-item` / `manage-activity` /

@@ -4,15 +4,109 @@
 // supported way to add/remove a status effect by id). It is authoring-only: it sets a creature's
 // condition state, it does NOT run combat automation (no duration tick-down, no save-ends loop).
 //
-// Live-verified dnd5e 5.3.3 facts:
+// dnd5e 6.0.1 / Foundry 14.367 facts (read from the system source, docs/dnd5e-6.0-compat-review.md):
 //  - Valid ids are CONFIG.DND5E.conditionTypes keys (the 26 D&D conditions) plus the broader
 //    CONFIG.statusEffects ids (cover, concentrating, dead, ...). We validate against their union.
-//  - Exhaustion is the one LEVELED condition. toggleStatusEffect's `levels` option is ignored
-//    (it always creates "Exhaustion 1"); the level is the `flags.dnd5e.exhaustionLevel` flag on the
-//    created effect, and the derived `system.attributes.exhaustion` follows that flag. Writing
-//    `system.attributes.exhaustion` directly does NOT stick. So: toggle on, then set the flag.
+//    ⚠️ dnd5e 6.0 builds CONFIG.statusEffects as a plain OBJECT keyed by id (5.x built an array;
+//    core v14's own value is an array-proxy that also answers keyed reads) — read it with
+//    Object.values, never .map.
+//  - Exhaustion is the one LEVELED condition. Its effect is an ActiveEffect of type "condition"
+//    with `system.type: "exhaustion"` and the level in `system.level` (the 5.x
+//    `flags.dnd5e.exhaustionLevel` flag is gone), stored under the static id
+//    dnd5e.utils.staticID("dnd5eexhaustion"). `system.attributes.exhaustion` is PERSISTED and
+//    Actor5e#_onUpdateExhaustion syncs the effect by delta (create / increase / decrease / delete)
+//    when it changes — that is the lever. toggleStatusEffect must NOT be used for it: in 6.0 a
+//    leveled status routes to ConditionData._applyDelta(+1) regardless of `active`, so a
+//    "remove" call would ADD a level.
 
 import { resolveActorFuzzy } from '../_shared.js';
+
+/** dnd5e's static effect id for the exhaustion condition (`staticID("dnd5eexhaustion")`). */
+const EXHAUSTION_STATIC_KEY = 'dnd5eexhaustion';
+
+/**
+ * The status-effect ids a world advertises: CONFIG.DND5E.conditionTypes keys ∪ CONFIG.statusEffects
+ * ids. Pure — tolerates the 6.0 object form, the 5.x array form, and an absent config.
+ */
+export function collectStatusIds(config: {
+  DND5E?: { conditionTypes?: Record<string, unknown> };
+  statusEffects?: Record<string, { id?: string }> | Array<{ id?: string }>;
+}): Set<string> {
+  const ids = new Set<string>(Object.keys(config?.DND5E?.conditionTypes ?? {}));
+  for (const s of Object.values(config?.statusEffects ?? {})) {
+    if (s && typeof s.id === 'string' && s.id) ids.add(s.id);
+  }
+  return ids;
+}
+
+/** Resolve the requested exhaustion level: explicit 0–6, else 1 when applying / 0 when removing. */
+export function resolveExhaustionLevel(requested: number | undefined, active: boolean): number {
+  if (typeof requested === 'number' && Number.isFinite(requested)) {
+    return Math.max(0, Math.min(6, Math.round(requested)));
+  }
+  return active ? 1 : 0;
+}
+
+/** Read a condition effect's level: 6.0 `system.level`, 5.x flag as a fallback, else 1. */
+export function readExhaustionLevel(effect: any): number {
+  const v = effect?.system?.level ?? effect?.flags?.dnd5e?.exhaustionLevel;
+  return typeof v === 'number' && Number.isFinite(v) ? v : 1;
+}
+
+/** Locate the actor's exhaustion effect by dnd5e's static id, falling back to its status. */
+function findExhaustionEffect(actor: any): any {
+  const staticId = (globalThis as any).dnd5e?.utils?.staticID?.(EXHAUSTION_STATIC_KEY);
+  return (
+    (staticId ? actor.effects?.get?.(staticId) : undefined) ??
+    actor.effects?.find?.((e: any) => e.statuses?.has?.('exhaustion'))
+  );
+}
+
+const sleep = (ms: number) => new Promise(r => (globalThis as any).setTimeout(r, ms));
+
+/**
+ * Set an actor's exhaustion to `lvl` (0 removes). Drives the persisted `system.attributes.exhaustion`
+ * field so dnd5e's own delta sync creates/removes the condition effect; an EXISTING effect's level is
+ * set directly (deterministic, no dependence on the un-awaited sync).
+ */
+async function setExhaustion(actor: any, lvl: number, warnings: string[]): Promise<void> {
+  const sourceLevel = Number(actor._source?.system?.attributes?.exhaustion ?? 0) || 0;
+  let eff = findExhaustionEffect(actor);
+
+  if (lvl <= 0) {
+    // Deleting the effect makes dnd5e write attributes.exhaustion = 0 itself; a stale source value
+    // with no effect behind it is cleared directly.
+    if (eff) await eff.delete();
+    else if (sourceLevel !== 0) await actor.update({ 'system.attributes.exhaustion': 0 });
+    return;
+  }
+
+  if (eff) {
+    if (readExhaustionLevel(eff) !== lvl) await eff.update({ 'system.level': lvl });
+    // Keep the persisted field in step. dnd5e's delta sync compares against the DERIVED level
+    // (already lvl), so this is a pure bookkeeping write with no second effect change.
+    if (sourceLevel !== lvl) await actor.update({ 'system.attributes.exhaustion': lvl });
+    return;
+  }
+
+  // No effect yet: a change to attributes.exhaustion makes dnd5e create it at `lvl`. If the source
+  // already says lvl (stale), there would be no diff and no sync — reset first.
+  if (sourceLevel === lvl) await actor.update({ 'system.attributes.exhaustion': 0 });
+  await actor.update({ 'system.attributes.exhaustion': lvl });
+  // Actor5e#_onUpdate fires the effect creation WITHOUT awaiting it — give it a moment to land.
+  for (let attempt = 0; attempt < 20 && !eff; attempt++) {
+    await sleep(50);
+    eff = findExhaustionEffect(actor);
+  }
+  if (!eff) {
+    warnings.push(
+      'Exhaustion level was written to the actor, but dnd5e did not create the condition effect ' +
+        '(check the sheet).'
+    );
+  } else if (readExhaustionLevel(eff) !== lvl) {
+    await eff.update({ 'system.level': lvl });
+  }
+}
 
 export async function applyCondition(args: {
   actorIdentifier: string;
@@ -25,22 +119,15 @@ export async function applyCondition(args: {
   if (typeof actor.toggleStatusEffect !== 'function') {
     throw new Error('This Foundry version does not support Actor#toggleStatusEffect.');
   }
-
   const conditions = Array.isArray(args.conditions) ? args.conditions : [];
   if (conditions.length === 0) throw new Error('Provide at least one condition.');
   const active = args.active !== false;
 
-  const CONFIG_: any = (globalThis as any).CONFIG ?? {};
-  const validIds = new Set<string>([
-    ...Object.keys(CONFIG_.DND5E?.conditionTypes ?? {}),
-    ...((CONFIG_.statusEffects ?? []).map((s: any) => s.id).filter(Boolean) as string[]),
-  ]);
+  const validIds = collectStatusIds((globalThis as any).CONFIG ?? {});
 
   const applied: string[] = [];
   const removed: string[] = [];
   const warnings: string[] = [];
-
-  const hasStatus = (id: string): boolean => actor.statuses?.has?.(id) ?? false;
 
   for (const raw of conditions) {
     const id = String(raw).trim().toLowerCase();
@@ -50,52 +137,13 @@ export async function applyCondition(args: {
       );
       continue;
     }
-
-    // Exhaustion: leveled — toggle on, then set the dnd5e.exhaustionLevel flag (derives the level).
     if (id === 'exhaustion') {
-      const lvl =
-        typeof args.exhaustionLevel === 'number'
-          ? Math.max(0, Math.min(6, Math.round(args.exhaustionLevel)))
-          : active
-            ? 1
-            : 0;
-      if (!active || lvl <= 0) {
-        if (hasStatus('exhaustion'))
-          await actor.toggleStatusEffect('exhaustion', { active: false });
-        removed.push('exhaustion');
-      } else {
-        // Ensure the exhaustion effect exists, then set the level via its dnd5e.exhaustionLevel flag
-        // (the derived system.attributes.exhaustion follows the flag). dnd5e initializes a freshly
-        // toggled exhaustion effect to level 1 via a DEFERRED step that can land AFTER our update and
-        // clobber it back to 1, so set-confirm-retry until the level sticks (it does once dnd5e's
-        // init settles). Update the PERSISTED effect off actor.effects — the doc toggleStatusEffect
-        // returns is transient and its update does not persist.
-        if (!hasStatus('exhaustion')) {
-          await actor.toggleStatusEffect('exhaustion', { active: true });
-        }
-        const findEff = () =>
-          actor.effects.find(
-            (e: any) => e.statuses?.has?.('exhaustion') || /exhaustion/i.test(e.name ?? '')
-          );
-        let eff = findEff();
-        if (!eff) {
-          warnings.push('Could not locate the exhaustion effect to set its level.');
-        } else {
-          const sleep = (ms: number) => new Promise(r => (globalThis as any).setTimeout(r, ms));
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const fresh = actor.effects.get(eff._id ?? eff.id) ?? findEff();
-            if (!fresh) break;
-            eff = fresh;
-            if (eff.flags?.dnd5e?.exhaustionLevel === lvl) break;
-            await eff.update({ 'flags.dnd5e.exhaustionLevel': lvl });
-            await sleep(80); // let any deferred dnd5e re-init land before we re-check
-          }
-        }
-        applied.push(`exhaustion ${lvl}`);
-      }
+      const lvl = resolveExhaustionLevel(args.exhaustionLevel, active);
+      await setExhaustion(actor, lvl, warnings);
+      if (lvl > 0) applied.push(`exhaustion ${lvl}`);
+      else removed.push('exhaustion');
       continue;
     }
-
     await actor.toggleStatusEffect(id, { active });
     (active ? applied : removed).push(id);
   }

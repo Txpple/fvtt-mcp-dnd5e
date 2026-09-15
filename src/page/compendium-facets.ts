@@ -17,8 +17,8 @@ import { excludeSrdPacks, isSrdPack, packPriority } from '../utils/compendium-so
 // ---------------------------------------------------------------------------
 
 export interface FacetFilter {
-  k: string; // dnd5e source key-path
-  o: string; // dnd5e.Filter operator (_, in, gte, lte, hasany, …)
+  k?: string; // dnd5e source key-path (absent on the logical operators, e.g. OR)
+  o: string; // dnd5e.Filter operator (exact, in, gte, lte, hasany, OR, …)
   v: unknown;
 }
 
@@ -147,7 +147,15 @@ const INDEX_FIELDS: Record<ContentTypeDef['kind'], string[]> = {
     'system.resources.legact.max',
   ],
   spell: ['system.level', 'system.school'],
-  gear: ['system.rarity', 'system.type.value', 'system.properties', 'system.price.value'],
+  // dnd5e 6.0 stores `system.rarities` (a Set); 5.x-built packs (the premium books today) still
+  // index `system.rarity`. Request both and filter on either, exactly like the system's browser.
+  gear: [
+    'system.rarities',
+    'system.rarity',
+    'system.type.value',
+    'system.properties',
+    'system.price.value',
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -165,7 +173,8 @@ export function packIdFromUuid(uuid: string | undefined): string | null {
 function pushRange(out: FacetFilter[], key: string, v: NumOrRange | undefined): void {
   if (v === undefined) return;
   if (typeof v === 'number') {
-    out.push({ k: key, o: '_', v });
+    // dnd5e 6.0 dropped the `_` alias for the exact-match operator; `exact` exists in 5.x too.
+    out.push({ k: key, o: 'exact', v });
     return;
   }
   if (typeof v.min === 'number') out.push({ k: key, o: 'gte', v: v.min });
@@ -206,13 +215,39 @@ export function buildFacetFilters(
     const rarities = toArray(args.rarity).map(
       r => RARITY_TO_DND5E[r.toLowerCase().trim()] ?? r.trim()
     );
-    if (rarities.length) out.push({ k: 'system.rarity', o: 'in', v: rarities });
+    if (rarities.length) out.push(rarityFilter(rarities));
     const subtypes = toArray(args.itemType);
     if (subtypes.length) out.push({ k: 'system.type.value', o: 'in', v: subtypes });
     const props = toArray(args.properties);
     if (props.length) out.push({ k: 'system.properties', o: 'hasany', v: props });
   }
   return out;
+}
+
+/**
+ * Rarity predicate that matches BOTH storage shapes: dnd5e 6.0 `system.rarities` (Set/array —
+ * `hasany`) and the 5.x `system.rarity` string (`in`). An `OR` filter is what dnd5e's own
+ * compendium browser builds (physical-item.mjs compendiumBrowserFilters).
+ */
+export function rarityFilter(rarities: string[]): FacetFilter {
+  return {
+    o: 'OR',
+    v: [
+      { k: 'system.rarities', o: 'hasany', v: rarities },
+      { k: 'system.rarity', o: 'in', v: rarities },
+    ],
+  };
+}
+
+/** First rarity of a gear hit — 6.0 `rarities` (Set or array) first, then the 5.x string. */
+export function readRarity(system: any): string {
+  const rs = system?.rarities;
+  const first = rs instanceof Set ? Array.from(rs)[0] : Array.isArray(rs) ? rs[0] : undefined;
+  return (
+    (typeof first === 'string' && first) ||
+    (typeof system?.rarity === 'string' ? system.rarity : '') ||
+    ''
+  );
 }
 
 /** Project a raw index/document hit into the uniform CompendiumHit shape. Pure + tested. */
@@ -233,7 +268,7 @@ export function projectHit(
     facets.spellLevel = Number(system.level) || 0;
     facets.spellSchool = system.school ?? null;
   } else if (kind === 'gear') {
-    facets.rarity = system.rarity || '';
+    facets.rarity = readRarity(system);
     facets.itemType = system.type?.value ?? null;
     facets.properties = Array.isArray(system.properties) ? system.properties : [];
     facets.magical = Array.isArray(system.properties) && system.properties.includes('mgc');
@@ -381,8 +416,14 @@ async function fallbackIndexFetch(
 /** Minimal JS evaluation of the {k,o,v} filters for the fallback path. Pure + tested. */
 export function matchesFilters(entry: any, filters: FacetFilter[]): boolean {
   for (const f of filters) {
-    const actual = getPath(entry, f.k);
+    if (f.o === 'OR') {
+      const alts = Array.isArray(f.v) ? (f.v as FacetFilter[]) : [];
+      if (!alts.some(alt => matchesFilters(entry, [alt]))) return false;
+      continue;
+    }
+    const actual = getPath(entry, f.k ?? '');
     switch (f.o) {
+      case 'exact':
       case '_':
         if (actual !== f.v) return false;
         break;

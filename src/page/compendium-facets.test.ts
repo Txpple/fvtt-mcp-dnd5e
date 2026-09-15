@@ -12,6 +12,8 @@ import {
   projectHit,
   passesPostFilters,
   matchesFilters,
+  rarityFilter,
+  readRarity,
   type FacetedSearchArgs,
 } from './compendium-facets.js';
 
@@ -51,7 +53,7 @@ describe('buildFacetFilters', () => {
       challengeRating: 17,
       hasSpells: true,
     } as FacetedSearchArgs);
-    expect(f).toEqual([{ k: 'system.details.cr', o: '_', v: 17 }]);
+    expect(f).toEqual([{ k: 'system.details.cr', o: 'exact', v: 17 }]);
   });
 
   it('spell: level range + school; damageType is NOT a filter (two-stage)', () => {
@@ -83,7 +85,14 @@ describe('buildFacetFilters', () => {
       properties: ['mgc'],
     } as FacetedSearchArgs);
     expect(f).toEqual([
-      { k: 'system.rarity', o: 'in', v: ['rare', 'veryRare'] },
+      // dnd5e 6.0 `rarities` (Set) OR the 5.x `rarity` string still indexed by the premium packs
+      {
+        o: 'OR',
+        v: [
+          { k: 'system.rarities', o: 'hasany', v: ['rare', 'veryRare'] },
+          { k: 'system.rarity', o: 'in', v: ['rare', 'veryRare'] },
+        ],
+      },
       { k: 'system.type.value', o: 'in', v: ['wondrous'] },
       { k: 'system.properties', o: 'hasany', v: ['mgc'] },
     ]);
@@ -95,7 +104,7 @@ describe('buildFacetFilters', () => {
       rarity: ['Very Rare', 'rare', 'mythic'],
     } as FacetedSearchArgs);
     // "Very Rare" -> camelCase key; "rare" unchanged; unknown "mythic" passes through trimmed.
-    expect(f).toEqual([{ k: 'system.rarity', o: 'in', v: ['veryRare', 'rare', 'mythic'] }]);
+    expect(f).toEqual([rarityFilter(['veryRare', 'rare', 'mythic'])]);
   });
 });
 
@@ -147,6 +156,13 @@ describe('projectHit', () => {
       'DMG'
     );
     expect(hit.facets).toMatchObject({ rarity: 'veryRare', itemType: 'wondrous', magical: true });
+  });
+
+  it('gear: reads the dnd5e 6.0 `rarities` set (array on an index entry, Set on a document)', () => {
+    expect(readRarity({ rarities: ['legendary'] })).toBe('legendary');
+    expect(readRarity({ rarities: new Set(['rare', 'veryRare']) })).toBe('rare');
+    expect(readRarity({ rarities: [], rarity: 'uncommon' })).toBe('uncommon');
+    expect(readRarity({})).toBe('');
   });
 });
 
@@ -207,7 +223,7 @@ describe('matchesFilters (fallback evaluator)', () => {
     expect(
       matchesFilters(entry, [{ k: 'system.details.type.value', o: 'in', v: ['fiend', 'undead'] }])
     ).toBe(true);
-    expect(matchesFilters(entry, [{ k: 'system.details.cr', o: '_', v: 6 }])).toBe(true);
+    expect(matchesFilters(entry, [{ k: 'system.details.cr', o: 'exact', v: 6 }])).toBe(true);
     expect(matchesFilters(entry, [{ k: 'system.properties', o: 'hasany', v: ['mgc'] }])).toBe(true);
     expect(matchesFilters(entry, [{ k: 'system.properties', o: 'hasany', v: ['ada'] }])).toBe(
       false
@@ -220,5 +236,12 @@ describe('matchesFilters (fallback evaluator)', () => {
         { k: 'system.traits.size', o: 'in', v: ['lg'] },
       ])
     ).toBe(false);
+  });
+  it('OR passes when any alternative matches — the dual-key rarity predicate on either shape', () => {
+    const f = [rarityFilter(['rare'])];
+    expect(matchesFilters({ system: { rarities: ['rare'] } }, f)).toBe(true); // 6.0 index
+    expect(matchesFilters({ system: { rarity: 'rare' } }, f)).toBe(true); // 5.x index
+    expect(matchesFilters({ system: { rarities: ['common'], rarity: 'common' } }, f)).toBe(false);
+    expect(matchesFilters({ system: {} }, f)).toBe(false);
   });
 });

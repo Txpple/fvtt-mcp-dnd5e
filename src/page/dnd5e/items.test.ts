@@ -295,6 +295,10 @@ describe('buildPhysicalItemData — errors', () => {
 describe('isMagicItemDoc', () => {
   it('flags a set rarity, the mgc property, or a numeric +N as magic', () => {
     expect(isMagicItemDoc({ rarity: 'rare' })).toBe(true);
+    // dnd5e 6.0 stores `rarities` (Set on a document, array in toObject()/index data)
+    expect(isMagicItemDoc({ rarities: ['rare'] })).toBe(true);
+    expect(isMagicItemDoc({ rarities: new Set(['veryRare']) })).toBe(true);
+    expect(isMagicItemDoc({ rarities: [], properties: [] })).toBe(false);
     expect(isMagicItemDoc({ rarity: '', properties: ['mgc'] })).toBe(true);
     expect(isMagicItemDoc({ magicalBonus: '1' })).toBe(true);
     expect(isMagicItemDoc({ armor: { magicalBonus: '2' } })).toBe(true);

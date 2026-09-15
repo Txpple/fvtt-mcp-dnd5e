@@ -26,6 +26,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -39,14 +40,7 @@ const args = process.argv.slice(2);
 const revert = args.includes('--revert');
 const sceneArgs = args.filter(a => a !== '--revert');
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const f = new Foundry(bridgeConfig(env));
 
 try {
   console.log('[reveal-fog] connecting…');

@@ -166,10 +166,11 @@ them — and **pull an approximating icon from the compendium** (see House rules
 - **The weapon a creature fights with must be a real `weapon` item with an attack** so to-hit/damage
   derive from it — a copied PHB weapon already has its attack activity; an authored one needs `withAttack`
   (the default when `damage` is given).
-- **Worn armor and AC:** adding body armor does not change an NPC's AC unless the actor derives AC from
-  it. When authoring body armor with `add-item`, pass `wireAc: true` to switch the actor to armor-based
-  AC. (A copied armor item is just an item — set the actor's AC calc with `update-actor` if needed; a
-  shield's bonus applies under any calc.)
+- **Worn armor and AC:** adding body armor does not change an actor's AC while a fixed AC override is
+  set (how stat-block NPCs are authored). When authoring body armor with `add-item`, pass
+  `wireAc: true` to put the actor back on armor-based AC. (A copied armor item is just an item —
+  clear the override with `update-actor` `ac: {override: null}` if needed; a shield's +2 applies
+  under every calculation except an override.)
 - **The description is PLAYER-VISIBLE and NOT audited — keep it innocuous (shared-policy rule 12).** A
   player can read an item's `system.description` the instant they see it, and `content-audit` doesn't
   scan description prose, so nothing catches a leak for you. **Never** bake a GM note, spoiler, or

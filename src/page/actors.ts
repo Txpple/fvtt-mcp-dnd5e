@@ -24,7 +24,7 @@ import {
 } from './_shared.js';
 import {
   ABILITIES,
-  ARMOR_CALC,
+  buildAcUpdate,
   CONDITION_TYPES,
   CREATURE_TYPES,
   DAMAGE_TYPES,
@@ -351,8 +351,24 @@ function extractDerived(actor: any): Record<string, any> | undefined {
     if (Object.keys(skills).length > 0) out.skills = skills;
   }
 
-  const acValue = system.attributes?.ac?.value;
-  if (typeof acValue === 'number') out.ac = { value: acValue };
+  const ac = system.attributes?.ac;
+  if (typeof ac?.value === 'number') {
+    // dnd5e 6.0: `calcs` is the Set of qualifying base calculations, `formulas` the custom ones
+    // (prep prepends the base calcs as type "base" — report only the authored ones), `override` a
+    // fixed AC, `calc`/`label` the calculation that actually won.
+    const sourceFormulas = actor?._source?.system?.attributes?.ac?.formulas;
+    out.ac = {
+      value: ac.value,
+      ...(ac.calcs ? { calcs: Array.from(ac.calcs) } : {}),
+      ...(typeof ac.flat === 'number' ? { flat: ac.flat } : {}),
+      ...(typeof ac.override === 'number' ? { override: ac.override } : {}),
+      ...(Array.isArray(sourceFormulas) && sourceFormulas.length > 0
+        ? { formulas: sourceFormulas.map((f: any) => ({ formula: f.formula, label: f.label })) }
+        : {}),
+      ...(typeof ac.calc === 'string' && ac.calc ? { calc: ac.calc } : {}),
+      ...(typeof ac.label === 'string' && ac.label ? { label: ac.label } : {}),
+    };
+  }
 
   const initTotal = system.attributes?.init?.total;
   if (typeof initTotal === 'number') out.init = { total: initTotal };
@@ -415,21 +431,25 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
     }),
     effects: actor.effects.map((effect: any) => {
       const dur = effect.duration;
-      const durRaw = effect._source?.duration;
-      // toObject().changes is plain data ({ key, value, type, ... }); surface it so effects are
-      // inspectable from get-actor (the shared sanitizer also preserves changes[].key — see R2).
-      const changes = toSource(effect).changes;
+      // Foundry v14: changes live at system.changes (plain data { key, value, type, phase }); the
+      // top-level `changes` is only a deprecated shim. Surface them so effects are inspectable
+      // from get-actor (the shared sanitizer also preserves changes[].key — see R2).
+      const source = toSource(effect);
+      const changes = source?.system?.changes ?? source?.changes;
       return {
         id: effect.id,
         name: effect.name || effect.label || 'Unknown Effect',
-        ...(effect.icon ? { icon: effect.icon } : {}),
+        ...(effect.img ? { icon: effect.img } : {}),
         disabled: effect.disabled,
+        ...(typeof effect.type === 'string' && effect.type !== 'base' ? { type: effect.type } : {}),
         ...(Array.isArray(changes) && changes.length > 0 ? { changes } : {}),
-        ...(dur
+        ...(dur && typeof dur.value === 'number'
           ? {
               duration: {
-                type: dur.units ?? durRaw?.type ?? 'none',
-                duration: dur.seconds ?? durRaw?.duration,
+                // v14 shape: value + units (+ expiry for turn-based durations)
+                value: dur.value,
+                units: dur.units ?? 'seconds',
+                ...(dur.expiry ? { expiry: dur.expiry } : {}),
                 remaining: dur.remaining,
               },
             }
@@ -587,10 +607,11 @@ export function getCharacterEntity(args: {
         entity: {
           id: entity.id,
           name: entity.name || entity.label,
-          icon: entity.icon,
+          icon: entity.img ?? entity.icon,
           disabled: entity.disabled,
           duration: entity.duration,
-          changes: entity.changes,
+          // v14: system.changes (the top-level getter is a deprecated shim)
+          changes: entity.system?.changes ?? entity.changes,
         },
       };
     }
@@ -1776,11 +1797,13 @@ export async function updateActor(params: any): Promise<unknown> {
     update['system.details.biography.value'] = params.biography;
     applied.push('biography');
   }
-  if (params.source && typeof params.source === 'object') {
+  // system.source exists on npc (and vehicle) data only — a character has no source stamp, so the
+  // write would be pruned silently; gate it like the other NPC-only fields.
+  if (params.source && typeof params.source === 'object' && npcOnly('source')) {
     let touched = false;
     for (const k of ['book', 'page', 'rules'] as const) {
       if (typeof params.source[k] === 'string') {
-        update[`system.details.source.${k}`] = params.source[k];
+        update[`system.source.${k}`] = params.source[k];
         touched = true;
       }
     }
@@ -1833,14 +1856,12 @@ export async function updateActor(params: any): Promise<unknown> {
     applied.push('hp');
   }
   if (params.ac && typeof params.ac === 'object') {
-    if (typeof params.ac.calc === 'string') {
-      warnUnknown('AC calculation', params.ac.calc, ARMOR_CALC);
-      update['system.attributes.ac.calc'] = params.ac.calc;
-    }
-    if (typeof params.ac.flat === 'number') update['system.attributes.ac.flat'] = params.ac.flat;
-    if (typeof params.ac.formula === 'string')
-      update['system.attributes.ac.formula'] = params.ac.formula;
-    applied.push('ac');
+    // dnd5e 6.0 AC model (calcs / flat / formulas / override); the 5.x calc/flat/formula aliases
+    // are translated, never written raw (`calc` and `formula` are non-persisted and get pruned).
+    const ac = buildAcUpdate(params.ac);
+    Object.assign(update, ac.update);
+    warnings.push(...ac.warnings);
+    if (Object.keys(ac.update).length > 0) applied.push('ac');
   }
   if (params.initiative && typeof params.initiative === 'object') {
     if (typeof params.initiative.bonus === 'number') {
@@ -1852,11 +1873,12 @@ export async function updateActor(params: any): Promise<unknown> {
     applied.push('initiative');
   }
 
-  // --- movement (FormulaField strings) / senses (ranges.* ints) ---
+  // --- movement (dnd5e 6.0 movement.speeds.* FormulaField strings) / senses (ranges.* ints) ---
   if (params.movement && typeof params.movement === 'object') {
-    for (const k of ['walk', 'fly', 'swim', 'climb', 'burrow'] as const) {
+    for (const k of ['walk', 'fly', 'swim', 'climb', 'burrow', 'jump'] as const) {
       const v = params.movement[k];
-      if (v !== undefined && v !== null) update[`system.attributes.movement.${k}`] = String(v);
+      if (v !== undefined && v !== null)
+        update[`system.attributes.movement.speeds.${k}`] = String(v);
     }
     if (typeof params.movement.units === 'string') {
       update['system.attributes.movement.units'] = params.movement.units;

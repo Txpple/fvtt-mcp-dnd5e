@@ -157,15 +157,140 @@ export const CONDITION_TYPES = new Set([
   'unconscious',
 ]);
 
-/** CONFIG.DND5E.armorClasses calculation keys (the `attributes.ac.calc` values). */
+/**
+ * CONFIG.DND5E.armorClasses keys — the base AC calculations an actor can QUALIFY for (dnd5e 6.0
+ * `attributes.ac.calcs`, a Set the sheet picks the best of). The 5.x pseudo-calcs `flat` / `default` /
+ * `custom` are modes, not calculations, and are translated by buildAcUpdate.
+ */
 export const ARMOR_CALC = new Set([
-  'flat',
   'natural',
-  'default',
+  'armored',
+  'unarmored',
   'mage',
   'draconic',
   'unarmoredMonk',
   'unarmoredBarb',
   'unarmoredBard',
-  'custom',
 ]);
+
+/** dnd5e 6.0 default `attributes.ac.calcs` — armor if worn, else 10 + DEX. */
+export const AC_DEFAULT_CALCS = ['unarmored', 'armored'];
+
+/** One custom AC formula (the `attributes.ac.formulas[]` element). */
+export interface AcFormulaInput {
+  formula: string;
+  label?: string;
+  armored?: boolean | null;
+  shielded?: boolean | null;
+}
+
+/** The update-actor `ac` block: the dnd5e 6.0 contract plus the 5.x aliases still accepted. */
+export interface AcInput {
+  override?: number | null;
+  natural?: number;
+  calcs?: string[];
+  formulas?: AcFormulaInput[];
+  /** @deprecated 5.x alias — flat | natural | default | custom | <armorClasses key> */
+  calc?: string;
+  /** @deprecated 5.x alias — the flat value for calc "flat" / "natural" */
+  flat?: number;
+  /** @deprecated 5.x alias — the formula for calc "custom" */
+  formula?: string;
+}
+
+const AC = 'system.attributes.ac';
+
+/**
+ * Translate an `ac` block into dnd5e 6.0 `attributes.ac` writes. PURE + unit-tested.
+ *
+ * 6.0 model (data/actor/templates/attributes.mjs): persisted `calcs` (Set of ARMOR_CALC keys,
+ * default AC_DEFAULT_CALCS), `flat` (the natural-armor value), `formulas[]` ({formula, label,
+ * armored, shielded}) and `override` (a fixed AC that replaces every calculation); `calc` and
+ * `formula` are `persisted:false` and get PRUNED on write. The 5.x aliases are mapped exactly the
+ * way the system's own `_migrateArmorClass` maps stored data — plus the two cases that migration
+ * cannot express on a partial update: `calc:"default"` becomes a real reset to the default calcs
+ * (the migration turns it into a no-op), and `natural`/`default` clear a stale `override` so the
+ * new calculation is actually used.
+ */
+export function buildAcUpdate(ac: AcInput | undefined): {
+  update: Record<string, unknown>;
+  warnings: string[];
+} {
+  const update: Record<string, unknown> = {};
+  const warnings: string[] = [];
+  if (!ac || typeof ac !== 'object') return { update, warnings };
+  const overrideGiven = ac.override !== undefined;
+
+  // --- 6.0 contract ---
+  if (overrideGiven) {
+    update[`${AC}.override`] =
+      typeof ac.override === 'number' && Number.isFinite(ac.override) ? ac.override : null;
+  }
+  if (typeof ac.natural === 'number') {
+    update[`${AC}.calcs`] = ['natural'];
+    update[`${AC}.flat`] = ac.natural;
+    if (!overrideGiven) update[`${AC}.override`] = null;
+  }
+  if (Array.isArray(ac.calcs)) {
+    for (const key of ac.calcs) {
+      if (!ARMOR_CALC.has(key)) {
+        warnings.push(`Unknown AC calculation "${key}" — verify it matches dnd5e armorClasses`);
+      }
+    }
+    update[`${AC}.calcs`] = [...ac.calcs];
+  }
+  if (Array.isArray(ac.formulas)) {
+    update[`${AC}.formulas`] = ac.formulas.map(f => ({
+      formula: String(f?.formula ?? ''),
+      label: typeof f?.label === 'string' ? f.label : '',
+      armored: typeof f?.armored === 'boolean' ? f.armored : null,
+      shielded: typeof f?.shielded === 'boolean' ? f.shielded : null,
+    }));
+  }
+
+  // --- 5.x aliases (deprecated; kept so existing skills/scripts keep working) ---
+  const flat = typeof ac.flat === 'number' ? ac.flat : undefined;
+  if (typeof ac.calc === 'string') {
+    switch (ac.calc) {
+      case 'flat':
+        if (flat === undefined) warnings.push('ac.calc "flat" needs ac.flat (the fixed AC value)');
+        else update[`${AC}.override`] = flat;
+        break;
+      case 'natural':
+        update[`${AC}.calcs`] = ['natural'];
+        if (flat !== undefined) update[`${AC}.flat`] = flat;
+        if (!overrideGiven) update[`${AC}.override`] = null;
+        break;
+      case 'default':
+        update[`${AC}.calcs`] = [...AC_DEFAULT_CALCS];
+        if (!overrideGiven) update[`${AC}.override`] = null;
+        break;
+      case 'custom':
+        if (typeof ac.formula !== 'string' || !ac.formula.trim()) {
+          warnings.push('ac.calc "custom" needs ac.formula');
+        } else {
+          update[`${AC}.formulas`] = [
+            { formula: ac.formula, label: 'Custom', armored: null, shielded: null },
+          ];
+        }
+        break;
+      default:
+        if (ARMOR_CALC.has(ac.calc)) {
+          update[`${AC}.calcs`] = [...AC_DEFAULT_CALCS, ac.calc];
+          if (!overrideGiven) update[`${AC}.override`] = null;
+        } else {
+          warnings.push(
+            `Unknown AC calculation "${ac.calc}" — verify it matches dnd5e armorClasses`
+          );
+        }
+    }
+  } else {
+    if (flat !== undefined && !(`${AC}.flat` in update)) update[`${AC}.flat`] = flat;
+    if (typeof ac.formula === 'string' && ac.formula.trim() && !(`${AC}.formulas` in update)) {
+      update[`${AC}.formulas`] = [
+        { formula: ac.formula, label: 'Custom', armored: null, shielded: null },
+      ];
+    }
+  }
+  return { update, warnings };
+}

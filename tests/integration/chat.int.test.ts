@@ -124,7 +124,8 @@ describe.skipIf(!LIVE)('chat-log tools (live)', () => {
   });
 
   it('exports to WebDAV and the public URL is reachable', async ctx => {
-    if (!ENV.MOLTEN_WEBDAV_PASSWORD) return ctx.skip();
+    // The local sandbox profile has NO WebDAV plane by design (src/config.ts) — prod only.
+    if (!ENV.MOLTEN_WEBDAV_PASSWORD || process.env.FOUNDRY_PROFILE === 'local') return ctx.skip();
     const tools = new ChatTools({ foundry: foundry as any, logger: noopLogger });
     const remote = `worlds/${ENV.MOLTEN_WORLD_ID}/exports/${TAG}-chat-log.md`;
     const out = await tools.handleExportChatLog({ remotePath: remote, overwrite: true });

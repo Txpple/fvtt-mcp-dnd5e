@@ -158,12 +158,11 @@ describe('buildNpcActorData', () => {
     expect(pt.ring).toEqual({ enabled: false });
   });
 
-  it('uses a flat AC block only in "flat" mode', () => {
-    expect(buildNpcActorData(baseNpc()).actorData.system.attributes.ac).toEqual({
-      calc: 'default',
-    });
+  it('writes a fixed AC as the dnd5e 6.0 `override`, and nothing in "default" mode', () => {
+    // 6.0: `calc` is non-persisted (pruned on write); defaults = calcs ["unarmored","armored"].
+    expect(buildNpcActorData(baseNpc()).actorData.system.attributes.ac).toEqual({});
     const flat = buildNpcActorData(baseNpc({ acMode: 'flat', acValue: 17 }));
-    expect(flat.actorData.system.attributes.ac).toEqual({ calc: 'flat', flat: 17 });
+    expect(flat.actorData.system.attributes.ac).toEqual({ override: 17 });
   });
 
   it('defaults an unknown size to "med"', () => {

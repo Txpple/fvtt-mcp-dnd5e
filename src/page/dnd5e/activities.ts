@@ -251,7 +251,7 @@ function buildUtilityActivity(opts: BuildActivityOpts): Record<string, any> {
 // (fireball sphere, lightning line…), save/attack, and effects FOR FREE — which is why target.template
 // stays MINIMAL here (the spell owns the real template; a full override would suppress it).
 //
-//   challenge: saveDC -> {save, attack:null, override:true} (fixed DC, e.g. the Wand of Fireballs)
+//   challenge: saveDC -> {save:"15", attack:"", override:true} (fixed DC, e.g. the Wand of Fireballs)
 //              attackBonus -> {attack:N, override:true}      (fixed spell-attack, e.g. a Witch Bolt staff)
 //              neither -> {attack:null, override:false}       (defer DC/attack to the casting actor)
 // The page sanitizer strips `save` tree-wide, so a fixed save DC is correct-but-invisible on read-back.
@@ -262,12 +262,14 @@ function buildUtilityActivity(opts: BuildActivityOpts): Record<string, any> {
 //                (usesOn 'activity', the feature free-cast pattern — the sheet's "Additional Spells"
 //                row counter reads this pool). Omit charges for an at-will cast (empty targets).
 function buildCastActivity(opts: BuildActivityOpts): Record<string, any> {
+  // dnd5e 6.0: spell.challenge.save / .attack are FormulaFields (strings; "" = unset), so the
+  // fixed values are written as the strings the schema stores.
   const challenge =
     opts.saveDC !== undefined
-      ? { save: opts.saveDC, attack: null, override: true }
+      ? { save: String(opts.saveDC), attack: '', override: true }
       : opts.attackBonus !== undefined
-        ? { attack: opts.attackBonus, override: true }
-        : { attack: null, override: false };
+        ? { attack: String(opts.attackBonus), save: '', override: true }
+        : { attack: '', save: '', override: false };
   const hasCharges = opts.charges !== undefined && opts.charges !== null;
   const pooled = hasCharges && opts.usesOn === 'activity';
   const targets = pooled

@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 import { DnD5eNpcTools } from '../dist/tools/dnd5e/npc.js';
 import { DnD5eAddFeatureTool } from '../dist/tools/dnd5e/add-feature.js';
 import { DnD5eFeaturesFromCompendiumTools } from '../dist/tools/dnd5e/features.js';
@@ -37,12 +38,7 @@ const logger = {
   },
 };
 const env = loadEnv();
-const foundry = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-});
+const foundry = new Foundry(bridgeConfig(env));
 
 const npc = new DnD5eNpcTools({ foundry, logger });
 const feat = new DnD5eAddFeatureTool({ foundry, logger });
@@ -231,7 +227,9 @@ try {
       return {
         cr: a.system?.details?.cr,
         hpMax: a.system?.attributes?.hp?.max,
-        acFlat: a.system?.attributes?.ac?.flat,
+        // dnd5e 6.0: a fixed stat-block AC is `override` (calc/flat were the 5.x shape)
+        acOverride: a.system?.attributes?.ac?.override,
+        acValue: live.system?.attributes?.ac?.value,
         spellAbility: live.system?.attributes?.spellcasting ?? a.system?.attributes?.spellcasting,
         spell1: sp('spell1'),
         spell3: sp('spell3'),
@@ -242,9 +240,9 @@ try {
     console.log('\n[inspect] actor data model:', JSON.stringify(inspect, null, 2), '\n');
 
     await check(
-      'NPC system data (cr=5, hp=76, ac flat=18)',
+      'NPC system data (cr=5, hp=76, ac override=18)',
       async () => inspect,
-      o => o?.cr === 5 && o.hpMax === 76 && o.acFlat === 18
+      o => o?.cr === 5 && o.hpMax === 76 && o.acOverride === 18 && o.acValue === 18
     );
     await check(
       'attack item has an attack activity',

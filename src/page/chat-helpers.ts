@@ -66,6 +66,8 @@ export interface RawMessageFields {
   timestamp: number;
   style: number;
   content: string;
+  /** Core v14 message title (dnd5e 6.0 cards set "Item - Activity"). */
+  title?: string;
   flavor?: string;
   whisper: string[];
   blind: boolean;
@@ -85,6 +87,7 @@ export interface MessageRecord {
   whisperCount: number;
   blind: boolean;
   content?: string;
+  title?: string;
   flavor?: string;
   rolls?: Array<{ total?: number; formula?: string }>;
 }
@@ -114,6 +117,7 @@ export function toMessageRecord(raw: RawMessageFields, opts: RecordOptions): Mes
   } else if (opts.contentMode === 'text') {
     rec.content = opts.stripFn ? opts.stripFn(raw.content) : raw.content;
   } // 'none' → omit content
+  if (raw.title) rec.title = raw.title;
   if (raw.flavor) rec.flavor = raw.flavor;
   if (raw.isRoll && raw.rolls && raw.rolls.length > 0) {
     rec.rolls = raw.rolls;
@@ -139,6 +143,7 @@ export function buildMarkdownTranscript(records: MessageRecord[]): string {
     const lines = [`### ${speakerLabel(rec)} — ${rec.time}`];
     if (rec.whisperCount > 0)
       lines.push(`*(whisper to ${rec.whisperCount}${rec.blind ? ', blind' : ''})*`);
+    if (rec.title) lines.push(`**${rec.title}**`);
     if (rec.flavor) lines.push(`_${rec.flavor}_`);
     if (rec.content) lines.push(rec.content);
     const roll = rollSummary(rec);
@@ -155,6 +160,7 @@ export function buildPlaintextTranscript(records: MessageRecord[]): string {
       rec.whisperCount > 0 ? ` (whisper${rec.blind ? ', blind' : ''})` : ''
     }`;
     const lines = [head];
+    if (rec.title) lines.push(rec.title);
     if (rec.flavor) lines.push(rec.flavor);
     if (rec.content) lines.push(rec.content);
     const roll = rollSummary(rec);
@@ -179,6 +185,7 @@ export function buildHtmlTranscript(records: MessageRecord[]): string {
         rec.whisperCount > 0 ? ` <em>(whisper${rec.blind ? ', blind' : ''})</em>` : ''
       }</header>`,
     ];
+    if (rec.title) parts.push(`<div class="title"><strong>${escapeHtml(rec.title)}</strong></div>`);
     if (rec.flavor) parts.push(`<div class="flavor"><em>${escapeHtml(rec.flavor)}</em></div>`);
     if (rec.content) parts.push(`<div class="content">${rec.content}</div>`);
     const roll = rollSummary(rec);

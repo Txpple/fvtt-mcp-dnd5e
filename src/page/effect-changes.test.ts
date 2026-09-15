@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeChange, summarizeChanges } from './effect-changes.js';
+import {
+  normalizeChange,
+  normalizeDuration,
+  normalizePatch,
+  summarizeChanges,
+} from './effect-changes.js';
 
 // These lock the dnd5e/Foundry-v14 ActiveEffect change mapping. If a Foundry version renumbers
 // CONST.ACTIVE_EFFECT_MODES or changes the { key, value, type, phase } shape, these fail OFFLINE
@@ -76,5 +81,45 @@ describe('summarizeChanges', () => {
     expect(summarizeChanges([{ key: 'c', value: '3', mode: 99 }])).toEqual([
       { key: 'c', value: '3', type: undefined },
     ]);
+  });
+});
+
+describe('normalizeDuration (Foundry v14 { value, units } shape)', () => {
+  it('passes the native shape through', () => {
+    expect(normalizeDuration({ value: 10, units: 'rounds' })).toEqual({
+      value: 10,
+      units: 'rounds',
+    });
+    expect(normalizeDuration({ value: 1, units: 'hours', expiry: 'turnEnd' })).toEqual({
+      value: 1,
+      units: 'hours',
+      expiry: 'turnEnd',
+    });
+  });
+
+  it('translates the 5.x rounds / turns / seconds keys (first wins, like core)', () => {
+    expect(normalizeDuration({ rounds: 10 })).toEqual({ value: 10, units: 'rounds' });
+    expect(normalizeDuration({ turns: 1 })).toEqual({ value: 1, units: 'turns' });
+    expect(normalizeDuration({ seconds: 60, rounds: 10 })).toEqual({ value: 60, units: 'seconds' });
+  });
+
+  it('drops an unknown unit and returns undefined for nothing usable', () => {
+    expect(normalizeDuration({ value: 3, units: 'fortnights' })).toEqual({ value: 3 });
+    expect(normalizeDuration(undefined)).toBeUndefined();
+    expect(normalizeDuration({})).toBeUndefined();
+  });
+});
+
+describe('normalizePatch', () => {
+  it('rewrites 5.x duration.rounds/turns/seconds dot-paths and leaves the rest alone', () => {
+    expect(normalizePatch({ 'duration.rounds': 10, tint: '#ff0000' })).toEqual({
+      'duration.value': 10,
+      'duration.units': 'rounds',
+      tint: '#ff0000',
+    });
+    expect(normalizePatch({ 'duration.value': 2, 'duration.units': 'turns' })).toEqual({
+      'duration.value': 2,
+      'duration.units': 'turns',
+    });
   });
 });

@@ -1,6 +1,6 @@
 // dnd5e NPC authoring — page-side writes that construct a full dnd5e 5.3.3 npc
 // Actor system-data model (abilities + save proficiency, attributes.hp/ac,
-// movement, senses, details.cr/type/alignment/source, traits damage/condition/
+// movement, senses, details.cr/type/alignment, source, traits damage/condition/
 // size/languages, skills). Runs inside the headless Foundry page.
 
 import { getOrCreateFolder, DAMAGE_TYPES } from '../_shared.js';
@@ -95,7 +95,7 @@ export interface NpcInput {
 }
 
 /**
- * PURE construction of the dnd5e 5.3.3 npc system-data model from validated input: soft-validation
+ * PURE construction of the dnd5e 6.0 npc system-data model from validated input: soft-validation
  * warnings (unknown damage types / conditions), CR normalization, the ability + save-proficiency
  * block, the AC block, and the full actor create-data (minus the folder, which the caller assigns).
  * Touches no Foundry globals — unit-tested offline in npc.test.ts.
@@ -141,9 +141,9 @@ export function buildNpcActorData(data: NpcInput): {
     cha: { value: data.abilities.cha, proficient: savingThrowSet.has('cha') ? 1 : 0 },
   };
 
-  // AC block — omit flat when mode is "default"
-  const acBlock =
-    data.acMode === 'flat' ? { calc: 'flat', flat: data.acValue } : { calc: 'default' };
+  // AC block (dnd5e 6.0 model): "flat" = a fixed AC via `override` (the stat block's number, armor
+  // baked in); "default" = the system defaults (calcs unarmored/armored — 10 + DEX, or worn armor).
+  const acBlock = data.acMode === 'flat' ? { override: data.acValue } : {};
 
   // Rule 8 — a hand-authored NPC gets a real, creatureType-appropriate portrait + token icon, not the
   // mystery-man placeholder. The caller may override via img; a compendium-copied creature keeps its
@@ -177,12 +177,15 @@ export function buildNpcActorData(data: NpcInput): {
           tempmax: 0,
           formula: data.hpFormula,
         },
+        // dnd5e 6.0: speeds live under movement.speeds.* (movement.walk is a deprecated getter)
         movement: {
-          walk: data.walkSpeed,
-          fly: data.flySpeed,
-          swim: data.swimSpeed,
-          climb: data.climbSpeed,
-          burrow: data.burrowSpeed,
+          speeds: {
+            walk: data.walkSpeed,
+            fly: data.flySpeed,
+            swim: data.swimSpeed,
+            climb: data.climbSpeed,
+            burrow: data.burrowSpeed,
+          },
           units: 'ft',
           hover: data.hover,
           special: '',
@@ -207,14 +210,15 @@ export function buildNpcActorData(data: NpcInput): {
           value: data.biography,
           public: '',
         },
-        source: {
-          revision: 1,
-          rules: data.sourceRules,
-          book: data.sourceBook,
-          page: data.sourcePage,
-          custom: '',
-          license: '',
-        },
+      },
+      // dnd5e stores the source stamp at system.source (details.source is a 3.x-era path).
+      source: {
+        revision: 1,
+        rules: data.sourceRules,
+        book: data.sourceBook,
+        page: data.sourcePage,
+        custom: '',
+        license: '',
       },
       traits: {
         size: normalizeSize(data.size) ?? 'med',

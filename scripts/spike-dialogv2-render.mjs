@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -19,14 +20,7 @@ for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r
   if (m) env[m[1]] = m[2];
 }
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const f = new Foundry(bridgeConfig(env));
 
 try {
   console.log('[spike4] connecting…');

@@ -1,4 +1,4 @@
-// dnd5e PC leveling engine — page-side. Runs INSIDE the headless Foundry page (dnd5e 5.3.3,
+// dnd5e PC leveling engine — page-side. Runs INSIDE the headless Foundry page (dnd5e 6.0,
 // Foundry v14). This is the ONE place advancement.apply(level, data, {initial}) is ever called, plus
 // the build-on-temp → snapshot → Actor.create persist cycle. PCs are a SEPARATE product from NPCs
 // (design.md §7): type:character + advancement (which resolves @scale.* natively), never bolted onto
@@ -401,7 +401,9 @@ function extractAdvancements(item: any): RawAdvancement[] {
       out.push({
         id: adv.id,
         type,
-        title: adv.title,
+        // dnd5e 6.0 renamed Advancement title/icon → name/img (#5782); `title` is a deprecation
+        // getter until 7.0.
+        title: adv.name ?? adv.title,
         levels: normalizeLevels(adv.levels ?? (adv.level != null ? [adv.level] : [])),
         classRestriction: adv.classRestriction ?? adv.level?.classRestriction ?? '',
         adv,
@@ -907,8 +909,9 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
       tmp.updateSource(abilityUpdate);
     }
 
-    // Source rules stamp.
-    tmp.updateSource({ 'system.details.source.rules': plan.sourceRules ?? '2024' });
+    // (No source-rules stamp: character data has no `system.source` field — npc/vehicle only — so
+    // the old `details.source.rules` write was always pruned. A PC's rules edition is the world's
+    // dnd5e `rulesVersion` setting.)
 
     // Caster spell picks (slots auto-derive from the class; this just imports chosen cantrips/spells).
     const spellNames = [...(plan.spells?.cantrips ?? []), ...(plan.spells?.prepared ?? [])];

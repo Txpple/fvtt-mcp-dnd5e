@@ -48,8 +48,21 @@ if (OPTED_IN && !HAS_ENV) {
   );
 }
 
-/** The FoundryConfig the bridge needs, derived from .env. */
+/**
+ * The FoundryConfig the bridge needs, derived from .env. `FOUNDRY_PROFILE=local` targets the LOCAL
+ * sandbox with the same env keys src/config.ts uses (LOCAL_* overrides, MOLTEN_* fallbacks, no wake
+ * URL) — the default stays prod, exactly as before.
+ */
 export function foundryConfig() {
+  if (process.env.FOUNDRY_PROFILE === 'local') {
+    return {
+      serverUrl: ENV.LOCAL_SERVER_URL || 'http://localhost:30000',
+      user: ENV.LOCAL_FOUNDRY_USER || ENV.FOUNDRY_USER || 'MCP-Claude',
+      password: ENV.LOCAL_FOUNDRY_PASSWORD ?? ENV.FOUNDRY_PASSWORD,
+      adminKey: ENV.LOCAL_ADMIN_KEY,
+      worldId: ENV.LOCAL_WORLD_ID || ENV.MOLTEN_WORLD_ID,
+    };
+  }
   return {
     serverUrl: ENV.MOLTEN_SERVER_URL,
     magicUrl: ENV.MOLTEN_MAGIC_URL,

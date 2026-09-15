@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 import { SceneTools } from '../dist/tools/scene.js';
 import { ActorTools } from '../dist/tools/actor.js';
 import { CompendiumTools } from '../dist/tools/compendium.js';
@@ -40,12 +41,7 @@ const logger = {
 };
 
 const env = loadEnv();
-const foundry = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-});
+const foundry = new Foundry(bridgeConfig(env));
 
 const scene = new SceneTools({ foundry, logger });
 const character = new ActorTools({ foundry, logger });

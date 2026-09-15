@@ -16,6 +16,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Machine-local fixture — set SCENE_SIDECAR to where the scene folder lives on this box.
@@ -33,14 +34,7 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-const foundry = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const foundry = new Foundry(bridgeConfig(env));
 
 try {
   const legacy = JSON.parse(readFileSync(SIDECAR, 'utf8'));

@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 function loadEnv() {
@@ -21,14 +22,9 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
-const foundry = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const foundry = new Foundry(bridgeConfig(env));
+// dnd5e 6.0 stores a rarity SET (`rarities`); toObject() data carries it as an array.
+const rarityOf = s => (Array.isArray(s?.rarities) ? s.rarities[0] : s?.rarity) ?? '';
 
 const results = [];
 const pass = (n, s) => {
@@ -85,7 +81,7 @@ try {
       [...(s?.properties ?? [])].includes('ver') &&
       s?.attunement === 'required' &&
       s?.equipped === true &&
-      s?.rarity === 'rare' &&
+      rarityOf(s) === 'rare' &&
       s?.damage?.base?.denomination === 8 &&
       acts.some(a => a.type === 'attack');
     ok
@@ -117,19 +113,19 @@ try {
     });
     const e = (await ent(npc.id, 'Chain Mail'))?.entity;
     const info = await foundry.call('getCharacterInfo', { characterName: npc.id });
+    // dnd5e 6.0: wireAc puts the actor on the default calcs (unarmored/armored) with no override;
+    // get-actor reports the persisted calcs + the winning calc under `derived.ac`.
+    const ac = info?.derived?.ac ?? {};
     const ok =
       e?.system?.armor?.value === 16 &&
       e?.system?.type?.value === 'heavy' &&
-      info?.system?.attributes?.ac?.calc === 'default';
+      Array.isArray(ac.calcs) &&
+      ac.calcs.includes('armored') &&
+      ac.override === undefined &&
+      ac.value === 16;
     ok
-      ? pass(
-          'armor: chain mail + wireAc',
-          `armor=16, ac.calc=${info?.system?.attributes?.ac?.calc}`
-        )
-      : fail(
-          'armor: chain mail + wireAc',
-          JSON.stringify({ armor: e?.system?.armor, calc: info?.system?.attributes?.ac?.calc })
-        );
+      ? pass('armor: chain mail + wireAc', `armor=16, ac=${ac.value} via ${ac.calc}`)
+      : fail('armor: chain mail + wireAc', JSON.stringify({ armor: e?.system?.armor, ac }));
   }
 
   // ── 3. Shield (defaults to +2, type.value shield) ──
@@ -155,12 +151,10 @@ try {
       wireAc: true, // must be a no-op for a shield — calc stays 'natural'
     });
     const info = await foundry.call('getCharacterInfo', { characterName: npc2.id });
-    info?.system?.attributes?.ac?.calc === 'natural'
-      ? pass('shield + wireAc leaves natural AC intact', `calc=${info.system.attributes.ac.calc}`)
-      : fail(
-          'shield + wireAc clobbered AC',
-          `calc=${info?.system?.attributes?.ac?.calc} (expected natural)`
-        );
+    const ac2 = info?.derived?.ac ?? {};
+    JSON.stringify(ac2.calcs) === JSON.stringify(['natural']) && ac2.value === 19
+      ? pass('shield + wireAc leaves natural AC intact', `calcs=${ac2.calcs} ac=${ac2.value}`)
+      : fail('shield + wireAc clobbered AC', `${JSON.stringify(ac2)} (expected natural 17 + 2)`);
   }
 
   // ── 4. Consumable potion (uses + autoDestroy) ──

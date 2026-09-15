@@ -24,6 +24,7 @@ import {
   buildHtmlTranscript,
   buildPlaintextTranscript,
   buildRollRequestExpression,
+  type MessageRecord,
   type RawMessageFields,
   type Visibility,
   type StyleName,
@@ -62,8 +63,23 @@ async function enrich(content: string, relativeTo?: any): Promise<string> {
   return await impl.enrichHTML(content, opts);
 }
 
+/**
+ * Render a message whose body lives in its system data. dnd5e 6.0 creates activity / roll cards
+ * with NO `content` — the card is rendered at display time from `message.system` (a
+ * ChatMessageDataModel with an async `render(options)`). Empty when the model has no template.
+ */
+async function renderSystemContent(m: any): Promise<string> {
+  if (typeof m?.system?.render !== 'function') return '';
+  try {
+    const html = await m.system.render({});
+    return typeof html === 'string' ? html : '';
+  } catch {
+    return '';
+  }
+}
+
 /** Extract the canonical per-message fields for listing/export. */
-function rawFields(m: any): RawMessageFields {
+async function rawFields(m: any): Promise<RawMessageFields> {
   const authorId = typeof m.author === 'string' ? m.author : (m.author?.id ?? '');
   const authorName =
     (typeof m.author === 'object' ? m.author?.name : undefined) ??
@@ -82,6 +98,7 @@ function rawFields(m: any): RawMessageFields {
         return o;
       })
     : [];
+  const content = m.content || (await renderSystemContent(m));
   return {
     id: m.id ?? '',
     author: authorId,
@@ -89,7 +106,8 @@ function rawFields(m: any): RawMessageFields {
     alias: m.speaker?.alias ?? m.alias ?? '',
     timestamp: m.timestamp ?? 0,
     style: m.style ?? 0,
-    content: m.content ?? '',
+    content,
+    title: m.title ?? '',
     flavor: m.flavor ?? '',
     whisper,
     blind: !!m.blind,
@@ -154,11 +172,11 @@ export async function postChatMessage(args: {
 
 // --- list -------------------------------------------------------------------
 
-export function listChatMessages(args: {
+export async function listChatMessages(args: {
   limit?: number;
   sinceTimestamp?: number;
   contentMode?: 'html' | 'text' | 'none';
-}): unknown {
+}): Promise<unknown> {
   const limit = args?.limit ?? 50;
   const contentMode = args?.contentMode ?? 'text';
   let msgs = (game.messages?.contents ?? [])
@@ -168,9 +186,10 @@ export function listChatMessages(args: {
     msgs = msgs.filter((m: any) => (m.timestamp ?? 0) >= args.sinceTimestamp!);
   }
   msgs = msgs.slice(-limit);
-  const messages = msgs.map((m: any) =>
-    toMessageRecord(rawFields(m), { contentMode, stripFn: stripHtml })
-  );
+  const messages: unknown[] = [];
+  for (const m of msgs) {
+    messages.push(toMessageRecord(await rawFields(m), { contentMode, stripFn: stripHtml }));
+  }
   return { count: messages.length, messages };
 }
 
@@ -239,11 +258,11 @@ export async function deleteChatMessages(args: {
 
 // --- export -----------------------------------------------------------------
 
-export function exportChatLog(args: {
+export async function exportChatLog(args: {
   format?: 'markdown' | 'html' | 'json' | 'plaintext';
   limit?: number;
   sinceTimestamp?: number;
-}): unknown {
+}): Promise<unknown> {
   const format = args?.format ?? 'markdown';
   let msgs = (game.messages?.contents ?? [])
     .slice()
@@ -254,9 +273,10 @@ export function exportChatLog(args: {
   if (args?.limit) msgs = msgs.slice(-args.limit);
 
   const contentMode = format === 'html' ? 'html' : 'text';
-  const records = msgs.map((m: any) =>
-    toMessageRecord(rawFields(m), { contentMode, stripFn: stripHtml })
-  );
+  const records: MessageRecord[] = [];
+  for (const m of msgs) {
+    records.push(toMessageRecord(await rawFields(m), { contentMode, stripFn: stripHtml }));
+  }
 
   let content: string;
   if (format === 'json') content = JSON.stringify(records, null, 2);
@@ -314,45 +334,52 @@ export async function postItemCard(args: {
     };
   }
 
+  // Honest `posted`: dnd5e returns undefined from use() and null from rollAttack/rollDamage when a
+  // `dnd5e.preUseActivity` / pre-roll hook vetoes the action (e.g. Battle Flow's require-target rule
+  // on an attack with nothing targeted) or a dialog is cancelled — nothing reaches chat then.
+  const VETOED =
+    'nothing was posted — a module hook vetoed the use (e.g. a require-target rule: target a token ' +
+    'first, or post the attack/damage roll directly with action "attack" / "damage")';
   const action = args.action ?? 'use';
+  const base = { success: true, actorName: actor.name, itemName: item.name, action };
   if (action === 'attack') {
     const atk = activities?.getByType?.('attack')?.[0] ?? activity;
-    await atk.rollAttack?.({}, { configure: false }, { create: true });
+    const rolls = await atk.rollAttack?.({}, { configure: false }, { create: true });
+    const posted = Array.isArray(rolls) && rolls.length > 0;
     return {
-      success: true,
-      posted: true,
-      actorName: actor.name,
-      itemName: item.name,
+      ...base,
+      posted,
       activityType: atk.type,
-      action,
+      ...(posted ? {} : { reason: VETOED }),
     };
   }
   if (action === 'damage') {
-    await activity.rollDamage?.(
+    const rolls = await activity.rollDamage?.(
       { critical: { allow: !!args.critical } },
       { configure: false },
-      {
-        create: true,
-      }
+      { create: true }
     );
+    const posted = Array.isArray(rolls) && rolls.length > 0;
     return {
-      success: true,
-      posted: true,
-      actorName: actor.name,
-      itemName: item.name,
+      ...base,
+      posted,
       activityType: activity.type,
-      action,
+      ...(posted ? {} : { reason: VETOED }),
     };
   }
   // action === 'use' — the supported primary path; buttons rebind via the dnd5e listeners.
-  await activity.use?.({ consume: !!args.consume }, { configure: false }, { create: true });
+  const results = await activity.use?.(
+    { consume: !!args.consume },
+    { configure: false },
+    { create: true }
+  );
+  const posted = !!results;
   return {
-    success: true,
-    posted: true,
-    actorName: actor.name,
-    itemName: item.name,
+    ...base,
+    posted,
     activityType: activity.type,
-    action,
+    ...(results?.message?.id ? { messageId: results.message.id } : {}),
+    ...(posted ? {} : { reason: VETOED }),
   };
 }
 

@@ -197,7 +197,7 @@ describe('buildActivity — lean types (heal / check / utility / damage)', () =>
       sort: 0,
       spell: {
         uuid: 'Compendium.dnd-players-handbook.spells.Item.phbsplFireball00',
-        challenge: { save: 15, attack: null, override: true },
+        challenge: { save: '15', attack: '', override: true },
         level: 3,
         properties: ['vocal', 'somatic', 'material'],
         spellbook: true,
@@ -235,7 +235,7 @@ describe('buildActivity — lean types (heal / check / utility / damage)', () =>
       attackBonus: 5,
       charges: 1,
     });
-    expect(a.spell.challenge).toEqual({ attack: 5, override: true });
+    expect(a.spell.challenge).toEqual({ attack: '5', save: '', override: true });
   });
 
   it('cast challenge: neither saveDC nor attackBonus defers to the caster (override:false)', () => {
@@ -244,7 +244,7 @@ describe('buildActivity — lean types (heal / check / utility / damage)', () =>
       spellUuid: 'Compendium.dnd-players-handbook.spells.Item.phbsplMagicMissi',
       charges: 1,
     });
-    expect(a.spell.challenge).toEqual({ attack: null, override: false });
+    expect(a.spell.challenge).toEqual({ attack: '', save: '', override: false });
   });
 
   it('cast without charges is at-will (empty consumption targets)', () => {

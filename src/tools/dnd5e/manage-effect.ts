@@ -7,7 +7,7 @@ import { toInputSchema } from '../../utils/schema.js';
 
 /**
  * manage-effect — create / edit / delete / list ActiveEffects on an actor OR an item (embedded on
- * an actor, or a world item). Effects carry top-level `changes[]` ({key, value, type}) that modify
+ * an actor, or a world item). Effects carry `system.changes[]` ({key, value, type}) that modify
  * the target's data (e.g. +1 AC, resist fire), plus disabled / transfer / statuses. Authoring only —
  * it sets effect DATA; it does not run combat (no duration tick-down). The page layer (manageEffect)
  * owns the v14 change shape (string `type`, `phase`) + parent resolution.
@@ -69,12 +69,47 @@ const ManageEffectSchema = z.object({
     .optional()
     .describe('Status/condition ids this effect confers (e.g. ["prone"]).'),
   description: z.string().optional().describe('Effect description (HTML).'),
+  duration: z
+    .object({
+      value: z.number().min(0).optional().describe('How long, in `units`.'),
+      units: z
+        .enum(['seconds', 'minutes', 'hours', 'days', 'rounds', 'turns'])
+        .optional()
+        .describe('Foundry v14 duration units (rounds/turns count in combat).'),
+      expiry: z
+        .string()
+        .optional()
+        .describe(
+          'When a turn-based duration lapses (dnd5e 6.0), e.g. "turnStart" / "turnEnd"; omit for the default.'
+        ),
+      // 5.x aliases, translated to value + units
+      rounds: z
+        .number()
+        .min(0)
+        .optional()
+        .describe('DEPRECATED 5.x alias for value + units "rounds".'),
+      turns: z
+        .number()
+        .min(0)
+        .optional()
+        .describe('DEPRECATED 5.x alias for value + units "turns".'),
+      seconds: z
+        .number()
+        .min(0)
+        .optional()
+        .describe('DEPRECATED 5.x alias for value + units "seconds".'),
+    })
+    .optional()
+    .describe('Effect duration ({value, units}); omit for a permanent/passive effect.'),
 
   // edit escape hatch
   patch: z
     .record(z.string(), z.any())
     .optional()
-    .describe('Edit: extra dot-paths relative to the effect, e.g. {"duration.rounds": 10}.'),
+    .describe(
+      'Edit: extra dot-paths relative to the effect, e.g. {"duration.value": 10, "duration.units": ' +
+        '"rounds"} or {"tint": "#ff0000"}. Changes live at "system.changes".'
+    ),
 });
 
 export interface DnD5eManageEffectToolOptions {
@@ -136,6 +171,7 @@ export class DnD5eManageEffectTool {
       transfer: parsed.transfer,
       statuses: parsed.statuses,
       description: parsed.description,
+      duration: parsed.duration,
     };
 
     this.logger.info('manage-effect', { action: parsed.action, effectId: parsed.effectId });

@@ -87,7 +87,7 @@ const CreateActorFromCompendiumSchema = z.object({
     .describe(
       'PREFAB-AS-BASE bridge: stat edits to layer onto the instantiated WORLD COPY — copy a ' +
         'close-matching Monster Manual creature, then customize it in one call (the §6 step-2 path). ' +
-        'Same shape as update-actor, e.g. {cr, hp:{value,max,formula}, ac:{calc,flat}, ' +
+        'Same shape as update-actor, e.g. {cr, hp:{value,max,formula}, ac:{override} or ac:{natural}, ' +
         'abilities:{str,…}, skills:[{skill,proficiency}], damageResistances:{values}, biography, ' +
         'currency:{mode,gp,…}}. Applied to the copy ONLY — the source compendium entry is never ' +
         'modified. Use names[] for the name, not this. Applies to every copy when quantity > 1.'

@@ -39,11 +39,78 @@ export interface ScanCombatStatsArgs {
   since?: number;
 }
 
-/** The item/spell behind a message, best-effort off dnd5e's own flags (use → item fallback). */
-function itemOf(m: any): string | null {
+// --- dnd5e message-data readers (PURE, unit-tested) --------------------------------------------
+// dnd5e 6.0 moved a card's identity out of flags into typed ChatMessage system data:
+//   message.type ∈ attack | save | check | damage | healing | usage | generic | hitDie | hitPoints…
+//   system.item {id,type,uuid} · system.activity {…} · system.origin (message id) ·
+//   system.targets[] {actor (uuid), token (uuid), name, ac, img}   (no `uuid` field any more)
+// The 5.x flags (flags.dnd5e.roll.type / item / use / targets / originatingMessage) are read as a
+// fallback only — the world migration rewrites old messages into the typed shape.
+
+/** The 5.x-vocabulary roll type of a message (attack/save/death/concentration/ability/skill/tool/…). */
+export function messageRollType(m: any): string | undefined {
+  const type = typeof m?.type === 'string' ? m.type : '';
+  const sys = m?.system ?? {};
+  switch (type) {
+    case 'attack':
+    case 'damage':
+    case 'healing':
+    case 'hitDie':
+    case 'hitPoints':
+    case 'generic':
+      return type;
+    case 'save':
+      return sys.type === 'death' || sys.type === 'concentration' ? sys.type : 'save';
+    case 'check':
+      if (sys.skill) return 'skill';
+      if (sys.tool) return 'tool';
+      return sys.type === 'initiative' ? 'initiative' : 'ability';
+    default:
+      return m?.flags?.dnd5e?.roll?.type ?? undefined;
+  }
+}
+
+/** The item/spell behind a message (system.item, else the 5.x use → item flags). */
+export function messageItemUuid(m: any): string | null {
+  const sys = m?.system ?? {};
   return (
-    m.flags?.dnd5e?.use?.itemUuid ?? m.flags?.dnd5e?.item?.uuid ?? m.flags?.dnd5e?.item?.id ?? null
+    sys.item?.uuid ??
+    sys.item?.id ??
+    m?.flags?.dnd5e?.use?.itemUuid ??
+    m?.flags?.dnd5e?.item?.uuid ??
+    m?.flags?.dnd5e?.item?.id ??
+    null
   );
+}
+
+/** The originating message id (system.origin — a document or id — else the 5.x flag). */
+export function messageOrigin(m: any): string | null {
+  const raw = m?._source?.system?.origin ?? m?.system?.origin;
+  if (typeof raw === 'string' && raw) return raw;
+  if (raw && typeof raw === 'object' && typeof raw.id === 'string') return raw.id;
+  return m?.flags?.dnd5e?.originatingMessage ?? null;
+}
+
+/**
+ * Target descriptors normalized to the 5.x wire shape the fold reads: `uuid` = the target ACTOR's
+ * uuid (a synthetic Scene…Token…Actor uuid for an unlinked token — identical to the 5.x value).
+ */
+export function messageTargets(
+  m: any
+): Array<{ uuid: string; name: string; ac: number | null; token?: string }> | null {
+  const sys = m?.system?.targets;
+  const raw: any[] | null = Array.isArray(sys)
+    ? sys
+    : Array.isArray(m?.flags?.dnd5e?.targets)
+      ? m.flags.dnd5e.targets
+      : null;
+  if (!raw) return null;
+  return raw.map((t: any) => ({
+    uuid: t?.actor ?? t?.uuid ?? '',
+    name: t?.name ?? '',
+    ac: typeof t?.ac === 'number' ? t.ac : null,
+    ...(typeof t?.token === 'string' ? { token: t.token } : {}),
+  }));
 }
 
 export async function scanCombatStats(args: ScanCombatStatsArgs = {}): Promise<unknown> {
@@ -67,19 +134,19 @@ export async function scanCombatStats(args: ScanCombatStatsArgs = {}): Promise<u
         ),
         deltas: m.system?.deltas ? JSON.parse(JSON.stringify(m.system.deltas)) : null,
         speakerActor: m.speaker?.actor ?? null,
-        itemUuid: itemOf(m),
+        itemUuid: messageItemUuid(m),
         // damage-roll totals by type off the receipt message's own rolls: PRE-mitigation
         rolls: (m.rolls ?? []).map((r: any) => ({ total: r.total, type: r.options?.type ?? null })),
         dnd5e: {
-          targets: m.getFlag('dnd5e', 'targets') ?? null,
-          origin: m.getFlag('dnd5e', 'originatingMessage') ?? null,
+          targets: messageTargets(m),
+          origin: messageOrigin(m),
         },
       });
     }
     // Buff margins, nat 20/1, advantage economy and death saves need the RAW d20 rolls — a
     // buff die rides the roll as its own term, on messages battleflow may never touch.
-    const rollType = m.flags?.dnd5e?.roll?.type;
-    if (m.rolls?.length && D20_TYPES.has(rollType)) {
+    const rollType = messageRollType(m);
+    if (m.rolls?.length && rollType && D20_TYPES.has(rollType)) {
       const r = m.rolls[0];
       const d20 = r.terms?.find((t: any) => t.faces === 20 && t.results);
       d20s.push({
@@ -89,7 +156,7 @@ export async function scanCombatStats(args: ScanCombatStatsArgs = {}): Promise<u
         total: r.total,
         actorUuid: m.speaker?.actor ? `Actor.${m.speaker.actor}` : null,
         speakerAlias: m.speaker?.alias ?? null,
-        itemUuid: itemOf(m),
+        itemUuid: messageItemUuid(m),
         // rollCtx: battleflow's at-roll-time context stamp — {combat, sourceUuid}
         ctx: bf?.rollCtx ? JSON.parse(JSON.stringify(bf.rollCtx)) : null,
         // advantageMode: dnd5e's own -1 | 0 | 1; `all` keeps both dice for adv/dis outcomes
@@ -103,11 +170,7 @@ export async function scanCombatStats(args: ScanCombatStatsArgs = {}): Promise<u
         bonusDice: (r.terms ?? [])
           .filter((t: any) => t.faces && t.faces !== 20 && t.results)
           .map((t: any) => ({ faces: t.faces, total: t.total })),
-        targets: (m.getFlag('dnd5e', 'targets') ?? []).map((t: any) => ({
-          uuid: t.uuid,
-          name: t.name,
-          ac: t.ac ?? null,
-        })),
+        targets: (messageTargets(m) ?? []).map(t => ({ uuid: t.uuid, name: t.name, ac: t.ac })),
       });
     }
   }

@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -50,12 +51,7 @@ function packDist(hits) {
   return [...m.entries()].map(([p, n]) => `${p}=${n}`).join(', ');
 }
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-});
+const f = new Foundry(bridgeConfig(env));
 
 async function facet(label, args, checks) {
   console.log(`\n# ${label}`);

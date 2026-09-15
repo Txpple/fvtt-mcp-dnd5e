@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 import { OwnershipTools } from '../dist/tools/ownership.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,14 +58,7 @@ const logger = {
   },
 };
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const f = new Foundry(bridgeConfig(env));
 
 // Read the fixture actor's raw ownership map + the user's EFFECTIVE permission.
 const readState = (actorId, userId) =>
