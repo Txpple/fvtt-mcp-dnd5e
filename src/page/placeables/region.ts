@@ -29,6 +29,8 @@ import {
   BEHAVIOR_DISPOSITIONS,
   CREATURE_TYPE_KEYS,
   DIFFICULT_TERRAIN_TYPES,
+  ROTATE_DIRECTIONS,
+  ROTATE_SPEED_MODES,
 } from '../../utils/dnd5e-canonical.js';
 import { resolveEffectRefs, type ResolvedEffect } from '../dnd5e/effect-refs.js';
 import { TOKEN_DISPOSITION } from '../dnd5e/token-defaults.js';
@@ -39,6 +41,29 @@ import { gridRectShape, resolveSceneStrict, sceneGrid, TOM_CARTOS_FLAG_SCOPE } f
 /** The dnd5e 6.0 behavior types the typed conveniences below know how to shape. */
 export const APPLY_EFFECT_BEHAVIOR = 'dnd5e.applyActiveEffect';
 export const DIFFICULT_TERRAIN_BEHAVIOR = 'dnd5e.difficultTerrain';
+export const ROTATE_AREA_BEHAVIOR = 'dnd5e.rotateArea';
+
+/**
+ * dnd5e.rotateArea — a turning platform / puzzle room: the listed placeables rotate together around
+ * the region's first shape's origin, stopping at `positions` (angles); a rotation is triggered from
+ * the region config or a script (`behavior.system.rotate()`), never by token movement.
+ */
+export interface RotateAreaOpts {
+  /** Stop angles in degrees, e.g. [0, 90, 180, 270]. Default [0]. */
+  positions?: number[];
+  tiles?: string[];
+  walls?: string[];
+  lights?: string[];
+  regions?: string[];
+  sounds?: string[];
+  /** Rotate the listed walls as linked segments (default true). */
+  linkWalls?: boolean;
+  /** Animation time in ms — the whole turn (fixed) or per 90° (variable). Default 1000. */
+  timeMs?: number;
+  timeMode?: string;
+  /** short (default) / long / cw / ccw. */
+  direction?: string;
+}
 
 export interface Dnd5eBehaviorOpts {
   /** Names / uuids / "Item uuid#Effect" refs — resolved to ActiveEffect uuids (applyActiveEffect). */
@@ -51,6 +76,47 @@ export interface Dnd5eBehaviorOpts {
   terrainTypes?: string[];
   /** difficultTerrain: magical terrain (Spike Growth) vs mundane (rubble). */
   magical?: boolean;
+  /** rotateArea: the turning-platform configuration. */
+  rotate?: RotateAreaOpts;
+}
+
+/** Shape a rotateArea configuration into the behavior's `system` (ids already validated). Pure. */
+export function rotateAreaSystem(r: RotateAreaOpts): Record<string, unknown> {
+  const positions = r.positions ?? [0];
+  if (!Array.isArray(positions) || positions.length === 0) {
+    throw new Error('rotate.positions needs at least one stop angle (e.g. [0, 90, 180, 270]).');
+  }
+  for (const a of positions) {
+    if (typeof a !== 'number' || !Number.isFinite(a) || a < -360 || a > 360) {
+      throw new Error(`rotate.positions: "${a}" is not an angle between -360 and 360.`);
+    }
+  }
+  const direction = r.direction ?? 'short';
+  if (!(ROTATE_DIRECTIONS as readonly string[]).includes(direction)) {
+    throw new Error(
+      `rotate.direction "${direction}" is unknown. Use one of: ${ROTATE_DIRECTIONS.join(' ')}.`
+    );
+  }
+  const timeMode = r.timeMode ?? 'fixed';
+  if (!(ROTATE_SPEED_MODES as readonly string[]).includes(timeMode)) {
+    throw new Error(
+      `rotate.timeMode "${timeMode}" is unknown. Use one of: ${ROTATE_SPEED_MODES.join(' ')}.`
+    );
+  }
+  const timeMs = r.timeMs ?? 1000;
+  if (!Number.isInteger(timeMs) || timeMs < 0)
+    throw new Error('rotate.timeMs must be a whole number of milliseconds.');
+  const ids = (list: string[] | undefined) => [...(list ?? [])];
+  return {
+    time: { value: timeMs, mode: timeMode },
+    tiles: { ids: ids(r.tiles) },
+    walls: { ids: ids(r.walls), link: r.linkWalls ?? true },
+    lights: { ids: ids(r.lights) },
+    regions: { ids: ids(r.regions) },
+    sounds: { ids: ids(r.sounds) },
+    directionMode: direction,
+    positions: positions.map(angle => ({ angle })),
+  };
 }
 
 const assertKeys = (values: string[] | undefined, vocab: readonly string[], label: string) => {
@@ -72,9 +138,23 @@ export function dnd5eBehaviorSystem(
   effectUuids: string[]
 ): Record<string, unknown> {
   const given = (
-    ['effects', 'dispositions', 'sizes', 'creatureTypes', 'terrainTypes', 'magical'] as const
+    [
+      'effects',
+      'dispositions',
+      'sizes',
+      'creatureTypes',
+      'terrainTypes',
+      'magical',
+      'rotate',
+    ] as const
   ).filter(k => opts[k] !== undefined);
   if (given.length === 0) return {};
+  if (type === ROTATE_AREA_BEHAVIOR) {
+    const bad = given.filter(k => k !== 'rotate');
+    if (bad.length) throw new Error(`${bad.join(', ')} do not apply to ${ROTATE_AREA_BEHAVIOR}.`);
+    return rotateAreaSystem(opts.rotate ?? {});
+  }
+  if (opts.rotate !== undefined) throw new Error(`rotate only applies to ${ROTATE_AREA_BEHAVIOR}.`);
   assertKeys(opts.dispositions, BEHAVIOR_DISPOSITIONS, 'disposition');
   const dispositionNumbers = (opts.dispositions ?? []).map(
     d => TOKEN_DISPOSITION[d as keyof typeof TOKEN_DISPOSITION]
@@ -109,8 +189,26 @@ export function dnd5eBehaviorSystem(
   }
   throw new Error(
     `${given.join(', ')} are dnd5e behavior conveniences — only valid with type ` +
-      `${APPLY_EFFECT_BEHAVIOR} or ${DIFFICULT_TERRAIN_BEHAVIOR} (got "${type}").`
+      `${APPLY_EFFECT_BEHAVIOR}, ${DIFFICULT_TERRAIN_BEHAVIOR} or ${ROTATE_AREA_BEHAVIOR} (got "${type}").`
   );
+}
+
+/** Every id a rotateArea lists must be a placeable on THIS scene — a typo would rotate nothing, silently. */
+function assertRotateIds(scene: any, r: RotateAreaOpts): void {
+  const check = (label: string, collection: any, ids: string[] | undefined) => {
+    for (const id of ids ?? []) {
+      if (!collection?.get?.(id)) {
+        throw new Error(
+          `rotate.${label}: "${id}" is not a ${label.replace(/s$/, '')} on scene "${scene.name}".`
+        );
+      }
+    }
+  };
+  check('tiles', scene.tiles, r.tiles);
+  check('walls', scene.walls, r.walls);
+  check('lights', scene.lights, r.lights);
+  check('regions', scene.regions, r.regions);
+  check('sounds', scene.sounds, r.sounds);
 }
 
 // --- teleport-behavior helpers (pure) -----------------------------------------
@@ -504,7 +602,7 @@ export async function addRegionBehavior(
   let resolvedEffects: ResolvedEffect[] = [];
   const warnings: string[] = [];
   {
-    const { effects, dispositions, sizes, creatureTypes, terrainTypes, magical } = args;
+    const { effects, dispositions, sizes, creatureTypes, terrainTypes, magical, rotate } = args;
     const opts: Dnd5eBehaviorOpts = {
       ...(effects !== undefined ? { effects } : {}),
       ...(dispositions !== undefined ? { dispositions } : {}),
@@ -512,7 +610,9 @@ export async function addRegionBehavior(
       ...(creatureTypes !== undefined ? { creatureTypes } : {}),
       ...(terrainTypes !== undefined ? { terrainTypes } : {}),
       ...(magical !== undefined ? { magical } : {}),
+      ...(rotate !== undefined ? { rotate } : {}),
     };
+    if (rotate && args.type === ROTATE_AREA_BEHAVIOR) assertRotateIds(scene, rotate);
     let uuids: string[] = [];
     if (Array.isArray(effects) && effects.length > 0) {
       const r = await resolveEffectRefs(effects);

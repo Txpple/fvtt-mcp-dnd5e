@@ -60,6 +60,12 @@ itself applies the rules, no macro:
   "snow" | "rocks" | "slope" | "liquid"]` (a creature that ignores that kind — a spider in webs — walks
   freely), `magical: true` for a spell's terrain, `dispositions` = who IGNORES it. Movement cost
   doubles while the token plans a path through it.
+- **`dnd5e.rotateArea`** — a turning platform / puzzle room: `rotate: {positions: [0, 90, 180,
+  270], tiles: [...], walls: [...], lights: [...]}` (ids from `list-tiles` / `list-walls` /
+  `list-lights`, validated to exist) turns the listed placeables together around the region's first
+  shape, stopping at the angles; `direction` (`short` / `cw` / `ccw`), `timeMs`. The DM triggers a
+  turn from the region config (or a macro calling `behavior.system.rotate()`) — walking in does not
+  turn it. Draw the region centred on the pivot.
 - Effects the behavior applies live in a compendium or on a world item — never on an actor; the
   tool refuses an actor's effect (it would be duplicated on entry and deleted on exit). Wrong
   behavior = `delete-region` + rebuild (no behavior editing).

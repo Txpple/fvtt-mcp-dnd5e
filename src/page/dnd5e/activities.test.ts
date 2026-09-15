@@ -607,3 +607,52 @@ describe("buildActivity('transform') — dnd5e 6.0", () => {
     ).toThrow(/movement type "teleport"/);
   });
 });
+
+describe("buildActivity('transform') — custom settings (transform.customize)", () => {
+  it('writes settings with the preset and sets customize; validates the category keys; refuses form mode', () => {
+    const act = buildActivity('transform', {
+      id: 'A',
+      transformMode: 'cr',
+      transformPreset: 'wildshape',
+      profiles: [{ cr: 1 }],
+      transformSettings: {
+        keep: ['mental', 'resistances'],
+        merge: ['saves'],
+        effects: ['origin'],
+        minimumAC: '13 + @abilities.wis.mod',
+        tempFormula: '@classes.druid.levels',
+        transformTokens: false,
+        spellLists: ['subclass:moon'],
+      },
+    });
+    expect(act.transform.customize).toBe(true);
+    expect(act.settings).toEqual({
+      preset: 'wildshape',
+      keep: ['mental', 'resistances'],
+      merge: ['saves'],
+      effects: ['origin'],
+      minimumAC: '13 + @abilities.wis.mod',
+      tempFormula: '@classes.druid.levels',
+      transformTokens: false,
+      spellLists: ['subclass:moon'],
+    });
+    expect(buildActivity('transform', { id: 'A', profiles: [{ cr: 1 }] })).not.toHaveProperty(
+      'settings'
+    );
+    expect(() =>
+      buildActivity('transform', {
+        id: 'A',
+        profiles: [{ cr: 1 }],
+        transformSettings: { keep: ['wings'] },
+      })
+    ).toThrow(/transformSettings\.keep "wings"/);
+    expect(() =>
+      buildActivity('transform', {
+        id: 'A',
+        transformMode: 'form',
+        formEffectIds: ['e1'],
+        transformSettings: { keep: ['hp'] },
+      })
+    ).toThrow(/not available in Select-Form mode/);
+  });
+});

@@ -11,6 +11,9 @@ import {
   EXPIRY_EVENTS,
   MOVEMENT_TYPES,
   TARGET_AFFECTS_TYPES,
+  TRANSFORM_EFFECT_KEYS,
+  TRANSFORM_KEEP_KEYS,
+  TRANSFORM_MERGE_KEYS,
   TRANSFORM_MODES,
   TRANSFORM_PRESETS,
 } from '../../utils/dnd5e-canonical.js';
@@ -203,6 +206,48 @@ const ManageActivitySchema = z.object({
     .boolean()
     .optional()
     .describe('Transform activity (form mode): may the actor revert to "no form" from the prompt.'),
+  transformSettings: z
+    .object({
+      keep: z
+        .array(z.enum(TRANSFORM_KEEP_KEYS))
+        .optional()
+        .describe(
+          'What the transformed actor KEEPS of its original self: physical / mental (ability scores), ' +
+            'saves, skills, gearProf, languages, class, feats, items, spells, bio, type, hp, tempHP, ' +
+            'resistances, vision, self (appearance only).'
+        ),
+      merge: z
+        .array(z.enum(TRANSFORM_MERGE_KEYS))
+        .optional()
+        .describe('Proficiencies merged (best of both): saves, skills.'),
+      effects: z
+        .array(z.enum(TRANSFORM_EFFECT_KEYS))
+        .optional()
+        .describe(
+          "Which of the original's active effects carry over: all, origin (from the transforming item), " +
+            'otherOrigin, background, class, feat, equipment, spell.'
+        ),
+      minimumAC: z.string().optional().describe('Deterministic formula floor for the new AC.'),
+      tempFormula: z
+        .string()
+        .optional()
+        .describe('Deterministic formula for temp HP on transforming.'),
+      transformTokens: z
+        .boolean()
+        .optional()
+        .describe('Also swap the token art/size (default true).'),
+      spellLists: z
+        .array(z.string())
+        .optional()
+        .describe('Spell lists the form keeps (e.g. "subclass:moon").'),
+    })
+    .optional()
+    .describe(
+      'Transform activity (cr / direct): CUSTOM transformation settings instead of the bare preset ' +
+        '(sets customize). Start from a preset and override — e.g. Wild Shape that also keeps ' +
+        'resistances: transformPreset "wildshape" + {keep: ["bio","class","feats","hp","languages",' +
+        '"mental","tempHP","type","resistances"]}. Not available in form mode.'
+    ),
   profiles: z
     .array(
       z.object({
@@ -531,6 +576,7 @@ export class DnD5eManageActivityTool {
       formless: parsed.formless,
       profiles: parsed.profiles,
       forms: parsed.forms,
+      transformSettings: parsed.transformSettings,
     };
 
     this.logger.info('manage-activity', {

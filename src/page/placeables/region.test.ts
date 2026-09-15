@@ -10,7 +10,9 @@ import { describe, it, expect } from 'vitest';
 import {
   APPLY_EFFECT_BEHAVIOR,
   DIFFICULT_TERRAIN_BEHAVIOR,
+  ROTATE_AREA_BEHAVIOR,
   dnd5eBehaviorSystem,
+  rotateAreaSystem,
   dumpRegion,
   rectContainsSnappedCenter,
   regionDescriptor,
@@ -341,7 +343,64 @@ describe('dnd5eBehaviorSystem (dnd5e 6.0 region behavior conveniences → system
       ])
     ).toThrow(/disposition "secret" is unknown/);
     expect(() => dnd5eBehaviorSystem('executeMacro', { effects: ['Poisoned'] }, [UUID])).toThrow(
-      /only valid with type dnd5e\.applyActiveEffect or dnd5e\.difficultTerrain/
+      /only valid with type dnd5e\.applyActiveEffect, dnd5e\.difficultTerrain or dnd5e\.rotateArea/
+    );
+  });
+});
+
+describe('rotateAreaSystem (dnd5e.rotateArea — the turning platform)', () => {
+  it('shapes the full system with defaults (one stop at 0°, 1000 ms fixed, shortest way, linked walls)', () => {
+    expect(rotateAreaSystem({})).toEqual({
+      time: { value: 1000, mode: 'fixed' },
+      tiles: { ids: [] },
+      walls: { ids: [], link: true },
+      lights: { ids: [] },
+      regions: { ids: [] },
+      sounds: { ids: [] },
+      directionMode: 'short',
+      positions: [{ angle: 0 }],
+    });
+    expect(
+      rotateAreaSystem({
+        positions: [0, 90, 180, 270],
+        tiles: ['t1'],
+        walls: ['w1', 'w2'],
+        linkWalls: false,
+        timeMs: 2500,
+        timeMode: 'variable',
+        direction: 'cw',
+      })
+    ).toEqual({
+      time: { value: 2500, mode: 'variable' },
+      tiles: { ids: ['t1'] },
+      walls: { ids: ['w1', 'w2'], link: false },
+      lights: { ids: [] },
+      regions: { ids: [] },
+      sounds: { ids: [] },
+      directionMode: 'cw',
+      positions: [{ angle: 0 }, { angle: 90 }, { angle: 180 }, { angle: 270 }],
+    });
+  });
+
+  it('rejects an empty / out-of-range position list, an unknown direction or speed mode, a bad time', () => {
+    expect(() => rotateAreaSystem({ positions: [] })).toThrow(/at least one stop angle/);
+    expect(() => rotateAreaSystem({ positions: [400] })).toThrow(/not an angle/);
+    expect(() => rotateAreaSystem({ direction: 'left' })).toThrow(/rotate\.direction "left"/);
+    expect(() => rotateAreaSystem({ timeMode: 'slow' })).toThrow(/rotate\.timeMode "slow"/);
+    expect(() => rotateAreaSystem({ timeMs: -5 })).toThrow(/whole number of milliseconds/);
+  });
+
+  it('dnd5eBehaviorSystem routes `rotate` to rotateArea only', () => {
+    expect(
+      dnd5eBehaviorSystem(ROTATE_AREA_BEHAVIOR, { rotate: { positions: [0, 90] } }, [])
+    ).toMatchObject({
+      positions: [{ angle: 0 }, { angle: 90 }],
+    });
+    expect(() =>
+      dnd5eBehaviorSystem(ROTATE_AREA_BEHAVIOR, { rotate: {}, magical: true }, [])
+    ).toThrow(/do not apply to dnd5e\.rotateArea/);
+    expect(() => dnd5eBehaviorSystem(DIFFICULT_TERRAIN_BEHAVIOR, { rotate: {} }, [])).toThrow(
+      /rotate only applies to dnd5e\.rotateArea/
     );
   });
 });

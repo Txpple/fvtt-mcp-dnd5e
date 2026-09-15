@@ -19,6 +19,9 @@ import {
   EXPIRY_EVENTS,
   MOVEMENT_TYPES,
   TARGET_AFFECTS_TYPES,
+  TRANSFORM_EFFECT_KEYS,
+  TRANSFORM_KEEP_KEYS,
+  TRANSFORM_MERGE_KEYS,
   TRANSFORM_MODES,
   TRANSFORM_PRESETS,
 } from '../../utils/dnd5e-canonical.js';
@@ -85,6 +88,20 @@ export interface ActivityBehaviorOpts {
   terrainTypes?: string[];
 }
 
+/** Custom transformation settings (TransformationSetting): what carries over from the original self. */
+export interface TransformSettingsOpts {
+  keep?: string[];
+  merge?: string[];
+  effects?: string[];
+  /** Deterministic formula for a floor on the new form's AC (Moon druid: "(13 + @abilities.wis.mod)"). */
+  minimumAC?: string;
+  /** Deterministic formula for temp HP granted on transforming ("@classes.druid.levels"). */
+  tempFormula?: string;
+  transformTokens?: boolean;
+  /** Spell lists the form keeps access to (dnd5e registry keys, e.g. "subclass:moon"). */
+  spellLists?: string[];
+}
+
 /** A transform profile (direct link: `actorUuid`; by CR: `cr` + the filters). */
 export interface TransformProfileOpts {
   name?: string;
@@ -125,6 +142,8 @@ export interface BuildActivityOpts {
   profiles?: TransformProfileOpts[];
   /** form mode: the ITEM's own effect ids, one per form — resolved by name by the orchestrator. */
   formEffectIds?: string[];
+  /** cr / direct: custom transformation settings (sets transform.customize) instead of the bare preset. */
+  transformSettings?: TransformSettingsOpts;
   // attack
   attackType?: 'melee' | 'ranged';
   attackBonus?: number;
@@ -462,6 +481,28 @@ function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
     profiles: [],
     effects: [],
   };
+  if (opts.transformSettings) {
+    if (mode === 'form') {
+      throw new Error(
+        "transformSettings are not available in Select-Form mode — the forms' effects ARE the transformation."
+      );
+    }
+    const ts = opts.transformSettings;
+    assertKeys(ts.keep, TRANSFORM_KEEP_KEYS, 'transformSettings.keep');
+    assertKeys(ts.merge, TRANSFORM_MERGE_KEYS, 'transformSettings.merge');
+    assertKeys(ts.effects, TRANSFORM_EFFECT_KEYS, 'transformSettings.effects');
+    act.transform.customize = true;
+    act.settings = {
+      preset: preset || null,
+      ...(ts.keep ? { keep: [...ts.keep] } : {}),
+      ...(ts.merge ? { merge: [...ts.merge] } : {}),
+      ...(ts.effects ? { effects: [...ts.effects] } : {}),
+      ...(ts.minimumAC !== undefined ? { minimumAC: String(ts.minimumAC) } : {}),
+      ...(ts.tempFormula !== undefined ? { tempFormula: String(ts.tempFormula) } : {}),
+      ...(typeof ts.transformTokens === 'boolean' ? { transformTokens: ts.transformTokens } : {}),
+      ...(ts.spellLists ? { spellLists: [...ts.spellLists] } : {}),
+    };
+  }
   if (mode === 'form') {
     if (!opts.formEffectIds?.length) {
       throw new Error(

@@ -391,3 +391,42 @@ describe('manage-activity — teleport + transform (dnd5e 6.0)', () => {
     ).rejects.toThrow(/need a `cr`/);
   });
 });
+
+describe('manage-activity — transformSettings (dnd5e 6.0 customize)', () => {
+  it('advertises the category enums and forwards the settings', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'add',
+      activityId: 'A3',
+      type: 'transform',
+      item: { id: 'i1', name: 'Wild Shape', type: 'feat' },
+    });
+    const schema: any = tool.getToolDefinitions()[0].inputSchema;
+    expect(schema.properties.transformSettings.properties.merge.items.enum).toEqual([
+      'saves',
+      'skills',
+    ]);
+    expect(schema.properties.transformSettings.properties.keep.items.enum).toContain('resistances');
+    await tool.handleManageActivity({
+      action: 'add',
+      itemIdentifier: 'Wild Shape',
+      type: 'transform',
+      transformPreset: 'wildshape',
+      profiles: [{ cr: 1, creatureTypes: ['beast'] }],
+      transformSettings: { keep: ['hp', 'resistances'], tempFormula: '@classes.druid.levels' },
+    });
+    expect(calls.find(([n]) => n === 'manageActivity')?.[1].activity.transformSettings).toEqual({
+      keep: ['hp', 'resistances'],
+      tempFormula: '@classes.druid.levels',
+    });
+    await expect(
+      tool.handleManageActivity({
+        action: 'add',
+        itemIdentifier: 'X',
+        type: 'transform',
+        profiles: [{ cr: 1 }],
+        transformSettings: { keep: ['wings'] },
+      })
+    ).rejects.toThrow();
+  });
+});

@@ -11,6 +11,8 @@ import {
   BEHAVIOR_DISPOSITIONS,
   CREATURE_TYPE_KEYS,
   DIFFICULT_TERRAIN_TYPES,
+  ROTATE_DIRECTIONS,
+  ROTATE_SPEED_MODES,
 } from '../../utils/dnd5e-canonical.js';
 import { toInputSchema } from '../../utils/schema.js';
 import {
@@ -182,7 +184,7 @@ const AddRegionBehaviorSchema = z.object({
         'modifyMovementCost, pauseGame, suppressWeather, toggleBehavior, defineSurface; dnd5e 6.0: ' +
         'dnd5e.applyActiveEffect (an area that applies effects to tokens inside it — lava, a poison ' +
         'cloud, consecrated ground; use `effects`), dnd5e.difficultTerrain (use `terrainTypes` / ' +
-        '`magical`), dnd5e.rotateArea.'
+        '`magical`), dnd5e.rotateArea (a turning platform — use `rotate`).'
     ),
   name: z.string().optional().describe("Behavior label (defaults to the type's standard name)."),
   disabled: z.boolean().optional().describe('Create the behavior disabled (default false).'),
@@ -231,6 +233,41 @@ const AddRegionBehaviorSchema = z.object({
     .optional()
     .describe(
       'difficultTerrain: magical terrain (Spike Growth) vs mundane (rubble). Default false.'
+    ),
+  rotate: z
+    .object({
+      positions: z
+        .array(z.number().min(-360).max(360))
+        .optional()
+        .describe('Stop angles in degrees, e.g. [0, 90, 180, 270] (default [0]).'),
+      tiles: z
+        .array(z.string())
+        .optional()
+        .describe('Tile ids on the scene that turn with the area.'),
+      walls: z.array(z.string()).optional().describe('Wall ids that turn with the area.'),
+      lights: z.array(z.string()).optional().describe('Light ids that turn with the area.'),
+      regions: z.array(z.string()).optional().describe('Other region ids that turn with the area.'),
+      sounds: z.array(z.string()).optional().describe('Ambient-sound ids that turn with the area.'),
+      linkWalls: z
+        .boolean()
+        .optional()
+        .describe('Rotate the walls as linked segments (default true).'),
+      timeMs: z.number().int().min(0).optional().describe('Animation time in ms (default 1000).'),
+      timeMode: z
+        .enum(ROTATE_SPEED_MODES)
+        .optional()
+        .describe('fixed (default) = timeMs for the whole turn; variable = timeMs per 90°.'),
+      direction: z
+        .enum(ROTATE_DIRECTIONS)
+        .optional()
+        .describe('short (default) / long / cw / ccw — how the area travels to the next stop.'),
+    })
+    .optional()
+    .describe(
+      'dnd5e.rotateArea: a turning platform / puzzle room — the listed placeables (ids from ' +
+        'list-tiles / list-walls / list-lights / list-regions / list-sounds, validated to exist on the ' +
+        "scene) rotate together around the region's first shape, stopping at `positions`. A turn is " +
+        'triggered from the region config or a script, not by walking in.'
     ),
   teleportTo: z
     .object({

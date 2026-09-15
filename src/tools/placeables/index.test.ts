@@ -1040,3 +1040,42 @@ describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('add-region-behavior — dnd5e.rotateArea conveniences', () => {
+  it('advertises `rotate` and forwards it', async () => {
+    const { tools, calls } = build({
+      success: true,
+      sceneId: 's1',
+      sceneName: 'Vault',
+      regionId: 'r1',
+      regionName: 'Turntable',
+      behavior: { id: 'b1', type: 'dnd5e.rotateArea' },
+    });
+    const def = tools
+      .getToolDefinitions()
+      .find((d: any) => d.name === 'add-region-behavior') as any;
+    const rotate = def.inputSchema.properties.rotate.properties;
+    expect(rotate.direction.enum).toEqual(['short', 'long', 'cw', 'ccw']);
+    expect(rotate.timeMode.enum).toEqual(['fixed', 'variable']);
+    const out = await tools.handle('add-region-behavior', {
+      sceneIdentifier: 'Vault',
+      regionIdentifier: 'Turntable',
+      type: 'dnd5e.rotateArea',
+      rotate: { positions: [0, 90], tiles: ['t1'], direction: 'cw' },
+    });
+    expect(calls.find(([n]) => n === 'addRegionBehavior')?.[1].rotate).toEqual({
+      positions: [0, 90],
+      tiles: ['t1'],
+      direction: 'cw',
+    });
+    expect(out).toContain('Added dnd5e.rotateArea behavior b1');
+    await expect(
+      tools.handle('add-region-behavior', {
+        sceneIdentifier: 'Vault',
+        regionIdentifier: 'Turntable',
+        type: 'dnd5e.rotateArea',
+        rotate: { positions: [720] },
+      })
+    ).rejects.toThrow();
+  });
+});

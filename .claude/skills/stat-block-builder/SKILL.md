@@ -305,6 +305,12 @@ mode by how the block reads:
   `transformMode: "form"`, `forms: ["Humanoid Form", "Hybrid Form", "Wolf Form"]`, `formless:
   true` when "no form" is a valid state. Bites and claws that only exist in a form stay as attack
   activities on the same item (gate them with an effect condition on `statuses`/the form if needed).
+- **Beyond the presets:** `transformSettings` (cr / direct modes) customizes what carries over —
+  `keep` (physical / mental / saves / skills / gearProf / languages / class / feats / items /
+  spells / bio / type / hp / tempHP / resistances / vision / self), `merge` (saves / skills),
+  `effects` (which of the original's effects persist), `minimumAC` / `tempFormula` (deterministic
+  formulas — Moon druid: `"13 + @abilities.wis.mod"` / `"@classes.druid.levels"`), `spellLists`,
+  `transformTokens`. Start from the closest preset and override only what the block changes.
 - Reading: `manage-activity list` names the profiles; the DM reverts a transformed actor from the
   sheet header. Copy the MM's shapeshifter first — author only when the block is custom.
 

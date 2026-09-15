@@ -254,6 +254,86 @@ try {
   );
 
   // ======================================================================
+  // 2b. rotateArea: a tile listed on a turning platform rotates 90° when the platform turns
+  // ======================================================================
+  const tileId = await f.evaluate(async sceneId => {
+    const scene = globalThis.game.scenes.get(sceneId);
+    const [tile] = await scene.createEmbeddedDocuments('Tile', [
+      {
+        x: 600,
+        y: 600,
+        width: 100,
+        height: 100,
+        rotation: 0,
+        texture: { src: 'icons/svg/aura.svg' },
+      },
+    ]);
+    return tile.id;
+  }, sceneId);
+  const turntable = await f.call('createSceneRegions', {
+    sceneIdentifier: sceneId,
+    items: [
+      {
+        name: `${TAG} Turntable`,
+        shapes: [{ type: 'rectangle', x: 500, y: 500, width: 300, height: 300 }],
+      },
+    ],
+  });
+  const turntableId = turntable?.items?.[0]?.id;
+  const rot = await f.call('addRegionBehavior', {
+    sceneIdentifier: sceneId,
+    regionIdentifier: turntableId,
+    type: 'dnd5e.rotateArea',
+    rotate: { positions: [0, 90], tiles: [tileId], timeMs: 600, direction: 'cw' },
+  });
+  assert(
+    rot?.behavior?.type === 'dnd5e.rotateArea',
+    'add-region-behavior: dnd5e.rotateArea created',
+    rot
+  );
+  const rotSrc = await f.evaluate(
+    ({ sceneId, regionId, behaviorId }) => {
+      const b = globalThis.game.scenes.get(sceneId).regions.get(regionId).behaviors.get(behaviorId);
+      return b.toObject().system;
+    },
+    { sceneId, regionId: turntableId, behaviorId: rot?.behavior?.id }
+  );
+  assert(
+    JSON.stringify(rotSrc?.positions) === JSON.stringify([{ angle: 0 }, { angle: 90 }]) &&
+      rotSrc?.tiles?.ids?.[0] === tileId &&
+      rotSrc?.directionMode === 'cw' &&
+      rotSrc?.time?.value === 600,
+    'rotateArea source: positions / tile id / direction / time persisted',
+    rotSrc
+  );
+  const turned = await f.evaluate(
+    async ({ sceneId, regionId, behaviorId, tileId }) => {
+      const scene = globalThis.game.scenes.get(sceneId);
+      const b = scene.regions.get(regionId).behaviors.get(behaviorId);
+      await b.system.rotate();
+      await new Promise(r => setTimeout(r, 300));
+      return { rotation: scene.tiles.get(tileId)?.rotation, status: b.system.status?.angle };
+    },
+    { sceneId, regionId: turntableId, behaviorId: rot?.behavior?.id, tileId }
+  );
+  assert(
+    turned.rotation === 90 && turned.status === 90,
+    'rotate(): the platform turned to the 90° stop and the tile turned with it',
+    turned
+  );
+  await expectThrow(
+    'refuses a tile id that is not on the scene',
+    () =>
+      f.call('addRegionBehavior', {
+        sceneIdentifier: sceneId,
+        regionIdentifier: turntableId,
+        type: 'dnd5e.rotateArea',
+        rotate: { tiles: ['nopenopenopenope'] },
+      }),
+    /is not a tile on scene/
+  );
+
+  // ======================================================================
   // 3. Refusals at the seam
   // ======================================================================
   await expectThrow(

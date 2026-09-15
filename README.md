@@ -94,6 +94,10 @@ validated against the 6.0.1 source and proven live (`scripts/verify-effects-6.mj
   filters + a `transformPreset`), direct link (`profiles[].actor` by Monster Manual name or uuid),
   and Select Form (`forms` — the item's own effects are the forms: a lycanthrope's Humanoid / Hybrid
   / Beast shapes, Disguise Self).
+- **`add-region-behavior`** — `dnd5e.rotateArea` gets a typed `rotate` (stop angles + the tiles /
+  walls / lights / regions / sounds that turn with the platform, validated to exist on the scene);
+  `manage-activity` transform gets `transformSettings` (keep / merge / effects / minimumAC /
+  tempFormula / spellLists) on top of the presets — the last 6.0 shapes that were pass-through.
 - **`configure-dnd5e-settings`** *(new)* — read or set the 6.0 automation switches through an
   allow-list: falling, token-size and vision sync, exhaustion, initiative grouping, auto-Downed,
   encounter placement, the player damage / effects trays, bastions, and the calendar (enabled,

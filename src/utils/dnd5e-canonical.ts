@@ -242,3 +242,45 @@ export const TRANSFORM_PRESETS = ['wildshape', 'polymorph', 'polymorphSelf'] as 
 
 /** Movement types a CR-mode transform profile can restrict (CONFIG.DND5E.movementTypes keys). */
 export const MOVEMENT_TYPES = ['walk', 'burrow', 'climb', 'fly', 'swim'] as const;
+
+/** Transform custom settings — what the transformed actor KEEPS from its original self (CONFIG.DND5E.transformation.keep). */
+export const TRANSFORM_KEEP_KEYS = [
+  'physical',
+  'mental',
+  'saves',
+  'skills',
+  'gearProf',
+  'languages',
+  'class',
+  'feats',
+  'items',
+  'spells',
+  'bio',
+  'type',
+  'hp',
+  'tempHP',
+  'resistances',
+  'vision',
+  'self',
+] as const;
+
+/** Transform custom settings — proficiencies MERGED (best of both) (CONFIG.DND5E.transformation.merge). */
+export const TRANSFORM_MERGE_KEYS = ['saves', 'skills'] as const;
+
+/** Transform custom settings — which of the original's effects carry over (CONFIG.DND5E.transformation.effects). */
+export const TRANSFORM_EFFECT_KEYS = [
+  'all',
+  'origin',
+  'otherOrigin',
+  'background',
+  'class',
+  'feat',
+  'equipment',
+  'spell',
+] as const;
+
+/** dnd5e.rotateArea: which way the area turns to reach the next stop (RotateAreaRegionBehaviorType.DIRECTION_MODES). */
+export const ROTATE_DIRECTIONS = ['short', 'long', 'cw', 'ccw'] as const;
+
+/** dnd5e.rotateArea: fixed = the whole turn takes `timeMs`; variable = `timeMs` per 90° (SPEED_MODES). */
+export const ROTATE_SPEED_MODES = ['fixed', 'variable'] as const;

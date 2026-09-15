@@ -101,6 +101,12 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   (switches + `calendarNow`). Live: `scripts/verify-settings-calendar.mjs` **35/35** (restores every
   switch and the worldTime). Skills: start-session reports them; session-audit judges them. Tool
   count 149 → **151**.
+- [x] **the last two shapes** (owner 2026-09-15, "wrap up the shapes"): `add-region-behavior` `rotate`
+  for `dnd5e.rotateArea` (stop angles, the placeables that turn, direction / time; ids validated on
+  the scene; `verify-region-effects` turns a tile to 90° — **30/30**) and `manage-activity`
+  `transformSettings` (keep / merge / effects / minimumAC / tempFormula / spellLists / transformTokens
+  → `transform.customize` + `settings`; `verify-activities-6` **27/27**). Nothing in the 6.0
+  inventory is pass-through any more.
 - [ ] **2.1.1** — milestone: tag after the regression + the README.
 
 ### 2.1.0 release proof (2026-09-15, sandbox)

@@ -183,6 +183,51 @@ try {
     crSrc.prepared
   );
 
+  // custom settings (transform.customize) — Wild Shape that also keeps resistances
+  const custom = await f.call('manageActivity', {
+    action: 'add',
+    itemIdentifier: wild,
+    activity: {
+      type: 'transform',
+      name: 'Wild Shape (custom)',
+      transformMode: 'cr',
+      transformPreset: 'wildshape',
+      profiles: [{ cr: 1, creatureTypes: ['beast'] }],
+      transformSettings: {
+        keep: ['mental', 'hp', 'resistances'],
+        merge: ['saves'],
+        tempFormula: '@classes.druid.levels',
+      },
+    },
+  });
+  const customSrc = await f.evaluate(
+    ({ itemId, activityId }) => {
+      const item = globalThis.game.items.get(itemId);
+      const src = item.toObject().system.activities[activityId];
+      const act = item.system.activities.get(activityId);
+      return {
+        customize: src.transform?.customize,
+        settings: src.settings,
+        preparedKeep: Array.from(act.settings?.keep ?? []),
+        preparedPreset: act.settings?.preset ?? null,
+      };
+    },
+    { itemId: wild, activityId: custom.activityId }
+  );
+  assert(
+    customSrc.customize === true &&
+      JSON.stringify(customSrc.settings?.keep) ===
+        JSON.stringify(['mental', 'hp', 'resistances']) &&
+      customSrc.settings?.tempFormula === '@classes.druid.levels',
+    'custom settings: transform.customize + settings persisted (keep / merge / tempFormula)',
+    customSrc
+  );
+  assert(
+    customSrc.preparedKeep.includes('resistances') && customSrc.preparedPreset === 'wildshape',
+    'prepared: the custom settings are what the system uses (keep has resistances, preset kept)',
+    customSrc
+  );
+
   // ======================================================================
   // 3. Transform — direct link by MM name
   // ======================================================================
