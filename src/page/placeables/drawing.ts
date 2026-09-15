@@ -208,7 +208,10 @@ function dump(doc: any): Record<string, unknown> {
     sort: doc.sort,
     ...(doc.text ? { text: doc.text } : {}),
     fillType: doc.fillType,
-    strokeColor: doc.strokeColor,
+    // 14.367 stores strokeColor / fillColor as Color instances (Number subclass) — serialize to
+    // the CSS hex like the light dump does; the node↔page seam rejects non-plain returns.
+    strokeColor: doc.strokeColor?.css ?? doc.strokeColor ?? null,
+    ...(doc.fillColor != null ? { fillColor: doc.fillColor?.css ?? doc.fillColor } : {}),
     hidden: doc.hidden,
     locked: doc.locked,
     interface: doc.interface,

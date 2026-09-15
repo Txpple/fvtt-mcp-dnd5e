@@ -110,7 +110,16 @@ export async function crudCreate(
   let made: any[] = [];
   if (data.length > 0) {
     try {
-      made = (await scene.createEmbeddedDocuments(desc.docName, data)) ?? [];
+      // `items[]` must come back in INPUT order — callers pair each result with the request that
+      // produced it (a landing pad vs a trigger, three tiles with different configs). Foundry's
+      // createEmbeddedDocuments does not promise that order (14.367 was observed returning the
+      // batch id-sorted about half the time), so pre-assign ids, keep them, and re-order by them.
+      const ids = data.map(d => (typeof d._id === 'string' ? d._id : foundry.utils.randomID()));
+      const withIds = data.map((d, i) => ({ ...d, _id: ids[i] }));
+      const docs =
+        (await scene.createEmbeddedDocuments(desc.docName, withIds, { keepId: true })) ?? [];
+      const byId = new Map(docs.map((d: any) => [d.id, d]));
+      made = ids.map(id => byId.get(id)).filter(Boolean);
       created = made.length;
     } catch (e) {
       errors.push(`${desc.docName}: ${e instanceof Error ? e.message : String(e)}`);
