@@ -107,7 +107,12 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   `transformSettings` (keep / merge / effects / minimumAC / tempFormula / spellLists / transformTokens
   → `transform.customize` + `settings`; `verify-activities-6` **27/27**). Nothing in the 6.0
   inventory is pass-through any more.
-- [ ] **2.1.1** — milestone: tag after the regression + the README.
+- [x] **2.1.1 shipped 2026-09-15** (`v2.1.1`). Regression on the sandbox: live integration 84 passed /
+  2 skipped, effects 47/47, region effects 30/30, activities 27/27, settings + calendar 35/35, items
+  13/13, actor 29/29, cast 25/25, region 22/22 (×3 after the kernel order fix), dnd5e-writes 16/16,
+  content-audit 8/8, pc-build 66/66, reads 25/25, spellcasting 32/32, free-cast 28/28, placeables
+  34/34 (×2), placeables library 43/43, scene tools 10/10, update-token 11/11. **Maintenance mode
+  resumes** (owner): bug fixes + small dogfood gaps only; Phase 2 stays shelved unless asked.
 
 ### 2.1.0 release proof (2026-09-15, sandbox)
 
