@@ -19,6 +19,13 @@ import type { PageApi } from './page/index.js';
 import { clearSystemCache } from './utils/system-detection.js';
 
 /**
+ * The /join user field. Foundry ≤14.365 renders a <select name="userid"> listing the world's
+ * users; 14.367+ renders a free-text <input name="username"> (with suggestions, not a list).
+ * The bridge must join either shape — prod and the sandbox can straddle a core patch release.
+ */
+const JOIN_USER_FIELD = 'select[name="userid"], input[name="username"]';
+
+/**
  * The seam the rest of the codebase depends on. Tools import THIS (a type),
  * never the Playwright-backed `Foundry` class, so nothing outside foundry.ts
  * pulls in Playwright. `call(name, args)` mirrors the legacy
@@ -221,7 +228,7 @@ export class Foundry implements FoundryBridge {
     } catch {
       return 'booting'; // connection refused / nav error -> VM still coming up
     }
-    // The user <select> is client-rendered once world data arrives over the socket — over a
+    // The user field is client-rendered once world data arrives over the socket — over a
     // slow client link that render takes 9s+ after domcontentloaded (measured live 2026-07-07,
     // airplane wifi), so poll a real window rather than one short wait. Each pass also checks for the
     // "VM up, no world active" page (Foundry's themed "Critical Failure!" / "no active game
@@ -230,7 +237,7 @@ export class Foundry implements FoundryBridge {
     const probeDeadline = Date.now() + 30_000;
     while (Date.now() < probeDeadline) {
       const hasForm = await page
-        .locator('select[name="userid"]')
+        .locator(JOIN_USER_FIELD)
         .count()
         .catch(() => 0);
       if (hasForm > 0) return 'joinable';
@@ -322,7 +329,7 @@ export class Foundry implements FoundryBridge {
 
   /** Navigate to /join, select the user (force-enabling a stale-active option), submit, await ready. */
   private async joinWorld(page: Page): Promise<void> {
-    // The user <select> is rendered by Foundry's client JS AFTER it finishes loading the
+    // The user field is rendered by Foundry's client JS AFTER it finishes loading the
     // world (the page first shows a "<world> Version 14 Build NNN" splash). So navigate ONCE
     // and WAIT for the form — do NOT re-goto in a tight loop, which restarts the client-side
     // load and leaves the box perpetually on the splash. Reload only between long waits, to
@@ -333,7 +340,7 @@ export class Foundry implements FoundryBridge {
     for (let attempt = 1; attempt <= tries && !formReady; attempt++) {
       await page.goto(`${this.base}/join`, { waitUntil: 'domcontentloaded' }).catch(() => {});
       try {
-        await page.waitForSelector('select[name="userid"]', { timeout: perTryMs });
+        await page.waitForSelector(JOIN_USER_FIELD, { timeout: perTryMs });
         formReady = true;
       } catch {
         const title = await page.title().catch(() => '?');
@@ -348,23 +355,32 @@ export class Foundry implements FoundryBridge {
       );
     }
 
-    const users: string[] = await page.evaluate(() => {
-      const sel = document.querySelector<HTMLSelectElement>('select[name="userid"]');
-      return sel ? [...sel.options].map(o => o.textContent?.trim() ?? '') : [];
-    });
-    if (!users.includes(this.cfg.user)) {
-      throw new Error(`User "${this.cfg.user}" not on /join. Available: ${JSON.stringify(users)}`);
+    // Two form shapes (see JOIN_USER_FIELD). The <select> exposes the user list, so a wrong
+    // FOUNDRY_USER fails fast with the real names; the free-text <input> exposes nothing, so a
+    // wrong name surfaces only as the server's join error below.
+    const isSelect = (await page.locator('select[name="userid"]').count()) > 0;
+    if (isSelect) {
+      const users: string[] = await page.evaluate(() => {
+        const sel = document.querySelector<HTMLSelectElement>('select[name="userid"]');
+        return sel ? [...sel.options].map(o => o.textContent?.trim() ?? '') : [];
+      });
+      if (!users.includes(this.cfg.user)) {
+        throw new Error(
+          `User "${this.cfg.user}" not on /join. Available: ${JSON.stringify(users)}`
+        );
+      }
+      // Select the user, force-enabling the option if Foundry disabled it (stale active flag).
+      await page.evaluate(label => {
+        const sel = document.querySelector('select[name="userid"]') as HTMLSelectElement;
+        const opt = [...sel.options].find(o => o.textContent?.trim() === label);
+        if (!opt) throw new Error('user option vanished');
+        opt.disabled = false;
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }, this.cfg.user);
+    } else {
+      await page.fill('input[name="username"]', this.cfg.user);
     }
-
-    // Select the user, force-enabling the option if Foundry disabled it (stale active flag).
-    await page.evaluate(label => {
-      const sel = document.querySelector('select[name="userid"]') as HTMLSelectElement;
-      const opt = [...sel.options].find(o => o.textContent?.trim() === label);
-      if (!opt) throw new Error('user option vanished');
-      opt.disabled = false;
-      sel.value = opt.value;
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    }, this.cfg.user);
 
     if (this.cfg.password) {
       await page.fill('input[name="password"]', this.cfg.password);
