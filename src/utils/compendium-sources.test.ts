@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   EFFECTS_PACK,
+  isHiddenFromEnumeration,
   isMechanicalPack,
   isSrdPack,
   isPremiumBookPack,
@@ -38,11 +39,25 @@ describe('compendium-sources — library policy (design.md §2.3: books only, ne
       expect(EFFECTS_PACK).toBe('dnd5e.effects');
       expect(isMechanicalPack('dnd5e.effects')).toBe(true);
       expect(isMechanicalPack('dnd5e.spells24')).toBe(false);
+      // stays FALSE so the effect-uuid resolver (page/dnd5e/effect-refs.ts), which runs the
+      // supplied pack through assertNoSrdPacks, keeps working
       expect(isSrdPack('dnd5e.effects')).toBe(false);
       expect(() => assertNoSrdPacks('dnd5e.effects')).not.toThrow();
-      expect(excludeSrdPacks(['dnd5e.effects', 'dnd5e.spells24'], p => p)).toEqual([
-        'dnd5e.effects',
-      ]);
+    });
+  });
+
+  describe('isHiddenFromEnumeration (what never SURFACES in a lookup)', () => {
+    it('hides the SRD packs and the mechanical effects pack alike', () => {
+      expect(isHiddenFromEnumeration('dnd5e.spells24')).toBe(true);
+      expect(isHiddenFromEnumeration('dnd5e.monsters')).toBe(true);
+      // dnd5e.effects is a mechanical source reached BY NAME, never browsed or searched — it must
+      // not eat the result budget of list-compendium-packs / search-compendium*
+      expect(isHiddenFromEnumeration('dnd5e.effects')).toBe(true);
+    });
+
+    it('keeps the premium books and third-party packs visible', () => {
+      expect(isHiddenFromEnumeration('dnd-players-handbook.spells')).toBe(false);
+      expect(isHiddenFromEnumeration('some-module.items')).toBe(false);
     });
   });
 
@@ -95,6 +110,12 @@ describe('compendium-sources — library policy (design.md §2.3: books only, ne
       ];
       const kept = excludeSrdPacks(packs, p => p.metadata.id).map(p => p.metadata.id);
       expect(kept).toEqual(['dnd-monster-manual.actors', 'some-module.items']);
+    });
+
+    it('drops the mechanical dnd5e.effects pack too (it is not a content source)', () => {
+      expect(
+        excludeSrdPacks(['dnd5e.effects', 'dnd5e.spells24', 'dnd-players-handbook.spells'], p => p)
+      ).toEqual(['dnd-players-handbook.spells']);
     });
 
     it('works on the flat { id } shape the Node tools hold', () => {

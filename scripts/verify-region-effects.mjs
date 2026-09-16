@@ -515,6 +515,97 @@ try {
     afterEdit
   );
 
+  // ======================================================================
+  // 4b. behaviors on a COMPENDIUM spell's activity — the template is INHERITED from the item
+  //     (activity target.override false), so the edit guard must look past the activity itself.
+  // ======================================================================
+  const webHit = await f.evaluate(async () => {
+    const pack = globalThis.game.packs.get('dnd-players-handbook.spells');
+    if (!pack) return null;
+    const idx = await pack.getIndex();
+    const hit = idx.find(e => e.name === 'Web');
+    return hit ? { packId: pack.metadata.id, itemId: hit._id } : null;
+  });
+  assert(!!webHit, 'found PHB "Web" in the premium spells pack', webHit);
+  if (webHit) {
+    const copied = await f.call('importItemFromCompendium', {
+      packId: webHit.packId,
+      itemId: webHit.itemId,
+      actorIdentifier: actorId,
+    });
+    const spellItemId = copied?.item?.id;
+    assert(!!spellItemId, `PHB Web copied onto "${TAG} Walker" (${spellItemId})`, copied);
+    const spellActs = await f.call('manageActivity', {
+      action: 'list',
+      itemIdentifier: spellItemId,
+      actorIdentifier: actorId,
+    });
+    const saveAct = (spellActs?.activities ?? []).find(a => a.type === 'save');
+    assert(!!saveAct, "Web's save activity listed", spellActs?.activities);
+    const beforeEdit = await f.evaluate(
+      ({ actorId, itemId, activityId }) => {
+        const item = globalThis.game.actors.get(actorId).items.get(itemId);
+        const src = item.toObject();
+        return {
+          itemTemplate: src.system.target?.template?.type ?? null,
+          activityOverride: src.system.activities[activityId]?.target?.override ?? null,
+          activityTemplate: src.system.activities[activityId]?.target?.template?.type ?? null,
+        };
+      },
+      { actorId, itemId: spellItemId, activityId: saveAct?.id }
+    );
+    assert(
+      beforeEdit.itemTemplate === 'cube' &&
+        beforeEdit.activityOverride === false &&
+        !beforeEdit.activityTemplate,
+      'the template lives on the ITEM (cube); the activity inherits it (target.override false)',
+      beforeEdit
+    );
+    const inherited = await f.call('manageActivity', {
+      action: 'edit',
+      itemIdentifier: spellItemId,
+      actorIdentifier: actorId,
+      activityId: saveAct?.id,
+      activity: { behaviors: [{ type: 'difficultTerrain', terrainTypes: ['web'] }] },
+    });
+    const afterInherited = await f.evaluate(
+      ({ actorId, itemId, activityId }) => {
+        const act = globalThis.game.actors.get(actorId).items.get(itemId).toObject().system
+          .activities[activityId];
+        return { behaviors: act.behaviors, override: act.target?.override ?? null };
+      },
+      { actorId, itemId: spellItemId, activityId: saveAct?.id }
+    );
+    assert(
+      inherited?.success &&
+        afterInherited.behaviors?.length === 1 &&
+        afterInherited.behaviors[0].type === 'difficultTerrain' &&
+        afterInherited.behaviors[0].config?.types?.[0] === 'web',
+      'edit accepts behaviors on an activity whose template is INHERITED from the item',
+      afterInherited
+    );
+    assert(
+      afterInherited.override === false,
+      'the edit did not force target.override (the activity still inherits the item target)',
+      afterInherited
+    );
+  }
+
+  // ======================================================================
+  // 4c. edit refuses the typed mechanics it cannot apply (it used to drop them silently)
+  // ======================================================================
+  await expectThrow(
+    'edit refuses a typed field it cannot apply, naming it + patch',
+    () =>
+      f.call('manageActivity', {
+        action: 'edit',
+        itemIdentifier: webItemId,
+        activityId: web.activityId,
+        activity: { saveDC: 16, damageParts: [{ number: 1, denomination: 6, type: 'fire' }] },
+      }),
+    /cannot change damageParts, saveDC/
+  );
+
   await expectThrow(
     'refuses behaviors on an activity without a template',
     () =>

@@ -98,6 +98,18 @@ describe('tool registry', () => {
     expect(names.length).toBe(151);
   });
 
+  it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
+    const { tools, handlers } = build();
+    expect(tools.map(t => t.name)).toContain('configure-dnd5e-settings');
+    expect(typeof handlers['configure-dnd5e-settings']).toBe('function');
+  });
+
+  it('registers manage-calendar (the in-world date/time over v14 game.time)', () => {
+    const { tools, handlers } = build();
+    expect(tools.map(t => t.name)).toContain('manage-calendar');
+    expect(typeof handlers['manage-calendar']).toBe('function');
+  });
+
   it('registers read-pack (the Node-only scene-pack module reader, tom-cartos-import M1)', () => {
     const { tools, handlers } = build();
     expect(tools.map(t => t.name)).toContain('read-pack');

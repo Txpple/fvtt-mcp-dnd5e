@@ -163,6 +163,10 @@ try {
         (sys?.attributes?.movement?.speeds?.walk ?? sys?.attributes?.movement?.walk) === '30', // FormulaField -> string
       fly: (sys?.attributes?.movement?.speeds?.fly ?? sys?.attributes?.movement?.fly) === '60',
       darkvision: sys?.attributes?.senses?.ranges?.darkvision === 120,
+      // dnd5e 6.0: attributes.init.bonus is a getter-only shim (common.mjs #BONUS_FIELD_PATHS) —
+      // a write there is pruned from _source. The real field is init.roll.bonus. `sys` is the
+      // actor's SOURCE (toObject), so this is the _source assertion.
+      initBonusSource: sys?.attributes?.init?.roll?.bonus === '2',
       di:
         JSON.stringify([...(sys?.traits?.di?.value ?? [])].sort()) ===
         JSON.stringify(['fire', 'poison']),
@@ -255,23 +259,78 @@ try {
       const eff = a.effects.find(e => e.statuses?.has?.('exhaustion'));
       return {
         sys: a.system?.attributes?.exhaustion,
+        // the PERSISTED field — the derived one can be masked; a desync shows up here
+        src: a._source?.system?.attributes?.exhaustion ?? null,
         level: eff?.system?.level ?? eff?.flags?.dnd5e?.exhaustionLevel ?? null,
         name: eff?.name ?? null,
       };
     };
     const exh = await foundry.evaluate(readExh, npc.id);
-    exh?.sys === 4 && exh?.level === 4
-      ? pass('apply-condition exhaustion level', `${exh.name} (sys=${exh.sys})`)
+    exh?.sys === 4 && exh?.src === 4 && exh?.level === 4
+      ? pass('apply-condition exhaustion level', `${exh.name} (sys=${exh.sys}, _source=${exh.src})`)
       : fail('apply-condition exhaustion level', JSON.stringify(exh));
+
+    // Level CHANGE on an EXISTING effect (2 → 4 → 1). dnd5e 6.0.1 ConditionData#_onUpdate reads
+    // `options.dnd5e?.originalLevel ?? Infinite` — an undefined identifier — so a level write that
+    // omits that option throws a ReferenceError AFTER the effect update lands: the follow-up
+    // actor.update never runs and _source.attributes.exhaustion desyncs from system.level. Both
+    // numbers must move together at every step.
+    for (const lvl of [2, 4, 1]) {
+      await foundry.call('applyCondition', {
+        actorIdentifier: npc.id,
+        conditions: ['exhaustion'],
+        exhaustionLevel: lvl,
+      });
+      const step = await foundry.evaluate(readExh, npc.id);
+      step?.level === lvl && step?.src === lvl && step?.sys === lvl
+        ? pass(`apply-condition exhaustion → ${lvl}`, `effect=${step.level}, _source=${step.src}`)
+        : fail(`apply-condition exhaustion → ${lvl}`, JSON.stringify(step));
+    }
+
     await foundry.call('applyCondition', {
       actorIdentifier: npc.id,
       conditions: ['exhaustion'],
       active: false,
     });
     const exhOff = await foundry.evaluate(readExh, npc.id);
-    exhOff?.sys === 0 && exhOff?.name === null
-      ? pass('apply-condition exhaustion remove', 'effect gone, sys=0')
+    exhOff?.sys === 0 && exhOff?.src === 0 && exhOff?.name === null
+      ? pass('apply-condition exhaustion remove', 'effect gone, sys=0, _source=0')
       : fail('apply-condition exhaustion remove', JSON.stringify(exhOff));
+
+    // A REMOVE carrying an explicit level is still a REMOVE — it must not re-apply that level.
+    await foundry.call('applyCondition', {
+      actorIdentifier: npc.id,
+      conditions: ['exhaustion'],
+      exhaustionLevel: 3,
+    });
+    await foundry.call('applyCondition', {
+      actorIdentifier: npc.id,
+      conditions: ['exhaustion'],
+      exhaustionLevel: 3,
+      active: false,
+    });
+    const exhOff2 = await foundry.evaluate(readExh, npc.id);
+    exhOff2?.sys === 0 && exhOff2?.name === null
+      ? pass('apply-condition exhaustion remove wins over exhaustionLevel', 'effect gone, sys=0')
+      : fail(
+          'apply-condition exhaustion remove wins over exhaustionLevel',
+          JSON.stringify(exhOff2)
+        );
+
+    // dnd5e 6.0 camelCase status ids must validate whatever case the caller typed — the old
+    // blanket toLowerCase() rejected every one of them as "unknown".
+    const cover = await foundry.call('applyCondition', {
+      actorIdentifier: npc.id,
+      conditions: ['coverhalf'],
+    });
+    (cover?.warnings ?? []).length === 0 && cover?.statuses?.includes('coverHalf')
+      ? pass('apply-condition camelCase status (coverhalf → coverHalf)', 'applied')
+      : fail('apply-condition camelCase status', JSON.stringify(cover));
+    await foundry.call('applyCondition', {
+      actorIdentifier: npc.id,
+      conditions: ['coverHalf'],
+      active: false,
+    });
 
     // unknown condition warns, not throws
     const bad = await foundry.call('applyCondition', {

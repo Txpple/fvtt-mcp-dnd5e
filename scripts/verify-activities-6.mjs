@@ -196,7 +196,6 @@ try {
       transformSettings: {
         keep: ['mental', 'hp', 'resistances'],
         merge: ['saves'],
-        tempFormula: '@classes.druid.levels',
       },
     },
   });
@@ -205,9 +204,16 @@ try {
       const item = globalThis.game.items.get(itemId);
       const src = item.toObject().system.activities[activityId];
       const act = item.system.activities.get(activityId);
+      const preset = globalThis.CONFIG.DND5E.transformation.presets.wildshape.settings;
       return {
         customize: src.transform?.customize,
         settings: src.settings,
+        preset: {
+          minimumAC: preset.minimumAC,
+          tempFormula: preset.tempFormula,
+          spellLists: Array.from(preset.spellLists ?? []),
+          effects: Array.from(preset.effects ?? []),
+        },
         preparedKeep: Array.from(act.settings?.keep ?? []),
         preparedPreset: act.settings?.preset ?? null,
       };
@@ -218,9 +224,20 @@ try {
     customSrc.customize === true &&
       JSON.stringify(customSrc.settings?.keep) ===
         JSON.stringify(['mental', 'hp', 'resistances']) &&
-      customSrc.settings?.tempFormula === '@classes.druid.levels',
-    'custom settings: transform.customize + settings persisted (keep / merge / tempFormula)',
+      JSON.stringify(customSrc.settings?.merge) === JSON.stringify(['saves']),
+    'custom settings: transform.customize + the overridden categories persisted (keep / merge)',
     customSrc
+  );
+  // The caller overrode keep + merge only — everything else must come FROM THE PRESET, not be lost
+  // (dnd5e's own sheet seeds a customised settings object from presets[preset].settings).
+  assert(
+    customSrc.settings?.minimumAC === customSrc.preset.minimumAC &&
+      customSrc.settings?.tempFormula === customSrc.preset.tempFormula &&
+      JSON.stringify(customSrc.settings?.spellLists) ===
+        JSON.stringify(customSrc.preset.spellLists) &&
+      JSON.stringify(customSrc.settings?.effects) === JSON.stringify(customSrc.preset.effects),
+    'custom settings SEED from the preset: minimumAC / tempFormula / spellLists / effects survive',
+    { persisted: customSrc.settings, preset: customSrc.preset }
   );
   assert(
     customSrc.preparedKeep.includes('resistances') && customSrc.preparedPreset === 'wildshape',
@@ -313,8 +330,147 @@ try {
   );
 
   // ======================================================================
+  // 4b. Applied effects (dnd5e 6.0 activity.effects[] — AppliedEffectField)
+  // ======================================================================
+  const sting = await makeFeat(`${TAG} Sting`);
+  const poison = await f.call('manageActivity', {
+    action: 'add',
+    itemIdentifier: sting,
+    activity: {
+      type: 'save',
+      name: 'Sting',
+      saveAbility: 'con',
+      saveDC: 13,
+      duration: { value: 1, units: 'minute' },
+      appliesEffects: [{ ref: 'Poisoned', onSave: false }],
+    },
+  });
+  assert(
+    poison?.success,
+    `save activity with appliesEffects added (${poison?.activityId})`,
+    poison
+  );
+  assert(
+    poison?.effects?.[0]?.source === 'dnd5e.effects' && poison.effects[0].name === 'Poisoned',
+    '"Poisoned" resolved from the stock pack and reported',
+    poison?.effects
+  );
+  const stingSrc = await f.evaluate(
+    ({ itemId, activityId }) => {
+      const item = globalThis.game.items.get(itemId);
+      const src = item.toObject().system.activities[activityId];
+      const act = item.system.activities.get(activityId);
+      return { effects: src.effects, duration: src.duration, prepared: act.effects?.length ?? 0 };
+    },
+    { itemId: sting, activityId: poison.activityId }
+  );
+  assert(
+    stingSrc.effects?.length === 1 &&
+      /^Compendium\.dnd5e\.effects\.ActiveEffect\./.test(stingSrc.effects[0].uuid ?? '') &&
+      stingSrc.effects[0].onSave === false,
+    'source: effects[0].uuid points at the stock effect, onSave false (survives the clean step)',
+    stingSrc.effects
+  );
+  assert(
+    stingSrc.duration?.value === '1' && stingSrc.duration?.units === 'minute',
+    'the applied effect inherits the activity duration (1 minute) — it carries none of its own',
+    stingSrc.duration
+  );
+  const stingList = await f.call('manageActivity', { action: 'list', itemIdentifier: sting });
+  const stingRow = (stingList?.activities ?? []).find(a => a.id === poison.activityId);
+  assert(
+    stingRow?.effects?.length === 1 && stingRow.effects[0].onSave === false,
+    'list: the applied effects are projected',
+    stingRow
+  );
+
+  // an effect ON THE ITEM resolves to an _id, not a uuid
+  await f.call('manageEffect', {
+    action: 'create',
+    itemIdentifier: sting,
+    effect: {
+      name: `${TAG} Numb`,
+      changes: [{ key: 'system.attributes.ac.bonus', value: '-1', type: 'add' }],
+      transfer: false,
+    },
+  });
+  const numb = await f.call('manageActivity', {
+    action: 'add',
+    itemIdentifier: sting,
+    activity: {
+      type: 'damage',
+      name: 'Numbing Sting',
+      damageParts: [],
+      appliesEffects: [{ ref: `${TAG} Numb` }],
+    },
+  });
+  const numbSrc = await f.evaluate(
+    ({ itemId, activityId }) => {
+      const item = globalThis.game.items.get(itemId);
+      return {
+        effects: item.toObject().system.activities[activityId].effects,
+        itemEffectIds: item.effects.map(e => e.id),
+      };
+    },
+    { itemId: sting, activityId: numb.activityId }
+  );
+  assert(
+    numbSrc.effects?.length === 1 &&
+      !numbSrc.effects[0].uuid &&
+      numbSrc.itemEffectIds.includes(numbSrc.effects[0]._id),
+    'an effect ON THE ITEM persists as _id (not a uuid)',
+    numbSrc
+  );
+
+  // edit REPLACES the list
+  const replaced = await f.call('manageActivity', {
+    action: 'edit',
+    itemIdentifier: sting,
+    activityId: poison.activityId,
+    activity: { appliesEffects: [{ ref: 'Restrained', onSave: true }] },
+  });
+  const afterReplace = await f.evaluate(
+    ({ itemId, activityId }) =>
+      globalThis.game.items.get(itemId).toObject().system.activities[activityId].effects,
+    { itemId: sting, activityId: poison.activityId }
+  );
+  assert(
+    replaced?.success &&
+      afterReplace?.length === 1 &&
+      afterReplace[0].onSave === true &&
+      afterReplace[0].uuid !== stingSrc.effects[0].uuid,
+    'edit: appliesEffects REPLACES the list',
+    afterReplace
+  );
+
+  // ======================================================================
   // 5. Refusals
   // ======================================================================
+  await expectThrow(
+    'edit refuses a typed field it cannot apply',
+    () =>
+      f.call('manageActivity', {
+        action: 'edit',
+        itemIdentifier: sting,
+        activityId: poison.activityId,
+        activity: { saveDC: 16 },
+      }),
+    /cannot change saveDC/
+  );
+  await expectThrow(
+    'refuses appliesEffects on a transform (its effects[] ARE the forms)',
+    () =>
+      f.call('manageActivity', {
+        action: 'add',
+        itemIdentifier: wild,
+        activity: {
+          type: 'transform',
+          profiles: [{ cr: 1 }],
+          appliesEffects: [{ ref: 'Poisoned' }],
+        },
+      }),
+    /ARE its forms/
+  );
   await expectThrow(
     'refuses an SRD creature as a transform profile',
     () =>

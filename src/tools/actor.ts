@@ -511,11 +511,16 @@ export class ActorTools {
         ...(effect.magical ? { magical: true } : {}),
         ...(effect.conditions ? { conditional: true } : {}),
         ...(rules.length > 0 ? { rules } : {}),
+        // The page sends the v14 projection ({ value, units, expiry?, remaining? }, or
+        // { expiry, remaining? } for a value-less expiry) — never a `type`. Forward it as-is.
         duration: effect.duration
           ? {
-              type: effect.duration.type,
-              remaining: effect.duration.remaining,
+              ...(effect.duration.value !== undefined ? { value: effect.duration.value } : {}),
+              ...(effect.duration.units !== undefined ? { units: effect.duration.units } : {}),
               ...(effect.duration.expiry ? { expiry: effect.duration.expiry } : {}),
+              ...(effect.duration.remaining !== undefined
+                ? { remaining: effect.duration.remaining }
+                : {}),
             }
           : null,
         hasIcon: !!effect.icon,

@@ -25,7 +25,9 @@ stat block, item, and handout in the VTT.
 ## 2.0 — built for the D&D 5e system 6.x
 
 **Version 2.0 targets the D&D 5e system 6.x on Foundry VTT 14** (developed and verified against
-dnd5e **6.0.1** / Foundry **14.367**). dnd5e 6.0 is, by the system team's own account, the biggest
+dnd5e **6.0.1** / Foundry **14.367** on the local sandbox; the production world stays on dnd5e 5.3.3 /
+Foundry 14.364 until the 2.x line has been tested there — a 2.x tool refuses to author against a
+pre-6.0 world, since it writes native 6.0 keys that a 5.3.3 schema prunes). dnd5e 6.0 is, by the system team's own account, the biggest
 release in the system's history: a ground-up pass that leans on everything new in Foundry v14. The
 Levels feature now drives falling and fall damage; ActiveEffect v2 underpins conditional effects,
 rules-based effects that apply at roll time, region-attached effects, and smarter expiry; chat cards
@@ -204,8 +206,8 @@ tests/              gated live integration suites (offline unit tests live besid
   isn't on `PATH`, use the full path to `node.exe` (see wiring below).
 - A **Chromium for Playwright** — `npx playwright install chromium` (Playwright is a devDependency;
   the headless bridge drives this browser).
-- **Foundry VTT 14.367+** with the **D&D 5e system 6.0.1+** (2.0 is the dnd5e **6.x** line; use a
-  1.x release for dnd5e 5.3.x), hosted on **Molten**, plus a dedicated **passwordless Foundry user**
+- **Foundry VTT 14.367+** with the **D&D 5e system 6.0.1+** (2.x is the dnd5e **6.x** line and
+  refuses to author against an older system; v1.5.2 is the last release that runs on dnd5e 5.3.x), hosted on **Molten**, plus a dedicated **passwordless Foundry user**
   for the MCP to join as.
 
 ## Build

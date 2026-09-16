@@ -199,7 +199,7 @@ describe('handleGetCharacter', () => {
             id: 'e1',
             name: 'Mage Armor',
             disabled: false,
-            duration: { type: 'turns', remaining: 10 },
+            duration: { value: 10, units: 'rounds', remaining: 60 },
             icon: 'x.png',
           },
         ],
@@ -244,7 +244,7 @@ describe('handleGetCharacter', () => {
         id: 'e1',
         name: 'Mage Armor',
         disabled: false,
-        duration: { type: 'turns', remaining: 10 },
+        duration: { value: 10, units: 'rounds', remaining: 60 },
         hasIcon: true,
       },
     ]);
@@ -418,7 +418,7 @@ describe('handleGetCharacterEntity', () => {
   it('resolves an effect entity by name', async () => {
     const { tools } = build(
       charWith({
-        effects: [{ id: 'ef1', name: 'Blessed', duration: { type: 'turns' } }],
+        effects: [{ id: 'ef1', name: 'Blessed', duration: { expiry: 'turnEnd' } }],
       })
     );
     const out = await tools.handleGetCharacterEntity({

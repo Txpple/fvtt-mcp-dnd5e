@@ -35,6 +35,11 @@ describe('configure-dnd5e-settings', () => {
     expect(Object.keys(props)).toContain('calendarEnabled');
     expect(Object.keys(props)).not.toContain('chatCardSummary');
     expect(props.autoApplyDowned.enum).toEqual(['none', 'deadOnly', 'npcs', 'all']);
+    // the unset spelling is 'auto' — "" is not offered because the field cannot store it
+    expect(props.calendarDailyRecovery.enum).toEqual(['auto', 'calendar', 'manual']);
+    expect(props.movementAutomation.enum).toEqual(['full', 'noBlocking', 'none']);
+    expect(props.bloodied.enum).toEqual(['all', 'player', 'none']);
+    expect(props.pietyScore.type).toBe('boolean');
     expect(props.bastionDuration.type).toBe('integer');
     expect(props.calendar.type).toBe('string');
     expect((def.inputSchema as any).required).toEqual([]);
@@ -120,7 +125,7 @@ describe('manage-calendar', () => {
       enabled: true,
       calendar: 'harptos',
       calendarName: 'Calendar of Harptos',
-      dailyRecovery: '',
+      dailyRecovery: 'auto',
       worldTime: 123456,
       year: 1492,
       month: { index: 4, number: 5, name: 'Mirtul' },

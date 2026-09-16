@@ -43,7 +43,7 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
 | 7 | **Teleport activity** | `type: "teleport"`, `teleport: {value (formula), units, override}`; distance defaults to the activity's range | `manage-activity` `type: 'teleport'` builder (activation/range/target as the other builders) | stat-block-builder: Misty Step-style traits | 45 min |
 | 8 | **Multiple rarities** ("Rarity Varies") | `system.rarities` (Set) | `add-item` / `update-actor-item`: `rarity` accepts a string **or array**; write `rarities` natively (2.0 still writes the shimmed `rarity`) | physical-item-builder: one line | 20 min |
 | 9 | **Reading it all back** | as above + effect `type` (`base` \| `condition` \| `enchantment`), `system.magical`, `system.rider.statuses` | `get-actor` / `get-actor-entity`: effect `type`, `magical`, `conditions` (present/JSON), rules changes in the readable form; `content-audit`: flag a rules change whose key×type combo is invalid | session-audit / plot-drift read them | 45 min |
-| 10 | **System automation settings** (all new in 6.0) | `dnd5e` settings `disableFalling`, `tokenSizeSync`, `senseVisionSync`, `disableExhaustion`, `initiativeGroupCombatants`, `initiativeGroupRoll`, `autoApplyDowned`, `allowPlayerDamageTray`, `allowPlayerEffectsTray`, `chatCardSummary`, `encounterPlacementBehavior`, `bastionTurns` | new **`configure-dnd5e-settings`** (GM-only, allow-listed keys, read + set, reports current values) — and `get-world-info` gains an `automation` block | start-session reports them; session-audit can warn ("falling automation is on but this scene has no Levels") | 1.5 h |
+| 10 | **System automation settings** (all new in 6.0) | `dnd5e` settings `disableFalling`, `tokenSizeSync`, `senseVisionSync`, `disableExhaustion`, `initiativeGroupCombatants`, `initiativeGroupRoll`, `autoApplyDowned`, `allowPlayerDamageTray`, `allowPlayerEffectsTray`, `chatCardSummary` (client — read-only), `encounterPlacementBehavior`, `bastionConfiguration.{enabled,duration}`, `calendarConfig.{enabled,dailyRecovery}`, `calendar` | new **`configure-dnd5e-settings`** (GM-only, allow-listed keys, read + set, reports current values) — and `get-world-info` gains an `automation` block | start-session reports them; session-audit can warn ("falling automation is on but this scene has no Levels") | 1.5 h |
 | 11 | **PC builder: Modify Item advancement** | new advancement type `ModifyItem` (uses Enchantments to alter an existing item, #6335) | `planAdvancementApply` currently returns "no player pick" for unknown types — confirm it is applied as a forced step (`initial`), find a PHB item that uses it, add it to `verify-pc-build` | pc-builder: none | 1 h |
 | 12 | **Transform "Select Form" mode** | Transform activity `profiles` with mode `select` — forms defined by the item's own active effects (lycanthropes, Disguise Self) | `manage-activity` `type: 'transform'` builder — the largest new surface (profiles, settings, form effects) | stat-block-builder: shapeshifters | 2–3 h — **2.1.1 (owner, 2026-09-15)** |
 | 13 | **Calendar** (dawn/dusk/day recovery, bastion turns, set date, advance time) | `game.time` + dnd5e calendar settings (`dnd5e.calendar` config, four built-in calendars); recovery is automatic once the calendar is enabled | **`manage-calendar`** (read the current date/time · advance time · set the date; GM-only) plus the enable switch via #10 — session-flavoured, but pulled in by the owner so the 6.0 surface ships whole | start-session reports the date; session-scribe stamps it | 1 h — **2.1.1 (owner, 2026-09-15)** |
@@ -116,6 +116,40 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   read, `get-world-info` automation block, and a `manage-effect` create → list round trip of a
   conditional rules effect on a tagged Scout (deleted after). **Maintenance mode resumes** (owner):
   bug fixes + small dogfood gaps only; Phase 2 stays shelved unless asked.
+
+- [x] **2.1.3 — the review fixes (2026-09-15)**: an owner-requested review of the 2.0/2.1 line
+  (11 static lenses + a second independent source-vs-code audit) confirmed six P1s and found four
+  more; all landed. **Second-call / edit / combination bugs:** `apply-condition` changing an
+  existing exhaustion level threw (dnd5e `ConditionData._onUpdate` reads an undefined `Infinite`
+  unless `originalLevel` is passed — now passed; remove waits for dnd5e's un-awaited `exhaustion:0`
+  write); `manage-effect` refused a value-less core combat expiry on a misreading of core (a bare
+  `{expiry:"turnEnd"}` expires at the FIRST matching event — proven live in a scripted combat);
+  `manage-calendar set` without `day` stepped back a day (dnd5e `jumpToDate` defaults from core's
+  0-based `dayOfMonth`) — all three parts are always passed, `day` bounded by the month, `advance`
+  reads the calendar's hours/minutes/seconds; transform `transformSettings` now SEEDS from the
+  preset (`CONFIG.DND5E.transformation.presets[preset].settings`) and overrides per key, like the
+  sheet; `manage-activity edit {behaviors}` accepts an inherited item-level template (PHB *Web*
+  proven); `edit` REFUSES the typed add-only params by name instead of silently dropping them.
+  **Pruned writes:** `update-actor` initiative bonus → `attributes.init.roll.bonus` (the 5.x path is
+  a getter-only shim); `.custom` no longer written to treasure / masteries. **New surface:**
+  `manage-activity` `appliesEffects: [{ref, onSave?, level?}]` populates `activity.effects[]` (the
+  6.0 "on use / on failed save apply X" model — ref = an effect on the item by name → `_id`, a stock
+  `dnd5e.effects` / world effect → `uuid`); `list` shows effects / transform / profiles; `subtract`
+  change type + `phase`; `months` / `years` durations (unknown unit now refuses); six more settings
+  gates (`movementAutomation`, `bloodied`, `allowPolymorphing`, `allowSummoning`,
+  `disableConcentration`, `pietyScore`); `calendarDailyRecovery` is `auto|calendar|manual` (the
+  blank choice was unwritable — dnd5e's field has no `blank`). **Guards:** `assertDnd5e` refuses a
+  world below dnd5e 6.0 (2.x writes keys a 5.3.3 schema prunes — prod stays on 5.3.3 until the owner
+  upgrades it); `dnd5e.effects` is hidden from pack enumeration again (still the effect resolver's
+  source); `roll.*` conditions refused on core-type changes and flagged by content-audit; camelCase
+  status ids (`coverHalf`…) validate; `DAMAGE_TYPES` = the real 13, `week` dropped from activity
+  units, `jump` added to movement. Offline: 1684 tests / 3 skipped. Live (sandbox): actor 34/34 ·
+  effects 51/51 · region effects 37/37 · activities 37/37 · settings + calendar 52/52 · items 13/13 ·
+  pc-build 66/66 · integration 84 / 2 skipped. Docs: prod version corrected everywhere (14.364 /
+  5.3.3), design.md §1 DDB line + §4 rows, skill recipe slips (`roll.type` for saves, Wild Shape
+  2024, Luckstone, copied armor drives AC). Not done (owner's call, maintenance mode): item-carried
+  effects in `get-actor` reads, region-behavior edit/remove, the calendar `requiresReload` bridge
+  reload, class spell lists.
 
 ### 2.1.0 release proof (2026-09-15, sandbox)
 

@@ -6,6 +6,9 @@ import {
   EXPIRY_EVENTS,
   FILTER_COMPARISONS,
   FILTER_OPERATORS,
+  ACTIVITY_DURATION_SCALAR_UNITS,
+  DAMAGE_TYPES,
+  MOVEMENT_TYPES,
   RULE_KEYS,
   RULE_TYPES,
 } from '../utils/dnd5e-canonical.js';
@@ -18,6 +21,7 @@ import {
   normalizeDuration,
   normalizePatch,
   parseConditions,
+  projectDuration,
   ruleChangeProblem,
   summarizeChanges,
   validateRuleChange,
@@ -120,8 +124,10 @@ describe('normalizeDuration (Foundry v14 { value, units } shape)', () => {
     expect(normalizeDuration({ seconds: 60, rounds: 10 })).toEqual({ value: 60, units: 'seconds' });
   });
 
-  it('drops an unknown unit and returns undefined for nothing usable', () => {
-    expect(normalizeDuration({ value: 3, units: 'fortnights' })).toEqual({ value: 3 });
+  it('throws on an unknown unit and returns undefined for nothing usable', () => {
+    expect(() => normalizeDuration({ value: 3, units: 'fortnights' })).toThrow(
+      /not a Foundry duration unit/
+    );
     expect(normalizeDuration(undefined)).toBeUndefined();
     expect(normalizeDuration({})).toBeUndefined();
   });
@@ -275,7 +281,7 @@ describe('normalizeConditions (dnd5e 6.0 Filter JSON → persisted string)', () 
 
   it('bars roll.* keys in effect scope (roll data only exists at roll time) but allows them on a change', () => {
     expect(() => normalizeConditions({ k: 'roll.ability', v: 'str' }, 'effect')).toThrow(
-      /roll\.\* keys are only available on a CHANGE/
+      /roll\.\* keys are only available on the conditions of a RULES-type change/
     );
     expect(normalizeConditions({ k: 'roll.ability', v: 'str' }, 'change')).toBe(
       '{"k":"roll.ability","v":"str"}'
@@ -590,8 +596,19 @@ describe('normalizeDuration — expiry events (core + dnd5e 6.0)', () => {
     });
   });
 
-  it('rejects a core expiry without a duration (core only expires once the duration has elapsed)', () => {
-    expect(() => normalizeDuration({ expiry: 'turnEnd' })).toThrow(/give value \+ units too/);
+  it('keeps a core expiry with NO value (it expires at the first matching event)', () => {
+    // Core 14.367 ActiveEffectRegistry#refresh: durationReached = remaining <= 0 ||
+    // !Number.isFinite(remaining), and _prepareDuration yields remaining: Infinity with no value.
+    expect(normalizeDuration({ expiry: 'combatEnd' })).toEqual({ expiry: 'combatEnd' });
+    expect(normalizeDuration({ expiry: 'turnEnd' })).toEqual({ expiry: 'turnEnd' });
+  });
+
+  it('accepts the long time units and throws on an unknown one', () => {
+    expect(normalizeDuration({ value: 2, units: 'months' })).toEqual({ value: 2, units: 'months' });
+    expect(normalizeDuration({ value: 1, units: 'years' })).toEqual({ value: 1, units: 'years' });
+    expect(() => normalizeDuration({ value: 1, units: 'fortnights' })).toThrow(
+      /not a Foundry duration unit/
+    );
   });
 
   it('drops value + units for the duration-less dnd5e expiries (the system nulls them anyway)', () => {
@@ -637,5 +654,129 @@ describe('ruleChangeProblem (content-audit predicate over PERSISTED changes)', (
       /writes to nowhere/
     );
     expect(ruleChangeProblem({ key: 'attack', value: '2', mode: 2 })).toMatch(/writes to nowhere/);
+  });
+});
+
+describe('projectDuration (the read-back shape both page paths emit)', () => {
+  it('projects a finite duration with its units, expiry and finite remaining', () => {
+    expect(
+      projectDuration({ value: 10, units: 'rounds', expiry: 'turnEnd', remaining: 6 })
+    ).toEqual({ value: 10, units: 'rounds', expiry: 'turnEnd', remaining: 6 });
+    expect(projectDuration({ value: 60 })).toEqual({ value: 60, units: 'seconds' });
+  });
+
+  it('projects a value-less expiry, dropping a non-finite remaining', () => {
+    expect(projectDuration({ expiry: 'targetEnd', remaining: Infinity })).toEqual({
+      expiry: 'targetEnd',
+    });
+    expect(projectDuration({ value: null, expiry: 'turnEnd', remaining: 3 })).toEqual({
+      expiry: 'turnEnd',
+      remaining: 3,
+    });
+  });
+
+  it('returns null for a permanent / passive (or absent) duration', () => {
+    expect(projectDuration({ value: null, units: null })).toBeNull();
+    expect(projectDuration(undefined)).toBeNull();
+  });
+});
+
+describe('change type + phase (CONST.ACTIVE_EFFECT_CHANGE_TYPES / _PHASES)', () => {
+  it('accepts the core subtract type', () => {
+    expect(
+      normalizeChange({ key: 'system.traits.di.value', value: 'fire', type: 'subtract' })
+    ).toEqual({ key: 'system.traits.di.value', value: 'fire', type: 'subtract', phase: 'initial' });
+  });
+
+  it('refuses a type outside the core + rules vocabulary', () => {
+    expect(() => normalizeChange({ key: 'a', value: '1', type: 'divide' })).toThrow(
+      /is not a change type/
+    );
+  });
+
+  it('accepts phase "final" and refuses anything else', () => {
+    expect(normalizeChange({ key: 'a', value: '1', phase: 'final' }).phase).toBe('final');
+    expect(normalizeChange({ key: 'a', value: '1' }).phase).toBe('initial');
+    expect(() => normalizeChange({ key: 'a', value: '1', phase: 'late' })).toThrow(
+      /must be "initial" or "final"/
+    );
+  });
+});
+
+describe('R1-012 — roll.* conditions belong to a RULES-type change only', () => {
+  it('keeps roll.* on a rules change', () => {
+    const out = normalizeChange({
+      key: 'attack',
+      value: '1d4',
+      type: 'dnd5e.bonus',
+      conditions: { k: 'roll.attack.type', v: 'ranged' },
+    });
+    expect(JSON.parse(String(out.conditions))).toEqual({ k: 'roll.attack.type', v: 'ranged' });
+  });
+
+  it('refuses roll.* on a CORE-type change, naming the rules types', () => {
+    expect(() =>
+      normalizeChange({
+        key: 'system.attributes.ac.bonus',
+        value: '2',
+        type: 'add',
+        conditions: { k: 'roll.ability', v: 'str' },
+      })
+    ).toThrow(/dnd5e\.advantage \/ dnd5e\.bonus/);
+  });
+
+  it('still allows non-roll conditions on a core-type change', () => {
+    const out = normalizeChange({
+      key: 'system.attributes.ac.bonus',
+      value: '2',
+      type: 'add',
+      conditions: { k: 'statuses.bloodied', v: 1 },
+    });
+    expect(JSON.parse(String(out.conditions))).toEqual({ k: 'statuses.bloodied', v: 1 });
+  });
+
+  it('ruleChangeProblem flags a persisted core-type change conditioned on roll.*', () => {
+    expect(
+      ruleChangeProblem({
+        key: 'system.attributes.ac.bonus',
+        value: '2',
+        type: 'add',
+        conditions: JSON.stringify({ o: 'AND', v: [{ k: 'roll.ability', v: 'str' }] }),
+      })
+    ).toMatch(/no roll data/);
+    expect(
+      ruleChangeProblem({
+        key: 'system.attributes.ac.bonus',
+        value: '2',
+        type: 'add',
+        conditions: JSON.stringify({ k: 'statuses.bloodied', v: 1 }),
+      })
+    ).toBeUndefined();
+  });
+});
+
+describe('canonical vocabularies locked against the dnd5e 6.0.1 source', () => {
+  it('CONFIG.DND5E.damageTypes has 13 keys (no none / vitality)', () => {
+    expect(DAMAGE_TYPES.size).toBe(13);
+    expect(DAMAGE_TYPES.has('none')).toBe(false);
+    expect(DAMAGE_TYPES.has('vitality')).toBe(false);
+  });
+
+  it('CONFIG.DND5E.movementTypes has 6 keys, including jump', () => {
+    expect(MOVEMENT_TYPES).toEqual(['walk', 'burrow', 'climb', 'fly', 'jump', 'swim']);
+    expect(MOVEMENT_TYPES.length).toBe(6);
+  });
+
+  it('drops week from the scalar activity duration units (timeUnits marks it option: false)', () => {
+    expect(ACTIVITY_DURATION_SCALAR_UNITS).not.toContain('week');
+    expect(ACTIVITY_DURATION_SCALAR_UNITS).toEqual([
+      'turn',
+      'round',
+      'minute',
+      'hour',
+      'day',
+      'month',
+      'year',
+    ]);
   });
 });

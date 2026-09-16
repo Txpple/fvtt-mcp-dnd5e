@@ -17,6 +17,14 @@ export interface Dnd5eSettingSpec {
   /** Fixed choices (kind 'choice'); `liveChoices` names a CONFIG list resolved on the page instead. */
   choices?: readonly string[];
   liveChoices?: 'calendars';
+  /**
+   * The choice that means "unset / automatic". It is NOT a storable value: the underlying
+   * StringField declares `choices`, which makes core default `blank` to FALSE (foundry.mjs
+   * StringField constructor), so writing "" throws `may not be a blank string` through
+   * ClientSettings#set's DataModel validation. The page reads an absent/blank source AS this value
+   * and, on a write, OMITS the key from the DataModel object instead of writing "".
+   */
+  omitWhenChoice?: string;
   /** Where it lives: the registered dnd5e setting, plus a field path for a DataModel setting. */
   setting: string;
   path?: string;
@@ -59,6 +67,21 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     requiresReload: true,
     hint: 'true turns OFF the exhaustion d20 penalties (default false).',
   },
+  {
+    key: 'movementAutomation',
+    label: 'Movement automation',
+    kind: 'choice',
+    choices: ['full', 'noBlocking', 'none'],
+    setting: 'movementAutomation',
+    hint: 'full (default — difficult terrain + creature blocking) · noBlocking (terrain only) · none.',
+  },
+  {
+    key: 'disableConcentration',
+    label: 'Disable concentration tracking',
+    kind: 'boolean',
+    setting: 'disableConcentration',
+    hint: 'true turns OFF automatic concentration effects + prompts (default false).',
+  },
   // --- combat ---
   {
     key: 'initiativeGroupCombatants',
@@ -90,6 +113,14 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     setting: 'encounterPlacementBehavior',
     hint: 'none (default) · createCombatants (add them to the tracker) · rollInitiative (and roll).',
   },
+  {
+    key: 'bloodied',
+    label: 'Who sees the Bloodied status',
+    kind: 'choice',
+    choices: ['all', 'player', 'none'],
+    setting: 'bloodied',
+    hint: 'all (every token) · player (default — only tokens the players own/see) · none (off).',
+  },
   // --- player permissions ---
   {
     key: 'allowPlayerDamageTray',
@@ -104,6 +135,28 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     kind: 'boolean',
     setting: 'allowPlayerEffectsTray',
     hint: 'Players apply effects from chat cards to their own tokens (default false).',
+  },
+  {
+    key: 'allowPolymorphing',
+    label: 'Players may polymorph / transform actors',
+    kind: 'boolean',
+    setting: 'allowPolymorphing',
+    hint: 'Players run the transform flow on actors they own (default false — GM-only).',
+  },
+  {
+    key: 'allowSummoning',
+    label: 'Players may summon',
+    kind: 'boolean',
+    setting: 'allowSummoning',
+    hint: 'Players place summons from their own summon activities (default false — GM-only).',
+  },
+  // --- optional rules ---
+  {
+    key: 'pietyScore',
+    label: 'Piety score (optional rule)',
+    kind: 'boolean',
+    setting: 'pietyScore',
+    hint: 'Adds the Piety score to character sheets (default false; registered config:false — this tool is the lever).',
   },
   // --- bastions (a DataModel setting: bastionConfiguration) ---
   {
@@ -135,10 +188,11 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     key: 'calendarDailyRecovery',
     label: 'Daily recovery mode',
     kind: 'choice',
-    choices: ['', 'calendar', 'manual'],
+    choices: ['auto', 'calendar', 'manual'],
+    omitWhenChoice: 'auto',
     setting: 'calendarConfig',
     path: 'dailyRecovery',
-    hint: '"" = automatic (calendar when enabled, else manual) · calendar (uses recover on time advance) · manual ("New Day" in rest dialogs).',
+    hint: 'auto = the system default (calendar when the calendar is enabled, else manual) · calendar (uses recover on time advance) · manual ("New Day" in rest dialogs).',
   },
   {
     key: 'calendar',

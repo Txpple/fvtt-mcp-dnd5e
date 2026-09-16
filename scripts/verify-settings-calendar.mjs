@@ -3,8 +3,11 @@
 //     DataModel-backed bastion / calendar fields each set with old → new and read back; the reload
 //     flag rides a requiresReload key; a client-scoped key and an off-list value are refused;
 //   * get-world-info carries the `automation` block;
+//   * calendarDailyRecovery round-trips as auto|calendar|manual — "auto" is stored by OMITTING the
+//     key, because the field declares choices and core therefore refuses a blank string;
 //   * the calendar reads in display terms; advance moves worldTime by exactly the delta; set jumps to
-//     a month by NAME + day and sets the time of day.
+//     a month by NAME + day and sets the time of day; a set with `day` OMITTED keeps the day (the
+//     jumpToDate 0-based dayOfMonth off-by-one) and a set on a month boundary lands exactly.
 //
 // Everything it changes is RESTORED in `finally` (the original settings and the original worldTime)
 // — these are world-level switches, not tagged documents.
@@ -81,12 +84,30 @@ try {
   ]) {
     assert(k in original, `read: "${k}" reported (${JSON.stringify(original[k])})`);
   }
+  for (const k of [
+    'movementAutomation',
+    'bloodied',
+    'allowPolymorphing',
+    'allowSummoning',
+    'disableConcentration',
+    'pietyScore',
+  ]) {
+    assert(
+      k in original,
+      `read: the 6.0 key "${k}" is registered (${JSON.stringify(original[k])})`
+    );
+  }
   assert(
     typeof original.disableFalling === 'boolean' &&
       typeof original.bastionDuration === 'number' &&
       typeof original.calendar === 'string',
     'read: kinds match the catalogue',
     original
+  );
+  assert(
+    ['auto', 'calendar', 'manual'].includes(original.calendarDailyRecovery),
+    'read: calendarDailyRecovery reports auto|calendar|manual, never ""',
+    original.calendarDailyRecovery
   );
   assert(
     Array.isArray(read.calendars) &&
@@ -150,6 +171,41 @@ try {
     set2
   );
 
+  // --- calendarDailyRecovery: the choices StringField cannot store "" -------------------------
+  // dnd5e's CalendarConfigSetting declares dailyRecovery with `choices`, which makes core default
+  // `blank` to FALSE — writing "" throws "may not be a blank string" through ClientSettings#set.
+  // The tool spells the unset state 'auto' and stores it by OMITTING the key.
+  const toRecovery = original.calendarDailyRecovery === 'manual' ? 'calendar' : 'manual';
+  const rec1 = await f.call('configureDnd5eSettings', { calendarDailyRecovery: toRecovery });
+  assert(
+    rec1?.settings?.calendarDailyRecovery === toRecovery,
+    `set: calendarDailyRecovery → ${toRecovery}`,
+    rec1?.applied
+  );
+  const rec2 = await f.call('configureDnd5eSettings', { calendarDailyRecovery: 'auto' });
+  assert(
+    rec2?.settings?.calendarDailyRecovery === 'auto',
+    'set: calendarDailyRecovery → auto reads back as auto',
+    rec2?.applied
+  );
+  const liveRec = await f.evaluate(
+    () => globalThis.game.settings.get('dnd5e', 'calendarConfig').toObject().dailyRecovery ?? null
+  );
+  assert(
+    liveRec === null || liveRec === '' || liveRec === undefined,
+    'live: "auto" is stored by omitting dailyRecovery, never as a written ""',
+    liveRec
+  );
+  // a sibling write on the same DataModel must survive the omitted key
+  const sibling = await f.call('configureDnd5eSettings', {
+    calendarEnabled: original.calendarEnabled,
+  });
+  assert(
+    sibling?.settings?.calendarDailyRecovery === 'auto',
+    'set: a sibling calendarConfig write does not resurrect a blank dailyRecovery',
+    sibling?.settings
+  );
+
   // ======================================================================
   // 3. Settings — refusals
   // ======================================================================
@@ -172,6 +228,11 @@ try {
     'refuses a wrong kind',
     () => f.call('configureDnd5eSettings', { bastionDuration: 0 }),
     /positive whole number/
+  );
+  await expectThrow(
+    'refuses the old blank spelling of calendarDailyRecovery',
+    () => f.call('configureDnd5eSettings', { calendarDailyRecovery: '' }),
+    /must be one of auto \| calendar \| manual/
   );
 
   // ======================================================================
@@ -245,6 +306,49 @@ try {
     'set: month by NUMBER keeps the time of day',
     setNum?.after
   );
+
+  // `day` OMITTED must keep the day. jumpToDate defaults an absent day to components.dayOfMonth,
+  // which core keeps 0-BASED, then does `dayOfYear = day - 1` — forwarding nothing stepped the
+  // date back one day every time. We now always send all three from our own 1-based read.
+  await f.call('manageCalendar', { action: 'set', month: 1, day: 12 });
+  const keepDay = await f.call('manageCalendar', { action: 'set', month: 2 });
+  assert(
+    keepDay?.after?.day === 12 && keepDay?.after?.month?.number === 2,
+    'set: omitting `day` keeps the day (no off-by-one rewind)',
+    keepDay?.after
+  );
+  const keepMonth = await f.call('manageCalendar', { action: 'set', year: keepDay.after.year + 1 });
+  assert(
+    keepMonth?.after?.day === 12 && keepMonth?.after?.month?.number === 2,
+    'set: omitting month + day keeps both',
+    keepMonth?.after
+  );
+  await f.call('manageCalendar', { action: 'set', year: keepDay.after.year });
+
+  // A set that CROSSES a month boundary must land in the named month, not spill into the next one
+  // (the dayOfYear accumulation is where an off-by-one shows).
+  const lastMonth = cal.months[cal.months.length - 1];
+  const crossing = await f.call('manageCalendar', {
+    action: 'set',
+    month: lastMonth.number,
+    day: lastMonth.days,
+  });
+  assert(
+    crossing?.after?.month?.number === lastMonth.number && crossing?.after?.day === lastMonth.days,
+    `set: the LAST day of the last month (${lastMonth.name} ${lastMonth.days}) lands exactly`,
+    crossing?.after
+  );
+  const rollover = await f.call('manageCalendar', { action: 'advance', days: 1 });
+  assert(
+    rollover?.after?.month?.number === 1 && rollover?.after?.day === 1,
+    'advance: +1 day from the last day of the year rolls to month 1 day 1',
+    rollover?.after
+  );
+  await expectThrow(
+    'refuses a day past the end of the target month',
+    () => f.call('manageCalendar', { action: 'set', month: cal.months[1].number, day: 99 }),
+    /day must be 1/
+  );
   await expectThrow(
     'refuses a month outside the calendar',
     () => f.call('manageCalendar', { action: 'set', month: 'Smarch' }),
@@ -266,6 +370,7 @@ try {
         autoApplyDowned: original.autoApplyDowned,
         bastionDuration: original.bastionDuration,
         calendarEnabled: original.calendarEnabled,
+        calendarDailyRecovery: original.calendarDailyRecovery,
         calendar: original.calendar,
       });
       console.log('\nrestored the original dnd5e settings');

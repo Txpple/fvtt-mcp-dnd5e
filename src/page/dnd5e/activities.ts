@@ -102,6 +102,19 @@ export interface TransformSettingsOpts {
   spellLists?: string[];
 }
 
+/**
+ * One entry of `activity.effects[]` (dnd5e 6.0 AppliedEffectField) — an ActiveEffect the activity
+ * applies to its targets. EITHER `_id` (an effect that lives ON THE ITEM) or `uuid` (a stock
+ * `dnd5e.effects` / compendium / world-item effect); the page resolves the authored ref to one or the
+ * other (see effect-refs.ts). `onSave` only exists on a SAVE activity's field (save-data.mjs).
+ */
+export interface AppliedEffectOpts {
+  _id?: string;
+  uuid?: string;
+  onSave?: boolean;
+  level?: { min?: number; max?: number };
+}
+
 /** A transform profile (direct link: `actorUuid`; by CR: `cr` + the filters). */
 export interface TransformProfileOpts {
   name?: string;
@@ -144,6 +157,20 @@ export interface BuildActivityOpts {
   formEffectIds?: string[];
   /** cr / direct: custom transformation settings (sets transform.customize) instead of the bare preset. */
   transformSettings?: TransformSettingsOpts;
+  /**
+   * The PRESET's own settings, read from `CONFIG.DND5E.transformation.presets[preset].settings` by the
+   * page (Sets → arrays) — the base `transformSettings` merges over. dnd5e's own transform sheet seeds
+   * a customised settings object the same way (transform-sheet.mjs #_processSubmitData), and
+   * transform-data.mjs uses a `customize: true` settings object VERBATIM, so without this base a
+   * customised transform silently loses the preset's minimumAC / tempFormula / spellLists / keep /
+   * merge / effects. Omit (or {}) when there is no preset.
+   */
+  transformPresetSettings?: Record<string, unknown>;
+  /**
+   * Applied effects (`activity.effects[]`): the ActiveEffects the activity puts on its targets. Refs
+   * are ALREADY resolved by the page to an on-item `_id` or a compendium / world-item `uuid`.
+   */
+  appliedEffects?: AppliedEffectOpts[];
   // attack
   attackType?: 'melee' | 'ranged';
   attackBonus?: number;
@@ -321,6 +348,76 @@ export function buildActivityBehavior(b: ActivityBehaviorOpts, id: string): Reco
   return { _id: id, type: b.type, name: b.name ?? '', level, config };
 }
 
+/**
+ * Build one `activity.effects[]` entry (AppliedEffectField: `{_id, uuid, level:{min,max}}`, plus
+ * `onSave` on a save activity). Exactly one of `_id` / `uuid` identifies the effect.
+ */
+export function buildAppliedEffect(e: AppliedEffectOpts, type: string): Record<string, any> {
+  if (!e?._id && !e?.uuid) {
+    throw new Error('an applied effect must resolve to an effect on the item (_id) or a uuid.');
+  }
+  if (typeof e.onSave === 'boolean' && type !== 'save') {
+    throw new Error(
+      `appliesEffects[].onSave only exists on a SAVE activity (this is a "${type}" activity).`
+    );
+  }
+  const level: Record<string, number> = {};
+  if (typeof e.level?.min === 'number') level.min = e.level.min;
+  if (typeof e.level?.max === 'number') level.max = e.level.max;
+  return {
+    ...(e._id ? { _id: e._id } : {}),
+    ...(e.uuid ? { uuid: e.uuid } : {}),
+    level,
+    ...(typeof e.onSave === 'boolean' ? { onSave: e.onSave } : {}),
+  };
+}
+
+/**
+ * The typed activity fields `manage-activity edit` does NOT understand. The page edit branch only
+ * applies name / duration / template / affects / behaviors / appliesEffects / patch; anything else
+ * used to be forwarded, ignored, and reported as a success. Throws naming the offenders.
+ */
+export const EDIT_UNSUPPORTED_ACTIVITY_KEYS = [
+  'activationType',
+  'damageParts',
+  'attackType',
+  'attackBonus',
+  'ability',
+  'includeBase',
+  'saveAbility',
+  'saveDC',
+  'onSave',
+  'healing',
+  'checkAbility',
+  'checkDC',
+  'skills',
+  'spellUuid',
+  'level',
+  'charges',
+  'recoveryPeriod',
+  'teleportDistance',
+  'transformMode',
+  'transformPreset',
+  'formless',
+  'profiles',
+  'forms',
+  'transformSettings',
+] as const;
+
+/** Throw if an edit carries a typed field the edit branch would silently drop. */
+export function assertEditableActivityFields(activity: Record<string, any> | undefined): void {
+  const offenders = EDIT_UNSUPPORTED_ACTIVITY_KEYS.filter(
+    k => activity?.[k] !== undefined && activity?.[k] !== null
+  );
+  if (offenders.length === 0) return;
+  throw new Error(
+    `manage-activity edit cannot change ${offenders.join(', ')}. Edit supports name, duration, ` +
+      'template, affects, behaviors and appliesEffects; change anything else with `patch` (dot-paths ' +
+      'relative to the activity root, e.g. {"attack.bonus":"3"}, {"save.dc.formula":"16"}) or remove ' +
+      'the activity and add it again.'
+  );
+}
+
 /** Build one dnd5e activity object of the given type. */
 export function buildActivity(type: string, opts: BuildActivityOpts): Record<string, any> {
   const act = buildActivityOfType(type, opts);
@@ -347,6 +444,15 @@ export function buildActivity(type: string, opts: BuildActivityOpts): Record<str
       );
     }
     act.behaviors = opts.behaviors.map((b, i) => buildActivityBehavior(b, behaviorId(opts.id, i)));
+  }
+  if (opts.appliedEffects?.length) {
+    if (type === 'transform') {
+      throw new Error(
+        "a transform activity's effects[] ARE its forms (Select-Form mode) — use `forms`, not " +
+          '`appliesEffects`.'
+      );
+    }
+    act.effects = opts.appliedEffects.map(e => buildAppliedEffect(e, type));
   }
   return act;
 }
@@ -492,7 +598,12 @@ function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
     assertKeys(ts.merge, TRANSFORM_MERGE_KEYS, 'transformSettings.merge');
     assertKeys(ts.effects, TRANSFORM_EFFECT_KEYS, 'transformSettings.effects');
     act.transform.customize = true;
+    // Seed from the PRESET's own settings (resolved by the page) exactly as dnd5e's transform sheet
+    // does — mergeObject({...preset.settings, preset}, submitted) — so an override of one category
+    // (say `keep`) REPLACES only that list and the rest of the preset (minimumAC / tempFormula /
+    // spellLists / merge / effects) is inherited instead of silently lost.
     act.settings = {
+      ...(opts.transformPresetSettings ?? {}),
       preset: preset || null,
       ...(ts.keep ? { keep: [...ts.keep] } : {}),
       ...(ts.merge ? { merge: [...ts.merge] } : {}),

@@ -55,19 +55,39 @@ const change = z.object({
         'maximum = a deterministic formula ("10", "@prof") — the d20 floor / ceiling.'
     ),
   type: z
-    .enum(['add', 'multiply', 'override', 'upgrade', 'downgrade', 'custom', ...RULE_TYPES])
+    .enum([
+      'add',
+      'subtract',
+      'multiply',
+      'override',
+      'upgrade',
+      'downgrade',
+      'custom',
+      ...RULE_TYPES,
+    ])
     .default('add')
     .describe(
-      'How the value is applied. Core: add / multiply / override / upgrade / downgrade / custom on a data ' +
-        'path. dnd5e 6.0 RULES (evaluated at roll time, key = a roll category): dnd5e.advantage, ' +
-        'dnd5e.bonus, dnd5e.minimum, dnd5e.maximum. Default "add".'
+      'How the value is applied. Core (CONST.ACTIVE_EFFECT_CHANGE_TYPES): add / subtract / multiply / ' +
+        'override / upgrade / downgrade / custom on a data path. dnd5e 6.0 RULES (evaluated at roll ' +
+        'time, key = a roll category): dnd5e.advantage, dnd5e.bonus, dnd5e.minimum, dnd5e.maximum. ' +
+        'Default "add".'
+    ),
+  phase: z
+    .enum(['initial', 'final'])
+    .optional()
+    .describe(
+      'When the change applies during data preparation: "initial" (the default, before derived data) ' +
+        'or "final" (after).'
     ),
   conditions: filter
     .optional()
     .describe(
-      'Per-change Filter — this change applies only while it holds. The only place roll.* keys work ' +
-        '(roll.ability, roll.skill, roll.type, roll.attack.type / .mode / .classification, ' +
-        'roll.damage.type, roll.proficient, roll.tool …), e.g. {k:"roll.attack.type", v:"ranged"}.'
+      'Per-change Filter — this change applies only while it holds. roll.* keys work ONLY on a ' +
+        'RULES-type change (dnd5e.advantage / bonus / minimum / maximum), the only changes evaluated ' +
+        'at roll time: roll.ability, roll.skill, roll.type, roll.attack.type / .mode / ' +
+        '.classification, roll.damage.type, roll.proficient, roll.tool …, e.g. ' +
+        '{k:"roll.attack.type", v:"ranged"}. A core-type change is evaluated at data preparation, ' +
+        'where there is no roll data.'
     ),
   replacement: z
     .enum(EFFECT_REPLACEMENTS)
@@ -142,17 +162,20 @@ const ManageEffectSchema = z.object({
     .object({
       value: z.number().min(0).optional().describe('How long, in `units`.'),
       units: z
-        .enum(['seconds', 'minutes', 'hours', 'days', 'rounds', 'turns'])
+        .enum(['seconds', 'minutes', 'hours', 'days', 'months', 'years', 'rounds', 'turns'])
         .optional()
-        .describe('Foundry v14 duration units (rounds/turns count in combat).'),
+        .describe(
+          'Foundry v14 duration units (CONST.ACTIVE_EFFECT_DURATION_UNITS; rounds/turns count in combat).'
+        ),
       expiry: z
         .enum(EXPIRY_EVENTS)
         .nullable()
         .optional()
         .describe(
           'When the effect lapses. Core combat events (combatStart roundStart turnStart combatEnd ' +
-            'roundEnd turnEnd) fire once the value+units have ALSO elapsed — give both. dnd5e ' +
-            'duration-less events need no value: shortRest / longRest, and the source/target turn ' +
+            'roundEnd turnEnd): with NO value the effect expires at the FIRST matching event; with a ' +
+            'value+units, at the first matching event after the value elapses. The dnd5e events are ' +
+            'duration-less and take no value: shortRest / longRest, and the source/target turn ' +
             'pseudo-expiries: "until the end of the target\'s next turn" = targetEnd, "until the start ' +
             'of your next turn" = sourceStart. Omit for the default; null clears.'
         ),

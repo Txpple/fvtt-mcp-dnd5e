@@ -24,12 +24,16 @@
 //    JSON (module/filter.mjs): a comparison { k, v, o? } (o ∈ COMPARISON_FUNCTIONS, default exact),
 //    an operator { o: AND|NAND|OR|NOR|XOR, v: Filter[] } / { o: NOT, v: Filter }, or an array
 //    (implicit AND). FiltersField extends JSONField (initial "{}") — persisted as a STRING.
-//  - Duration is { value, units, expiry? }: units ∈ seconds | minutes | hours | days | rounds |
-//    turns; the 5.x `{ rounds | turns | seconds: N }` keys are translated (core migrates them too).
+//  - Duration is { value, units, expiry? }: units ∈ seconds | minutes | hours | days | months |
+//    years | rounds | turns (CONST.ACTIVE_EFFECT_DURATION_UNITS); the 5.x `{ rounds | turns |
+//    seconds: N }` keys are translated (core migrates them too).
 //    Expiry ∈ core CONST.ACTIVE_EFFECT_EXPIRY_EVENTS (combatStart roundStart turnStart combatEnd
-//    roundEnd turnEnd — need a finite value: core only expires when the duration is ALSO reached),
-//    dnd5e's registered shortRest / longRest, and the pseudo sourceStart / sourceEnd / targetStart /
-//    targetEnd (ActiveEffect5e.PSEUDO_EXPIRIES) — the last six are DURATION-LESS (the system nulls
+//    roundEnd turnEnd) — a core expiry with no value expires at the first matching event; with a
+//    value, at the first matching event after the value elapses (ActiveEffectRegistry#refresh:
+//    `durationReached = remaining <= 0 || !Number.isFinite(remaining)`, and `_prepareDuration`
+//    yields remaining: Infinity when no value is set) — plus dnd5e's registered shortRest /
+//    longRest, and the pseudo sourceStart / sourceEnd / targetStart / targetEnd
+//    (ActiveEffect5e.PSEUDO_EXPIRIES) — the last six are DURATION-LESS (the system nulls
 //    `duration.value` on create/update), so a value given with them is dropped here.
 
 import {
@@ -53,6 +57,20 @@ const MODE_NUM_TO_TYPE: Record<number, string> = {
   4: 'upgrade',
   5: 'override',
 };
+
+/** Core change types (CONST.ACTIVE_EFFECT_CHANGE_TYPES). */
+const CORE_CHANGE_TYPES = new Set([
+  'custom',
+  'multiply',
+  'add',
+  'subtract',
+  'downgrade',
+  'upgrade',
+  'override',
+]);
+
+/** Core change phases (CONST.ACTIVE_EFFECT_CHANGE_PHASES). */
+const CHANGE_PHASES = new Set(['initial', 'final']);
 
 // ---------------------------------------------------------------------------------------------
 // Filters (dnd5e 6.0 `module/filter.mjs`) — the condition vocabulary
@@ -133,8 +151,9 @@ function normalizeFilterNode(node: unknown, scope: FilterScope, path: string): u
   }
   if (scope === 'effect' && /^roll\./.test(k)) {
     throw new Error(
-      `${path}.k: "${k}" — roll.* keys are only available on a CHANGE's conditions (rules are ` +
-        'evaluated at roll time); an effect-level condition cannot see the roll.'
+      `${path}.k: "${k}" — roll.* keys are only available on the conditions of a RULES-type change ` +
+        `(${RULE_TYPES.join(' / ')}), which alone are evaluated at roll time; an effect-level ` +
+        'condition (or a core-type change, evaluated at data preparation) cannot see the roll.'
     );
   }
   let v = node.v;
@@ -277,16 +296,28 @@ export function validateRuleChange(type: RuleType, key: string, value: string): 
   return v;
 }
 
+/** True when any comparison in a (parsed) Filter tree keys off `roll.*`. */
+function referencesRollData(node: unknown): boolean {
+  if (Array.isArray(node)) return node.some(referencesRollData);
+  if (!isPlainObject(node)) return false;
+  if (typeof node.k === 'string' && /^roll\./.test(node.k)) return true;
+  return referencesRollData(node.v);
+}
+
 /**
  * Why a PERSISTED change is a dead rule — a rules type on a non-category key / a damage-healing
- * key with a non-bonus type / an advantage value outside the vocabulary, or a core type on a roll
- * category (a write to nowhere). Undefined when the change is fine. Used by content-audit.
+ * key with a non-bonus type / an advantage value outside the vocabulary, a core type on a roll
+ * category (a write to nowhere), or a core type whose conditions key off `roll.*` (R1-012: only a
+ * rules change is evaluated at roll time; a core change's conditions run at data preparation with
+ * no roll data, so such a condition never holds). Undefined when the change is fine. Used by
+ * content-audit.
  */
 export function ruleChangeProblem(c: {
   type?: unknown;
   mode?: unknown;
   key?: unknown;
   value?: unknown;
+  conditions?: unknown;
 }): string | undefined {
   const type =
     typeof c?.type === 'string'
@@ -307,6 +338,13 @@ export function ruleChangeProblem(c: {
     return (
       `key "${key}" is a roll category but type "${type}" is a core change type — it writes to ` +
       `nowhere; use ${RULE_TYPES.join(' / ')}.`
+    );
+  }
+  if (referencesRollData(parseConditions(c?.conditions))) {
+    return (
+      `type "${type}" is a core change type but its conditions key off roll.* — a core change is ` +
+      'evaluated at data preparation, where there is no roll data, so the condition never holds; ' +
+      `use a rules type (${RULE_TYPES.join(' / ')}) on a roll category.`
     );
   }
   return undefined;
@@ -358,8 +396,9 @@ const REPLACEMENTS = new Set<string>(['', ...EFFECT_REPLACEMENTS]);
 
 /**
  * Normalize an authored change to the v14 { key, value(string), type, phase } shape, plus the
- * dnd5e 6.0 extras when given: `conditions` (validated Filter → JSON string, change scope),
- * `replacement` (origin | target), `priority`. Rules types are validated (key × type × value).
+ * dnd5e 6.0 extras when given: `conditions` (validated Filter → JSON string — change scope, so
+ * `roll.*` is available, ONLY for a rules type; effect scope otherwise), `replacement`
+ * (origin | target), `priority`. Rules types are validated (key × type × value).
  */
 export function normalizeChange(c: any): Record<string, unknown> {
   const type =
@@ -368,6 +407,12 @@ export function normalizeChange(c: any): Record<string, unknown> {
       : typeof c?.mode === 'number'
         ? (MODE_NUM_TO_TYPE[c.mode] ?? 'add')
         : 'add';
+  if (!CORE_CHANGE_TYPES.has(type) && !isRuleType(type)) {
+    throw new Error(
+      `change.type "${type}" is not a change type. Core: ${[...CORE_CHANGE_TYPES].join(' ')}; ` +
+        `dnd5e rules: ${RULE_TYPES.join(' ')}.`
+    );
+  }
   const key = String(c?.key ?? '');
   let value = c?.value === undefined || c?.value === null ? '' : String(c.value);
   if (isRuleType(type)) {
@@ -378,15 +423,20 @@ export function normalizeChange(c: any): Record<string, unknown> {
         `(${RULE_TYPES.join(' ')}), not "${type}" (which writes to a data path).`
     );
   }
-  const out: Record<string, unknown> = {
-    key,
-    value,
-    type,
-    phase: typeof c?.phase === 'string' ? c.phase : 'initial',
-  };
+  let phase = 'initial';
+  if (typeof c?.phase === 'string' && c.phase !== '') {
+    if (!CHANGE_PHASES.has(c.phase)) {
+      throw new Error(`change.phase must be "initial" or "final" (got "${c.phase}").`);
+    }
+    phase = c.phase;
+  }
+  const out: Record<string, unknown> = { key, value, type, phase };
   if (typeof c?.priority === 'number' && Number.isFinite(c.priority)) out.priority = c.priority;
   if (c?.conditions !== undefined) {
-    const conditions = normalizeConditions(c.conditions, 'change');
+    // R1-012: only a RULES-type change is evaluated at roll time (skipConditions: true), so only
+    // there do `roll.*` keys exist. A core-type change's conditions are evaluated at data-prep with
+    // no roll data — validate those in 'effect' scope so roll.* is refused with a naming message.
+    const conditions = normalizeConditions(c.conditions, isRuleType(type) ? 'change' : 'effect');
     if (conditions !== EMPTY_CONDITIONS) out.conditions = conditions;
   }
   if (c?.replacement !== undefined && c?.replacement !== null) {
@@ -422,7 +472,16 @@ export function summarizeChanges(changes: any[]): Array<Record<string, unknown>>
 // ---------------------------------------------------------------------------------------------
 
 /** v14 duration units (CONST.ACTIVE_EFFECT_DURATION_UNITS) accepted as `duration.units`. */
-const DURATION_UNITS = new Set(['seconds', 'minutes', 'hours', 'days', 'rounds', 'turns']);
+const DURATION_UNITS = new Set([
+  'seconds',
+  'minutes',
+  'hours',
+  'days',
+  'months',
+  'years',
+  'rounds',
+  'turns',
+]);
 
 /** The dnd5e rest / source / target expiries carry no duration (the system nulls the value). */
 const DURATIONLESS_EXPIRIES = new Set<string>(DND5E_EXPIRY_EVENTS);
@@ -430,11 +489,11 @@ const DURATIONLESS_EXPIRIES = new Set<string>(DND5E_EXPIRY_EVENTS);
 /**
  * Normalize an authored duration to the v14 { value, units[, expiry] } shape. Accepts the native
  * shape as-is (unknown keys pass through) and translates the 5.x { rounds | turns | seconds: N }
- * keys — first one wins, matching core's own #migrateDuration. Validates `expiry` against the
- * 6.0 vocabulary: a core combat event needs a finite value (core only expires when the duration
- * is also reached); the dnd5e rest / source / target expiries are duration-less, so any value
- * given with them is dropped (the system nulls it anyway). Returns undefined when nothing usable
- * was given.
+ * keys — first one wins, matching core's own #migrateDuration. Throws on an unknown `units`.
+ * Validates `expiry` against the 6.0 vocabulary: a core expiry with no value expires at the first
+ * matching event, with a value at the first matching event after the value elapses; the dnd5e rest
+ * / source / target expiries are duration-less, so any value given with them is dropped (the
+ * system nulls it anyway). Returns undefined when nothing usable was given.
  */
 export function normalizeDuration(d: any): Record<string, unknown> | undefined {
   if (!d || typeof d !== 'object') return undefined;
@@ -454,7 +513,10 @@ export function normalizeDuration(d: any): Record<string, unknown> | undefined {
     }
   }
   if (typeof out.units === 'string' && !DURATION_UNITS.has(out.units)) {
-    delete out.units; // let the field default (seconds) stand rather than fail validation
+    throw new Error(
+      `duration.units "${out.units}" is not a Foundry duration unit. Use one of: ` +
+        `${[...DURATION_UNITS].join(' ')}.`
+    );
   }
   if (out.expiry !== undefined && out.expiry !== null) {
     const expiry = String(out.expiry);
@@ -466,16 +528,34 @@ export function normalizeDuration(d: any): Record<string, unknown> | undefined {
     if (DURATIONLESS_EXPIRIES.has(expiry)) {
       delete out.value;
       delete out.units;
-    } else if (typeof out.value !== 'number' || !Number.isFinite(out.value)) {
-      throw new Error(
-        `duration.expiry "${expiry}" is a combat event that only fires once the duration has ALSO ` +
-          'elapsed — give value + units too (e.g. { value: 1, units: "rounds", expiry: "turnEnd" }), ' +
-          'or use a duration-less expiry (targetEnd / sourceEnd / shortRest / longRest).'
-      );
     }
     out.expiry = expiry;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Project a (live or source) effect duration into the shape the tool layer reads back: the v14
+ * `{ value, units, expiry?, remaining? }` when a finite value is set, `{ expiry, remaining? }` for
+ * a value-less expiry (which still expires at the first matching event), and null for a permanent
+ * / passive effect. `remaining` is only included when it is a finite number — a duration-less
+ * effect's prepared `remaining` is Infinity, which does not survive JSON.
+ */
+export function projectDuration(dur: any): Record<string, unknown> | null {
+  if (!dur || typeof dur !== 'object') return null;
+  const remaining =
+    typeof dur.remaining === 'number' && Number.isFinite(dur.remaining)
+      ? { remaining: dur.remaining }
+      : {};
+  if (typeof dur.value === 'number' && Number.isFinite(dur.value)) {
+    return {
+      value: dur.value,
+      units: typeof dur.units === 'string' ? dur.units : 'seconds',
+      ...(dur.expiry ? { expiry: dur.expiry } : {}),
+      ...remaining,
+    };
+  }
+  return dur.expiry ? { expiry: dur.expiry, ...remaining } : null;
 }
 
 /**

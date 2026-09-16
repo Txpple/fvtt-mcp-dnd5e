@@ -205,8 +205,9 @@ known casters at this table. Prepared casters (cleric/druid/wizard/paladin) keep
   (`actorIdentifier` = the new PC), `equipped: true` for what it wears/wields. The 2024 class+background
   starting-equipment package, **or** the gold option if the player would rather buy — ask. Worn armor /
   shield, the primary weapon(s), adventuring gear, any spellbook/focus. Defer item judgment to
-  [[physical-item-builder]]. Copied armor doesn't auto-drive AC — if AC looks off, set it with
-  `update-actor` (a shield bonus applies under any calc).
+  [[physical-item-builder]]. Equipped armor and a shield drive AC through the `armored` calc on
+  their own — only reach for `update-actor` AC fields when the sheet shows a value the block
+  disagrees with (an unarmored-defense class needs its calc, not a flat number).
 - **Feats** — for a PC **above level 3** whose player took a **feat** at an ASI tier (4/8/12/16/19),
   add it now: `add-feature` mode `compendium-features` with the feat name (it copies the real PHB feat),
   or `import-item` for a feat-as-item. (Ability-increase ASIs are already in the final scores — don't

@@ -31,8 +31,8 @@ adventure end to end**, scaled to however much the DM brings:
   linked journals (plot, GM notes, read-aloud boxed text, handouts), and the roll tables to match.
 - **As much as a finished module.** Hand Claude your own adventure and it faithfully recreates it in
   the VTT — every stat block, magic item, handout, and map placed as written, sourced from the books.
-- **Anywhere in between** is the normal case — and a player's own character can be imported straight
-  from a **publicly shared D&D Beyond** sheet (§7).
+- **Anywhere in between** is the normal case — and a player's own character is rebuilt natively from
+  the books (there is deliberately no D&D Beyond import — §7).
 
 ---
 
@@ -131,6 +131,8 @@ This is the architectural backbone that makes principle #1 real.
 | | Tables (roll tables) | 1 | ✅ done (`table-builder`; v14 results + `@UUID` loot + import) |
 | | Playable cards | 1 | ✅ done (`cards-builder`; face text + preset import) |
 | | Playlists | 1 | ✅ done (`playlist-builder`; scene-builder delegates) |
+| | **dnd5e 6.0 features** — conditional / rules-type effects, expiry events, region + activity behaviors, teleport / transform activities, rarities | 1 | ✅ done 2.1.0–2.1.1 (`manage-effect`, `manage-activity`, `add-region-behavior`; `docs/plan-2.1-dnd5e-6-features.md`) |
+| | **System automation settings + calendar** | 1 | ✅ done 2.1.1 (`configure-dnd5e-settings` read + allow-listed set; `manage-calendar` read / advance / set) |
 | **DM session assistance** | **Event bridge** — live world → Claude (`wait-for-events`) | 2 | ⛔ not started (§8.1 — build first) |
 | | Chat messages & integration | 2 | ◻️ partial (chat tools exist) |
 | | Export chats | 2 | ◻️ partial (`export-chat-log`) |
@@ -369,7 +371,9 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 ## 10. How we use this document
 
 - **Before building**, locate the work on this page. If it isn't here, decide whether it's in scope —
-  and if so, add it here first.
+  and if so, add it here first. (The 2.1 line added three capability areas this way after the fact:
+  system automation settings + calendar (`configure-dnd5e-settings`, `manage-calendar`) and areas
+  with dnd5e behaviors (`add-region-behavior`, activity `behaviors`) — now rows in the §4 table.)
 - **When a skill and a tool seem to overlap**, re-read §2.1 and §3 and put each concern on the correct
   side.
 - **When tempted by a shortcut**, re-read §2.2.

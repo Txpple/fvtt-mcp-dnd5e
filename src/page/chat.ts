@@ -6,7 +6,7 @@
 // roll-request tokens) lives in chat-helpers.ts and is unit-tested offline. The bridge is always a
 // ready GM, so all five visibility modes are reachable. No rollback; best-effort writes.
 //
-// Version-grounded for Foundry 14.364 / dnd5e 5.3.3:
+// Version-grounded for Foundry 14.367 / dnd5e 6.0.1 (see docs/dnd5e-6.0-compat-review.md):
 //  - presentation = `style` (CONST.CHAT_MESSAGE_STYLES, by NAME), NOT the doc-subtype `type`;
 //  - whisper-ness derives from the `whisper` id array (no WHISPER style); set whisper+blind
 //    explicitly and pass NO rollMode so explicit recipients are respected;

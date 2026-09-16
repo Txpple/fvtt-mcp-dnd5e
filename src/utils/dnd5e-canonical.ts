@@ -1,12 +1,12 @@
-// THE single source of truth for canonical dnd5e enum sets (5.3.3 sets, plus the 6.0 ActiveEffect
-// vocabularies at the bottom) used in validation across the authoring surface. Previously each tool/page file kept its own copy, which drifted
-// (the Node-side damage copies were missing 'none'/'vitality' that the page-side set had).
+// THE single source of truth for canonical dnd5e enum sets (read from the 6.0.1 source) used in
+// validation across the authoring surface. Previously each tool/page file kept its own copy, which
+// drifted; the lists here are locked against the source by unit tests.
 //
 // Intentionally PURE — no imports, no Node or Foundry globals — so it can be shared by BOTH bundles:
 // the Node-side tools (add-feature / add-item / npc) and the page-side library (bundled into
 // dist/page.bundle.js by esbuild). Same sanctioned-exception rationale as utils/compendium-sources.ts.
 
-/** CONFIG.DND5E.damageTypes (dnd5e 5.3.3) — incl. 'none' and 'vitality'. */
+/** CONFIG.DND5E.damageTypes (dnd5e 6.0.1 `config.mjs`) — the 13 real damage types. */
 export const DAMAGE_TYPES = new Set([
   'acid',
   'bludgeoning',
@@ -15,14 +15,12 @@ export const DAMAGE_TYPES = new Set([
   'force',
   'lightning',
   'necrotic',
-  'none',
   'piercing',
   'poison',
   'psychic',
   'radiant',
   'slashing',
   'thunder',
-  'vitality',
 ]);
 
 /** CONFIG.DND5E.validProperties.weapon (dnd5e 5.3.3) — the 17 weapon property codes. */
@@ -112,7 +110,11 @@ export const ADVANTAGE_VALUES = ['+1', '-1', '=+1', '=-1', '>=0', '<=0'] as cons
 /** Per-change `replacement` (ActiveEffectDataModel): substitute the origin's / target's roll data. */
 export const EFFECT_REPLACEMENTS = ['origin', 'target'] as const;
 
-/** Core combat expiry events (CONST.ACTIVE_EFFECT_EXPIRY_EVENTS) — fire only once the duration has ALSO elapsed. */
+/**
+ * Core combat expiry events (CONST.ACTIVE_EFFECT_EXPIRY_EVENTS): a core expiry with no value
+ * expires at the first matching event; with a value, at the first matching event after the value
+ * elapses.
+ */
 export const CORE_EXPIRY_EVENTS = [
   'combatStart',
   'roundStart',
@@ -141,8 +143,8 @@ export const EXPIRY_EVENTS = [...CORE_EXPIRY_EVENTS, ...DND5E_EXPIRY_EVENTS] as 
 
 /**
  * Activity / item `duration.units` (CONFIG.DND5E.timePeriods): the SCALAR units take a value
- * (`second` is not offered in the UI); the special (inst spec) and permanent (disp dstr perm) ones
- * take none.
+ * (`second` and `week` are `option: false` in `timeUnits`, so dnd5e nulls a value given with them);
+ * the special (inst spec) and permanent (disp dstr perm) ones take none.
  */
 export const ACTIVITY_DURATION_SCALAR_UNITS = [
   'turn',
@@ -150,7 +152,6 @@ export const ACTIVITY_DURATION_SCALAR_UNITS = [
   'minute',
   'hour',
   'day',
-  'week',
   'month',
   'year',
 ] as const;
@@ -241,7 +242,7 @@ export const TRANSFORM_MODES = ['direct', 'cr', 'form'] as const;
 export const TRANSFORM_PRESETS = ['wildshape', 'polymorph', 'polymorphSelf'] as const;
 
 /** Movement types a CR-mode transform profile can restrict (CONFIG.DND5E.movementTypes keys). */
-export const MOVEMENT_TYPES = ['walk', 'burrow', 'climb', 'fly', 'swim'] as const;
+export const MOVEMENT_TYPES = ['walk', 'burrow', 'climb', 'fly', 'jump', 'swim'] as const;
 
 /** Transform custom settings — what the transformed actor KEEPS from its original self (CONFIG.DND5E.transformation.keep). */
 export const TRANSFORM_KEEP_KEYS = [

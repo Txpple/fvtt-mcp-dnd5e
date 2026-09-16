@@ -74,7 +74,9 @@ If the exact item isn't in a compendium but a close base IS (the common case for
      type:"dnd5e.bonus"|"dnd5e.advantage"|"dnd5e.minimum"|"dnd5e.maximum", value}` — narrowed by a
      change `conditions` Filter on the `roll.*` keys: a Bracer of Archery-style "+2 damage with bows" is
      `{key:"damage", type:"dnd5e.bonus", value:"2", conditions:{k:"roll.attack.type", v:"ranged"}}`; a
-     Luckstone-style "advantage on saves" is `{key:"save", type:"dnd5e.advantage", value:"+1"}`; a
+     Stone of Good Luck-style "+1 to checks and saves" is two changes, `{key:"check",
+     type:"dnd5e.bonus", value:"1"}` + `{key:"save", type:"dnd5e.bonus", value:"1"}` (a plain
+     "advantage on saving throws" property would be `{key:"save", type:"dnd5e.advantage", value:"+1"}`); a
      Flame Tongue-style "+2d6 fire" is `{key:"damage", type:"dnd5e.bonus", value:"2d6[fire]",
      conditions:{k:"roll.item.name", v:"Flame Tongue"}}` — a transferred item effect's rule applies to
      ALL the wearer's rolls in that category, so gate "with this weapon only" on `roll.item.name` (the

@@ -1,4 +1,4 @@
-// dnd5e NPC authoring — page-side writes that construct a full dnd5e 5.3.3 npc
+// dnd5e NPC authoring — page-side writes that construct a full dnd5e 6.0.1 npc
 // Actor system-data model (abilities + save proficiency, attributes.hp/ac,
 // movement, senses, details.cr/type/alignment, source, traits damage/condition/
 // size/languages, skills). Runs inside the headless Foundry page.

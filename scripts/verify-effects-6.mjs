@@ -418,7 +418,7 @@ try {
           changes: [{ key: 'system.attributes.ac.bonus', value: '1', type: 'add' }],
         },
       }),
-    /roll\.\* keys are only available on a CHANGE/
+    /roll\.\* keys are only available on the conditions of a RULES-type/
   );
   await expectThrow(
     'refuses a core type on a roll category',
@@ -471,19 +471,50 @@ try {
     /not an expiry event/
   );
   await expectThrow(
-    'refuses a core expiry without a duration',
+    'refuses an unknown duration unit',
     () =>
       f.call('manageEffect', {
         action: 'create',
         actorIdentifier: actorId,
         effect: {
           name: `${TAG} bad`,
-          duration: { expiry: 'turnEnd' },
+          duration: { value: 1, units: 'fortnights' },
           changes: [{ key: 'system.attributes.ac.bonus', value: '1' }],
         },
       }),
-    /give value \+ units too/
+    /not a Foundry duration unit/
   );
+  {
+    // A core expiry with NO value is legal: core's durationReached is `remaining <= 0 ||
+    // !Number.isFinite(remaining)`, and _prepareDuration yields Infinity when no value is set,
+    // so a bare { expiry: 'turnEnd' } expires at the FIRST turn end.
+    const bare = await f.call('manageEffect', {
+      action: 'create',
+      actorIdentifier: actorId,
+      effect: {
+        name: `${TAG} bare turnEnd`,
+        duration: { expiry: 'turnEnd' },
+        changes: [{ key: 'system.attributes.ac.bonus', value: '1' }],
+      },
+    });
+    const bareDur = await f.evaluate(
+      ({ actorId, effectId }) => {
+        const a = globalThis.game.actors.get(actorId);
+        return a.effects.get(effectId)?.toObject()?.duration ?? null;
+      },
+      { actorId, effectId: bare.effectId }
+    );
+    assert(
+      bare?.success && bareDur?.expiry === 'turnEnd' && bareDur?.value == null,
+      'value-less core expiry persists as { expiry: "turnEnd" } with no value',
+      bareDur
+    );
+    await f.call('manageEffect', {
+      action: 'delete',
+      actorIdentifier: actorId,
+      effectId: bare.effectId,
+    });
+  }
   await expectThrow(
     'refuses an unknown Filter operator',
     () =>
@@ -557,8 +588,103 @@ try {
   );
 
   // ======================================================================
+  // 5b. A value-less CORE expiry really fires: bare { expiry: 'turnEnd' } on a combatant expires
+  //     the first time that combatant's turn ends. (Core 14.367 ActiveEffectRegistry#refresh:
+  //     durationReached = remaining <= 0 || !Number.isFinite(remaining); _prepareDuration gives
+  //     Infinity with no value. CONFIG.ActiveEffect.expiryAction defaults to "update", which
+  //     stamps duration.expired = true.) Everything it makes is ZZ-* and torn down in-page.
+  // ======================================================================
+  const turnEndCase = await f.evaluate(async () => {
+    const game = globalThis.game;
+    const scene = game.scenes.active ?? game.scenes.contents[0];
+    if (!scene) return { error: 'no scene available to host a combat' };
+    // Its OWN actor: the combat's turn/round events expire (and dnd5e's combat teardown then
+    // DELETES) every combat-expiry effect on the combatant's actor — the shared temp actor
+    // carries "Wounded Guard" (1 round / turnEnd), which section 6 still needs.
+    const actor = await game.actors.documentClass.create({
+      name: 'ZZ-FX Combatant Actor',
+      type: 'npc',
+    });
+    const actorId = actor.id;
+    let token = null;
+    let combat = null;
+    let effectId = null;
+    try {
+      const tokenData = (
+        await actor.getTokenDocument({ name: 'ZZ-FX Combatant', x: 0, y: 0 })
+      ).toObject();
+      tokenData.actorLink = true; // the combatant's actor must BE the effect's actor
+      delete tokenData.delta;
+      [token] = await scene.createEmbeddedDocuments('Token', [tokenData]);
+      combat = await game.combats.documentClass.create({ scene: scene.id });
+      await combat.createEmbeddedDocuments('Combatant', [
+        { tokenId: token.id, sceneId: scene.id, actorId, initiative: 20 },
+      ]);
+      const [effect] = await actor.createEmbeddedDocuments('ActiveEffect', [
+        {
+          name: 'ZZ-FX bare turnEnd',
+          duration: { expiry: 'turnEnd' },
+          system: {
+            changes: [
+              { key: 'system.attributes.ac.bonus', value: '1', type: 'add', phase: 'initial' },
+            ],
+          },
+        },
+      ]);
+      effectId = effect.id;
+      const before = actor.effects.get(effectId)?.toObject()?.duration ?? null;
+      await combat.startCombat();
+      await combat.nextTurn(); // one combatant: ends its turn (and the round)
+      // Combat#_onUpdate runs the end-turn workflow (registry.refresh('turnEnd')) WITHOUT the
+      // nextTurn promise awaiting it — poll for the expiry stamp.
+      let after = null;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        after = actor.effects.get(effectId)?.toObject()?.duration ?? null;
+        if (after?.expired === true) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return { before, after };
+    } finally {
+      try {
+        if (effectId) await actor.deleteEmbeddedDocuments('ActiveEffect', [effectId]);
+      } catch {}
+      try {
+        if (combat) await combat.delete();
+      } catch {}
+      try {
+        if (token) await scene.deleteEmbeddedDocuments('Token', [token.id]);
+      } catch {}
+      try {
+        await actor.delete();
+      } catch {}
+    }
+  }, {});
+  assert(
+    turnEndCase?.before?.expiry === 'turnEnd' && turnEndCase?.before?.expired !== true,
+    'bare { expiry: "turnEnd" } starts unexpired',
+    turnEndCase?.before
+  );
+  assert(
+    turnEndCase?.after?.expired === true,
+    'bare { expiry: "turnEnd" } expired at the first end of its combatant turn',
+    turnEndCase
+  );
+
+  // ======================================================================
   // 6. content-audit flags a DEAD rules change written by hand (bypassing manage-effect)
   // ======================================================================
+  //    A fresh vehicle: 5b's combat round advanced worldTime, and core treats ANY time advance as
+  //    satisfying a combat expiry for an actor NOT in combat (ActiveEffect#isExpiryEvent), after
+  //    which dnd5e deletes the expired out-of-combat effect — "Wounded Guard" is gone by now.
+  const vehicle = await f.call('manageEffect', {
+    action: 'create',
+    actorIdentifier: actorId,
+    effect: {
+      name: `${TAG} Audit Vehicle`,
+      changes: [{ key: 'system.attributes.ac.bonus', value: '1', type: 'add' }],
+    },
+  });
+  assert(vehicle?.success, `manage-effect create "${TAG} Audit Vehicle"`);
   await f.evaluate(
     async ({ actorId, effectId }) => {
       const a = globalThis.game.actors.get(actorId);
@@ -566,7 +692,7 @@ try {
         { _id: effectId, 'system.changes': [{ key: 'attack', value: '2', type: 'add' }] },
       ]);
     },
-    { actorId, effectId: cond.effectId }
+    { actorId, effectId: vehicle.effectId }
   );
   const audit = await f.call('auditContent', { actorIdentifiers: [actorId] });
   const dead = (audit?.findings ?? []).filter(x => x.issue === 'dead-rules-change');

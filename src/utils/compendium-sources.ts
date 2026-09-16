@@ -62,14 +62,27 @@ export function isPremiumBookPack(packId: string): boolean {
 }
 
 /**
+ * True if a pack must not SURFACE in a content enumeration (pack list, search, creature index).
+ * That is the SRD packs — plus `dnd5e.effects`, which `isSrdPack` deliberately exempts so the
+ * effect-uuid resolver (src/page/dnd5e/effect-refs.ts) can pull from it. The effects pack is a
+ * MECHANICAL source reached by name through that resolver, never a content source a caller should
+ * browse or search: leaving it in enumeration puts ~100 ActiveEffect documents into every
+ * list-compendium-packs / search result budget.
+ */
+export function isHiddenFromEnumeration(packId: string): boolean {
+  return isSrdPack(packId) || isMechanicalPack(packId);
+}
+
+/**
  * Filter a list of compendium packs down to the ones VISIBLE for authoring — i.e. everything
  * except the SRD (`dnd5e.*`) packs, which are never a source (design.md §2.3) and must not even
- * surface in lookups. This is the chokepoint every enumeration site routes through, so the deny
- * list stays single-source. `getId` extracts the pack id from whatever shape the caller holds
- * (a Foundry pack exposes `metadata.id`; the Node tool holds `{ id }`).
+ * surface in lookups, and the mechanical `dnd5e.effects` pack (see `isHiddenFromEnumeration`).
+ * This is the chokepoint every enumeration site routes through, so the deny list stays
+ * single-source. `getId` extracts the pack id from whatever shape the caller holds (a Foundry pack
+ * exposes `metadata.id`; the Node tool holds `{ id }`).
  */
 export function excludeSrdPacks<T>(packs: readonly T[], getId: (pack: T) => string): T[] {
-  return packs.filter(pack => !isSrdPack(getId(pack)));
+  return packs.filter(pack => !isHiddenFromEnumeration(getId(pack)));
 }
 
 /**

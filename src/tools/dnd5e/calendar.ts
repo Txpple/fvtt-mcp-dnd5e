@@ -95,7 +95,7 @@ export class DnD5eCalendarTool {
       `**Calendar:** ${c?.calendarName ?? c?.calendar ?? '?'} (\`${c?.calendar ?? '?'}\`) — ${c?.enabled ? 'enabled' : 'DISABLED (HUD + calendar recovery off; enable with configure-dnd5e-settings calendarEnabled)'}`,
       `- **Now:** ${stamp(c)}`,
       `- **Components:** year ${c?.year}, month ${c?.month?.number} (${c?.month?.name ?? '?'}), day ${c?.day}${c?.weekday ? ` (${c.weekday})` : ''}, ${c?.hour}:${String(c?.minute ?? 0).padStart(2, '0')}:${String(c?.second ?? 0).padStart(2, '0')} · worldTime ${c?.worldTime} s`,
-      `- **Daily recovery:** ${c?.dailyRecovery === '' ? 'automatic' : (c?.dailyRecovery ?? '?')}`,
+      `- **Daily recovery:** ${c?.dailyRecovery === 'auto' || c?.dailyRecovery === '' ? 'automatic' : (c?.dailyRecovery ?? '?')}`,
       ...(months ? [`- **Months:** ${months}`] : []),
     ].join('\n');
   }

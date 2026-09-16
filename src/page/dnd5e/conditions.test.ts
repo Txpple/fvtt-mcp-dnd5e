@@ -7,7 +7,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { collectStatusIds, readExhaustionLevel, resolveExhaustionLevel } from './conditions.js';
+import {
+  canonicalStatusId,
+  collectStatusIds,
+  readExhaustionLevel,
+  resolveExhaustionLevel,
+} from './conditions.js';
 
 describe('collectStatusIds', () => {
   it('reads the dnd5e 6.0 object form of CONFIG.statusEffects', () => {
@@ -46,6 +51,39 @@ describe('resolveExhaustionLevel', () => {
   it('defaults to 1 when applying and 0 when removing', () => {
     expect(resolveExhaustionLevel(undefined, true)).toBe(1);
     expect(resolveExhaustionLevel(undefined, false)).toBe(0);
+  });
+
+  it('a REMOVE always resolves to 0, even with an explicit level alongside it', () => {
+    // active:false + exhaustionLevel used to resolve to the LEVEL and silently re-apply it.
+    expect(resolveExhaustionLevel(4, false)).toBe(0);
+    expect(resolveExhaustionLevel(1, false)).toBe(0);
+    expect(resolveExhaustionLevel(0, false)).toBe(0);
+  });
+});
+
+describe('canonicalStatusId', () => {
+  const ids = new Set([
+    'blinded',
+    'exhaustion',
+    'coverHalf',
+    'coverThreeQuarters',
+    'coverTotal',
+    'heavilyEncumbered',
+  ]);
+
+  it('resolves dnd5e 6.0 camelCase statuses whatever case the caller used', () => {
+    expect(canonicalStatusId('coverHalf', ids)).toBe('coverHalf');
+    expect(canonicalStatusId('coverhalf', ids)).toBe('coverHalf');
+    expect(canonicalStatusId('COVERTOTAL', ids)).toBe('coverTotal');
+    expect(canonicalStatusId('  coverThreeQuarters  ', ids)).toBe('coverThreeQuarters');
+    expect(canonicalStatusId('heavilyencumbered', ids)).toBe('heavilyEncumbered');
+  });
+
+  it('still resolves the plain lower-case ids and rejects unknowns', () => {
+    expect(canonicalStatusId('Blinded', ids)).toBe('blinded');
+    expect(canonicalStatusId('exhaustion', ids)).toBe('exhaustion');
+    expect(canonicalStatusId('confuddled', ids)).toBeNull();
+    expect(canonicalStatusId('   ', ids)).toBeNull();
   });
 });
 

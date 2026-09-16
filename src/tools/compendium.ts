@@ -7,7 +7,7 @@ import {
   getCreatureType,
   type GameSystem,
 } from '../utils/system-detection.js';
-import { assertNoSrdPacks, isSrdPack } from '../utils/compendium-sources.js';
+import { assertNoSrdPacks, isHiddenFromEnumeration } from '../utils/compendium-sources.js';
 import { toInputSchema } from '../utils/schema.js';
 
 // Single source of truth for each tool's input contract: the handlers parse with these schemas
@@ -403,7 +403,7 @@ export class CompendiumTools {
       // Enforced backstop to the page-side exclusion: an SRD (`dnd5e.*`) hit is never a result
       // (design.md §2.3). The page already drops SRD packs before indexing; we re-drop here so the
       // contract holds even if a pack slips past that filter, and counts reflect only book hits.
-      const visibleResults = results.filter((item: any) => !isSrdPack(item?.pack));
+      const visibleResults = results.filter((item: any) => !isHiddenFromEnumeration(item?.pack));
 
       // Limit results
       const limitedResults = visibleResults.slice(0, limit);
@@ -529,7 +529,7 @@ export class CompendiumTools {
 
       // Enforced backstop to the engine's by-uuid SRD exclusion (design.md §2.3); see the spell facade.
       const list: any[] = Array.isArray(hits) ? hits : [];
-      const results = list.filter(hit => !isSrdPack(hit?.pack));
+      const results = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
 
       return {
         documentType: 'creature',
@@ -556,9 +556,11 @@ export class CompendiumTools {
       const rawPacks = await this.foundry.call('getAvailablePacks');
 
       // Enforced backstop to the page-side exclusion: SRD (`dnd5e.*`) packs are not visible in
-      // lookups (design.md §2.3). The page already omits them; re-drop here so the contract holds,
-      // and so `availableTypes` below is derived only from the visible (book) packs.
-      const packs = rawPacks.filter((pack: any) => !isSrdPack(pack?.id));
+      // lookups (design.md §2.3), and neither is the mechanical `dnd5e.effects` pack — it is
+      // reached by name through the effect-uuid resolver, never browsed. The page already omits
+      // them; re-drop here so the contract holds, and so `availableTypes` below is derived only
+      // from the visible (book) packs.
+      const packs = rawPacks.filter((pack: any) => !isHiddenFromEnumeration(pack?.id));
 
       // Filter by type if specified
       const filteredPacks = type ? packs.filter((pack: any) => pack.type === type) : packs;
@@ -622,7 +624,7 @@ export class CompendiumTools {
       // (design.md §2.3). The engine already drops SRD packs; re-drop here so the contract holds
       // (and counts stay book-only) even if one slips past.
       const list: any[] = Array.isArray(hits) ? hits : [];
-      const results = list.filter(hit => !isSrdPack(hit?.pack));
+      const results = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
 
       return {
         documentType: 'spell',
@@ -676,7 +678,7 @@ export class CompendiumTools {
 
       // Enforced backstop to the engine's by-uuid SRD exclusion (design.md §2.3); see the spell facade.
       const list: any[] = Array.isArray(hits) ? hits : [];
-      const results = list.filter(hit => !isSrdPack(hit?.pack));
+      const results = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
 
       return {
         documentType: params.documentType,

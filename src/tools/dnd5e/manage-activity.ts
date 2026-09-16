@@ -328,8 +328,46 @@ const ManageActivitySchema = z.object({
     .optional()
     .describe(
       "Duration OVERRIDE for the activity (sets duration.override so it beats the item's). dnd5e 6.0: " +
-        'effects the activity applies inherit it, including `expiry` — e.g. {value: 1, units: "minute"} ' +
-        'or {expiry: "targetEnd"} for "until the end of the target\'s next turn".'
+        'the effects this activity applies (see `appliesEffects`) INHERIT this duration, including ' +
+        '`expiry` — they carry no duration of their own. E.g. {value: 1, units: "minute"} for a ' +
+        '1-minute effect, or {expiry: "targetEnd"} for "until the end of the target\'s next turn".'
+    ),
+
+  // applied effects (add + edit) — dnd5e 6.0 activity.effects[] (AppliedEffectField)
+  appliesEffects: z
+    .array(
+      z.object({
+        ref: z
+          .string()
+          .min(1)
+          .describe(
+            'The effect: a NAME of an effect ON THIS ITEM (author it with manage-effect first — it ' +
+              'persists by id), a stock dnd5e.effects name ("Poisoned", "Restrained", "Prone"), an ' +
+              'ActiveEffect uuid, an Item uuid + "#<effect name>" (a premium-pack spell\'s effect), ' +
+              'or "<world item>#<effect>". Resolved and echoed back.'
+          ),
+        onSave: z
+          .boolean()
+          .optional()
+          .describe(
+            'SAVE activities only: does the effect still apply on a SUCCESSFUL save? Default false.'
+          ),
+        level: z
+          .object({
+            min: z.number().int().min(0).optional(),
+            max: z.number().int().min(0).optional(),
+          })
+          .optional()
+          .describe('Only applied when the cast / item level is within [min, max] (upcast tiers).'),
+      })
+    )
+    .optional()
+    .describe(
+      'dnd5e 6.0: the ActiveEffects this activity APPLIES to its targets (activity.effects[]). The ' +
+        'effects inherit the activity `duration` (including its `expiry`) — do not give them one of ' +
+        'their own. E.g. a save activity that poisons on a failed save: appliesEffects ' +
+        '[{ref: "Poisoned", onSave: false}] + duration {value: 1, units: "minute"}. On edit this ' +
+        'REPLACES the list. Not for a transform activity — its effects[] ARE its `forms`.'
     ),
 
   // area (add + edit) — a measured template + who it affects; behaviors ride on the template
@@ -434,6 +472,38 @@ const ManageActivitySchema = z.object({
     ),
 });
 
+/**
+ * Tool-side names of the typed mechanics `edit` cannot apply (the page's edit branch only writes
+ * name / duration / template / affects / behaviors / effects / patch). Mirrors the page's
+ * EDIT_UNSUPPORTED_ACTIVITY_KEYS so the refusal lands before the bridge call.
+ */
+const EDIT_UNSUPPORTED_ARGS = [
+  'activationType',
+  'damageParts',
+  'attackType',
+  'attackBonus',
+  'ability',
+  'includeBase',
+  'saveAbility',
+  'saveDC',
+  'onSave',
+  'healAmount',
+  'checkAbility',
+  'checkDC',
+  'skills',
+  'spellUuid',
+  'castLevel',
+  'charges',
+  'recoveryPeriod',
+  'teleportDistance',
+  'transformMode',
+  'transformPreset',
+  'formless',
+  'profiles',
+  'forms',
+  'transformSettings',
+] as const;
+
 export interface DnD5eManageActivityToolOptions {
   foundry: FoundryBridge;
   logger: Logger;
@@ -459,9 +529,13 @@ export class DnD5eManageActivityTool {
           '(action="add", type="utility", name="Multiattack"), a heal, an ability-check, a ' +
           'saving-throw activity, OR a spell-casting item (action="add", type="cast", spellUuid=…, ' +
           'charges=…, saveDC/attackBonus=… to pin a fixed challenge) — the cast LINKS a real ' +
-          'compendium spell so its measured template + save/attack fire for free. Use action="list" ' +
-          '(or get-actor-entity) to find activityIds, then edit/remove by id; edit takes a `patch` of ' +
-          'dot-paths relative to the activity. Authoring only — it does not run combat.',
+          'compendium spell so its measured template + save/attack fire for free. `appliesEffects` ' +
+          'puts real ActiveEffects on the targets (dnd5e 6.0) — e.g. [{ref:"Poisoned", onSave:false}] ' +
+          'on a save activity; they inherit the activity `duration`/`expiry`. Use action="list" ' +
+          '(or get-actor-entity) to find activityIds, then edit/remove by id. EDIT changes only name, ' +
+          'duration, template, affects, behaviors and appliesEffects — every other field goes through ' +
+          '`patch` (dot-paths relative to the activity, e.g. {"attack.bonus":"3"}) or a remove + add. ' +
+          'Authoring only — it does not run combat.',
         inputSchema: toInputSchema(ManageActivitySchema),
       },
     ];
@@ -532,6 +606,21 @@ export class DnD5eManageActivityTool {
     if ((parsed.action === 'edit' || parsed.action === 'remove') && !parsed.activityId) {
       throw new FormattedToolError(`action "${parsed.action}" requires \`activityId\`.`);
     }
+    if (parsed.action === 'edit') {
+      // edit applies name / duration / template / affects / behaviors / appliesEffects / patch — a
+      // typed mechanic passed here used to be forwarded, dropped, and reported as a success.
+      const offenders = EDIT_UNSUPPORTED_ARGS.filter(
+        k => (parsed as any)[k] !== undefined && (parsed as any)[k] !== null
+      );
+      if (offenders.length > 0) {
+        throw new FormattedToolError(
+          `action "edit" cannot change ${offenders.join(', ')}. Edit supports name, duration, ` +
+            'template, affects, behaviors and appliesEffects; change anything else with `patch` ' +
+            '(dot-paths relative to the activity root, e.g. {"attack.bonus":"3"}, ' +
+            '{"save.dc.formula":"16"}, {"damage.onSave":"half"}), or remove the activity and add it again.'
+        );
+      }
+    }
 
     await assertDnd5e(this.foundry, this.logger, 'manage-activity');
 
@@ -569,6 +658,8 @@ export class DnD5eManageActivityTool {
       template: parsed.template,
       affects: parsed.affects,
       behaviors: parsed.behaviors,
+      // dnd5e 6.0 activity.effects[] — the page resolves each ref to an on-item id or a uuid
+      appliesEffects: parsed.appliesEffects,
       // teleport / transform (dnd5e 6.0)
       teleportDistance: parsed.teleportDistance,
       transformMode: parsed.transformMode,

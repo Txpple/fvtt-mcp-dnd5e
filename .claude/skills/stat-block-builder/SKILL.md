@@ -214,7 +214,8 @@ unknown Filter operator, a `roll.*` key in the wrong place); you choose the mode
   - `dnd5e.minimum` / `dnd5e.maximum` — a deterministic d20 floor / ceiling (`"10"`, `"@prof"`).
 - **Narrow a rule with a CHANGE condition** (`changes[].conditions`, a Filter) — the only place the
   `roll.*` keys exist: `roll.ability` (`str` …), `roll.skill` (`his`, `med` …), `roll.type` (`attack`,
-  `skill`, `save` …), `roll.attack.type` (`melee` | `ranged`), `roll.attack.mode` (`thrown`,
+  `skill`, `tool`, `initiative`; a saving throw reports `ability` / `death` / `concentration`, never
+  `save` — the change KEY already scopes it), `roll.attack.type` (`melee` | `ranged`), `roll.attack.mode` (`thrown`,
   `offhand` …), `roll.attack.classification` (`weapon` | `spell` | `unarmed`), `roll.damage.type`,
   `roll.proficient`, `roll.tool`. The worked recipes:
   - ranged attacks never roll below 10 → `{key:"attack", type:"dnd5e.minimum", value:"10",
@@ -240,13 +241,18 @@ unknown Filter operator, a `roll.*` key in the wrong place); you choose the mode
 - **Timers = `duration.expiry`.** "Until the end of the target's next turn" → `duration: {expiry:
   "targetEnd"}`; "until the start of its next turn" → `sourceStart`; "until it finishes a short/long
   rest" → `shortRest` / `longRest` — these need no value. A core combat event (`turnEnd`, `roundEnd`,
-  `combatEnd` …) fires only once a duration has ALSO elapsed, so pair it: `{value: 1, units:
-  "rounds", expiry: "turnEnd"}`. On an activity, `manage-activity` `duration: {…, expiry}` does the
-  same and the effects it applies inherit it ("Frightful Presence: frightened until the end of the
-  target's next turn").
+  `combatEnd` …) with no value expires at the FIRST matching event (`{expiry: "turnEnd"}` = at the end
+  of the next turn); with a value, at the first matching event AFTER the value elapses (`{value: 1,
+  units: "rounds", expiry: "turnEnd"}`). On an activity, `manage-activity` `duration: {…, expiry}` does the
+  same and the effects it applies inherit it. **Attach the applied effect with `appliesEffects`**:
+  Frightful Presence = a save activity (`saveAbility: "wis"`, `saveDC`) with `appliesEffects:
+  [{ref: "Frightened", onSave: false}]` (the stock `dnd5e.effects` condition) and `duration:
+  {value: 1, units: "minutes"}` — the target is frightened on a failed save for the activity's
+  duration. `ref` names an effect on the ITEM (a form, an authored buff) or a stock / world effect.
 - **`replacement: "origin"`** on a change freezes `@attribute` strings to the APPLYING actor's numbers
   (a curse that deals the caster's `@abilities.cha.mod`); `"target"` uses the receiver's.
-- **`magical: true`** marks the effect as magical (dispellable / suppressed in an antimagic field).
+- **`magical: true`** marks the effect as magical (the flag other automation reads — e.g. an
+  antimagic-field or dispel handler; dnd5e itself only records it).
 - **Read it back.** `manage-effect` `list` and `get-actor` show each effect's `type`, `magical`,
   `conditions` (parsed) and every rules change as a sentence ("+1d4 to attack rolls when
   roll.attack.type = ranged"). `content-audit` flags a dead rule (a rules type on a data path, or a core
@@ -296,15 +302,16 @@ mode by how the block reads:
   `"polymorph"` replaces everything, `"polymorphSelf"` changes only the appearance.
 - **"Any beast of CR ½ or lower"** → `transformMode: "cr"`, `profiles: [{cr: 0.5, creatureTypes:
   ["beast"], restrictMovement: ["fly"]}]`; the player picks from the compendium browser at use time.
-  Level-gate tiers with `level: {min, max}` (2024 Wild Shape: CR ¼ no fly/swim to L3, CR ½ no fly
-  L4–7, CR 1 from L8) — the transform level is the creature's level, or the class identifier's.
+  Level-gate tiers with `level: {min, max}` (2024 Wild Shape: CR ¼ no fly to L3, CR ½ no fly
+  L4–7, CR 1 from L8 — the swim restriction was 2014) — the transform level is the creature's level, or the class identifier's.
 - **A lycanthrope's Humanoid / Hybrid / Beast forms, or Disguise Self** — the forms are the ITEM's
   OWN effects, not other actors → author each form as an effect on the trait item first
   (`manage-effect` with `actorIdentifier` + `itemIdentifier`, `transfer: false`, its changes ARE
   the form: AC, speed, size, senses, a `dnd5e.bonus` damage rule for the beast's bite), then
   `transformMode: "form"`, `forms: ["Humanoid Form", "Hybrid Form", "Wolf Form"]`, `formless:
   true` when "no form" is a valid state. Bites and claws that only exist in a form stay as attack
-  activities on the same item (gate them with an effect condition on `statuses`/the form if needed).
+  activities on the same item — there is no mechanism to hide an activity per form; name them
+  ("Bite (Wolf Form)") so the player picks the right one.
 - **Beyond the presets:** `transformSettings` (cr / direct modes) customizes what carries over —
   `keep` (physical / mental / saves / skills / gearProf / languages / class / feats / items /
   spells / bio / type / hp / tempHP / resistances / vision / self), `merge` (saves / skills),

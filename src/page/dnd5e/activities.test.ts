@@ -9,9 +9,11 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  assertEditableActivityFields,
   behaviorId,
   buildActivity,
   buildActivityBehavior,
+  buildAppliedEffect,
   damagePartToActivity,
   normalizeActivityDuration,
   normalizeActivityTarget,
@@ -654,5 +656,132 @@ describe("buildActivity('transform') — custom settings (transform.customize)",
         transformSettings: { keep: ['hp'] },
       })
     ).toThrow(/not available in Select-Form mode/);
+  });
+});
+
+// The wildshape preset's own settings, as the page resolves them off CONFIG (Sets -> arrays).
+// dnd5e 6.0.1 config.mjs `transformation.presets.wildshape.settings`.
+const WILDSHAPE_BASE = {
+  effects: ['otherOrigin', 'origin', 'feat', 'spell', 'class', 'background'],
+  keep: ['bio', 'class', 'feats', 'hp', 'languages', 'mental', 'tempHP', 'type'],
+  merge: ['saves', 'skills'],
+  minimumAC: '(13 + @abilities.wis.mod) * sign(@subclasses.moon.levels)',
+  spellLists: ['subclass:moon'],
+  tempFormula: 'max(@classes.druid.levels, @subclasses.moon.levels * 3)',
+};
+
+describe("buildActivity('transform') — custom settings SEED from the preset", () => {
+  it('inherits the preset settings a caller did not override, and REPLACES the ones it did', () => {
+    const act = buildActivity('transform', {
+      id: 'A',
+      transformMode: 'cr',
+      transformPreset: 'wildshape',
+      profiles: [{ cr: 1 }],
+      transformPresetSettings: WILDSHAPE_BASE,
+      transformSettings: { keep: ['mental', 'hp', 'resistances'] },
+    });
+    expect(act.transform.customize).toBe(true);
+    // the overridden category is REPLACED wholesale (mergeObject semantics on arrays)…
+    expect(act.settings.keep).toEqual(['mental', 'hp', 'resistances']);
+    // …and every other preset setting survives
+    expect(act.settings.minimumAC).toBe(WILDSHAPE_BASE.minimumAC);
+    expect(act.settings.tempFormula).toBe(WILDSHAPE_BASE.tempFormula);
+    expect(act.settings.spellLists).toEqual(['subclass:moon']);
+    expect(act.settings.merge).toEqual(['saves', 'skills']);
+    expect(act.settings.effects).toEqual(WILDSHAPE_BASE.effects);
+    expect(act.settings.preset).toBe('wildshape');
+  });
+
+  it('a caller field beats the base; with no preset the base is empty', () => {
+    const act = buildActivity('transform', {
+      id: 'A',
+      transformPreset: 'wildshape',
+      profiles: [{ cr: 1 }],
+      transformPresetSettings: WILDSHAPE_BASE,
+      transformSettings: { tempFormula: '@classes.druid.levels', spellLists: [] },
+    });
+    expect(act.settings.tempFormula).toBe('@classes.druid.levels');
+    expect(act.settings.spellLists).toEqual([]);
+    expect(act.settings.keep).toEqual(WILDSHAPE_BASE.keep);
+
+    const bare = buildActivity('transform', {
+      id: 'A',
+      profiles: [{ cr: 1 }],
+      transformSettings: { keep: ['hp'] },
+    });
+    expect(bare.settings).toEqual({ preset: null, keep: ['hp'] });
+  });
+});
+
+describe('buildAppliedEffect + buildActivity appliesEffects (dnd5e 6.0 activity.effects[])', () => {
+  it('persists a uuid effect with a level band, and an on-item effect by _id', () => {
+    expect(
+      buildAppliedEffect(
+        { uuid: 'Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa', level: { min: 3 } },
+        'damage'
+      )
+    ).toEqual({
+      uuid: 'Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa',
+      level: { min: 3 },
+    });
+    expect(buildAppliedEffect({ _id: 'effectid00000001' }, 'utility')).toEqual({
+      _id: 'effectid00000001',
+      level: {},
+    });
+  });
+
+  it('carries onSave on a save activity only, and needs an identity', () => {
+    const act = buildActivity('save', {
+      id: 'A',
+      saveAbility: 'con',
+      saveDC: 13,
+      duration: { value: 1, units: 'minute' },
+      appliedEffects: [
+        { uuid: 'Compendium.dnd5e.effects.ActiveEffect.bbbbbbbbbbbbbbbb', onSave: false },
+      ],
+    });
+    expect(act.effects).toEqual([
+      { uuid: 'Compendium.dnd5e.effects.ActiveEffect.bbbbbbbbbbbbbbbb', level: {}, onSave: false },
+    ]);
+    // the effect carries NO duration of its own — it inherits the activity's
+    expect(act.duration).toMatchObject({ value: '1', units: 'minute', override: true });
+    expect(() =>
+      buildActivity('utility', { id: 'A', appliedEffects: [{ uuid: 'x', onSave: true }] })
+    ).toThrow(/onSave only exists on a SAVE activity/);
+    expect(() => buildAppliedEffect({}, 'save')).toThrow(/must resolve to an effect/);
+  });
+
+  it('refuses appliesEffects on a transform (its effects[] ARE the forms)', () => {
+    expect(() =>
+      buildActivity('transform', {
+        id: 'A',
+        profiles: [{ cr: 1 }],
+        appliedEffects: [{ uuid: 'Compendium.dnd5e.effects.ActiveEffect.cccccccccccccccc' }],
+      })
+    ).toThrow(/ARE its forms/);
+  });
+});
+
+describe('assertEditableActivityFields', () => {
+  it('passes the fields edit understands and names the ones it does not', () => {
+    expect(() => assertEditableActivityFields(undefined)).not.toThrow();
+    expect(() =>
+      assertEditableActivityFields({
+        name: 'Web',
+        duration: { units: 'minute', value: 1 },
+        template: { type: 'cube', size: 20 },
+        affects: { type: 'creature' },
+        behaviors: [{ type: 'difficultTerrain' }],
+        appliesEffects: [{ ref: 'Restrained' }],
+      })
+    ).not.toThrow();
+    expect(() => assertEditableActivityFields({ saveDC: 15, damageParts: [] })).toThrow(
+      /cannot change damageParts, saveDC/
+    );
+    expect(() => assertEditableActivityFields({ attackBonus: 3 })).toThrow(/`patch`/);
+    // an undefined / null field is not an "offender" (the tool forwards the whole shape)
+    expect(() =>
+      assertEditableActivityFields({ saveDC: undefined, profiles: null, name: 'x' })
+    ).not.toThrow();
   });
 });

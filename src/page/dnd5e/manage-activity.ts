@@ -19,9 +19,12 @@ import {
 } from '../_shared.js';
 import {
   type ActivityBehaviorOpts,
+  type AppliedEffectOpts,
+  assertEditableActivityFields,
   behaviorId,
   buildActivity,
   buildActivityBehavior,
+  buildAppliedEffect,
   normalizeActivityDuration,
   normalizeActivityTarget,
 } from './activities.js';
@@ -88,6 +91,71 @@ function resolveFormEffects(item: any, forms: unknown): string[] {
     }
     return hit.id;
   });
+}
+
+/** An effect the page resolved for the report (ResolvedEffect, plus the on-item `item` source). */
+type ReportedEffect = { ref: string; uuid: string; name: string; source: string };
+
+/**
+ * Read a transformation preset's OWN settings off CONFIG so a customised transform inherits them
+ * (dnd5e stores the sets as `Set`s in config.mjs — flatten to arrays for the persisted object).
+ * Returns {} when the preset is unknown / absent.
+ */
+function transformPresetSettings(preset: unknown): Record<string, unknown> {
+  const key = String(preset ?? '').trim();
+  if (!key) return {};
+  const settings = (globalThis as any).CONFIG?.DND5E?.transformation?.presets?.[key]?.settings;
+  if (!settings || typeof settings !== 'object') return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(settings)) {
+    out[k] = v instanceof Set ? Array.from(v) : Array.isArray(v) ? [...v] : v;
+  }
+  return out;
+}
+
+/**
+ * Resolve an authored `appliesEffects[]` entry to the AppliedEffectField identity: an effect that
+ * lives ON THIS ITEM (by id or name) persists as `_id`; anything else goes through the shared
+ * effect-ref resolver (stock dnd5e.effects pack / a world item / a uuid) and persists as `uuid`.
+ */
+async function resolveAppliedEffects(
+  item: any,
+  entries: any[] | undefined
+): Promise<{ opts: AppliedEffectOpts[]; resolved: ReportedEffect[]; warnings: string[] }> {
+  const opts: AppliedEffectOpts[] = [];
+  const resolved: ReportedEffect[] = [];
+  const warnings: string[] = [];
+  const itemEffects: any[] = Array.from(item?.effects ?? []);
+  for (const e of entries ?? []) {
+    const ref = String(e?.ref ?? '').trim();
+    if (!ref) {
+      throw new Error(
+        'each appliesEffects entry needs a `ref` — an effect NAME on this item, a stock effect name ' +
+          '("Poisoned"), an ActiveEffect uuid, or an Item uuid + "#<effect name>".'
+      );
+    }
+    const rest = {
+      ...(typeof e?.onSave === 'boolean' ? { onSave: e.onSave } : {}),
+      ...(e?.level ? { level: e.level } : {}),
+    };
+    const onItem = itemEffects.find(
+      x =>
+        x.id === ref ||
+        String(x.name ?? '')
+          .trim()
+          .toLowerCase() === ref.toLowerCase()
+    );
+    if (onItem) {
+      opts.push({ _id: onItem.id, ...rest });
+      resolved.push({ ref, uuid: onItem.uuid, name: onItem.name, source: 'item' });
+      continue;
+    }
+    const r = await resolveEffectRefs([ref]);
+    opts.push({ uuid: r.uuids[0], ...rest });
+    resolved.push(...r.resolved);
+    warnings.push(...r.warnings);
+  }
+  return { opts, resolved, warnings };
 }
 
 /**
@@ -159,35 +227,84 @@ export async function manageActivity(params: {
   const base = { success: true, item: itemRef, ...(actorRef ? { actor: actorRef } : {}) };
 
   switch (action) {
-    case 'list':
+    case 'list': {
+      // Resolve on-item effect ids to names so applied effects / transform forms read as words.
+      const effectNames = new Map<string, string>();
+      for (const e of Array.from(item?.effects ?? []) as any[]) {
+        effectNames.set(e.id, e.name);
+      }
       return {
         ...base,
-        activities: Object.values(activities).map((a: any) => ({
-          id: a._id,
-          type: a.type,
-          name: a.name ?? '',
-          ...(a.target?.template?.type
-            ? {
-                template: {
-                  type: a.target.template.type,
-                  size: a.target.template.size,
-                  units: a.target.template.units,
-                },
-              }
-            : {}),
-          ...(Array.isArray(a.behaviors) && a.behaviors.length > 0
-            ? {
-                behaviors: a.behaviors.map((b: any) => ({
-                  type: b.type,
-                  ...(b.name ? { name: b.name } : {}),
-                  ...(b.config?.effects?.length ? { effects: b.config.effects } : {}),
-                  ...(b.config?.types?.length ? { types: b.config.types } : {}),
-                  ...(b.config?.sizes?.length ? { sizes: b.config.sizes } : {}),
-                })),
-              }
-            : {}),
-        })),
+        activities: Object.values(activities).map((a: any) => {
+          // activity.effects[] (AppliedEffectField): the effects the activity APPLIES — or, on a
+          // Select-Form transform, its forms (the item's own effects, referenced by _id).
+          const applied = (Array.isArray(a.effects) ? a.effects : [])
+            .filter((e: any) => e && (e._id || e.uuid))
+            .map((e: any) => ({
+              ...(e._id ? { _id: e._id } : {}),
+              ...(e._id && effectNames.has(e._id) ? { name: effectNames.get(e._id) } : {}),
+              ...(e.uuid ? { uuid: e.uuid } : {}),
+              ...(typeof e.onSave === 'boolean' ? { onSave: e.onSave } : {}),
+              ...(e.level?.min !== undefined && e.level?.min !== null
+                ? { level: e.level }
+                : e.level?.max !== undefined && e.level?.max !== null
+                  ? { level: e.level }
+                  : {}),
+            }));
+          return {
+            id: a._id,
+            type: a.type,
+            name: a.name ?? '',
+            ...(a.target?.template?.type
+              ? {
+                  template: {
+                    type: a.target.template.type,
+                    size: a.target.template.size,
+                    units: a.target.template.units,
+                  },
+                }
+              : {}),
+            ...(a.type === 'transform'
+              ? {
+                  transform: {
+                    mode: a.transform?.mode ?? '',
+                    preset: a.transform?.preset ?? '',
+                    customize: !!a.transform?.customize,
+                  },
+                  ...(Array.isArray(a.profiles) && a.profiles.length > 0
+                    ? {
+                        profiles: a.profiles.map((p: any) => ({
+                          name: p.name ?? '',
+                          cr: p.cr ?? '',
+                          uuid: p.uuid ?? null,
+                          sizes: p.sizes ?? [],
+                          types: p.types ?? [],
+                        })),
+                      }
+                    : {}),
+                }
+              : {}),
+            ...(applied.length > 0 ? { effects: applied } : {}),
+            ...(Array.isArray(a.behaviors) && a.behaviors.length > 0
+              ? {
+                  behaviors: a.behaviors.map((b: any) => ({
+                    type: b.type,
+                    ...(b.name ? { name: b.name } : {}),
+                    ...(b.config?.effects?.length ? { effects: b.config.effects } : {}),
+                    // `config.types` means different things per behavior type — label it.
+                    ...(b.config?.types?.length
+                      ? b.type === 'difficultTerrain'
+                        ? { terrainTypes: b.config.types }
+                        : { creatureTypes: b.config.types }
+                      : {}),
+                    ...(b.config?.sizes?.length ? { sizes: b.config.sizes } : {}),
+                  })),
+                }
+              : {}),
+          };
+        }),
       };
+    }
 
     case 'add': {
       const type = params.activity?.type;
@@ -231,6 +348,18 @@ export async function manageActivity(params: {
           rest.formEffectIds = resolveFormEffects(item, rest.forms);
           rest.forms = undefined;
         }
+        // Custom settings START from the preset's own settings (dnd5e's own sheet seeds them the
+        // same way) — otherwise a single override would drop the preset's minimumAC / tempFormula /
+        // spellLists / keep / merge / effects.
+        if (rest.transformSettings) {
+          rest.transformPresetSettings = transformPresetSettings(rest.transformPreset);
+        }
+      }
+      // Applied effects (activity.effects[]) — refs → an on-item _id or a compendium/world uuid.
+      const appliesEffects = await resolveAppliedEffects(item, rest.appliesEffects);
+      if (rest.appliesEffects !== undefined) {
+        rest.appliedEffects = appliesEffects.opts;
+        rest.appliesEffects = undefined;
       }
       const act = buildActivity(type, { id, ...rest });
       await applyUpdate({ [`system.activities.${id}`]: act });
@@ -248,8 +377,12 @@ export async function manageActivity(params: {
         type,
         ...(type === 'cast' ? { spell: rest.spellUuid } : {}),
         ...(cachedSpell ? { cachedSpell } : {}),
-        ...(behaviors.resolved.length > 0 ? { effects: behaviors.resolved } : {}),
-        ...(behaviors.warnings.length > 0 ? { warnings: behaviors.warnings } : {}),
+        ...(behaviors.resolved.length + appliesEffects.resolved.length > 0
+          ? { effects: [...behaviors.resolved, ...appliesEffects.resolved] }
+          : {}),
+        ...(behaviors.warnings.length + appliesEffects.warnings.length > 0
+          ? { warnings: [...behaviors.warnings, ...appliesEffects.warnings] }
+          : {}),
         ...(transformActors.length > 0 ? { transformActors } : {}),
       };
     }
@@ -258,6 +391,9 @@ export async function manageActivity(params: {
       const id = params.activityId;
       if (!id) throw new Error('activityId is required to edit an activity.');
       if (!activities[id]) throw new Error(`Activity "${id}" not found on item "${item.name}".`);
+      // Refuse the typed fields this branch cannot apply rather than reporting a silent success.
+      assertEditableActivityFields(params.activity);
+      const srcActivity = activities[id];
       const data: Record<string, any> = {};
       if (typeof params.activity?.name === 'string') {
         data[`system.activities.${id}.name`] = params.activity.name;
@@ -282,8 +418,12 @@ export async function manageActivity(params: {
       // behaviors REPLACE the list (like an effect's changes); effects resolved by name first
       const behaviors = await resolveBehaviors(params.activity?.behaviors);
       if (Array.isArray(params.activity?.behaviors)) {
+        // A compendium spell's activity INHERITS the item's target (target.override false), so the
+        // template may live on the item rather than on the activity — Web's cube, say.
         const hasTemplate =
-          target?.template !== undefined || !!activities[id]?.target?.template?.type;
+          target?.template !== undefined ||
+          !!srcActivity?.target?.template?.type ||
+          (!srcActivity?.target?.override && !!toSource(item).system?.target?.template?.type);
         if (behaviors.opts.length > 0 && !hasTemplate) {
           throw new Error(
             'behaviors ride on an AREA TEMPLATE — this activity has none; pass `template` ({type, size}) too.'
@@ -293,22 +433,32 @@ export async function manageActivity(params: {
           buildActivityBehavior(b, behaviorId(id, i))
         );
       }
+      // applied effects REPLACE the list (like behaviors)
+      const appliesEffects = await resolveAppliedEffects(item, params.activity?.appliesEffects);
+      if (Array.isArray(params.activity?.appliesEffects)) {
+        data[`system.activities.${id}.effects`] = appliesEffects.opts.map(e =>
+          buildAppliedEffect(e, srcActivity?.type)
+        );
+      }
       for (const [k, v] of Object.entries(params.patch ?? {})) {
         data[`system.activities.${id}.${k}`] = v;
       }
       if (Object.keys(data).length === 0) {
         throw new Error(
-          'Provide a `patch`, a `duration`, a `template`/`affects`, `behaviors`, and/or activity.name to edit.'
+          'Provide a `patch`, a `duration`, a `template`/`affects`, `behaviors`, `appliesEffects`, ' +
+            'and/or activity.name to edit.'
         );
       }
       await applyUpdate(data);
+      const editResolved = [...behaviors.resolved, ...appliesEffects.resolved];
+      const editWarnings = [...behaviors.warnings, ...appliesEffects.warnings];
       return {
         ...base,
         action: 'edit',
         activityId: id,
         editedKeys: Object.keys(data),
-        ...(behaviors.resolved.length > 0 ? { effects: behaviors.resolved } : {}),
-        ...(behaviors.warnings.length > 0 ? { warnings: behaviors.warnings } : {}),
+        ...(editResolved.length > 0 ? { effects: editResolved } : {}),
+        ...(editWarnings.length > 0 ? { warnings: editWarnings } : {}),
       };
     }
 

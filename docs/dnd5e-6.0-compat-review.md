@@ -1,7 +1,8 @@
 # dnd5e 6.0.1 compatibility review — MCP tools (2026-09-15)
 
 Scope: every tool that reads or writes dnd5e system data, audited against **dnd5e 6.0.1 on Foundry
-14.367** (the prod + sandbox versions since 2026-09-15). Static review first (the sandbox was in use),
+14.367** (the SANDBOX versions since 2026-09-15; prod was restored to Foundry 14.364 / dnd5e 5.3.3 by
+owner decision until the 2.x line is tested — it upgrades after the 2026-09-22 game). Static review first (the sandbox was in use),
 then fixes, then the live smoke on the sandbox — see **Status** below for the outcome.
 
 ## Ground truth used (no memory, no guesswork)
@@ -199,6 +200,10 @@ new core `title` field.
 - Compendium reads via `pack.getDocument()` return migrated documents (prepared shims apply).
 
 ## Status (2026-09-15, same day) — fixed AND smoked on the sandbox; shipped as v1.5.2
+
+> Correction (2026-09-15, review): every live number in this document comes from the **sandbox**
+> (14.367 / 6.0.1). Prod runs 14.364 / 5.3.3 until the owner upgrades it; the 2.x tools refuse to
+> write there (`assertDnd5e` version guard, v2.1.3).
 
 Offline gate `biome · tsc · 1533 tests · build · knip` green. Live on the sandbox (Foundry 14.367 +
 dnd5e 6.0.1, `FOUNDRY_PROFILE=local`): `verify-actor-tooling` 29/29 · `verify-item-tooling` 11/11 ·

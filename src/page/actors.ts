@@ -34,7 +34,7 @@ import {
   SKILL_ABILITY,
 } from './dnd5e/actor-fields.js';
 import { normalizeRarities } from './dnd5e/items.js';
-import { describeRule, parseConditions } from './effect-changes.js';
+import { describeRule, parseConditions, projectDuration } from './effect-changes.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveCreatureIcon, GENERIC_ICON } from './dnd5e/icons.js';
 import {
@@ -432,7 +432,7 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
       };
     }),
     effects: actor.effects.map((effect: any) => {
-      const dur = effect.duration;
+      const duration = projectDuration(effect.duration);
       // Foundry v14: changes live at system.changes (plain data { key, value, type, phase }); the
       // top-level `changes` is only a deprecated shim. Surface them so effects are inspectable
       // from get-actor (the shared sanitizer also preserves changes[].key — see R2). dnd5e 6.0
@@ -467,19 +467,9 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
         ...(conditions ? { conditions } : {}),
         ...(Array.isArray(riders) && riders.length > 0 ? { riderStatuses: riders } : {}),
         ...(changes.length > 0 ? { changes } : {}),
-        ...(dur && typeof dur.value === 'number'
-          ? {
-              duration: {
-                // v14 shape: value + units (+ expiry for turn-based durations)
-                value: dur.value,
-                units: dur.units ?? 'seconds',
-                ...(dur.expiry ? { expiry: dur.expiry } : {}),
-                remaining: dur.remaining,
-              },
-            }
-          : dur?.expiry
-            ? { duration: { expiry: dur.expiry } }
-            : {}),
+        // v14 shape: { value, units, expiry?, remaining? }, or { expiry, remaining? } for a
+        // value-less expiry (which still expires at the first matching event).
+        ...(duration ? { duration } : {}),
       };
     }),
   };
@@ -1891,7 +1881,9 @@ export async function updateActor(params: any): Promise<unknown> {
   }
   if (params.initiative && typeof params.initiative === 'object') {
     if (typeof params.initiative.bonus === 'number') {
-      update['system.attributes.init.bonus'] = String(params.initiative.bonus);
+      // dnd5e 6.0: `attributes.init.bonus` is a GETTER-ONLY shim (common.mjs #BONUS_FIELD_PATHS +
+      // shimBonusData) — a write there is pruned from the source. The real field is init.roll.bonus.
+      update['system.attributes.init.roll.bonus'] = String(params.initiative.bonus);
     }
     if (typeof params.initiative.ability === 'string') {
       update['system.attributes.init.ability'] = params.initiative.ability;
@@ -1930,13 +1922,17 @@ export async function updateActor(params: any): Promise<unknown> {
   }
 
   // --- defenses (Set fields: replace-whole, so add/remove read the live Set first) ---
+  // `supportsCustom` — only a SimpleTraitField (di / dr / dv / ci / languages) carries a `custom`
+  // string. The 6.0.1 npc `details.treasure` and character `traits.weaponProf.mastery` schemas are
+  // { value } / { value, bonus }: a `.custom` write there is pruned, so warn instead of writing it.
   const applySet = (
     path: string,
     current: any,
     field: any,
     validSet: Set<string> | null,
     label: string,
-    name: string
+    name: string,
+    supportsCustom = true
   ) => {
     const values: string[] = Array.isArray(field.values) ? field.values.map(String) : [];
     if (validSet) for (const v of values) warnUnknown(label, v, validSet);
@@ -1950,7 +1946,10 @@ export async function updateActor(params: any): Promise<unknown> {
           ? Array.from(new Set([...cur, ...values]))
           : cur.filter(x => !values.includes(x));
     }
-    if (typeof field.custom === 'string') update[`${path}.custom`] = field.custom;
+    if (typeof field.custom === 'string') {
+      if (supportsCustom) update[`${path}.custom`] = field.custom;
+      else warnings.push(`"${name}" has no custom field in dnd5e 6.0 — "custom" ignored`);
+    }
     applied.push(name);
   };
 
@@ -2045,7 +2044,8 @@ export async function updateActor(params: any): Promise<unknown> {
         normalized,
         weaponIds.size > 0 ? weaponIds : null,
         'weapon kind',
-        'weaponMasteries'
+        'weaponMasteries',
+        false
       );
     }
   }
@@ -2101,7 +2101,8 @@ export async function updateActor(params: any): Promise<unknown> {
       params.treasure,
       null,
       'treasure',
-      'treasure'
+      'treasure',
+      false
     );
   }
 

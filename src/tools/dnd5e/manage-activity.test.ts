@@ -430,3 +430,105 @@ describe('manage-activity — transformSettings (dnd5e 6.0 customize)', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('manage-activity — appliesEffects (dnd5e 6.0 activity.effects[])', () => {
+  it('advertises appliesEffects and forwards it on add and edit', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'add',
+      type: 'save',
+      activityId: 'S1',
+      item: { id: 'i1', name: 'Stinger', type: 'weapon' },
+      effects: [
+        {
+          ref: 'Poisoned',
+          uuid: 'Compendium.dnd5e.effects.ActiveEffect.aaaaaaaaaaaaaaaa',
+          name: 'Poisoned',
+          source: 'dnd5e.effects',
+        },
+      ],
+    });
+    const props = (tool.getToolDefinitions()[0].inputSchema as any).properties;
+    expect(props.appliesEffects).toBeDefined();
+    expect(props.appliesEffects.items.required).toContain('ref');
+    expect(JSON.stringify(props.duration)).toMatch(/inherit/i);
+
+    const res = await tool.handleManageActivity({
+      action: 'add',
+      actorIdentifier: 'Wasp',
+      itemIdentifier: 'Stinger',
+      type: 'save',
+      saveAbility: 'con',
+      saveDC: 13,
+      duration: { value: 1, units: 'minute' },
+      appliesEffects: [{ ref: 'Poisoned', onSave: false }],
+    });
+    const call = calls.find(([n]) => n === 'manageActivity');
+    expect(call?.[1].activity.appliesEffects).toEqual([{ ref: 'Poisoned', onSave: false }]);
+    expect(res.message).toContain('Poisoned');
+
+    const { tool: t2, calls: c2 } = makeTool({
+      success: true,
+      action: 'edit',
+      activityId: 'S1',
+      item: { id: 'i1', name: 'Stinger', type: 'weapon' },
+    });
+    await t2.handleManageActivity({
+      action: 'edit',
+      itemIdentifier: 'Stinger',
+      activityId: 'S1',
+      appliesEffects: [{ ref: 'Restrained', level: { min: 3 } }],
+    });
+    expect(c2.find(([n]) => n === 'manageActivity')?.[1].activity.appliesEffects).toEqual([
+      { ref: 'Restrained', level: { min: 3 } },
+    ]);
+  });
+});
+
+describe('manage-activity — edit refuses the typed fields it cannot apply', () => {
+  it('names the offenders and points at patch, without calling the bridge', async () => {
+    const { tool, calls } = makeTool();
+    await expect(
+      tool.handleManageActivity({
+        action: 'edit',
+        itemIdentifier: 'Claws',
+        activityId: 'A1',
+        saveDC: 16,
+        damageParts: [{ number: 1, denomination: 6, type: 'fire' }],
+      })
+    ).rejects.toThrow(/cannot change damageParts, saveDC/);
+    await expect(
+      tool.handleManageActivity({
+        action: 'edit',
+        itemIdentifier: 'Wild Shape',
+        activityId: 'A1',
+        transformPreset: 'wildshape',
+      })
+    ).rejects.toThrow(/`patch`/);
+    expect(calls.find(([n]) => n === 'manageActivity')).toBeUndefined();
+  });
+
+  it('still allows name / duration / template / affects / behaviors / appliesEffects / patch', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      action: 'edit',
+      activityId: 'A1',
+      item: { id: 'i1', name: 'Web', type: 'feat' },
+    });
+    await tool.handleManageActivity({
+      action: 'edit',
+      itemIdentifier: 'Web',
+      activityId: 'A1',
+      name: 'Webbing',
+      duration: { value: 1, units: 'hour' },
+      template: { type: 'cube', size: 20 },
+      affects: { type: 'creature' },
+      behaviors: [{ type: 'difficultTerrain', terrainTypes: ['web'] }],
+      appliesEffects: [{ ref: 'Restrained' }],
+      patch: { 'save.dc.formula': '13' },
+    });
+    const call = calls.find(([n]) => n === 'manageActivity');
+    expect(call?.[1].activity.name).toBe('Webbing');
+    expect(call?.[1].patch).toEqual({ 'save.dc.formula': '13' });
+  });
+});

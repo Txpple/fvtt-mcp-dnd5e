@@ -18,7 +18,42 @@
 
 import { readDnd5eSettings } from './settings.js';
 
-const SECONDS = { round: 6, minute: 60, hour: 3600, day: 86400 } as const;
+/**
+ * The seconds-per-unit of the ACTIVE calendar. Core `CalendarData.days` carries hoursPerDay /
+ * minutesPerHour / secondsPerMinute (foundry.mjs CalendarData schema) and the stock calendars are
+ * NOT all 24×60×60 — a homebrew / module calendar with a 20-hour day would drift badly under the
+ * hard-coded 86400. A combat round stays 6 s (CONFIG.time.roundTime when the world overrides it):
+ * it is a rules quantity, not a calendar one.
+ */
+export function unitSeconds(
+  cal: any,
+  config: any = (globalThis as any).CONFIG
+): {
+  round: number;
+  minute: number;
+  hour: number;
+  day: number;
+} {
+  const num = (v: unknown, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback;
+  const secondsPerMinute = num(cal?.days?.secondsPerMinute, 60);
+  const minutesPerHour = num(cal?.days?.minutesPerHour, 60);
+  const hoursPerDay = num(cal?.days?.hoursPerDay, 24);
+  const hour = secondsPerMinute * minutesPerHour;
+  return {
+    round: num(config?.time?.roundTime, 6),
+    minute: secondsPerMinute,
+    hour,
+    day: hour * hoursPerDay,
+  };
+}
+
+/** The number of days in month `index` of this calendar, honouring the leap-year variant. */
+export function monthLength(cal: any, index: number, leapYear: boolean): number {
+  const m = cal?.months?.values?.[index];
+  const days = leapYear ? (m?.leapDays ?? m?.days) : m?.days;
+  return typeof days === 'number' && Number.isFinite(days) && days > 0 ? days : 0;
+}
 
 export interface CalendarArgs {
   action: 'read' | 'advance' | 'set';
@@ -62,8 +97,11 @@ export function readCalendar(): Record<string, unknown> {
     enabled: settings.calendarEnabled === true,
     calendar: settings.calendar ?? null,
     calendarName: cal?.name ?? null,
-    dailyRecovery: settings.calendarDailyRecovery ?? '',
+    // 'auto' is how the tool spells calendarConfig.dailyRecovery's unset/blank state — the stored
+    // StringField has choices and therefore blank:false, so "" is not a writable value.
+    dailyRecovery: settings.calendarDailyRecovery ?? 'auto',
     worldTime: game.time.worldTime,
+    leapYear: c.leapYear === true,
     year: (c.year ?? 0) + yearZero,
     month: { index: c.month ?? 0, number: (c.month ?? 0) + 1, name: loc(month?.name) },
     day: (c.dayOfMonth ?? 0) + 1,
@@ -129,11 +167,12 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
   const cal: any = game.time.calendar;
 
   if (action === 'advance') {
+    const unit = unitSeconds(cal);
     const delta =
-      (args.rounds ?? 0) * SECONDS.round +
-      (args.minutes ?? 0) * SECONDS.minute +
-      (args.hours ?? 0) * SECONDS.hour +
-      (args.days ?? 0) * SECONDS.day +
+      (args.rounds ?? 0) * unit.round +
+      (args.minutes ?? 0) * unit.minute +
+      (args.hours ?? 0) * unit.hour +
+      (args.days ?? 0) * unit.day +
       (args.seconds ?? 0);
     if (!Number.isFinite(delta) || delta === 0) {
       throw new Error(
@@ -154,11 +193,20 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
       if (day !== undefined && (!Number.isInteger(day) || day < 1)) {
         throw new Error(`day must be a positive whole number (got ${day}).`);
       }
-      await cal.jumpToDate({
-        ...(year !== undefined ? { year } : {}),
-        ...(mi !== undefined ? { month: mi } : {}),
-        ...(day !== undefined ? { day } : {}),
-      });
+      // ⚠️ jumpToDate defaults an omitted `day` to `components.dayOfMonth`, which core keeps
+      // 0-BASED, and then does `dayOfYear = day - 1` — so forwarding nothing steps the date back a
+      // day. Always send all three, taken from our own (1-based) read.
+      const target = {
+        year: year ?? (before.year as number),
+        month: mi ?? (before.month as any).index,
+        day: day ?? (before.day as number),
+      };
+      const length = monthLength(cal, target.month, before.leapYear === true);
+      if (length > 0 && target.day > length) {
+        const name = (before.months as any[])?.[target.month]?.name ?? `month ${target.month + 1}`;
+        throw new Error(`day must be 1–${length} in ${name} (got ${target.day}).`);
+      }
+      await cal.jumpToDate(target);
     }
     if (hour !== undefined || minute !== undefined) {
       const c = { ...(game.time.components as any) };

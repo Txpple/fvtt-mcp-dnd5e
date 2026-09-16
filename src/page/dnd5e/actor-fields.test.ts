@@ -78,8 +78,10 @@ describe('canonical value sets (live CONFIG.DND5E)', () => {
     expect(ARMOR_CALC.has('natural')).toBe(true);
     expect(ARMOR_CALC.has('armored')).toBe(true); // 6.0 armorClasses keys
     expect(ARMOR_CALC.has('flat')).toBe(false); // 5.x mode, not a calculation
-    expect(DAMAGE_TYPES.has('vitality')).toBe(true); // 5.3.3 added none/vitality
-    expect(DAMAGE_TYPES.has('none')).toBe(true);
+    // 6.0.1 CONFIG.DND5E.damageTypes has 13 keys — the 5.3.3-era 'none'/'vitality' are gone.
+    expect(DAMAGE_TYPES.size).toBe(13);
+    expect(DAMAGE_TYPES.has('vitality')).toBe(false);
+    expect(DAMAGE_TYPES.has('none')).toBe(false);
     expect(ABILITIES).toEqual(['str', 'dex', 'con', 'int', 'wis', 'cha']);
   });
 });

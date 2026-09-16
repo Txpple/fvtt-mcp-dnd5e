@@ -16,7 +16,9 @@ const ABILITY = z.enum(['str', 'dex', 'con', 'int', 'wis', 'cha']);
 
 // Reusable Set-field shape (damage/condition immunities, languages, treasure). Replace overwrites
 // the whole list; add/remove merge against the actor's current list (page reads it live).
-const setField = (what: string) =>
+// `custom` exists only on the SimpleTraitField traits (di / dr / dv / ci / languages) — the 6.0.1
+// npc `details.treasure` schema is { value } alone, so its shape omits it.
+const setField = (what: string, supportsCustom = true) =>
   z
     .object({
       mode: z
@@ -26,12 +28,16 @@ const setField = (what: string) =>
           'replace (default) overwrites the whole list; add/remove merge with the current list.'
         ),
       values: z.array(z.string()).default([]).describe(what),
-      custom: z
-        .string()
-        .optional()
-        .describe(
-          'Free-text custom entry stored alongside the set (replaces the existing custom string).'
-        ),
+      ...(supportsCustom
+        ? {
+            custom: z
+              .string()
+              .optional()
+              .describe(
+                'Free-text custom entry stored alongside the set (replaces the existing custom string).'
+              ),
+          }
+        : {}),
     })
     .optional();
 
@@ -380,7 +386,7 @@ const UpdateActorSchema = z.object({
     .describe(
       '[NPC, 2024] Habitats (replace the whole list), e.g. [{type:"forest"},{type:"planar",subtype:"nine hells"}].'
     ),
-  treasure: setField('[NPC, 2024] Treasure themes (any, arcana, individual, ...).'),
+  treasure: setField('[NPC, 2024] Treasure themes (any, arcana, individual, ...).', false),
 
   // currency (coins) — actor-level, applies to NPCs and PCs
   currency: z

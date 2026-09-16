@@ -24,7 +24,8 @@ const ApplyConditionSchema = z.object({
     .describe(
       'Condition ids to toggle: blinded, charmed, deafened, frightened, grappled, incapacitated, ' +
         'invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion, ' +
-        'and the other dnd5e conditionTypes/statusEffects.'
+        'and the other dnd5e conditionTypes/statusEffects (coverHalf, coverThreeQuarters, ' +
+        'coverTotal, concentrating, heavilyEncumbered, ...). Matched case-insensitively.'
     ),
   active: z
     .boolean()
@@ -36,7 +37,10 @@ const ApplyConditionSchema = z.object({
     .min(0)
     .max(6)
     .optional()
-    .describe('Exhaustion level 1-6 (0 removes it). Only affects the "exhaustion" condition.'),
+    .describe(
+      'Exhaustion level 1-6 (0 removes it). Only affects the "exhaustion" condition, and only ' +
+        'when applying — with active=false the condition is removed regardless of this value.'
+    ),
 });
 
 export interface DnD5eConditionToolOptions {

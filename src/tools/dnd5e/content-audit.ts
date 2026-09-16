@@ -51,7 +51,7 @@ export class DnD5eContentAuditTool {
       {
         name: 'content-audit',
         description:
-          '[D&D 5e only] Finishing check for authored content — scan documents for the four strict ' +
+          '[D&D 5e only] Finishing check for authored content — scan documents for the five strict ' +
           'authoring-quality rules and report violations to fix (read-only; never mutates):\n' +
           '• rule 8 — placeholder icons (icons/svg/...) on an actor, item, or authored feature.\n' +
           '• rule 7 — GM-fudge / pretend-reskin language in a description or biography ("treat its X ' +

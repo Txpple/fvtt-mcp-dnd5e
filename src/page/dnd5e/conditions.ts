@@ -39,12 +39,33 @@ export function collectStatusIds(config: {
   return ids;
 }
 
-/** Resolve the requested exhaustion level: explicit 0–6, else 1 when applying / 0 when removing. */
+/**
+ * Resolve the requested exhaustion level: explicit 0–6 when applying, else 1; a REMOVE
+ * (`active: false`) always resolves to 0 — an exhaustionLevel passed alongside it names the
+ * condition being removed, it is not a level to write.
+ */
 export function resolveExhaustionLevel(requested: number | undefined, active: boolean): number {
+  if (!active) return 0;
   if (typeof requested === 'number' && Number.isFinite(requested)) {
     return Math.max(0, Math.min(6, Math.round(requested)));
   }
-  return active ? 1 : 0;
+  return 1;
+}
+
+/**
+ * Match a caller-supplied status id against the world's valid ids case-INSENSITIVELY and return the
+ * canonical spelling. dnd5e 6.0 ships camelCase ids (`coverHalf`, `coverThreeQuarters`, `coverTotal`,
+ * `heavilyEncumbered`, `surprised`…), so a blind `.toLowerCase()` would reject every one of them.
+ */
+export function canonicalStatusId(raw: string, validIds: Iterable<string>): string | null {
+  const wanted = String(raw ?? '')
+    .trim()
+    .toLowerCase();
+  if (!wanted) return null;
+  for (const id of validIds) {
+    if (id.toLowerCase() === wanted) return id;
+  }
+  return null;
 }
 
 /** Read a condition effect's level: 6.0 `system.level`, 5.x flag as a fallback, else 1. */
@@ -69,23 +90,47 @@ const sleep = (ms: number) => new Promise(r => (globalThis as any).setTimeout(r,
  * field so dnd5e's own delta sync creates/removes the condition effect; an EXISTING effect's level is
  * set directly (deterministic, no dependence on the un-awaited sync).
  */
+function readSourceExhaustion(actor: any): number {
+  return Number(actor._source?.system?.attributes?.exhaustion ?? 0) || 0;
+}
+
 async function setExhaustion(actor: any, lvl: number, warnings: string[]): Promise<void> {
-  const sourceLevel = Number(actor._source?.system?.attributes?.exhaustion ?? 0) || 0;
+  const sourceLevel = readSourceExhaustion(actor);
   let eff = findExhaustionEffect(actor);
 
   if (lvl <= 0) {
-    // Deleting the effect makes dnd5e write attributes.exhaustion = 0 itself; a stale source value
-    // with no effect behind it is cleared directly.
-    if (eff) await eff.delete();
-    else if (sourceLevel !== 0) await actor.update({ 'system.attributes.exhaustion': 0 });
+    // Deleting the effect makes dnd5e write attributes.exhaustion = 0 itself — but from
+    // Actor5e#_onDeleteDescendantDocuments, which the delete promise does NOT await. Wait for that
+    // write to land; if it never does (or there was no effect), clear the stale source directly.
+    if (eff) {
+      await eff.delete();
+      for (let attempt = 0; attempt < 20 && readSourceExhaustion(actor) !== 0; attempt++) {
+        await sleep(50);
+      }
+    }
+    if (readSourceExhaustion(actor) !== 0)
+      await actor.update({ 'system.attributes.exhaustion': 0 });
     return;
   }
 
   if (eff) {
-    if (readExhaustionLevel(eff) !== lvl) await eff.update({ 'system.level': lvl });
-    // Keep the persisted field in step. dnd5e's delta sync compares against the DERIVED level
-    // (already lvl), so this is a pure bookkeeping write with no second effect change.
-    if (sourceLevel !== lvl) await actor.update({ 'system.attributes.exhaustion': lvl });
+    const previous = readExhaustionLevel(eff);
+    if (previous !== lvl) {
+      // ⚠️ dnd5e 6.0.1 ConditionData#_onUpdate reads `options.dnd5e?.originalLevel ?? Infinite` —
+      // `Infinite` is an undefined identifier, so a level write WITHOUT that option throws a
+      // ReferenceError after the update lands and everything after it is skipped. Supplying the
+      // option (as condition.mjs's own increase/decrease do) keeps the delta finite and the
+      // handler on its happy path.
+      await eff.update({ 'system.level': lvl }, { dnd5e: { originalLevel: previous } });
+    }
+    // Keep the persisted field in step. dnd5e's delta sync compares against the DERIVED level —
+    // which only equals `lvl` while the effect is ACTIVE. A suppressed/disabled effect (immunity,
+    // a disabled condition) leaves the derived value at 0, so the same write would look like a
+    // 0 → lvl delta and dnd5e would apply a SECOND level. Skip the bookkeeping write there.
+    const effectActive = eff.active !== false;
+    if (effectActive && sourceLevel !== lvl) {
+      await actor.update({ 'system.attributes.exhaustion': lvl });
+    }
     return;
   }
 
@@ -104,7 +149,10 @@ async function setExhaustion(actor: any, lvl: number, warnings: string[]): Promi
         '(check the sheet).'
     );
   } else if (readExhaustionLevel(eff) !== lvl) {
-    await eff.update({ 'system.level': lvl });
+    await eff.update(
+      { 'system.level': lvl },
+      { dnd5e: { originalLevel: readExhaustionLevel(eff) } }
+    );
   }
 }
 
@@ -130,8 +178,10 @@ export async function applyCondition(args: {
   const warnings: string[] = [];
 
   for (const raw of conditions) {
-    const id = String(raw).trim().toLowerCase();
-    if (!validIds.has(id)) {
+    // Match case-insensitively but act on the CANONICAL id — dnd5e 6.0's camelCase statuses
+    // (coverHalf, coverThreeQuarters, coverTotal, heavilyEncumbered…) must survive the lookup.
+    const id = canonicalStatusId(String(raw), validIds);
+    if (!id) {
       warnings.push(
         `Unknown condition "${raw}" — verify it matches dnd5e conditionTypes / statusEffects`
       );
