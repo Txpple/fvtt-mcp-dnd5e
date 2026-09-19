@@ -20,6 +20,7 @@
 // back to cookies):
 //   - sessions.authenticateAdmin reads `adminPassword` from the REQUEST BODY on every route it
 //     guards, so admin posts are stateless JSON — no /auth login, no session cookie to carry.
+//     Since 14.368 every POST must also look same-origin (Origin header = server origin).
 //   - Launching: POST /setup {action:"launchWorld", world, adminPassword}. The /setup action
 //     switch only exists while NO world is active (with one running, every action 403s
 //     "You lack server administrator permission" no matter who you are).
@@ -131,7 +132,10 @@ async function poll(check, deadlineMs, intervalMs = 2000) {
 async function postJson(path, body) {
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    // Foundry 14.368+ rejects every POST whose Sec-Fetch-Site is not same-origin and whose
+    // Origin does not match the server's own origin (400 "The request could not be processed.").
+    // Node's fetch sends neither, so state the origin explicitly.
+    headers: { 'Content-Type': 'application/json', Origin: new URL(baseUrl).origin },
     body: JSON.stringify(body),
     redirect: 'manual',
     signal: AbortSignal.timeout(15_000),

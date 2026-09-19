@@ -16,6 +16,7 @@ import {
   dumpRegion,
   rectContainsSnappedCenter,
   regionDescriptor,
+  absoluteTeleportDest,
   remapTeleportDestination,
   teleportDestUuid,
   teleportDestinationsOf,
@@ -67,6 +68,36 @@ describe('teleportDestinationsOf', () => {
     expect(teleportDestinationsOf({})).toEqual([]);
     expect(teleportDestinationsOf(undefined)).toEqual([]);
     expect(teleportDestinationsOf({ destination: '' })).toEqual([]);
+  });
+});
+
+describe('absoluteTeleportDest (14.368 relativized storage)', () => {
+  // A behavior on Scene S / Region R — the parents core's buildRelativeUuid climbs.
+  const behavior = { id: 'bhv', parent: { id: 'R', parent: { id: 'S' } } };
+  it('leaves an absolute destination alone', () => {
+    expect(absoluteTeleportDest('Scene.A.Region.X', behavior)).toBe('Scene.A.Region.X');
+  });
+  it('resolves a sibling region (`..X`) against the owning scene', () => {
+    expect(absoluteTeleportDest('..X', behavior)).toBe('Scene.S.Region.X');
+  });
+  it("resolves another scene's region (`...A.Region.X`)", () => {
+    expect(absoluteTeleportDest('...A.Region.X', behavior)).toBe('Scene.A.Region.X');
+  });
+  it('resolves the typed sibling form (`..Region.X`) and the self form (`..`)', () => {
+    expect(absoluteTeleportDest('..Region.X', behavior)).toBe('Scene.S.Region.X');
+    expect(absoluteTeleportDest('..', behavior)).toBe('Scene.S.Region.R');
+  });
+  it('returns an unresolvable relative form unchanged (no parents / unknown shape)', () => {
+    expect(absoluteTeleportDest('..X')).toBe('..X');
+    expect(absoluteTeleportDest('.Weird.Thing.Deep.Er', behavior)).toBe('.Weird.Thing.Deep.Er');
+  });
+  it('teleportDestinationsOf normalizes every entry through it', () => {
+    expect(
+      teleportDestinationsOf(
+        { destinations: new Set(['..X', '...A.Region.Y', 'Scene.B.Region.Z']) },
+        behavior
+      )
+    ).toEqual(['Scene.S.Region.X', 'Scene.A.Region.Y', 'Scene.B.Region.Z']);
   });
 });
 

@@ -129,6 +129,37 @@ try {
     ? pass('update-scene fields', `${u1.sceneId}`)
     : fail('update-scene fields', JSON.stringify(su));
 
+  // ---- 3b. Foundry 14.368 darknessLock: a darkness write on a LOCKED scene must still land ----
+  // Core drops `environment.darknessLevel` from an update on a locked scene unless the lock is
+  // restated in the same update (Scene#_preUpdate, #14718); the tool restates it and warns.
+  await foundry.evaluate(
+    id => game.scenes.get(id).update({ 'environment.darknessLock': true }),
+    c1.sceneId
+  );
+  const u1b = await foundry.call('updateScene', { sceneIdentifier: c1.sceneId, darkness: 0.25 });
+  const lockState = await foundry.evaluate(
+    id => ({
+      lock: game.scenes.get(id).environment.darknessLock,
+      level: game.scenes.get(id).environment.darknessLevel,
+    }),
+    c1.sceneId
+  );
+  const okLock =
+    u1b?.updated &&
+    Math.abs((lockState?.level ?? -1) - 0.25) < 1e-6 &&
+    lockState?.lock === true &&
+    (u1b?.warnings ?? []).some(w => /darknessLock/.test(w));
+  okLock
+    ? pass('update-scene darkness on a LOCKED scene lands, keeps the lock, warns', `level=${lockState.level}`)
+    : fail(
+        'update-scene darkness on a LOCKED scene',
+        JSON.stringify({ lockState, warnings: u1b?.warnings, settings: u1b?.settings })
+      );
+  await foundry.evaluate(
+    id => game.scenes.get(id).update({ 'environment.darknessLock': false }),
+    c1.sceneId
+  );
+
   // ---- 4. weather + case-insensitive normalization ----
   const u2 = await foundry.call('updateScene', { sceneIdentifier: c1.sceneId, weather: 'RAIN' });
   u2?.settings?.weather === 'rain'

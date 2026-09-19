@@ -18,6 +18,7 @@ import {
   sidecarRegionToV14,
   TOM_CARTOS_FLAG_SCOPE,
   gridRectShape,
+  keepDarknessLock,
 } from './scenes.js';
 
 describe('fogModeToNumber', () => {
@@ -373,5 +374,43 @@ describe('gridRectShape', () => {
   it('falls back to a 100px cell when the grid size is missing', () => {
     const s = gridRectShape({ size: 0, sceneX: 0, sceneY: 0 }, 50, 50, 1, 1, false);
     expect(s).toMatchObject({ width: 100, height: 100, x: 0, y: 0 });
+  });
+});
+
+describe('keepDarknessLock (Foundry 14.368 darknessLock rule)', () => {
+  const locked = { environment: { darknessLock: true } };
+  const open = { environment: { darknessLock: false } };
+  it('does nothing on an unlocked scene', () => {
+    const p = { 'environment.darknessLevel': 0.3 };
+    expect(keepDarknessLock(p, open)).toBeNull();
+    expect(p).toEqual({ 'environment.darknessLevel': 0.3 });
+  });
+  it('does nothing when the update does not touch the darkness level', () => {
+    const p = { weather: 'RAIN' };
+    expect(keepDarknessLock(p, locked)).toBeNull();
+    expect(p).toEqual({ weather: 'RAIN' });
+  });
+  it('restates the lock beside a flat dot-path darkness write and warns', () => {
+    const p: Record<string, unknown> = { 'environment.darknessLevel': 0.3 };
+    expect(keepDarknessLock(p, locked)).toMatch(/darknessLock/);
+    expect(p['environment.darknessLock']).toBe(true);
+  });
+  it('restates the lock inside a nested environment object (post mood-merge) and warns', () => {
+    const p: Record<string, unknown> = { environment: { darknessLevel: 0.3 } };
+    expect(keepDarknessLock(p, locked)).toMatch(/darknessLock/);
+    expect(p).toEqual({ environment: { darknessLevel: 0.3, darknessLock: true } });
+  });
+  it('leaves an explicit darknessLock (either form) alone — the caller chose', () => {
+    const flat: Record<string, unknown> = {
+      'environment.darknessLevel': 0.3,
+      'environment.darknessLock': false,
+    };
+    expect(keepDarknessLock(flat, locked)).toBeNull();
+    expect(flat['environment.darknessLock']).toBe(false);
+    const nested: Record<string, unknown> = {
+      environment: { darknessLevel: 0.3, darknessLock: false },
+    };
+    expect(keepDarknessLock(nested, locked)).toBeNull();
+    expect((nested.environment as any).darknessLock).toBe(false);
   });
 });

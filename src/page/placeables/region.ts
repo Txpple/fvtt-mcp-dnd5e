@@ -8,6 +8,9 @@
 //    on update would orphan the cross-link. Teleporter creation/repair stay the named special ops.
 //  - v14.364 stores teleport destinations in `system.destinations`, a SetField — the LIVE value is a
 //    Set (an array only via toObject()), and pre-migration data used a singular `system.destination`.
+//  - v14.368 made `destinations` a `relativize: true` DocumentUUIDField: an absolute write is STORED
+//    relative to the behavior (`..X` = sibling region, `...A.Region.X` = another scene's region).
+//    `absoluteTeleportDest` restores the absolute form on every read; writes stay absolute.
 //    `teleportDestinationsOf` is the ONE normalizer every read goes through.
 //  - Deleting a region can orphan the OTHER end of a teleporter (its destination now points at a dead
 //    id) — deleteSceneRegions scans the world afterwards and WARNS on each surviving reference.
@@ -230,14 +233,52 @@ export function teleportDestUuid(sceneId: string, regionId: string): string {
  * behavior. Pure/exported for unit testing — the ONE place that normalizes all three shapes, so every
  * read (dumpRegion, remap) goes through it.
  */
-export function teleportDestinationsOf(system: any): string[] {
+export function teleportDestinationsOf(system: any, behavior?: any): string[] {
   const raw = system?.destinations;
   const clean = (arr: unknown[]) =>
-    arr.filter((d: unknown): d is string => typeof d === 'string' && d.trim() !== '');
+    arr
+      .filter((d: unknown): d is string => typeof d === 'string' && d.trim() !== '')
+      .map(d => absoluteTeleportDest(d, behavior));
   if (raw instanceof Set) return clean([...raw]);
   if (Array.isArray(raw)) return clean(raw);
   const single = system?.destination;
   return typeof single === 'string' && single.trim() !== '' ? [single] : [];
+}
+
+/**
+ * Restore the absolute `Scene.<sceneId>.Region.<regionId>` form of a teleport destination. Foundry
+ * 14.368 made `teleportToken.destinations` a `relativize: true` DocumentUUIDField (fix #14703):
+ * `_cleanType` runs `buildRelativeUuid(value, behavior)` on every write that has a parent document,
+ * so the STORED string is relative to the behavior — `..X` for a sibling region on the same scene,
+ * `...A.Region.X` for another scene's region, `..` for the behavior's own region (one leading dot
+ * per parent level climbed, per `_resolveRelativeUuid`). 14.367 data and behaviors created inline
+ * with their region (no parent at clean time) still hold the absolute form. Given the live behavior
+ * document this resolves through core's own `foundry.utils.parseUuid(…, { relative })`; without one
+ * (unit tests, mocks) the three shapes above are resolved from the behavior's parents when present.
+ * An unrecognised relative form is returned unchanged so it surfaces in read-back instead of
+ * vanishing. Pure/exported for unit testing.
+ */
+export function absoluteTeleportDest(dest: string, behavior?: any): string {
+  if (!dest.startsWith('.')) return dest;
+  const parseUuid = (globalThis as any).foundry?.utils?.parseUuid;
+  if (typeof parseUuid === 'function' && behavior?.parent) {
+    try {
+      const resolved = parseUuid(dest, { relative: behavior })?.uuid;
+      if (typeof resolved === 'string' && TELEPORT_DEST_RE.test(resolved)) return resolved;
+    } catch {
+      /* fall through to the shape-based fallback */
+    }
+  }
+  const regionId: string | undefined = behavior?.parent?.id;
+  const sceneId: string | undefined = behavior?.parent?.parent?.id;
+  const rest = dest.replace(/^\.+/, '');
+  if (rest === '') return sceneId && regionId ? teleportDestUuid(sceneId, regionId) : dest;
+  const other = rest.match(/^([^.]+)\.Region\.([^.]+)$/);
+  if (other) return teleportDestUuid(other[1], other[2]);
+  const typed = rest.match(/^Region\.([^.]+)$/);
+  if (typed && sceneId) return teleportDestUuid(sceneId, typed[1]);
+  if (!rest.includes('.') && sceneId) return teleportDestUuid(sceneId, rest);
+  return dest;
 }
 
 export type RemapStatus = 'rewritten' | 'unchanged' | 'no-match' | 'unresolved';
@@ -300,7 +341,7 @@ export interface RegionPatch {
  * mocks and pre-create docs lack them), teleport destinations when the behavior has any.
  */
 export function dumpBehavior(b: any): Record<string, unknown> {
-  const destinations = teleportDestinationsOf(b?.system);
+  const destinations = teleportDestinationsOf(b?.system, b);
   return {
     ...(b?.id ? { id: b.id } : {}),
     type: b?.type,
@@ -457,7 +498,7 @@ export async function deleteSceneRegions(args: { sceneIdentifier: string; ids: s
   for (const s of game.scenes?.contents ?? []) {
     for (const region of s.regions ?? []) {
       for (const behavior of region.behaviors ?? []) {
-        for (const dest of teleportDestinationsOf(behavior?.system)) {
+        for (const dest of teleportDestinationsOf(behavior?.system, behavior)) {
           const m = dest.match(TELEPORT_DEST_RE);
           if (m && deletedIds.has(m[2])) {
             warnings.push(
@@ -665,7 +706,7 @@ export async function addRegionBehavior(
   const [behavior] = await region.createEmbeddedDocuments('RegionBehavior', [doc]);
 
   // Teleport-destination geometry check — the silent-no-op guard.
-  for (const dest of teleportDestinationsOf(behavior.system)) {
+  for (const dest of teleportDestinationsOf(behavior.system, behavior)) {
     const m = dest.match(TELEPORT_DEST_RE);
     if (!m) continue;
     const dScene = game.scenes?.get?.(m[1]);
@@ -738,6 +779,8 @@ export async function remapSceneTeleporters(args: { sourceModule: string }): Pro
   // Pass 2 — rewrite + persist each teleport destination. v14.364 stores destinations in a
   // `system.destinations` ARRAY, so each entry is remapped independently and the whole array is written
   // back when any entry changed (per-destination counting preserves the single-destination semantics).
+  // Reads come back ABSOLUTE (teleportDestinationsOf) whatever 14.368 relativized on disk, and the
+  // absolute rewrite is what gets written — core relativizes it again itself on the way in.
   let rewritten = 0;
   let unchanged = 0;
   const unresolved: string[] = [];
@@ -747,7 +790,7 @@ export async function remapSceneTeleporters(args: { sourceModule: string }): Pro
       const updates: Array<Record<string, unknown>> = [];
       for (const behavior of region.behaviors ?? []) {
         behaviorsScanned++;
-        const dests = teleportDestinationsOf(behavior?.system);
+        const dests = teleportDestinationsOf(behavior?.system, behavior);
         if (dests.length === 0) continue; // non-teleport behavior / unset destination
         let changed = false;
         const newDests = dests.map(d => {

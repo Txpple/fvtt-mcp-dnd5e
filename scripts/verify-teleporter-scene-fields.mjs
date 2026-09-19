@@ -175,12 +175,20 @@ try {
   assert((remap?.unresolved?.length ?? 0) === 0, 'B — no unresolved destinations');
   const remapped = await f.evaluate(({ sceneAId, regAId, sceneBId, regBId }) => {
     // Spread the destinations SET page-side (a Set serializes as {} across the bridge).
-    const dest = (sId, rId) => [
-      ...game.scenes.get(sId).regions.get(rId).behaviors.contents[0].system.destinations,
-    ];
+    // 14.368+ STORES the destination relative to the behavior (`...<sceneId>.Region.<regionId>`);
+    // resolve it through core's own parser so the assertion holds on 14.367 (absolute) and 14.368+.
+    const behaviorOf = (sId, rId) => game.scenes.get(sId).regions.get(rId).behaviors.contents[0];
+    const dest = (sId, rId) => {
+      const b = behaviorOf(sId, rId);
+      return [...b.system.destinations].map(
+        d => foundry.utils.parseUuid(d, { relative: b })?.uuid ?? d
+      );
+    };
     return {
       a: dest(sceneAId, regAId),
       b: dest(sceneBId, regBId),
+      rawA: [...behaviorOf(sceneAId, regAId).system.destinations],
+      relativized: foundry.utils.isNewerVersion(game.version, '14.367'),
       wantA: `Scene.${sceneBId}.Region.${regBId}`,
       wantB: `Scene.${sceneAId}.Region.${regAId}`,
     };
@@ -192,6 +200,22 @@ try {
   assert(
     remapped.b?.[0] === remapped.wantB,
     `B — B→A destination rewritten to live ids (${remapped.b?.[0]})`
+  );
+  assert(
+    remapped.relativized
+      ? remapped.rawA?.[0]?.startsWith('.')
+      : remapped.rawA?.[0] === remapped.wantA,
+    `B — stored form matches the core version (${
+      remapped.relativized ? '14.368+ relative' : '≤14.367 absolute'
+    }: ${remapped.rawA?.[0]})`
+  );
+  // What every tool returns (dumpBehavior) must read back ABSOLUTE whatever is on disk.
+  const dumped = await f.call('listSceneRegions', { sceneIdentifier: fx.sceneAId });
+  const dumpedDest = (dumped?.items ?? []).find(r => r.id === fx.regAId)
+    ?.behaviors?.[0]?.destinations?.[0];
+  assert(
+    dumpedDest === remapped.wantA,
+    `B — list-regions reads the destination back absolute (${dumpedDest})`
   );
 
   // ---- Phase 0b · C: update-scene deep-merges mood / camera / flags ----

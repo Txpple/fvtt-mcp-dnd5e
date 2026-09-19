@@ -150,6 +150,24 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   2024, Luckstone, copied armor drives AC). Not done (owner's call, maintenance mode): item-carried
   effects in `get-actor` reads, region-behavior edit/remove, the calendar `requiresReload` bridge
   reload, class spell lists.
+- [x] **Foundry 14.368 compatibility pass** (2026-09-19, v2.1.4): the sandbox moved to 14.368
+  (stable, 2026-09-16). Two of its changes hit us: (1) every POST must now look same-origin or 400s
+  ("The request could not be processed.") — `scripts/local-foundry.mjs` launch/stop now send an
+  `Origin` header (the bridge itself posts from inside the page, so it was never affected); (2)
+  `teleportToken.destinations` became a `relativize: true` DocumentUUIDField (core #14703), so a
+  written `Scene.A.Region.X` is STORED as `...A.Region.X` (or `..X` for a same-scene region) —
+  `absoluteTeleportDest` in `region.ts` now restores the absolute form on every read (dump, remap,
+  orphan scan, placement check) through core's own `parseUuid(…, { relative })`, with a shape-based
+  fallback for mocks. The three 14.368 bug fixes we care about (duration-only effects lingering until
+  world time advanced, Scene bulk delta updates not re-initialising synthetic actors, Region Config
+  Level order) needed no workaround removal — we never carried one. Levels' default top elevation
+  is now `4 × grid distance` (same resulting foreground elevation), and darkness may only be
+  updated on a locked scene when `darknessLock` is passed explicitly — `update-scene` never writes
+  darkness alone against a lock. Offline: 1690 tests / 3 skipped. Live (sandbox 14.368): effects
+  51/51 · region effects 37/37 · activities 37/37 · settings + calendar 52/52 · items 13/13 · actor
+  34/34 · pc-build 66/66 · teleporter + scene fields 13/13 · placeables 34/34 · scene tools 10/10 ·
+  cast activity 25/25 · region tooling 22/22 · integration 84 / 2 skipped. `CLAUDE.md` now carries
+  the upgrade-review rule (notes → launch → connect → verify before trusting an update).
 
 ### 2.1.0 release proof (2026-09-15, sandbox)
 

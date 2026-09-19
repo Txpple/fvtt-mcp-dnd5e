@@ -684,7 +684,12 @@ export async function updateScene(
   try {
     // KEEP+WARN: a map/thumbnail has no sensible substitute — apply the path but warn on a 404.
     const warnings: string[] = [];
-    if (hasDocUpdate) await scene.update(applyMoodMerge(update, args, moodKeys, hasFlags));
+    if (hasDocUpdate) {
+      const payload = applyMoodMerge(update, args, moodKeys, hasFlags);
+      const lockNote = keepDarknessLock(payload, scene);
+      if (lockNote) warnings.push(lockNote);
+      await scene.update(payload);
+    }
     if (hasBackground) {
       const bg = normalizeAssetPath(args.backgroundPath!);
       if (bg && !(await imgResolves(bg)))
@@ -1210,6 +1215,36 @@ function applyMoodMerge(
   }
   if (hasFlags) payload.flags = { ...(payload.flags ?? {}), ...args.flags };
   return payload;
+}
+
+/**
+ * Foundry 14.368 (`Scene#_preUpdate`, core #14718): a `darknessLevel` change on a scene whose
+ * `environment.darknessLock` is set is SILENTLY DROPPED unless the same update names
+ * `environment.darknessLock` explicitly — the tool would report success with nothing changed. A GM
+ * asking this tool for a darkness level means it, so restate the existing lock in the payload (the
+ * lock stays on — the scene sheet does the same) and say so in a warning. Handles both the flat
+ * dot-path form and the nested form the mood merge produces. Returns the warning text, or null when
+ * nothing had to be done. Pure/exported for unit testing.
+ */
+export function keepDarknessLock(payload: Record<string, unknown>, scene: any): string | null {
+  if (!scene?.environment?.darknessLock) return null;
+  const env =
+    payload.environment && typeof payload.environment === 'object'
+      ? (payload.environment as Record<string, unknown>)
+      : undefined;
+  const touchesLevel =
+    'environment.darknessLevel' in payload || (env !== undefined && env.darknessLevel !== undefined);
+  if (!touchesLevel) return null;
+  const explicit =
+    'environment.darknessLock' in payload || (env !== undefined && env.darknessLock !== undefined);
+  if (explicit) return null;
+  if (env) env.darknessLock = true;
+  else payload['environment.darknessLock'] = true;
+  return (
+    'darkness level is LOCKED on this scene (environment.darknessLock) — applied the new level and ' +
+    'kept the lock, since core drops a darkness change on a locked scene unless the lock is restated; ' +
+    'pass environment: { darknessLock: false } to release it'
+  );
 }
 
 /** Normalize a weather key against the live CONFIG.weatherEffects registry. */
