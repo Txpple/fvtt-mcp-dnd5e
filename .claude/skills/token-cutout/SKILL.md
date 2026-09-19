@@ -1,120 +1,28 @@
 ---
 name: token-cutout
 description: >-
-  Knock a baked-in background off a token image so it has real alpha transparency — for prepping
-  tokens/portraits before dropping them on a VTT. Use when the user wants to "remove the background",
-  "make the background transparent", "give this token alpha / an alpha channel", "cut out this token",
-  "knock out the green screen / white background", "chroma-key this", "this token has no transparency",
-  or hands over a token render on a solid green/blue/white/colored plate (or a busy background). Runs a
-  bundled local script (rembg AI matte, or an offline chroma-key fallback), verifies the cut against a
-  magenta preview, delivers a square 512x512 canvas so the token sits at scale 1.0, and can upload the
-  result into the world and assign it as an actor's token art.
-  Image prep only — no new mechanics; the script owns the pixels, this skill owns the judgment.
+  Put a token image into the world correctly after its background has been cut to alpha. Use when
+  the user wants a cut-out token assigned to an actor, or asks to "remove the background" / "make
+  it transparent" for a token: the PIXEL WORK is NOT here any more — it is the artificer server's
+  `cutout-image` tool (fvtt-mcp-artificer, 2026-09-19), which also runs automatically for every
+  `kind: "token"` render. This skill keeps only the Foundry-side judgment: uploading, assigning
+  with set-actor-art, resetting inherited prototype settings, and checking facing before
+  auto-rotate.
 ---
 
-# Token cutout
+# Token cutout (Foundry install half)
 
-A prep helper that turns a background-baked token image (green/blue screen, a flat white or colored
-plate, or any busy background) into a transparent RGBA PNG ready to drop on the table — and, if asked,
-wires it into the live world as an actor's token art.
+**The cutout itself moved to `fvtt-mcp-artificer` on 2026-09-19.** Call `cutout-image` there
+(chroma key for flat plates, rembg AI matte fallback, 512 square, magenta preview). Tokens
+generated or edited with `generate-image` / `edit-image` in `kind: "token"` arrive already cut.
+There is no script in this folder any more; `token_cutout.py` lives at
+`fvtt-mcp-artificer/scripts/token_cutout.py` and the tool is its only caller.
 
-There is **no MCP tool for this** — the pixel work is a bundled script,
-`token_cutout.py` (next to this file). This skill owns the judgment: which method, whether to keep the
-cast shadow, verifying the edge, and the optional Foundry hand-off. The Foundry steps reuse the normal
-tools: `upload-asset` (asset in) and `set-actor-art` (assign it).
+Read the `*_preview.png` the tool reports before trusting the edge: a colour halo means a fringe
+survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade means over-cut
+(prefer rembg). Coverage near 0% or 100% means the key was misread; pass `color`.
 
-## Step 0 — Get the image and confirm the goal
-
-Need a local file path (the script reads from disk, not from an uploaded asset). If the user only
-gestured at "the token on my Desktop", find it with a glob first — and note the **real extension**: a
-`.jpg`/`.jpeg` source has *no* alpha by definition, which is usually the whole reason we're here.
-
-## Step 1 — Pick the method
-
-The script's `--method auto` (default) uses **rembg** if installed, else **chroma**. Override when you
-know better:
-
-- **rembg** (AI matte, U^2-Net) — the default and the right call for a **character**: soft edges, hair
-  wisps, thin details (bowstrings), and especially a **cast shadow** on the plate. It's also the
-  **only** option when the background is **not a flat solid color** (a scene, a gradient, clutter).
-  First use triggers a one-time ~176MB model download (`pip install "rembg[cpu]"`).
-- **chroma** (offline, instant, deterministic) — best for a **clean flat solid-color plate** (classic
-  green/blue screen, or a uniform white/colored back). Auto-detects the key color from the four
-  corners. Prefer it when rembg isn't installed, when you want zero downloads, or for a batch where
-  every image shares the same clean plate. Pass `--color RRGGBB` to force the key color if
-  auto-detect is fooled by a subject that touches a corner.
-
-When unsure for a single hero token, use rembg. For a bulk folder of identically-plated sprites,
-chroma is faster and more predictable.
-
-## Step 2 — The cast-shadow decision (ask if it matters)
-
-Token renders often have a drop shadow on the plate. For a VTT token you almost always want it
-**gone** (the VTT draws its own token ring/elevation cues; a baked green-tinted shadow looks wrong).
-Defaults already do this:
-- **rembg** drops the shadow automatically.
-- **chroma** keys out a same-hue shadow too (it's just a darker green/blue). Pass **`--keep-shadow`**
-  only if the user explicitly wants the shadow retained.
-
-If the source is a *portrait/art* piece rather than a token, the shadow may be wanted — ask.
-
-## Step 3 — Run it
-
-```
-python .claude/skills/token-cutout/token_cutout.py INPUT [OUTPUT] [--method ...] [--color RRGGBB] [--keep-shadow] [--erode N] [--size N] [--pad PCT] [--no-trim]
-```
-
-- Output defaults to `INPUT.png`, and it **never overwrites the source** (a same-path collision is
-  redirected to `*_cutout.png`). The original stays untouched.
-- Output is **always PNG** — the only common token format that carries alpha. (Don't "convert" to JPG
-  afterward; JPG has no alpha and will re-bake a background.)
-- `--erode N` shrinks the matte N px inward to eat a stubborn fringe (needs scipy; skipped with a note
-  if absent). Reach for it only if the preview shows a thin ring.
-- Output is **512x512 square by default** — see Step 3b. The printed size line says which canvas you
-  got.
-
-## Step 3b — The square canvas (why every cutout comes out 512x512)
-
-**Every converted token is delivered as a 512x512 square, subject centered, so it drops in at
-`scale 1.0` with no per-token fiddling.** Foundry stretches a token image onto the token's grid
-footprint, so a non-square canvas (or a subject adrift in the corner of a wide plate) is exactly what
-forces someone to hand-tune scale afterwards. The script does the fit itself:
-
-- **aspect is preserved** — never squashed; the subject is scaled to fit and the rest is transparent
-  padding,
-- **trimmed to the subject's alpha bounding box first**, so a small figure on a big plate still fills
-  the square,
-- **4% transparent margin** on the edge, so the art doesn't butt against the token ring.
-
-Overrides, for the cases that earn them:
-- `--size N` — a different square edge. 512 is the house default (crisp on a 100-200px grid without
-  being wasteful); use 256 for a bulk swarm of mooks, 1024 only for a large/huge centerpiece whose
-  source is genuinely that big. **`--size 0` keeps the source canvas** — reach for it when the image
-  is a *portrait* rather than a token, or when the user says they'll frame it themselves.
-- `--pad PCT` — a wider margin (a winged or weapon-flourishing silhouette can want 8) or none (`0`).
-- `--no-trim` — letterbox the whole source instead of tightening to the subject. Use when the framing
-  is deliberate (a token whose art is *meant* to sit off-center).
-
-⚠ **Don't upscale a tiny source into 512 and call it sharp.** If the source's subject is much smaller
-than 512px, the fit enlarges it and the result is soft — say so rather than shipping it quietly, and
-offer `--size 256` or a better source. This skill still does not *upscale as a feature*; the fit is a
-canvas operation, and a low-res subject stays low-res.
-
-## Step 4 — Verify against the preview (do not skip)
-
-The script writes `*_preview.png` — the cutout composited over **magenta**. **Read that image.** Magenta
-makes two failure modes obvious:
-- a **green/color halo** ring (fringe not fully removed → try rembg, or `--erode 1`),
-- **over-cut** edges eating into the subject (hair, a thin blade/bowstring → prefer rembg's matte, or
-  loosen a chroma `--color`).
-
-Also sanity-check the printed **coverage %** — if "subject coverage" is ~0% or ~100%, the key color was
-misread; pass `--color`. Only proceed once the edge looks clean. Delete the `_preview.png` when done so
-you don't leave clutter next to the user's file.
-
-## Step 5 — (optional) Put it in Foundry
-
-If the user wants it in the world (not just a clean file on disk):
+## Put it in Foundry
 
 1. `upload-asset` the PNG to `worlds/<world>/assets/tokens/<name>.png` (get `<world>` from
    `get-world-info`).
@@ -130,10 +38,10 @@ If the user wants it in the world (not just a clean file on disk):
 3. **Reset the inherited prototype config — `set-actor-art` only swaps the texture.** A module or
    compendium actor keeps the rest of its prototype token exactly as imported, so fresh art lands on
    someone else's settings. The 2024 `dnd-monster-manual` actors ship a **dynamic ring on** and
-   **`texture.scaleX`/`scaleY` at 2** (their art is a small subject on a big plate; a Step-3b cutout is
-   already trimmed and centred, so 2 overflows the token's footprint and the ring draws a dark disc
-   under it) — and **`lockRotation: true`**, so the token won't turn to face its movement like every
-   other token at the table. After every art swap, `update-actor` with **`tokenScale: 1`,
+   **`texture.scaleX`/`scaleY` at 2** (their art is a small subject on a big plate; a 512-square
+   cutout is already trimmed and centred, so 2 overflows the token's footprint and the ring draws a
+   dark disc under it) — and **`lockRotation: true`**, so the token won't turn to face its movement
+   like every other token at the table. After every art swap, `update-actor` with **`tokenScale: 1`,
    `tokenRing: false`, `tokenAutoRotate: true`** (house rules — `_shared/authoring-policy.md` rule 10).
 4. **Prototype vs placed.** Setting the prototype only affects **newly dropped** tokens. A copy already
    sitting on a scene won't change — `list-tokens` the scene and patch each with `update-token`
@@ -143,14 +51,6 @@ If the user wants it in the world (not just a clean file on disk):
    once auto-rotate is live. Look at the cutout and say so — the fix is rotating the source PNG, which
    is the user's call, not a silent edit.
 
-## Batch prep
-
-For a folder of same-plate sprites, loop the script over each file (chroma is the predictable choice
-here). The square fit applies per file, so a mixed-aspect folder still comes out uniform — which is
-the point for a bulk drop. Report anything with a suspicious coverage % for a manual look rather than
-silently shipping a bad cut. Don't upload a batch to Foundry unless asked — usually the user just wants clean files.
-
 ## What this skill does NOT do
 
-Retouch/redraw art, upscale (as a quality pass), or recolor. It removes a background to alpha and
-normalizes the canvas to a scale-1.0 square (Step 3b) — nothing more.
+Cut, retouch, redraw, upscale, or recolor. Pixels are the artificer's job.
