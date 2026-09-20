@@ -107,7 +107,10 @@ Offline gate before and after every commit (`npm run check && npm run typecheck 
 run build && npm run knip`). Live on the sandbox (`FOUNDRY_HOST=local`, one driver at a time):
 
 - the measurement scripts (M0) re-run at the end of every milestone and their numbers pasted into
-  the commit message;
+  the commit message; the three ratchets in `src/measure.test.ts` (tools/list, names, skill
+  descriptions) move only for a reason this plan names — a new selector or field is paid for in
+  its own family's prose in the same commit (M2 did this seven times), and a milestone that lands
+  its diet lowers its ceiling in the same commit;
 - the family's verify script(s) and `FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration` on
   every M8 commit;
 - the release set + integration + a Claude Code smoke after restart (new tool schemas need a
