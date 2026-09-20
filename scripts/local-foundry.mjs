@@ -24,11 +24,14 @@
 //   - Launching: POST /setup {action:"launchWorld", world, adminPassword}. The /setup action
 //     switch only exists while NO world is active (with one running, every action 403s
 //     "You lack server administrator permission" no matter who you are).
-//   - Stopping a world: POST /join {action:"shutdown", adminPassword} — the join view's own
-//     shutdown case, available exactly while a world IS active. It runs world.deactivate
-//     (db.disconnect + world.save — the flush that matters), answering
-//     {status:"success"}. On an adminless install this route 403s ERROR.InvalidAdminKey, which
-//     is why LOCAL_ADMIN_KEY is required kit.
+//   - Stopping a world (14.368, re-read from dist/server/views/setup.mjs 2026-09-20): POST /setup
+//     {action:"worldShutdown", adminPassword} — the ONE /setup action that exists while a world IS
+//     active. It runs world.deactivate (db.disconnect + world.save — the flush that matters) and
+//     answers a 302 to /setup (so post with redirect:'manual' and poll /api/status). The old
+//     POST /join {action:"shutdown"} route is gone: the join view now handles only join/loginAs
+//     and answers {} to anything else — a silent no-op, which is how it was found. Without an
+//     admin password the route falls back to "is this session a GM"; ours is stateless JSON, so
+//     LOCAL_ADMIN_KEY stays required kit.
 //   - There is NO process-exit route in v14; the desktop app quits via its Electron shell. So
 //     `stop` deactivates the world first, then terminates the Setup-idle node process. A killed
 //     process leaves Config/options.json.lock behind; Foundry treats it as stale after ~10s
@@ -144,7 +147,7 @@ async function postJson(path, body) {
   try {
     payload = await res.json();
   } catch {}
-  return { status: res.status, payload };
+  return { status: res.status, payload, location: res.headers.get('location') };
 }
 
 function requireAdminKey() {
@@ -250,11 +253,16 @@ async function stop() {
       );
     requireAdminKey();
     console.log('deactivating world…');
-    const { status: http, payload } = await postJson('/join', {
-      action: 'shutdown',
+    const {
+      status: http,
+      payload,
+      location,
+    } = await postJson('/setup', {
+      action: 'worldShutdown',
       adminPassword: adminKey,
     });
-    if (http !== 200 || payload?.status !== 'success')
+    // Success is the redirect back to the setup screen; a JSON body means it was refused.
+    if (http !== 302 || !(location ?? '').endsWith('/setup'))
       die(`world shutdown refused: HTTP ${http} ${JSON.stringify(payload)}`);
     const idle = await poll(
       async () => {

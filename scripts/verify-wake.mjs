@@ -1,14 +1,20 @@
 // Live acceptance: prove the bridge auto-recovers a COLD box end to end.
-//   Phase 1: take the world DOWN (GM game.shutDown) to create the cold "no world" state.
+//   Phase 1: take the world DOWN to create the cold "no world" state — POST /setup
+//            {action:"worldShutdown", adminPassword} (Foundry 14.368's own route, the one
+//            scripts/local-foundry.mjs uses; an admin key gates it, so a GM's bare
+//            game.shutDown() is refused when one is set — it is the fallback without a key).
 //   Phase 2: a fresh bridge.connect() must, with NO human steps, wake the box -> detect
 //            'no world active' -> launch the world via admin /setup (game.post) -> join ->
 //            game.ready, then round-trip getWorldInfo.
-// Needs .env with MOLTEN_* and FOUNDRY_USER as a GM. Run: node scripts/verify-wake.mjs
+// DESTRUCTIVE: phase 1 shuts the world down. It therefore refuses to run without an explicit
+// host — `FOUNDRY_HOST=local node scripts/verify-wake.mjs` (the sandbox: no wake, straight to
+// /join, then the /setup relaunch) or `FOUNDRY_HOST=molten …` (prod: the Magic-URL wake first).
+// Needs the host's admin key (LOCAL_ADMIN_KEY / MOLTEN_ADMIN_KEY) — or a GM bridge user as fallback.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
-import { hostFor } from './lib/bridge-config.mjs';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 function loadEnv() {
@@ -21,14 +27,14 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
-const cfg = {
-  serverUrl: env.MOLTEN_SERVER_URL,
-  host: hostFor(env),
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-};
+// No implicit target for a script that takes the world down: the selector's default is prod.
+if (!process.env.FOUNDRY_HOST && !process.env.FOUNDRY_PROFILE) {
+  console.error(
+    'verify-wake shuts the world down — name the target explicitly: FOUNDRY_HOST=local (sandbox) or FOUNDRY_HOST=molten (prod).'
+  );
+  process.exit(2);
+}
+const cfg = bridgeConfig(env);
 const base = cfg.serverUrl.replace(/\/$/, '');
 const stamp = () => new Date().toISOString().slice(11, 19);
 const log = {
@@ -71,9 +77,30 @@ if (!probe.isGM || !probe.shutDown) {
   await shutter.dispose();
   process.exit(2);
 }
-console.log('  firing game.shutDown() (returns the world to setup) ...');
-await shutter.evaluate(() => globalThis.game.shutDown(), null).catch(() => {});
 await shutter.dispose();
+if (cfg.adminKey) {
+  console.log(
+    '  POST /setup {action:"worldShutdown"} with the admin key (returns the world to setup) ...'
+  );
+  const res = await fetch(`${base}/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: new URL(base).origin },
+    body: JSON.stringify({ action: 'worldShutdown', adminPassword: cfg.adminKey }),
+    redirect: 'manual',
+  });
+  // 302 → /setup is success; a JSON body is a refusal.
+  console.log(
+    `  -> HTTP ${res.status} ${res.headers.get('location') ?? (await res.text()).slice(0, 120)}`
+  );
+} else {
+  console.log(
+    '  no admin key — firing game.shutDown() as the GM (refused by v14 when a key is set) ...'
+  );
+  const gm = new Foundry(cfg, log);
+  await gm.connect();
+  await gm.evaluate(() => globalThis.game.shutDown(), null).catch(() => {});
+  await gm.dispose();
+}
 
 let down = false;
 for (let i = 0; i < 36 && !down; i++) {
