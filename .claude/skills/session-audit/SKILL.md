@@ -67,12 +67,12 @@ Four things about this list are load-bearing:
   is usually the best finding in the report — a named villain in the wrong room, a reveal that now
   fires out of order.
 
-**Two gaps in the reads you must name rather than paper over.** `get-actor` returns `0`/`null` for a
+**One gap in the reads you must name rather than paper over.** `get-actor` returns `0`/`null` for a
 PC's maximum HP — take it from the newest `party-snapshots/*.md` and say in the report which number
-you used. And `get-actor` does not surface damage vulnerabilities, resistances, or immunities — read
-the compendium source with `get-compendium-entry` (`compact: true`) and report it as *confirm on the
-sheet*, never as an assertion. Both are tool correctness gaps, not judgment gaps (design.md §2.1);
-if either bites twice, say so and propose extending `get-actor` rather than working around it again.
+you used. It is a tool correctness gap, not a judgment gap (design.md §2.1); if it bites twice, say
+so and propose extending `get-actor` rather than working around it again. (Damage and condition
+immunities / resistances / vulnerabilities ARE on `get-actor` — `defenses`, with each entry's
+`bypasses`; read them there, not from the compendium source.)
 
 ## Step 2 — the arithmetic (the script owns this)
 

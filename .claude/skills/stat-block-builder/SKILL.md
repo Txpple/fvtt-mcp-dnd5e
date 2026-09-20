@@ -149,11 +149,11 @@ all**, just the feature names:
 
 Only author from scratch with `add-feature` mode `feature` / `featureType: "passive"` (`featType:
 "monster"`, prerequisite in `requirements`) for genuinely homebrew traits with no compendium source.
-> **⚠ An authored feature ships with a BLANK star icon — set its art.** `add-feature` takes no `img`, so
-> after authoring ANY `passive` / `attack` / `save` / Multiattack feature, set its icon with
-> `update-actor-item img`, grabbing it from the compendium feature you're emulating (a real MM feature's
-> `img`, e.g. `icons/skills/melee/strike-weapons-orange.webp` for a Multiattack). Every row on the sheet
-> must carry real art — a blank star is unfinished (shared-policy rule 8).
+> **⚠ An authored feature ships with a BLANK star icon unless you pass `img`.** Give every
+> `passive` / `attack` / `save` / Multiattack feature its icon in the `add-feature` call, taken from
+> the compendium feature you're emulating (a real MM feature's `img`, e.g.
+> `icons/skills/melee/strike-weapons-orange.webp` for a Multiattack). Every row on the sheet must
+> carry real art — a blank star is unfinished (shared-policy rule 8).
 
 ## Step 5 — Actions, attacks, and abilities
 
