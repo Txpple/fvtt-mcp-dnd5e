@@ -328,6 +328,20 @@ describe('tool registry', () => {
     expect(handlerWithoutDefinition).toEqual([]);
   });
 
+  it('every advertised schema closes its top level, and dispatch refuses an unknown argument by name', async () => {
+    const { tools, dispatch } = build();
+    for (const tool of tools) {
+      expect(tool.inputSchema.additionalProperties, tool.name).toBe(false);
+    }
+    // The F6 case: a facet the tool does not have must not be stripped into an unfiltered survey.
+    await expect(dispatch('search-compendium-creatures', { query: 'goblin' })).rejects.toThrow(
+      /search-compendium-creatures: unknown argument "query" — it takes: name, challengeRating/
+    );
+    await expect(dispatch('get-world-info', { verbose: true, x: 1 })).rejects.toThrow(
+      /unknown arguments "verbose", "x" — it takes: no arguments/
+    );
+  });
+
   it('every advertised tool carries a name + inputSchema', () => {
     const { tools } = build();
     for (const tool of tools) {

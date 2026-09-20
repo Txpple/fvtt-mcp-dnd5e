@@ -393,42 +393,7 @@ export class CompendiumTools {
     // Detect game system for appropriate filtering
     const gameSystem = await this.getGameSystem();
 
-    const schema = SearchCompendiumSchema;
-
-    // Defensive coercion for occasionally-malformed call shapes: some MCP clients have been
-    // observed to send `query` as a bare string or under a single differently-named key instead
-    // of `{ query }`. We recover those two shapes rather than hard-failing the search, but we
-    // WARN when we do (the reshaping is intentionally not silent — a sudden spike means a client
-    // is sending the wrong shape and the workaround should be revisited/removed).
-    let parsedArgs: z.infer<typeof schema>;
-    try {
-      parsedArgs = schema.parse(args);
-    } catch (zodError) {
-      if (typeof args === 'string') {
-        this.logger.warn(
-          'search-compendium: recovered a bare-string query (non-standard arg shape)'
-        );
-        parsedArgs = schema.parse({ query: args });
-      } else if (args && typeof args.query === 'undefined' && typeof args === 'object') {
-        const firstKey = Object.keys(args)[0];
-        if (firstKey && typeof args[firstKey] === 'string') {
-          this.logger.warn('search-compendium: recovered query from a non-standard key', {
-            key: firstKey,
-          });
-          parsedArgs = schema.parse({ query: args[firstKey] });
-        } else {
-          throw zodError;
-        }
-      } else {
-        this.logger.debug('Failed to parse search args, using fallback', {
-          args: typeof args === 'object' ? JSON.stringify(args) : args,
-          error: zodError instanceof Error ? zodError.message : 'Unknown parsing error',
-        });
-        throw zodError;
-      }
-    }
-
-    const { query, packType, limit } = parsedArgs;
+    const { query, packType, limit } = SearchCompendiumSchema.parse(args);
 
     this.logger.info('Compendium name search', { gameSystem, query, packType });
 

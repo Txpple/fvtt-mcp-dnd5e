@@ -10,6 +10,15 @@ describe('toInputSchema', () => {
     expect(Array.isArray(json.required)).toBe(true);
   });
 
+  it('closes the top level: additionalProperties false (unknown args are refused, not stripped)', () => {
+    const json = toInputSchema(z.object({ name: z.string().optional() }));
+    expect(json.additionalProperties).toBe(false);
+    // Nested objects keep their own policy — a passthrough sub-schema stays open.
+    const nested = toInputSchema(z.object({ data: z.object({ a: z.string() }).passthrough() }));
+    const data = (nested.properties as any).data;
+    expect(data.additionalProperties).not.toBe(false);
+  });
+
   it('strips the $schema dialect marker', () => {
     const json = toInputSchema(z.object({ name: z.string() }));
     expect(json.$schema).toBeUndefined();

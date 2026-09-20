@@ -28,6 +28,11 @@ import { z } from 'zod';
  * The emitted `$schema` is stripped (MCP carries the dialect out-of-band, and the hand-written
  * definitions never included it), and `required` is normalised to always be an array — matching
  * the previous definitions and the expectations baked into the tool tests.
+ *
+ * The top level is CLOSED (`additionalProperties: false`): an unknown argument is refused by the
+ * registry's dispatch (src/registry.ts), never silently stripped the way zod's default object
+ * parse does — `{query:"goblin"}` to a tool whose facet is `name` must fail loudly, not return
+ * the unfiltered pool. Nested objects keep their own policy (some are deliberately passthrough).
  */
 export function toInputSchema(schema: z.ZodType): Record<string, unknown> {
   const json = z.toJSONSchema(schema, {
@@ -40,6 +45,7 @@ export function toInputSchema(schema: z.ZodType): Record<string, unknown> {
   stripIntSentinels(json);
   if (!Array.isArray(json.required)) json.required = [];
   if (typeof json.properties !== 'object' || json.properties === null) json.properties = {};
+  json.additionalProperties = false;
 
   return json;
 }

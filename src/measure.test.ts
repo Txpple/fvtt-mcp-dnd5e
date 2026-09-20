@@ -22,7 +22,9 @@ import { makeFoundry, makeLogger } from './tools/test-helpers.js';
 
 /** The ratchets (chars). The comment names the milestone that lowers each one and its target. */
 const BUDGET = {
-  toolsListChars: 284_000, // 283,945 at 2.2.0 — M7 (prose diet) → ≤ 230,000
+  // 283,945 at 2.2.0; +4,379 for the closed top level (`additionalProperties:false` × 151, M2 —
+  // the cost the plan accepted for refusing unknown arguments); M7 (prose diet) → ≤ 230,000
+  toolsListChars: 288_200,
   nameChars: 11_200, // 11,147 at 2.2.0 — M8 (CRUD consolidation) → ≤ 7,000
   skillDescriptionChars: 15_400, // 15,381 at 2.2.0 — M3 (six rewrites) → ≤ 8,000
 };

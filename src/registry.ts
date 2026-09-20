@@ -470,6 +470,26 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   }
   const isEnabled = (name: string): boolean => enabledToolsets.has(toolsetByTool.get(name)!);
 
+  // The advertised top level is closed (toInputSchema sets additionalProperties:false): an unknown
+  // argument is refused HERE, by name, before the handler's zod parse would strip it silently —
+  // `{query:"goblin"}` to a tool whose facet is `name` is a wrong call, not an unfiltered survey.
+  const knownArgs = new Map<string, Set<string>>();
+  for (const [name, def] of defByName) {
+    knownArgs.set(name, new Set(Object.keys(def.inputSchema?.properties ?? {})));
+  }
+  const refuseUnknownArgs = (name: string, args: unknown): void => {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) return;
+    const known = knownArgs.get(name);
+    if (!known) return;
+    const unknown = Object.keys(args).filter(k => !known.has(k));
+    if (unknown.length === 0) return;
+    const takes = known.size ? [...known].join(', ') : 'no arguments';
+    throw new FormattedToolError(
+      `${name}: unknown argument${unknown.length > 1 ? 's' : ''} ${unknown.map(k => `"${k}"`).join(', ')} — ` +
+        `it takes: ${takes}. Unknown arguments are refused, not ignored.`
+    );
+  };
+
   // Advertise exactly what we can dispatch (within the enabled toolsets); a handler with no
   // matching definition is a wiring bug that should fail loudly at startup, not ship a tool that
   // can't describe itself.
@@ -498,6 +518,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
           'the MCP registration (or unset it for the whole surface) and restart the client.'
       );
     }
+    refuseUnknownArgs(name, args);
     return handler(args ?? {});
   };
 
