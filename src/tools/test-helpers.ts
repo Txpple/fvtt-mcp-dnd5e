@@ -46,6 +46,8 @@ export function makeFoundry(response: any = {}): {
     // the one exercised; override isReady per-test for the already-disconnected branch.
     isReady: vi.fn(() => true),
     dispose: vi.fn(async () => {}),
+    // The live world's id (world-scoped default paths, e.g. send-chat-message's image folder).
+    worldId: vi.fn(async () => 'w'),
   };
   return { foundry, calls };
 }

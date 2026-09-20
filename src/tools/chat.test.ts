@@ -23,16 +23,10 @@ function fakeHost(files: any, serverUrl = 'https://srv'): any {
   return {
     kind: 'molten',
     label: 'stub',
-    worldId: 'w',
-    vars: {
-      serverUrl: 'MOLTEN_SERVER_URL',
-      adminKey: 'MOLTEN_ADMIN_KEY',
-      worldId: 'MOLTEN_WORLD_ID',
-    },
     unreachableHint: '',
     redact: (m: string) => m,
     files,
-    filesNotConfigured: (tool: string) => `${tool} is not configured: set MOLTEN_WEBDAV_PASSWORD.`,
+    filesNotConfigured: (tool: string) => `${tool} is not configured: set FOUNDRY_WEBDAV_PASSWORD.`,
     publicUrl: (p: string) => `${serverUrl}/${p}`,
   };
 }

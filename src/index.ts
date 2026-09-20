@@ -42,6 +42,7 @@ async function main(): Promise<void> {
     serverUrl: config.host.serverUrl,
     user: config.host.user,
   });
+  for (const note of config.notes) logger.warn(note);
 
   // The live bridge. Lazy: it connects (wake -> /join -> game.ready -> inject)
   // on the first foundry.call(). Its own diagnostics go to stderr.

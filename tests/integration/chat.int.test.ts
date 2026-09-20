@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Foundry } from '../../dist/foundry.js';
 import { ChatTools } from '../../dist/tools/chat.js';
-import { LIVE, ENV, foundryConfig, noopLogger, CONNECT_TIMEOUT_MS, TAG } from './setup.js';
+import { LIVE, foundryConfig, noopLogger, CONNECT_TIMEOUT_MS, TAG } from './setup.js';
 
 describe.skipIf(!LIVE)('chat-log tools (live)', () => {
   let foundry: Foundry;
@@ -125,11 +125,11 @@ describe.skipIf(!LIVE)('chat-log tools (live)', () => {
   });
 
   it("exports through the host's file plane and the public URL is reachable", async ctx => {
-    // Needs a plane: WebDAV on molten (MOLTEN_WEBDAV_PASSWORD), the Data/ dir on local
-    // (LOCAL_FOUNDRY_DATA). A host without one skips — that is the host's contract, not a failure.
+    // Needs a plane: WebDAV (FOUNDRY_WEBDAV_*), or the Data/ dir of a local install
+    // (FOUNDRY_DATA_DIR). A host without one skips — that is the host's contract, not a failure.
     if (!cfg.host.files) return ctx.skip();
     const tools = new ChatTools({ foundry: foundry as any, logger: noopLogger, host: cfg.host });
-    const remote = `worlds/${cfg.host.worldId ?? ENV.MOLTEN_WORLD_ID}/exports/${TAG}-chat-log.md`;
+    const remote = `worlds/${await foundry.worldId()}/exports/${TAG}-chat-log.md`;
     try {
       const out = await tools.handleExportChatLog({ remotePath: remote, overwrite: true });
       const urlMatch = out.match(/public URL: (\S+)/);

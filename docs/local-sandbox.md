@@ -131,31 +131,34 @@ app binary is a manual install.
 ## Pointing the MCP at the sandbox — hosts
 
 The server binary takes a **host** via the `FOUNDRY_HOST` env var (`src/hosts/env.ts`, design.md
-§2.6), set in the MCP *registration*, never in `.env` — one `.env` serves every host. (The pre-2.2
-spelling `FOUNDRY_PROFILE=local` still works as an alias.)
+§2.6), set in the MCP *registration*, never in `.env` — one `.env` serves every registration,
+because a registration's `env` block beats it. (The pre-2.2 spelling `FOUNDRY_PROFILE=local`
+still works as an alias.)
 
-| Registration (user scope, `~/.claude.json`) | `FOUNDRY_HOST` | Targets |
+| Registration (user scope, `~/.claude.json`) | `env` | Targets |
 | --- | --- | --- |
-| `foundry-molten5e` | *(unset)* = `molten` | prod (Molten), the `MOLTEN_*` set |
-| `foundry-local5e` | `local` | the sandbox: `LOCAL_SERVER_URL` (default `http://localhost:30000`) |
+| `foundry-molten5e` | `FOUNDRY_HOST=molten` | prod (Molten) — `FOUNDRY_URL` or the 2.x `MOLTEN_SERVER_URL` alias |
+| `foundry-local5e` | `FOUNDRY_HOST=local` | the sandbox — `FOUNDRY_URL` defaults to `http://localhost:30000` |
 
-The local host **inherits** the world id and join user/password from the prod values (a
-sandbox is a byte copy of prod — same world id, same users) and accepts `LOCAL_WORLD_ID` /
-`LOCAL_FOUNDRY_USER` / `LOCAL_FOUNDRY_PASSWORD` overrides. Both tool namespaces coexist in one
-Claude Code session; which instance a call touches is fixed by which server it goes to — there is
-no runtime "switch instance" state to get wrong. `get-world-info` reports the host it is on
-(`host: { kind, label, files }`).
+Both read the same `FOUNDRY_*` names; under `local` the 2.x `LOCAL_*` names (`LOCAL_SERVER_URL`,
+`LOCAL_ADMIN_KEY`, `LOCAL_WORLD_ID`, `LOCAL_FOUNDRY_USER` / `_PASSWORD`, `LOCAL_FOUNDRY_DATA`) are
+still read as aliases that win over the canonical name, which is what lets one `.env` hold prod's
+values under `MOLTEN_*` and the sandbox's under `LOCAL_*`. Nothing is inherited across hosts any
+more: with no `FOUNDRY_WORLD_ID` / `LOCAL_WORLD_ID` the bridge launches the one world `/setup`
+lists. Both tool namespaces coexist in one Claude Code session; which instance a call touches is
+fixed by which server it goes to — there is no runtime "switch instance" state to get wrong.
+`get-world-info` reports the host it is on (`host: { kind, label, files }`).
 
 What the local host does differently (deliberate):
 
-- **The file plane is the install's `Data/` directory** (`LOCAL_FOUNDRY_DATA`, the same directory
-  `local-foundry.mjs` serves) over `node:fs` — so the asset file tools (`upload-asset`,
-  `list-assets`, …) work on the sandbox with exactly the WebDAV contract, including the live
-  world-DB refusal. With `LOCAL_FOUNDRY_DATA` unset they report "not configured" — a local-host
-  process never dials prod's WebDAV.
+- **The file plane is the install's `Data/` directory** (`FOUNDRY_DATA_DIR`, alias
+  `LOCAL_FOUNDRY_DATA` — the same directory `local-foundry.mjs` serves) over `node:fs` — so the
+  asset file tools (`upload-asset`, `list-assets`, …) work on the sandbox with exactly the WebDAV
+  contract, including the live world-DB refusal. A local-host process never dials WebDAV.
 - **No wake plumbing** — a local box doesn't sleep; if it isn't running the bridge fails fast
   naming `scripts/local-foundry.mjs start`.
-- **World launch needs `LOCAL_ADMIN_KEY`** — with it set, the bridge auto-launches a cold
+- **World launch needs the admin key** (`FOUNDRY_ADMIN_KEY`, alias `LOCAL_ADMIN_KEY`) — with it
+  set, the bridge auto-launches a cold
   instance exactly like prod; without it you click Play yourself. Counter-intuitively, an
   admin-*less* Foundry v14 is *less* automatable, not more: it accepts a `launchWorld` POST but
   refuses remote shutdown/return-to-setup with 403 `InvalidAdminKey` (observed live), so there

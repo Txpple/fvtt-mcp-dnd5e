@@ -1,23 +1,25 @@
 // src/hosts — the one place that knows where Foundry runs (design.md §2.6).
 //
-//   resolveHostConfig(env)  →  HostConfig   (the single env selector)
+//   resolveHostConfig(env)  →  HostConfig   (the single env selector: FOUNDRY_*, the presets)
 //   createHost(cfg, logger) →  Host         (what the bridge and the tools are handed)
 //
 // The bridge's own config (serverUrl / user / password / adminKey / worldId) is read off the same
 // HostConfig by `bridgeConfigOf`, so a script or the server builds both from one object.
 
 import { Logger } from '../logger.js';
-import { GenericHost } from './generic.js';
-import { LocalHost } from './local.js';
-import { MoltenHost } from './molten.js';
-import type { HostConfig } from './env.js';
+import { FoundryHost } from './host.js';
+import type { HostConfig } from './host.js';
 import type { Host } from './types.js';
 
-export { hostKindFromEnv, resolveHostConfig } from './env.js';
-export type { Env, HostConfig } from './env.js';
-export type { MoltenHostConfig } from './molten.js';
-export type { LocalHostConfig } from './local.js';
-export type { GenericHostConfig } from './generic.js';
+export {
+  hostConfigProblem,
+  hostKindFromEnv,
+  isPlaceholderUrl,
+  PLACEHOLDER_URL,
+  resolveHostConfig,
+} from './env.js';
+export type { AliasWarn, Env } from './env.js';
+export type { HostConfig } from './host.js';
 export {
   buildPublicUrl,
   guessContentType,
@@ -30,14 +32,7 @@ export { FilePlaneError } from './types.js';
 export type { FileEntry, FilePlane, Host, HostKind, WakeContext } from './types.js';
 
 export function createHost(cfg: HostConfig, logger: Logger): Host {
-  switch (cfg.kind) {
-    case 'molten':
-      return new MoltenHost(cfg, logger);
-    case 'local':
-      return new LocalHost(cfg);
-    case 'generic':
-      return new GenericHost(cfg);
-  }
+  return new FoundryHost(cfg, logger);
 }
 
 /** The connection half of a HostConfig — what `new Foundry(...)` takes, minus the host itself. */

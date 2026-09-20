@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import type { PageApi } from './page/index.js';
 import type { Host } from './hosts/types.js';
+import { hostConfigProblem } from './hosts/env.js';
 import { clearSystemCache } from './utils/system-detection.js';
 
 /**
@@ -48,6 +49,11 @@ export interface FoundryBridge {
    * overlay) to shoot a specific scene. Visual QA for scene/import work.
    */
   screenshot(outPath: string): Promise<void>;
+  /**
+   * The live world's id (`game.world.id`), read once per connection. Connects if needed. Tools
+   * build world-scoped default paths on it (`worlds/<id>/assets/...`) instead of on config.
+   */
+  worldId(): Promise<string>;
   /** Is the live session currently up (page open + bridge marked ready)? */
   isReady(): boolean;
   /**
@@ -60,26 +66,28 @@ export interface FoundryBridge {
 }
 
 export interface FoundryConfig {
-  /** Base world URL, e.g. https://eoh-test.moltenhosting.com or http://localhost:30000. */
+  /** Base world URL (FOUNDRY_URL), e.g. https://your-box.moltenhosting.com or http://localhost:30000. */
   serverUrl: string;
   /**
-   * Where this Foundry runs (src/hosts). Supplies the optional wake step before /join is probed,
-   * secret redaction for logs, and the env-var names error messages should point at. Omitted =
-   * a generic host: no wake, and messages name the generic variables.
+   * Where this Foundry runs (src/hosts). Supplies the optional wake step before /join is probed
+   * and secret redaction for logs. Omitted = a host that never sleeps.
    */
   host?: Host;
-  /** Dedicated Foundry user to join as (FOUNDRY_USER, e.g. "MCP-Claude"). */
+  /** Dedicated Foundry user to join as (FOUNDRY_USER, default "MCP-Claude"). */
   user: string;
-  /** Optional user password; omit for a passwordless user. */
+  /** Optional user password (FOUNDRY_PASSWORD); omit for a passwordless user. */
   password?: string;
   /**
-   * Foundry admin access key. When set (with worldId), an instance that is up but has no world
-   * launched is recovered by authenticating to /setup and launching the world — Foundry's own
-   * admin flow, the same on every host. Omit to keep world-launch a manual step (the bridge then
-   * fails with guidance).
+   * Foundry admin access key (FOUNDRY_ADMIN_KEY). When set, an instance that is up but has no
+   * world launched is recovered by authenticating to /setup and launching the world — Foundry's
+   * own admin flow, the same on every host. Omit to keep world-launch a manual step (the bridge
+   * then fails with guidance).
    */
   adminKey?: string;
-  /** World to launch when the instance is up but no world is active. */
+  /**
+   * World to launch when the instance is up but no world is active (FOUNDRY_WORLD_ID). Omit and
+   * the bridge launches the ONE world it finds on /setup — several worlds need the id.
+   */
   worldId?: string;
   /** Run Chromium headless (default true). */
   headless?: boolean;
@@ -115,6 +123,10 @@ export class Foundry implements FoundryBridge {
   private ready = false;
   private connecting: Promise<void> | undefined;
   private readonly pageBundle: string;
+  /** `game.world.id` of the joined world, read after game.ready. */
+  private liveWorldId: string | undefined;
+  /** The world /setup discovery settled on (kept for the next launch of this process). */
+  private discoveredWorldId: string | undefined;
 
   constructor(
     private readonly cfg: FoundryConfig,
@@ -138,6 +150,15 @@ export class Foundry implements FoundryBridge {
   }
 
   private async doConnect(): Promise<void> {
+    // A placeholder URL can never connect — refuse in milliseconds, naming the variable, instead
+    // of spending the cold-boot budget on "booting" (the server refuses it at startup too; this
+    // covers a script or test that built the config by hand).
+    const problem = hostConfigProblem({
+      kind: 'generic',
+      serverUrl: this.cfg.serverUrl,
+      user: this.cfg.user,
+    });
+    if (problem) throw new Error(problem);
     this.ready = false;
     // A reconnect (after a "Return to Setup" / box relaunch) could in principle bring up a different
     // world, so drop the process-lifetime system-detection cache — it must re-detect, not trust a stale
@@ -153,9 +174,17 @@ export class Foundry implements FoundryBridge {
     await this.ensureWorldReady(this.page);
     await this.joinWorld(this.page);
     await this.injectBundle(this.page);
+    this.liveWorldId = await this.page.evaluate(
+      () => (globalThis as { game?: { world?: { id?: string } } }).game?.world?.id ?? ''
+    );
     this.ready = true;
-    this.log.info(`connected as "${this.cfg.user}" — game.ready`);
+    this.log.info(`connected as "${this.cfg.user}" — game.ready (world "${this.liveWorldId}")`);
     this.warmIndexes();
+  }
+
+  async worldId(): Promise<string> {
+    await this.ensureReady();
+    return this.liveWorldId ?? '';
   }
 
   /**
@@ -187,17 +216,6 @@ export class Foundry implements FoundryBridge {
     });
   }
 
-  /** Env-var names for messages: the host's own, or the generic spelling when there is no host. */
-  private get vars(): { serverUrl: string; adminKey: string; worldId: string } {
-    return (
-      this.cfg.host?.vars ?? {
-        serverUrl: 'FOUNDRY_URL',
-        adminKey: 'FOUNDRY_ADMIN_KEY',
-        worldId: 'FOUNDRY_WORLD_ID',
-      }
-    );
-  }
-
   /**
    * Bring a cold box to a joinable world. The Magic URL only wakes the VM; if the VM is up
    * but no world is launched, Foundry serves a "no active game session" page indefinitely. So
@@ -213,7 +231,7 @@ export class Foundry implements FoundryBridge {
       const state = await this.probeJoinState(page);
       if (state === 'joinable') return;
       if (state === 'no-world') {
-        if (this.cfg.adminKey && this.cfg.worldId) {
+        if (this.cfg.adminKey) {
           // Launch once; retry only if still 'no-world' after a grace period. Stamp the
           // attempt time BEFORE launching so a throwing attempt still honors the grace.
           if (Date.now() - lastLaunchAt > 60_000) {
@@ -222,8 +240,9 @@ export class Foundry implements FoundryBridge {
               await this.launchWorld(page);
             } catch (err) {
               const msg = (err as Error).message;
-              // Misconfiguration (bad admin key / wrong world id) won't self-heal — fail fast.
-              if (/authentication failed|not found on \/setup/i.test(msg)) throw err;
+              // Misconfiguration (bad admin key / wrong or ambiguous world id) won't self-heal —
+              // fail fast.
+              if (/authentication failed|found on \/setup|\/setup lists/i.test(msg)) throw err;
               // Otherwise it may be a transient /setup hiccup; keep retrying within the budget.
               this.log.warn(`launch attempt failed (retrying within budget): ${msg}`);
             }
@@ -232,7 +251,8 @@ export class Foundry implements FoundryBridge {
         } else {
           throw new Error(
             'Foundry world is not launched and no admin key is configured to launch it. ' +
-              `Launch the world (Setup → Launch World), or set ${this.vars.adminKey} + ${this.vars.worldId}.`
+              'Launch the world (Setup → Launch World), or set FOUNDRY_ADMIN_KEY (and ' +
+              'FOUNDRY_WORLD_ID when /setup lists more than one world).'
           );
         }
       }
@@ -246,8 +266,7 @@ export class Foundry implements FoundryBridge {
     throw new Error(
       `Foundry world never became joinable within ${Math.round(budget / 1000)}s ` +
         '(the instance failed to come up, or the world failed to launch). ' +
-        (this.cfg.host?.unreachableHint ??
-          `Check ${this.vars.serverUrl} and that the world is launched.`)
+        (this.cfg.host?.unreachableHint ?? 'Check FOUNDRY_URL and that the world is launched.')
     );
   }
 
@@ -284,22 +303,25 @@ export class Foundry implements FoundryBridge {
     return 'booting';
   }
 
-  /** Authenticate to /setup with the admin key and launch the configured world. */
+  /**
+   * Authenticate to /setup with the admin key and launch the configured world — or, with no
+   * FOUNDRY_WORLD_ID, the one world /setup lists (several = a refusal naming them).
+   */
   private async launchWorld(page: Page): Promise<void> {
-    this.log.info(`world not active — launching "${this.cfg.worldId}" via admin /setup`);
+    const want = this.cfg.worldId ? `"${this.cfg.worldId}"` : 'the world on /setup';
+    this.log.info(`world not active — launching ${want} via admin /setup`);
     await page
       .goto(`${this.base}/setup`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
       .catch(() => {});
     await page.waitForSelector('input[name="adminPassword"]', { timeout: 30_000 });
     await page.fill('input[name="adminPassword"]', this.cfg.adminKey ?? '');
     await page.locator('button[name="action"], button[type="submit"]').first().click();
-    // Foundry returns to /setup with the world tiles once authenticated. If the tile never
-    // appears, disambiguate the cause so the operator gets an actionable error (not a raw
-    // selector timeout): a persistent password gate = rejected admin key; otherwise a wrong
-    // world id. ensureWorldReady fails fast on both (neither self-heals).
-    const tile = `li[data-package-id="${this.cfg.worldId}"]`;
+    // Foundry returns to /setup with the world tiles once authenticated. If no tile appears,
+    // disambiguate the cause so the operator gets an actionable error (not a raw selector
+    // timeout): a persistent password gate = rejected admin key; otherwise there is no world.
+    // ensureWorldReady fails fast on both (neither self-heals).
     const appeared = await page
-      .waitForSelector(tile, { timeout: 30_000 })
+      .waitForSelector('li[data-package-id]', { timeout: 30_000 })
       .then(() => true)
       .catch(() => false);
     if (!appeared) {
@@ -309,16 +331,25 @@ export class Foundry implements FoundryBridge {
         .catch(() => 0);
       throw new Error(
         stillGated
-          ? `Foundry admin authentication failed — check ${this.vars.adminKey}`
-          : `world "${this.cfg.worldId}" not found on /setup — check ${this.vars.worldId}`
+          ? 'Foundry admin authentication failed — check FOUNDRY_ADMIN_KEY'
+          : 'no world found on /setup — create one, or check FOUNDRY_WORLD_ID'
       );
+    }
+    const world = this.cfg.worldId ?? this.discoveredWorldId ?? (await this.discoverWorld(page));
+    const tile = `li[data-package-id="${world}"]`;
+    if (
+      (await page
+        .locator(tile)
+        .count()
+        .catch(() => 0)) === 0
+    ) {
+      throw new Error(`world "${world}" not found on /setup — check FOUNDRY_WORLD_ID`);
     }
     // Prefer Foundry's own setup POST helper: the "Launch World" button calls
     // game.post({action:'launchWorld', world}) internally. It's robust (no hover/visibility
     // games) but only valid while no world is active. A successful launch navigates away,
     // destroying the eval context — treat that as success. Fall back to clicking the
     // hover-reveal launch control if game.post is unavailable or rejects.
-    const world = this.cfg.worldId ?? '';
     const outcome = await page
       .evaluate(async w => {
         const g = (globalThis as { game?: { post?: (d: unknown) => Promise<unknown> } }).game;
@@ -346,7 +377,41 @@ export class Foundry implements FoundryBridge {
         }, world);
       }
     }
-    this.log.info('worldLaunch dispatched — waiting for the world to boot');
+    this.log.info(`worldLaunch dispatched for "${world}" — waiting for the world to boot`);
+  }
+
+  /**
+   * No FOUNDRY_WORLD_ID: the authenticated /setup page knows every installed world
+   * (`game.worlds` on the Setup client; the world tiles as a fallback). One world = the answer;
+   * more = the operator has to say which.
+   */
+  private async discoverWorld(page: Page): Promise<string> {
+    const ids: string[] = await page
+      .evaluate(() => {
+        const g = (globalThis as { game?: { worlds?: Iterable<{ id?: string }> } }).game;
+        const fromApi = g?.worlds ? [...g.worlds].map(w => w.id ?? '').filter(Boolean) : [];
+        if (fromApi.length) return fromApi;
+        // The tiles: worlds sit in their own list; systems and modules have their own lists.
+        return [
+          ...document.querySelectorAll<HTMLElement>(
+            '#worlds-list li[data-package-id], [data-package-type="world"] li[data-package-id]'
+          ),
+        ]
+          .map(li => li.dataset.packageId ?? '')
+          .filter(Boolean);
+      })
+      .catch(() => [] as string[]);
+    if (ids.length === 1) {
+      this.discoveredWorldId = ids[0];
+      this.log.info(`FOUNDRY_WORLD_ID unset — /setup has one world: "${ids[0]}"`);
+      return ids[0] as string;
+    }
+    if (ids.length === 0) {
+      throw new Error('no world found on /setup — create one, or check FOUNDRY_WORLD_ID');
+    }
+    throw new Error(
+      `/setup lists ${ids.length} worlds (${ids.join(', ')}) — set FOUNDRY_WORLD_ID to the one to launch`
+    );
   }
 
   private get base(): string {

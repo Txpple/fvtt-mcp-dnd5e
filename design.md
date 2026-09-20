@@ -90,15 +90,18 @@ These are not aspirations; they are the rules we hold each other to.
 
 6. **A host-agnostic core; hosts are options.** The bridge is Foundry's own client, so the whole
    tool surface works against *any* Foundry instance. Everything that depends on **where** the
-   instance runs — how a sleeping box is woken, how a file reaches its `Data/` directory, which
-   env vars name it — lives behind one seam, `src/hosts/**`, as a **host**: `molten` (Molten
-   Hosting: Magic-URL wake, WebDAV file plane), `local` (an install on this machine: no wake,
-   direct filesystem plane), `generic` (a URL and nothing else). `local` means *on this machine*,
-   never "not Molten" — a self-hosted box elsewhere is its own host when we need it. No file
-   outside `src/hosts/**` may name a host, and a tool never changes behaviour by host except
-   through the plane the host provides (a host without a file plane makes the asset tools say so,
-   by name). The registration picks the host (`FOUNDRY_HOST`); the tool names are the same on all
-   of them, so skills never know which one they are on.
+   instance runs — how a sleeping box is woken, how a file reaches its `Data/` directory — lives
+   behind one seam, `src/hosts/**`, and is configured by **one variable set on every host**,
+   `FOUNDRY_*` (`FOUNDRY_URL`, `_USER`, `_PASSWORD`, `_ADMIN_KEY`, `_WORLD_ID`, `_WAKE_URL`, and
+   the plane extras `_DATA_DIR` / `_WEBDAV_*`). A **host** is a *preset* over those facts, chosen
+   per registration by `FOUNDRY_HOST`: `generic` (the default — any Foundry at a URL; reads every
+   variable), `molten` (Molten Hosting: the WebDAV plane derived from the URL, never a filesystem
+   plane), `local` (an install on this machine: no wake, never WebDAV, the launcher's hints).
+   `local` means *on this machine*, never "not Molten". Legacy names (`MOLTEN_*`, `LOCAL_*`) are
+   read only in `src/hosts/env.ts`, as aliases under their own host. No file outside
+   `src/hosts/**` may name a host, and a tool never changes behaviour by host except through the
+   plane the host provides (a host without a file plane makes the asset tools say so, by name).
+   The tool names are the same on every host, so skills never know which one they are on.
 
 ---
 
@@ -309,9 +312,11 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   `src/page/**` and is bundled into the browser context.
 - **Hosts.** `src/hosts/**` is the one place that knows where Foundry runs (§2.6). A `Host` gives
   the bridge its optional `wake` and the tools their optional `FilePlane`; `resolveHostConfig`
-  (`hosts/env.ts`) is the single env selector (`FOUNDRY_HOST`, with the `LOCAL_*` → `MOLTEN_*`
-  fallbacks) shared by the server, the verify scripts and the integration suite. The asset file
-  tools (`src/tools/assets/**`) are written against the plane, never a host.
+  (`hosts/env.ts`) is the single env selector (the `FOUNDRY_*` set; `FOUNDRY_HOST` picks the
+  preset, default `generic`; the 2.x `MOLTEN_*` / `LOCAL_*` names as aliases) shared by the
+  server, the verify scripts and the integration suite, and a placeholder `FOUNDRY_URL` is refused
+  at startup. An unset `FOUNDRY_WORLD_ID` is discovered on `/setup`. The asset file tools
+  (`src/tools/assets/**`) are written against the plane, never a host.
 - **One registry.** `src/registry.ts` is the single source of truth wiring tool name → handler; the
   advertised tool list is derived from it so the two can't drift.
 - **Generated schemas.** Every tool's input schema is generated from one hoisted zod (`io: 'input'`)

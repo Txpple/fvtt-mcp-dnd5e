@@ -120,9 +120,9 @@ No tool behaviour changed in 2.2; what changed is what the project *is*. It was 
 (`fvtt-mcp-molten5e`) while the code had long been host-agnostic in fact — so the host left the
 name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md`](docs/history/plan-2.2-hosts.md)):
 
-- **`FOUNDRY_HOST`** = `molten` (Magic-URL wake, WebDAV file plane) · `local` (an install on this
-  machine — no wake, and the asset file tools work straight on its `Data/` directory, which the
-  sandbox never had before) · `generic` (a URL, nothing else). One `.env`, one registration per
+- **`FOUNDRY_HOST`** = `generic` (any Foundry at a URL — the default) · `molten` (Molten Hosting:
+  the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
+  asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
 - **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 151 tools (13 named toolsets;
   `world` always on); an out-of-set call is refused by name. `chat,combat` is 16 tools at ~6k tokens
@@ -271,10 +271,10 @@ Register the built MCP server in your Claude Code config. Copy
 ```json
 {
   "mcpServers": {
-    "foundry-prod": {
+    "foundry": {
       "command": "C:/Program Files/nodejs/node.exe",
       "args": ["C:/path/to/fvtt-mcp-dnd5e/dist/index.js"],
-      "env": { "FOUNDRY_HOST": "molten" }
+      "env": { "FOUNDRY_URL": "https://your-box.example.com" }
     },
     "foundry-sandbox": {
       "command": "C:/Program Files/nodejs/node.exe",
@@ -285,10 +285,11 @@ Register the built MCP server in your Claude Code config. Copy
 }
 ```
 
-- **One registration per Foundry instance.** `FOUNDRY_HOST` in the registration's `env` says where
-  that instance runs — `molten` (the default), `local` (an install on this machine), or `generic`
-  (a bare URL) — and one `.env` serves all of them ([design.md §2.6](design.md)). Which instance a
-  call touches is fixed by which server it goes to.
+- **One registration per Foundry instance.** The registration's `env` names the instance
+  (`FOUNDRY_URL`) and, when it is not a bare URL, how it is reached — `FOUNDRY_HOST=molten`
+  (Molten Hosting) or `local` (an install on this machine); `generic` is the default
+  ([design.md §2.6](design.md)). A registration's `env` beats the shared `.env`, so one `.env`
+  serves all of them. Which instance a call touches is fixed by which server it goes to.
 - Use an **absolute** path to the root `dist/index.js` (Claude Code may launch the server from any
   directory).
 - On Windows, point `command` at the full `node.exe` path if Node isn't on `PATH`.
@@ -324,23 +325,26 @@ startup with the valid names. The table is [`src/toolsets.ts`](src/toolsets.ts).
 
 ## Configuration
 
-Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your instance. The host
-(`FOUNDRY_HOST`) picks which variables apply:
+Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your instance. One variable
+set on every host, `FOUNDRY_*`:
 
-- **`molten`** — `MOLTEN_SERVER_URL`, `MOLTEN_WORLD_ID`, `MOLTEN_WEBDAV_URL`,
-  `MOLTEN_FILEBROWSER_URL`, `FOUNDRY_USER` (the dedicated user to join as; defaults to
-  `MCP-Claude`) / `FOUNDRY_PASSWORD`. The committed defaults are neutral `your-server`/`your-world`
-  placeholders. **Wake (optional but recommended):** `MOLTEN_MAGIC_URL` — Molten's "Server
-  Startup / Magic URL" (`…?s=token`), GET to wake a sleeping box before joining. **Secrets (never
-  commit — env only):** `MOLTEN_WEBDAV_PASSWORD` (the asset file tools), `MOLTEN_ADMIN_KEY`. Read
-  them from your Molten panel → Server Details.
-- **`local`** — `LOCAL_SERVER_URL` (default `http://localhost:30000`), `LOCAL_ADMIN_KEY`,
-  `LOCAL_FOUNDRY_DATA` (the install's `Data/` directory — the asset file tools' plane); the world id
-  and join user fall back to the `MOLTEN_*` / `FOUNDRY_*` values (a sandbox is a copy of prod).
-- **`generic`** — `FOUNDRY_URL`, `FOUNDRY_USER` / `FOUNDRY_PASSWORD`, optionally `FOUNDRY_ADMIN_KEY` +
-  `FOUNDRY_WORLD_ID` for a remote world launch. No wake, no file plane.
+- **`FOUNDRY_URL`** (required — the placeholder is refused at startup), **`FOUNDRY_USER`** (the
+  dedicated user to join as, default `MCP-Claude`) / `FOUNDRY_PASSWORD`.
+- **`FOUNDRY_ADMIN_KEY`** — the admin access key; with it the bridge launches the world itself when
+  the instance is up but no world is active. **`FOUNDRY_WORLD_ID`** only when `/setup` lists more
+  than one world (unset = the one world there is launched).
+- **`FOUNDRY_WAKE_URL`** — a GET that wakes a sleeping instance (Molten's "Server Startup / Magic
+  URL", `…?s=token`); redacted from logs.
+- **The file plane** (the asset file tools): `FOUNDRY_DATA_DIR` (the install's `Data/` directory,
+  when it is on this machine) or `FOUNDRY_WEBDAV_URL` / `_USER` / `_PASSWORD` (a WebDAV endpoint
+  over `Data/`). `FOUNDRY_HOST=molten` derives the WebDAV URL and user from `FOUNDRY_URL`, so it
+  needs only the password (the panel's File Manager password).
 
-Each tool reports which variable to set if something it needs is missing.
+`FOUNDRY_HOST` (per registration; default `generic`) is the preset: `molten` (WebDAV derived, never
+a filesystem plane), `local` (`FOUNDRY_URL` defaults to `http://localhost:30000`, no wake, never
+WebDAV), `generic` (reads everything). The 2.x names (`MOLTEN_*`, `LOCAL_*`, `FOUNDRY_PROFILE`)
+are still read as aliases under their own host and logged once at startup. Each tool reports which
+variable to set if something it needs is missing.
 
 ## Tools
 
@@ -400,8 +404,8 @@ sidebar), `add-item` (author structured weapons/armor/consumables/loot/container
 (`list-actors`, `search-compendium`, `list-journals`, …), and organization (`create-folder`,
 `move-documents`, `bulk-delete`). See the `handlers` map in [`src/registry.ts`](src/registry.ts) for the full dispatch table.
 
-> Plane B file ops run over the host's file plane (Molten: WebDAV, needs `MOLTEN_WEBDAV_PASSWORD`,
-> works whenever the VM is awake; local: `LOCAL_FOUNDRY_DATA`).
+> Plane B file ops run over the host's file plane (WebDAV — `FOUNDRY_WEBDAV_*`, on Molten just the
+> password — or the `Data/` directory of an install on this machine, `FOUNDRY_DATA_DIR`).
 > Plane A tools run over the headless bridge (need the world joined). Write tools refuse live
 > world-DB paths; destructive file ops consult `find-asset-references` first.
 
@@ -410,8 +414,8 @@ sidebar), `add-item` (author structured weapons/armor/consumables/loot/container
 - **Outbound-only, nothing public.** The server and the headless browser run on your machine and make
   only outbound connections (to Foundry on Molten, and to Anthropic); nothing listens for inbound
   traffic, and the headless client authenticates to Foundry exactly as a normal user would.
-- **Secrets stay in `.env`** (gitignored), with tight file perms — never commit `MOLTEN_WEBDAV_PASSWORD`,
-  `MOLTEN_ADMIN_KEY`, or your Claude token. Errors name the missing variable, never its value.
+- **Secrets stay in `.env`** (gitignored), with tight file perms — never commit `FOUNDRY_WEBDAV_PASSWORD`,
+  `FOUNDRY_ADMIN_KEY`, a wake URL, or your Claude token. Errors name the missing variable, never its value.
 - **Treat all agent inputs as untrusted** (chat, transcripts, web) — prompt-injection can ride in.
   Plane-A writes are inherently safe because they go through Foundry's own client APIs; Plane-B
   destructive file ops are reference-aware, refuse live world-DB paths (canonicalized, `..`-rejecting),

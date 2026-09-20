@@ -60,16 +60,11 @@ function makeHost(configured: boolean): any {
   return {
     kind: 'molten',
     label: 'Molten Hosting (stub)',
-    vars: {
-      serverUrl: 'MOLTEN_SERVER_URL',
-      adminKey: 'MOLTEN_ADMIN_KEY',
-      worldId: 'MOLTEN_WORLD_ID',
-    },
     unreachableHint: '',
     redact: (m: string) => m,
     files: configured ? plane : null,
     filesNotConfigured: (tool: string) =>
-      `${tool} is not configured: set MOLTEN_WEBDAV_PASSWORD in your .env.`,
+      `${tool} is not configured: set FOUNDRY_WEBDAV_PASSWORD in your .env.`,
     publicUrl: (p: string) => buildPublicUrl(serverUrl, p),
   };
 }
@@ -258,7 +253,7 @@ describe('not-configured behaviour (no WebDAV password)', () => {
   it('list-assets returns a configuration hint and makes no WebDAV call', async () => {
     const out = await build({ configured: false }).handleListAssets({ remotePath: 'assets' });
     expect(out).toMatch(/not configured/);
-    expect(out).toMatch(/MOLTEN_WEBDAV_PASSWORD/);
+    expect(out).toMatch(/FOUNDRY_WEBDAV_PASSWORD/);
     expect(davInstance.list).not.toHaveBeenCalled();
   });
   it('upload-asset (non-DB path) still reports not-configured', async () => {

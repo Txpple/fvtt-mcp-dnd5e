@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { resolveHostConfig, type HostConfig } from './hosts/env.js';
+import { hostConfigProblem, resolveHostConfig, type HostConfig } from './hosts/env.js';
 import { parseToolsetsEnv } from './toolsets.js';
 
 // Load .env from the repo root regardless of the process's CWD, so the server picks up its
@@ -53,11 +53,15 @@ const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema> & {
   /**
    * Which Foundry this server process targets and everything its host needs — resolved by the ONE
-   * env selector (src/hosts/env.ts) from FOUNDRY_HOST (`FOUNDRY_PROFILE=local` still honoured).
-   * The host is set per MCP-server REGISTRATION (its `env` block), never in .env, so one .env
-   * serves every host.
+   * env selector (src/hosts/env.ts) from the FOUNDRY_* set; FOUNDRY_HOST (default generic) picks
+   * the preset, per MCP-server REGISTRATION (its `env` block, which beats the shared .env).
    */
   host: HostConfig;
+  /**
+   * Legacy (2.x, host-prefixed) variable names that supplied a value — logged once at startup so
+   * an old .env keeps working while saying what to rename.
+   */
+  notes: string[];
 };
 
 const rawConfig = {
@@ -73,7 +77,16 @@ const rawConfig = {
   toolsets: parseToolsetsEnv(process.env.FOUNDRY_TOOLSETS),
 };
 
+const notes: string[] = [];
+const host = resolveHostConfig(process.env, undefined, { warn: m => notes.push(m) });
+
+// A config that can never connect is refused HERE, before the server answers anything: an unset
+// FOUNDRY_URL used to sit behind the bridge's 600 s cold-boot budget before the first error.
+const problem = hostConfigProblem(host);
+if (problem) throw new Error(problem);
+
 export const config: Config = {
   ...ConfigSchema.parse(rawConfig),
-  host: resolveHostConfig(process.env),
+  host,
+  notes,
 };

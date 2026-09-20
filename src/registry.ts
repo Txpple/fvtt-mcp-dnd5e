@@ -147,7 +147,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   // foundryvtt-cli child process. Seeds the tom-cartos-import skill (docs/history/tom-cartos-import-plan.md).
   const packReaderTools = new PackReaderTools({ logger });
 
-  // Bridge session lifecycle: disconnect-bridge logs the DM Assistant user out of the live world
+  // Bridge session lifecycle: disconnect-bridge logs the bridge user out of the live world
   // (disposes the Playwright session) without ending the MCP process; the next tool call
   // reconnects lazily. Drives the seam's isReady/dispose directly — no foundry.call().
   const bridgeTools = new BridgeTools({ foundry, logger });

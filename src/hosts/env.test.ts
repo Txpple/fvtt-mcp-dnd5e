@@ -2,25 +2,37 @@
  * The ONE env selector (hosts/env.ts): which host a registration targets and what it reads.
  *
  * These pin the contract the server, the verify scripts and the integration suite all share —
- * the FOUNDRY_HOST switch, the FOUNDRY_PROFILE=local alias, and the LOCAL_* → MOLTEN_* fallbacks
- * that let one .env serve every host.
+ * the FOUNDRY_* set on every host, `generic` as the default, the placeholder refusal, and the
+ * legacy MOLTEN_* / LOCAL_* / FOUNDRY_PROFILE aliases that keep a 2.x .env working (each read
+ * only under its own host, each reported once).
  */
 
 import { describe, it, expect } from 'vitest';
-import { hostKindFromEnv, resolveHostConfig } from './env.js';
+import { hostConfigProblem, hostKindFromEnv, PLACEHOLDER_URL, resolveHostConfig } from './env.js';
 import { createHost } from './index.js';
 
-const prodEnv = {
-  MOLTEN_SERVER_URL: 'https://eoh.moltenhosting.com',
-  MOLTEN_MAGIC_URL: 'https://eoh.moltenhosting.com/wake?s=secret',
-  MOLTEN_WORLD_ID: 'greenrest',
+/** A 2.x-layout .env: the MOLTEN_* prod set plus the LOCAL_* sandbox overrides, side by side. */
+const legacyEnv = {
+  MOLTEN_SERVER_URL: 'https://box.moltenhosting.com',
+  MOLTEN_MAGIC_URL: 'https://box.moltenhosting.com/wake?s=secret',
+  MOLTEN_WORLD_ID: 'prod-world',
   MOLTEN_ADMIN_KEY: 'admin-prod',
-  MOLTEN_WEBDAV_URL: 'https://eoh.webdav.moltenhosting.com',
+  MOLTEN_WEBDAV_URL: 'https://box.webdav.moltenhosting.com',
   MOLTEN_WEBDAV_PASSWORD: 'dav-secret',
   FOUNDRY_USER: 'MCP-Claude',
   FOUNDRY_PASSWORD: 'join-secret',
   LOCAL_ADMIN_KEY: 'admin-local',
   LOCAL_FOUNDRY_DATA: 'C:/Foundry/Data',
+};
+
+/** The 3.0 contract: FOUNDRY_* only. */
+const canonicalEnv = {
+  FOUNDRY_URL: 'https://vtt.example.org',
+  FOUNDRY_USER: 'Bridge',
+  FOUNDRY_PASSWORD: 'pw',
+  FOUNDRY_ADMIN_KEY: 'k',
+  FOUNDRY_WORLD_ID: 'w',
+  FOUNDRY_WAKE_URL: 'https://panel.example.org/wake?s=tok',
 };
 
 const noopLogger: any = {
@@ -34,17 +46,19 @@ const noopLogger: any = {
 };
 
 describe('hostKindFromEnv', () => {
-  it('defaults to molten', () => {
-    expect(hostKindFromEnv({})).toBe('molten');
+  it('defaults to generic', () => {
+    expect(hostKindFromEnv({})).toBe('generic');
   });
 
   it('reads FOUNDRY_HOST (case-insensitive, trimmed)', () => {
     expect(hostKindFromEnv({ FOUNDRY_HOST: 'local' })).toBe('local');
-    expect(hostKindFromEnv({ FOUNDRY_HOST: ' Generic ' })).toBe('generic');
+    expect(hostKindFromEnv({ FOUNDRY_HOST: ' Molten ' })).toBe('molten');
   });
 
-  it('honours the pre-2.2 FOUNDRY_PROFILE=local alias, with FOUNDRY_HOST winning when both are set', () => {
-    expect(hostKindFromEnv({ FOUNDRY_PROFILE: 'local' })).toBe('local');
+  it('honours the pre-2.2 FOUNDRY_PROFILE=local alias (reported), with FOUNDRY_HOST winning', () => {
+    const notes: string[] = [];
+    expect(hostKindFromEnv({ FOUNDRY_PROFILE: 'local' }, m => notes.push(m))).toBe('local');
+    expect(notes).toEqual(['FOUNDRY_PROFILE=local is a legacy alias of FOUNDRY_HOST=local.']);
     expect(hostKindFromEnv({ FOUNDRY_PROFILE: 'local', FOUNDRY_HOST: 'molten' })).toBe('molten');
   });
 
@@ -53,62 +67,189 @@ describe('hostKindFromEnv', () => {
   });
 });
 
-describe('resolveHostConfig — molten', () => {
-  it('reads the MOLTEN_* set and the FOUNDRY_USER / FOUNDRY_PASSWORD join pair', () => {
-    const cfg = resolveHostConfig(prodEnv);
-    expect(cfg.kind).toBe('molten');
-    expect(cfg).toMatchObject({
-      serverUrl: 'https://eoh.moltenhosting.com',
-      user: 'MCP-Claude',
-      password: 'join-secret',
-      adminKey: 'admin-prod',
-      worldId: 'greenrest',
+describe('resolveHostConfig — generic (the default)', () => {
+  it('reads the whole FOUNDRY_* set', () => {
+    const cfg = resolveHostConfig({
+      ...canonicalEnv,
+      FOUNDRY_DATA_DIR: '/srv/foundry/Data',
+      FOUNDRY_WEBDAV_URL: 'https://dav.example.org',
+      FOUNDRY_WEBDAV_USER: 'dav',
+      FOUNDRY_WEBDAV_PASSWORD: 'dav-pw',
     });
-    if (cfg.kind !== 'molten') throw new Error('unreachable');
-    expect(cfg.magicUrl).toBe('https://eoh.moltenhosting.com/wake?s=secret');
-    expect(cfg.webdavPassword).toBe('dav-secret');
+    expect(cfg).toEqual({
+      kind: 'generic',
+      serverUrl: 'https://vtt.example.org',
+      user: 'Bridge',
+      password: 'pw',
+      adminKey: 'k',
+      worldId: 'w',
+      wakeUrl: 'https://panel.example.org/wake?s=tok',
+      dataDir: '/srv/foundry/Data',
+      webdav: { url: 'https://dav.example.org', user: 'dav', password: 'dav-pw' },
+    });
   });
 
-  it('falls back to neutral placeholders and leaves secrets + worldId unset', () => {
+  it('with nothing set: the placeholder URL, the default user, no secrets, no world id', () => {
     const cfg = resolveHostConfig({});
-    if (cfg.kind !== 'molten') throw new Error('unreachable');
-    expect(cfg.serverUrl).toBe('https://your-server.moltenhosting.com');
+    expect(cfg.kind).toBe('generic');
+    expect(cfg.serverUrl).toBe(PLACEHOLDER_URL);
+    expect(cfg.user).toBe('MCP-Claude');
     expect(cfg.worldId).toBeUndefined();
-    expect(cfg.magicUrl).toBeUndefined();
-    expect(cfg.webdavPassword).toBeUndefined();
+    expect(cfg.wakeUrl).toBeUndefined();
+    expect(cfg.dataDir).toBeUndefined();
+    expect(cfg.webdav).toBeUndefined();
+  });
+
+  it('the WebDAV plane needs all three variables', () => {
+    const cfg = resolveHostConfig({
+      ...canonicalEnv,
+      FOUNDRY_WEBDAV_URL: 'https://dav.example.org',
+      FOUNDRY_WEBDAV_PASSWORD: 'dav-pw',
+    });
+    expect(cfg.webdav).toBeUndefined();
+  });
+
+  it('never reads a MOLTEN_* or LOCAL_* name', () => {
+    const notes: string[] = [];
+    const cfg = resolveHostConfig(legacyEnv, 'generic', { warn: m => notes.push(m) });
+    expect(cfg.serverUrl).toBe(PLACEHOLDER_URL);
+    expect(cfg.adminKey).toBeUndefined();
+    expect(cfg.dataDir).toBeUndefined();
+    expect(notes).toEqual([]);
   });
 
   it('treats an empty value as unset', () => {
-    const cfg = resolveHostConfig({ ...prodEnv, MOLTEN_WEBDAV_PASSWORD: '  ' });
-    if (cfg.kind !== 'molten') throw new Error('unreachable');
-    expect(cfg.webdavPassword).toBeUndefined();
+    expect(resolveHostConfig({ FOUNDRY_URL: '  ' }).serverUrl).toBe(PLACEHOLDER_URL);
+  });
+
+  it('rejects a non-URL server value', () => {
+    expect(() => resolveHostConfig({ FOUNDRY_URL: 'not a url' })).toThrow();
+  });
+});
+
+describe('resolveHostConfig — molten', () => {
+  it('is generic + the WebDAV defaults derived from FOUNDRY_URL, and never a filesystem plane', () => {
+    const cfg = resolveHostConfig(
+      {
+        FOUNDRY_URL: 'https://box.moltenhosting.com',
+        FOUNDRY_WEBDAV_PASSWORD: 'dav-secret',
+        FOUNDRY_DATA_DIR: 'C:/Foundry/Data',
+      },
+      'molten'
+    );
+    expect(cfg).toMatchObject({
+      kind: 'molten',
+      serverUrl: 'https://box.moltenhosting.com',
+      user: 'MCP-Claude',
+      webdav: {
+        url: 'https://box.webdav.moltenhosting.com',
+        user: 'foundry-ftp',
+        password: 'dav-secret',
+      },
+    });
+    expect(cfg.dataDir).toBeUndefined();
+  });
+
+  it('reads the MOLTEN_* aliases of a 2.x .env, reporting each one', () => {
+    const notes: string[] = [];
+    const cfg = resolveHostConfig(legacyEnv, 'molten', { warn: m => notes.push(m) });
+    expect(cfg).toMatchObject({
+      kind: 'molten',
+      serverUrl: 'https://box.moltenhosting.com',
+      user: 'MCP-Claude',
+      password: 'join-secret',
+      adminKey: 'admin-prod',
+      worldId: 'prod-world',
+      wakeUrl: 'https://box.moltenhosting.com/wake?s=secret',
+      webdav: {
+        url: 'https://box.webdav.moltenhosting.com',
+        user: 'foundry-ftp',
+        password: 'dav-secret',
+      },
+    });
+    expect(cfg.dataDir).toBeUndefined(); // LOCAL_FOUNDRY_DATA is local's, never molten's
+    expect(notes).toEqual([
+      'MOLTEN_SERVER_URL is a legacy alias of FOUNDRY_URL — set FOUNDRY_URL instead.',
+      'MOLTEN_WEBDAV_URL is a legacy alias of FOUNDRY_WEBDAV_URL — set FOUNDRY_WEBDAV_URL instead.',
+      'MOLTEN_WEBDAV_PASSWORD is a legacy alias of FOUNDRY_WEBDAV_PASSWORD — set FOUNDRY_WEBDAV_PASSWORD instead.',
+      'MOLTEN_ADMIN_KEY is a legacy alias of FOUNDRY_ADMIN_KEY — set FOUNDRY_ADMIN_KEY instead.',
+      'MOLTEN_WORLD_ID is a legacy alias of FOUNDRY_WORLD_ID — set FOUNDRY_WORLD_ID instead.',
+      'MOLTEN_MAGIC_URL is a legacy alias of FOUNDRY_WAKE_URL — set FOUNDRY_WAKE_URL instead.',
+    ]);
+  });
+
+  it('an alias beats the canonical name (one .env, several registrations)', () => {
+    const cfg = resolveHostConfig(
+      { FOUNDRY_URL: 'http://localhost:30000', MOLTEN_SERVER_URL: 'https://box.moltenhosting.com' },
+      'molten'
+    );
+    expect(cfg.serverUrl).toBe('https://box.moltenhosting.com');
+  });
+
+  it('no WebDAV password → no plane; a non-Molten URL derives no WebDAV URL', () => {
+    expect(
+      resolveHostConfig({ FOUNDRY_URL: 'https://box.moltenhosting.com' }, 'molten').webdav
+    ).toBeUndefined();
+    expect(
+      resolveHostConfig(
+        { FOUNDRY_URL: 'https://vtt.example.org', FOUNDRY_WEBDAV_PASSWORD: 'x' },
+        'molten'
+      ).webdav
+    ).toBeUndefined();
   });
 });
 
 describe('resolveHostConfig — local', () => {
-  it('reads the LOCAL_* overrides and inherits the rest from the prod values', () => {
-    const cfg = resolveHostConfig(prodEnv, 'local');
-    expect(cfg.kind).toBe('local');
+  it('defaults FOUNDRY_URL to localhost:30000, never wakes, never dials WebDAV', () => {
+    const cfg = resolveHostConfig(
+      {
+        FOUNDRY_ADMIN_KEY: 'k',
+        FOUNDRY_DATA_DIR: 'C:/Foundry/Data',
+        FOUNDRY_WAKE_URL: 'https://panel.example.org/wake?s=tok',
+        FOUNDRY_WEBDAV_URL: 'https://dav.example.org',
+        FOUNDRY_WEBDAV_USER: 'dav',
+        FOUNDRY_WEBDAV_PASSWORD: 'dav-pw',
+      },
+      'local'
+    );
+    expect(cfg).toEqual({
+      kind: 'local',
+      serverUrl: 'http://localhost:30000',
+      user: 'MCP-Claude',
+      password: undefined,
+      adminKey: 'k',
+      worldId: undefined,
+      dataDir: 'C:/Foundry/Data',
+    });
+  });
+
+  it('reads the LOCAL_* aliases of a 2.x .env and nothing from the MOLTEN_* set', () => {
+    const notes: string[] = [];
+    const cfg = resolveHostConfig(legacyEnv, 'local', { warn: m => notes.push(m) });
     expect(cfg).toMatchObject({
+      kind: 'local',
       serverUrl: 'http://localhost:30000',
       user: 'MCP-Claude', // FOUNDRY_USER (no LOCAL_FOUNDRY_USER)
       password: 'join-secret', // FOUNDRY_PASSWORD
       adminKey: 'admin-local', // LOCAL_ADMIN_KEY — never the prod key
-      worldId: 'greenrest', // MOLTEN_WORLD_ID (the sandbox is a byte copy)
+      dataDir: 'C:/Foundry/Data',
     });
-    if (cfg.kind !== 'local') throw new Error('unreachable');
-    expect(cfg.dataDir).toBe('C:/Foundry/Data');
-    expect((cfg as any).magicUrl).toBeUndefined(); // a local box does not sleep
-    expect((cfg as any).webdavPassword).toBeUndefined(); // and never dials prod's file plane
+    expect(cfg.worldId).toBeUndefined(); // MOLTEN_WORLD_ID is not inherited: /setup discovery
+    expect(cfg.wakeUrl).toBeUndefined();
+    expect(cfg.webdav).toBeUndefined();
+    expect(notes).toEqual([
+      'LOCAL_ADMIN_KEY is a legacy alias of FOUNDRY_ADMIN_KEY — set FOUNDRY_ADMIN_KEY instead.',
+      'LOCAL_FOUNDRY_DATA is a legacy alias of FOUNDRY_DATA_DIR — set FOUNDRY_DATA_DIR instead.',
+    ]);
   });
 
-  it('lets LOCAL_* override every inherited value', () => {
+  it('lets every LOCAL_* alias override the canonical value', () => {
     const cfg = resolveHostConfig(
       {
-        ...prodEnv,
+        ...canonicalEnv,
         LOCAL_SERVER_URL: 'http://localhost:30001',
         LOCAL_FOUNDRY_USER: 'Sandbox-GM',
-        LOCAL_FOUNDRY_PASSWORD: 'pw',
+        LOCAL_FOUNDRY_PASSWORD: 'pw2',
         LOCAL_WORLD_ID: 'zz-test',
       },
       'local'
@@ -116,39 +257,34 @@ describe('resolveHostConfig — local', () => {
     expect(cfg).toMatchObject({
       serverUrl: 'http://localhost:30001',
       user: 'Sandbox-GM',
-      password: 'pw',
+      password: 'pw2',
       worldId: 'zz-test',
     });
   });
 });
 
-describe('resolveHostConfig — generic', () => {
-  it('reads the FOUNDRY_* set and nothing host-specific', () => {
-    const cfg = resolveHostConfig(
-      { FOUNDRY_URL: 'https://vtt.example.org', FOUNDRY_ADMIN_KEY: 'k', FOUNDRY_WORLD_ID: 'w' },
-      'generic'
-    );
-    expect(cfg).toEqual({
-      kind: 'generic',
-      serverUrl: 'https://vtt.example.org',
-      user: 'MCP-Claude',
-      password: undefined,
-      adminKey: 'k',
-      worldId: 'w',
-    });
+describe('hostConfigProblem — the startup refusal', () => {
+  it('refuses the placeholder URL, naming FOUNDRY_URL', () => {
+    expect(hostConfigProblem(resolveHostConfig({}))).toMatch(/FOUNDRY_URL is not set/);
+    expect(
+      hostConfigProblem(
+        resolveHostConfig({ FOUNDRY_URL: 'https://your-server.moltenhosting.com' }, 'molten')
+      )
+    ).toMatch(/FOUNDRY_URL is not set/);
   });
 
-  it('rejects a non-URL server value', () => {
-    expect(() => resolveHostConfig({ FOUNDRY_URL: 'not a url' }, 'generic')).toThrow();
+  it('accepts a real URL — including local\u2019s default', () => {
+    expect(hostConfigProblem(resolveHostConfig(canonicalEnv))).toBeUndefined();
+    expect(hostConfigProblem(resolveHostConfig({}, 'local'))).toBeUndefined();
   });
 });
 
 describe('createHost', () => {
-  it('molten: wakes through the Magic URL, redacts it, has a WebDAV plane when the password is set', async () => {
-    const host = createHost(resolveHostConfig(prodEnv), noopLogger);
+  it('molten: wakes through FOUNDRY_WAKE_URL, redacts it, has a WebDAV plane when the password is set', async () => {
+    const host = createHost(resolveHostConfig(legacyEnv, 'molten'), noopLogger);
     expect(host.kind).toBe('molten');
+    expect(host.label).toBe('Molten Hosting');
     expect(host.files?.label).toBe('WebDAV');
-    expect(host.worldId).toBe('greenrest');
     const visited: string[] = [];
     await host.wake?.({
       goto: async url => {
@@ -156,40 +292,41 @@ describe('createHost', () => {
       },
       log: { debug() {}, warn() {} },
     });
-    expect(visited).toEqual(['https://eoh.moltenhosting.com/wake?s=secret']);
-    expect(host.redact('nav failed: https://eoh.moltenhosting.com/wake?s=secret')).toBe(
-      'nav failed: <MOLTEN_MAGIC_URL>'
+    expect(visited).toEqual(['https://box.moltenhosting.com/wake?s=secret']);
+    expect(host.redact('nav failed: https://box.moltenhosting.com/wake?s=secret')).toBe(
+      'nav failed: <FOUNDRY_WAKE_URL>'
     );
     expect(host.redact('GET /x?s=abc123 failed')).toBe('GET /x?s=<redacted> failed');
-    expect(host.publicUrl('worlds/w/a.png')).toBe('https://eoh.moltenhosting.com/worlds/w/a.png');
+    expect(host.publicUrl('worlds/w/a.png')).toBe('https://box.moltenhosting.com/worlds/w/a.png');
+    expect(host.unreachableHint).toMatch(/FOUNDRY_WAKE_URL/);
   });
 
-  it('molten: no password → no plane, and the message names MOLTEN_WEBDAV_PASSWORD', () => {
+  it('molten: no password → no plane, and the message names FOUNDRY_WEBDAV_PASSWORD', () => {
     const host = createHost(
-      resolveHostConfig({ ...prodEnv, MOLTEN_WEBDAV_PASSWORD: '' }),
+      resolveHostConfig({ ...legacyEnv, MOLTEN_WEBDAV_PASSWORD: '' }, 'molten'),
       noopLogger
     );
     expect(host.files).toBeNull();
-    expect(host.filesNotConfigured('upload-asset')).toMatch(/MOLTEN_WEBDAV_PASSWORD/);
+    expect(host.filesNotConfigured('upload-asset')).toMatch(/FOUNDRY_WEBDAV_PASSWORD/);
   });
 
-  it('molten: a wake nav error is logged, never thrown', async () => {
-    const host = createHost(resolveHostConfig(prodEnv), noopLogger);
+  it('a wake nav error is logged, never thrown', async () => {
+    const host = createHost(resolveHostConfig(legacyEnv, 'molten'), noopLogger);
     const warned: string[] = [];
     await expect(
       host.wake?.({
         goto: async () => {
-          throw new Error('net::ERR at https://eoh.moltenhosting.com/wake?s=secret');
+          throw new Error('net::ERR at https://box.moltenhosting.com/wake?s=secret');
         },
         log: { debug() {}, warn: m => warned.push(m) },
       })
     ).resolves.toBeUndefined();
-    expect(warned[0]).toContain('<MOLTEN_MAGIC_URL>');
+    expect(warned[0]).toContain('<FOUNDRY_WAKE_URL>');
     expect(warned[0]).not.toContain('s=secret');
   });
 
-  it('local: no wake, a filesystem plane over LOCAL_FOUNDRY_DATA, local public URLs', () => {
-    const host = createHost(resolveHostConfig(prodEnv, 'local'), noopLogger);
+  it('local: no wake, a filesystem plane over FOUNDRY_DATA_DIR, local public URLs', () => {
+    const host = createHost(resolveHostConfig(legacyEnv, 'local'), noopLogger);
     expect(host.kind).toBe('local');
     expect(host.wake).toBeUndefined();
     expect(host.files?.label).toBe('local filesystem');
@@ -197,26 +334,44 @@ describe('createHost', () => {
     expect(host.unreachableHint).toMatch(/local-foundry\.mjs/);
   });
 
-  it('local: no LOCAL_FOUNDRY_DATA → no plane, and the message names it', () => {
+  it('local: no FOUNDRY_DATA_DIR → no plane, and the message names it', () => {
     const host = createHost(
-      resolveHostConfig({ ...prodEnv, LOCAL_FOUNDRY_DATA: '' }, 'local'),
+      resolveHostConfig({ ...legacyEnv, LOCAL_FOUNDRY_DATA: '' }, 'local'),
       noopLogger
     );
     expect(host.files).toBeNull();
-    expect(host.filesNotConfigured('list-assets')).toMatch(/LOCAL_FOUNDRY_DATA/);
+    expect(host.filesNotConfigured('list-assets')).toMatch(/FOUNDRY_DATA_DIR/);
   });
 
-  it('generic: no wake, no plane, and the message points at the hosts that have one', () => {
-    const host = createHost(resolveHostConfig({}, 'generic'), noopLogger);
-    expect(host.wake).toBeUndefined();
-    expect(host.files).toBeNull();
-    expect(host.filesNotConfigured('upload-asset')).toMatch(
-      /FOUNDRY_HOST=molten|FOUNDRY_HOST=local/
+  it('generic: a wake when FOUNDRY_WAKE_URL is set, a plane from either extra, else the two named', () => {
+    const bare = createHost(
+      resolveHostConfig({ FOUNDRY_URL: 'https://vtt.example.org' }),
+      noopLogger
     );
-    expect(host.vars).toEqual({
-      serverUrl: 'FOUNDRY_URL',
-      adminKey: 'FOUNDRY_ADMIN_KEY',
-      worldId: 'FOUNDRY_WORLD_ID',
-    });
+    expect(bare.wake).toBeUndefined();
+    expect(bare.files).toBeNull();
+    expect(bare.filesNotConfigured('upload-asset')).toMatch(/FOUNDRY_DATA_DIR/);
+    expect(bare.filesNotConfigured('upload-asset')).toMatch(/FOUNDRY_WEBDAV_URL/);
+    expect(bare.unreachableHint).toMatch(/FOUNDRY_URL/);
+
+    const woken = createHost(resolveHostConfig(canonicalEnv), noopLogger);
+    expect(woken.wake).toBeDefined();
+    expect(woken.redact('x https://panel.example.org/wake?s=tok y')).toBe('x <FOUNDRY_WAKE_URL> y');
+
+    const fs = createHost(
+      resolveHostConfig({ ...canonicalEnv, FOUNDRY_DATA_DIR: 'C:/Foundry/Data' }),
+      noopLogger
+    );
+    expect(fs.files?.label).toBe('local filesystem');
+    const dav = createHost(
+      resolveHostConfig({
+        ...canonicalEnv,
+        FOUNDRY_WEBDAV_URL: 'https://dav.example.org',
+        FOUNDRY_WEBDAV_USER: 'dav',
+        FOUNDRY_WEBDAV_PASSWORD: 'dav-pw',
+      }),
+      noopLogger
+    );
+    expect(dav.files?.label).toBe('WebDAV');
   });
 });

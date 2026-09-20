@@ -17,7 +17,7 @@
    ```
 
 2. **Live integration suite green** — needs a live Molten box and a populated `.env`
-   (`MOLTEN_SERVER_URL`, `MOLTEN_MAGIC_URL`, `FOUNDRY_USER`, and `MOLTEN_ADMIN_KEY` + `MOLTEN_WORLD_ID`
+   (`FOUNDRY_URL`, `FOUNDRY_WAKE_URL`, `FOUNDRY_USER`, and `FOUNDRY_ADMIN_KEY` (+ `FOUNDRY_WORLD_ID`)
    for a cold-box launch). This runs `npm run build` first, then the suites that page-eval-inspect the
    real data model:
    ```sh

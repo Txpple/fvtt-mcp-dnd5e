@@ -332,7 +332,7 @@ export class ChatTools {
     if (parsed.images && parsed.images.length > 0) {
       const assembled = await this.assembleImages(
         parsed.images,
-        parsed.imageFolder ?? `worlds/${this.host.worldId ?? 'world'}/assets/chat`,
+        parsed.imageFolder ?? `worlds/${await this.foundry.worldId()}/assets/chat`,
         parsed.overwriteImages
       );
       if ('refusal' in assembled) return assembled.refusal;

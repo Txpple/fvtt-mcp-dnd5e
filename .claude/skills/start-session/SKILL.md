@@ -17,12 +17,12 @@ Any tool call triggers the bridge's cold-start path automatically.
 ## How the cold-start actually works (context, not steps)
 
 The headless bridge (`src/foundry.ts`) handles two distinct cold states on its
-own, driven by `.env` config (`MOLTEN_MAGIC_URL`, `MOLTEN_ADMIN_KEY`,
-`MOLTEN_WORLD_ID`):
+own, driven by `.env` config (`FOUNDRY_WAKE_URL`, `FOUNDRY_ADMIN_KEY`,
+`FOUNDRY_WORLD_ID` when there are several worlds):
 
 1. **VM asleep** → the bridge GETs the Magic URL to wake the EC2 box.
 2. **VM up, no world active** → the bridge logs into admin `/setup` and launches
-   `MOLTEN_WORLD_ID` (`game.post({action:'launchWorld', ...})`).
+   the configured — or the only — world (`game.post({action:'launchWorld', ...})`).
 3. **World booting** → it waits for the world to become joinable (~25s for the
    heavy dnd5e world, plus VM wake time on a fully cold box).
 
@@ -66,7 +66,7 @@ order:
 - **Timeout / no response on a cold box** — the VM may still be waking. Wait and
   retry the same call once before concluding anything.
 - **Bridge can't wake/launch** (auth or unreachable errors) — confirm `.env` has
-  `MOLTEN_MAGIC_URL`, `MOLTEN_ADMIN_KEY`, and `MOLTEN_WORLD_ID` set (check names
+  `FOUNDRY_WAKE_URL` and `FOUNDRY_ADMIN_KEY` set (check names
   only, never echo secret values). If they're missing, that's why auto-launch
   didn't fire; tell the user, and offer the manual fallback: open the Magic URL
   in a browser to wake the VM, then launch the world from Foundry's `/setup`

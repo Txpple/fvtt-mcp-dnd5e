@@ -6,7 +6,7 @@ import { toInputSchema } from '../utils/schema.js';
 /**
  * Bridge session lifecycle — the one tool that talks to the BRIDGE itself instead of the world.
  *
- * disconnect-bridge: log the DM Assistant user out of the live world on request ("log out
+ * disconnect-bridge: log the bridge user (FOUNDRY_USER) out of the live world on request ("log out
  * please") by disposing the persistent Playwright session, without ending the MCP process.
  * The next tool call reconnects transparently through the existing lazy connect/recover path,
  * so this is purely a courtesy logout: the user drops off the world's active-player list.
@@ -36,7 +36,7 @@ export class BridgeTools {
       {
         name: 'disconnect-bridge',
         description:
-          'Log the DM Assistant bridge user out of the live Foundry world: closes the persistent ' +
+          'Log the bridge user (FOUNDRY_USER) out of the live Foundry world: closes the persistent ' +
           'headless browser session so the user goes inactive (drops off the active-player list). ' +
           'The world itself keeps running and the MCP server stays up — the NEXT tool call ' +
           'transparently reconnects (wake → join → ready), so nothing needs to be restarted. ' +

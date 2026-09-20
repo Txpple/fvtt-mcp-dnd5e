@@ -77,17 +77,19 @@ export interface Host {
   readonly kind: HostKind;
   /** Human label for logs and get-world-info: 'Molten Hosting', 'local install', 'generic'. */
   readonly label: string;
-  /** The configured world id, if any — default paths such as worlds/<id>/assets/chat are built on it. */
-  readonly worldId?: string | undefined;
-  /** The env-var names this host reads, for error messages that tell the operator what to set. */
-  readonly vars: { serverUrl: string; adminKey: string; worldId: string };
-  /** Bring a sleeping / stopped instance up before the bridge probes /join. Absent = never sleeps. */
-  wake?(ctx: WakeContext): Promise<void>;
+  /**
+   * Bring a sleeping / stopped instance up before the bridge probes /join (a GET of
+   * FOUNDRY_WAKE_URL). Undefined = this host never sleeps.
+   */
+  readonly wake: ((ctx: WakeContext) => Promise<void>) | undefined;
   /** Appended to the bridge's "never became joinable" error — names this host's own knobs. */
   readonly unreachableHint: string;
-  /** Strip this host's secrets (a wake token) out of a message before it reaches a log. */
+  /** Strip this host's secrets (the wake token) out of a message before it reaches a log. */
   redact(msg: string): string;
-  /** The file plane, or `null` when this host has none configured. */
+  /**
+   * The host's file plane (WebDAV, or the `Data/` directory of an install on this machine), or
+   * `null` when none is configured — the tools then say so, by name.
+   */
   readonly files: FilePlane | null;
   /** Why `files` is null, for a tool that needs it — names the variable to set. */
   filesNotConfigured(tool: string): string;
