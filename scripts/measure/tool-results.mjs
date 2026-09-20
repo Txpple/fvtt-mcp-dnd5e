@@ -124,7 +124,7 @@ try {
     const ms = Date.now() - t0;
     const text = res.result?.content?.[0]?.text ?? '';
     const isError = res.result?.isError === true || !!res.error;
-    const truncated = /chars omitted — response exceeded toolResponseMaxChars/.test(text);
+    const truncated = /response exceeded toolResponseMaxChars/.test(text);
     const schemaBytes = JSON.stringify(byName.get(name)?.inputSchema ?? {}).length;
     if (bodiesDir) {
       const n = (bodyNames.get(name) ?? 0) + 1;

@@ -19,19 +19,9 @@ import { config } from './config.js';
 import { Logger } from './logger.js';
 import { Foundry } from './foundry.js';
 import { bridgeConfigOf, createHost } from './hosts/index.js';
+import { capResult } from './utils/cap.js';
 import { ErrorHandler, FormattedToolError } from './utils/error-handler.js';
 import { buildToolRegistry } from './registry.js';
-
-/**
- * Cap a tool result so a single fat response (a fully-loaded actor dump, a broad search) can't blow
- * the model's context or inflate cost without bound. Truncates and annotates how much was dropped,
- * enforcing the config.toolResponseMaxChars guardrail that was previously defined but never applied.
- */
-function capResponse(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  const omitted = text.length - maxChars;
-  return `${text.slice(0, maxChars)}\n…[${omitted} chars omitted — response exceeded toolResponseMaxChars (${maxChars})]`;
-}
 
 async function main(): Promise<void> {
   // File-only logging: stdout is the JSON-RPC channel and must stay clean.
@@ -83,9 +73,10 @@ async function main(): Promise<void> {
     const { name, arguments: args } = request.params as any;
     try {
       const result = await dispatch(name, args ?? {});
-      const text = typeof result === 'string' ? result : JSON.stringify(result);
+      // A fat result (a broad search, a loaded actor) is cut at RECORD boundaries with a count of
+      // what was omitted — config.toolResponseMaxChars is the guardrail (src/utils/cap.ts).
       return {
-        content: [{ type: 'text', text: capResponse(text, config.toolResponseMaxChars) }],
+        content: [{ type: 'text', text: capResult(result, config.toolResponseMaxChars) }],
       };
     } catch (e) {
       // Tools that curate their own errors throw FormattedToolError — pass those through verbatim.
