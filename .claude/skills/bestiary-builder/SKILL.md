@@ -79,6 +79,9 @@ Override when the DM has their own scan or a higher-res plate:
 node .claude/skills/bestiary-builder/bestiary-entry.mjs --monster "<MM name>" [options]
 ```
 
+It targets the same world the MCP registration does: `FOUNDRY_HOST` picks the host exactly as it
+does for the server (`FOUNDRY_HOST=local` = the sandbox); the repo's `.env` supplies the rest.
+
 | option | effect |
 | --- | --- |
 | `--monster <name>` | required; MM creature name (any variant of a shared-lore family) |

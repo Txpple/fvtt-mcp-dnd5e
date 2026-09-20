@@ -32,9 +32,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
+// The skill ships inside the MCP repo (.claude/skills/<skill>/); FVTT_MCP_REPO points elsewhere
+// when it is installed from a clone. The bridge and the host selector come from that repo's dist/
+// — the same `FOUNDRY_HOST` switch every verify script honours (`FOUNDRY_HOST=local` = the sandbox).
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(__dirname, '..', '..', '..');
+const REPO_ROOT = process.env.FVTT_MCP_REPO ?? join(__dirname, '..', '..', '..');
 const { Foundry } = await import(pathToFileURL(join(REPO_ROOT, 'dist', 'foundry.js')).href);
+const { bridgeConfig } = await import(
+  pathToFileURL(join(REPO_ROOT, 'scripts', 'lib', 'bridge-config.mjs')).href
+);
 
 // ---- args -------------------------------------------------------------------------------------
 const argv = process.argv.slice(2);
@@ -71,14 +77,7 @@ for (const line of readFileSync(join(REPO_ROOT, '.env'), 'utf8').split(/\r?\n/))
   if (m) env[m[1]] = m[2];
 }
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
-  user: env.FOUNDRY_USER || 'DM Assistant',
-  password: env.FOUNDRY_PASSWORD,
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+const f = new Foundry(bridgeConfig(env, { quiet: true }));
 
 // ---- the live-page half -----------------------------------------------------------------------
 const work = async o => {
