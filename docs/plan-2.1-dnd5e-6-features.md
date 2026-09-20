@@ -168,6 +168,26 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   34/34 · pc-build 66/66 · teleporter + scene fields 13/13 · placeables 34/34 · scene tools 10/10 ·
   cast activity 25/25 · region tooling 22/22 · integration 84 / 2 skipped. `CLAUDE.md` now carries
   the upgrade-review rule (notes → launch → connect → verify before trusting an update).
+- [x] **dnd5e 6.0.2 / 6.0.3 compatibility pass** (2026-09-20): the sandbox moved to 6.0.3 (6.0.2
+  2026-09-15, 6.0.3 2026-09-17; `compatibility.minimum` stays 14.367). Reviewed from the
+  tag-to-tag source diff, not the notes alone (six of the commits carry no issue number): 15
+  files changed in content between 6.0.1 and 6.0.3, all bug fixes, no data-model change. What
+  touches us — 6.0.2: rule-type conditions now see `sourceItem.*` (the effect's own item) while
+  `item.*` is the item being rolled (#7450 — our Filter normaliser is open-vocabulary, so the
+  key writes verbatim; the tool text is a 3.0 doc pass); dependent effects survive out-of-combat
+  expiry; the falling toggle's designated user no longer needs to view the scene (a headless GM
+  can be it); group roll signatures gained dialog/message args; request cards carry `messageId`.
+  6.0.3: an effect with NO duration created in combat keeps `expiry` null instead of a stamped
+  `turnStart` (#7482 — our read-back reports it permanent, as it should); `system.rolls.*`
+  initialises when absent (#7475); ActorDelta migration inheritance. Targeted live
+  (`scratch/pin-6.0.3-targeted.mjs`): 4/4. Release set on the sandbox (6.0.3 / 14.368): effects
+  51/51 · region effects 37/37 · activities 37/37 · settings + calendar 52/52 · items 13/13 ·
+  actor 34/34 · pc-build 66/66 · teleporter + scene fields 13/13 · placeables 34/34 · scene tools
+  11/11 · cast activity 25/25 · region tooling 22/22 · integration 85 passed / 1 skipped;
+  verify-wake on local: world down 5 s → cold bring-up 12 s. Offline: 1730 tests / 3 skipped.
+  Found on the way: Foundry 14.368 moved world shutdown to `POST /setup worldShutdown` (the
+  launcher's stop was a silent no-op) and `verify-wake` ignored `FOUNDRY_HOST` — fixed in
+  96ed726.
 
 ### 2.1.0 release proof (2026-09-15, sandbox)
 
