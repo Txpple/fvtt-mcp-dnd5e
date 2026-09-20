@@ -1,14 +1,11 @@
 ---
 name: cards-builder
 description: >-
-  Author D&D 5e card decks in Foundry — themed decks (Deck of Many Things, a tarokka deck, encounter
-  / event / fate decks, initiative decks) and standard playing-card decks. Use when the user wants to
-  "make a deck", "build a card deck", "create a Deck of Many Things", "a tarokka deck", "encounter
-  cards", "import a standard deck of cards", or stat out a set of cards. YOU decide the deck's cards —
-  their names, face text, art; the tools only STRUCTURE it (the v14 Cards/Card shape) or import a core
-  preset deck. Cards have no premium-book compendium, so decks are asset-driven (like scenes): the card
-  art is uploaded, the flavor text is yours. Creation only — dealing / drawing / shuffling in play is
-  out of scope. Composes create-cards / import-cards / list-cards / delete-cards.
+  Author D&D 5e card decks in Foundry — themed decks (Deck of Many Things, tarokka, encounter /
+  event / fate / initiative decks) and standard playing-card decks; creation only, not dealing or
+  drawing in play. Use when the user wants to "make a deck", "build a card deck", "create a Deck of
+  Many Things", "a tarokka deck", "encounter cards", "import a standard deck of cards", or stat out
+  a set of cards.
 ---
 
 # Cards builder

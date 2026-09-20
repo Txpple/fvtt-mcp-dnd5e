@@ -2,14 +2,10 @@
 name: table-builder
 description: >-
   Author D&D 5e roll tables in Foundry — random encounter tables, loot/treasure tables, rumor & hook
-  tables, name generators, wild-magic / effect tables, weather, and any "roll a d__ and consult the
-  list" content. Use when the user wants to "make a roll table", "build a random encounter table", "a
-  loot/treasure table", "a table of rumors / hooks", "a name generator", "a wild magic table", "roll
-  for loot", or pastes a die-and-list table to recreate. YOU decide the CONTENTS — the entries, their
-  weights, the theme; the tools only STRUCTURE it (v14 result rendering, ranges from weights, and real
-  @UUID item links — never the SRD). Loot/encounter entries reference REAL compendium items & monsters
-  by uuid (mix-and-match), exactly how the published tables are built. Composes create-rolltable /
-  update-rolltable / roll-on-table / list-rolltables / delete-rolltable with GMing judgment.
+  tables, name generators, wild-magic / effect tables, weather, any "roll a d__ and consult the
+  list" content. Use when the user wants to "make a roll table", "build a random encounter table",
+  "a loot/treasure table", "a table of rumors / hooks", "a name generator", "a wild magic table",
+  "roll for loot", or pastes a die-and-list table to recreate.
 ---
 
 # Table builder

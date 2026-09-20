@@ -1,17 +1,12 @@
 ---
 name: playlist-builder
 description: >-
-  Author D&D 5e audio playlists in Foundry — MUSIC and whole-track ambience: scene ambience beds
-  (tavern, forest, dungeon, storm), combat/boss music, exploration music sets, and SFX soundboards.
-  Use when the user wants to "make a playlist", "add background music", "battle music", "a theme for
-  this place", "exploration music", "a soundboard of effects", or to attach audio to a scene. YOU
-  decide the tracks, the playback mode, and the mix; the tools only STRUCTURE it (the
-  Playlist/PlaylistSound shape). Audio has no premium-book compendium — playlists are asset-driven
-  (like scenes): the sound files are uploaded. Composes create-playlist / update-playlist /
-  list-playlists / delete-playlist (+ upload-asset for the audio); to attach a playlist to a scene,
-  hand off to scene-builder. For randomized atmospheric ONE-SHOTS with silence between them (a crow,
-  quiet, a distant dog) or a crossfaded ambient bed layered on a scene, hand off to
-  soundscape-builder — that is the house Soundscape module, not a Playlist.
+  Author Foundry audio playlists — MUSIC and whole-track ambience: scene ambience beds, combat/boss
+  music, exploration sets, SFX soundboards (uploaded files; no compendium). Use when the user wants
+  to "make a playlist", "add background music", "battle music", "a theme for this place",
+  "exploration music", "a soundboard of effects", or to attach audio to a scene. NOT for randomized
+  one-shots with silence between them or a crossfaded ambient bed — that is soundscape-builder; a
+  sound from one spot on the map is an AmbientSound (create-sounds).
 ---
 
 # Playlist builder

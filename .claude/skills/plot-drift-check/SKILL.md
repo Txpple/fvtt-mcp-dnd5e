@@ -1,15 +1,12 @@
 ---
 name: plot-drift-check
 description: >-
-  Audit the live Foundry world against the campaign's authoritative plot document and report DRIFT —
-  stale names a rename left behind, world text that contradicts the doc, references to plot elements
-  the doc dropped, and GM-only canon leaking into player-visible pages. Use when the user wants to
-  "check for plot drift", "audit the world against the plot doc", "did the rename propagate",
-  "find stale references to <name>", "consistency-check the campaign", "sync the world with the plot",
-  or after any plot-doc revision (a renamed NPC, a changed backstory, a rewritten faction). READ-ONLY
-  by default: it produces a drift report; it fixes findings only when the user says go. Composes the
-  read/search tools (search-journals, list/get-rolltable, get-actor, list-scenes/-folders/-notes/-items)
-  with surgical fixes (update-journal, update-rolltable editResults, update-actor) on request.
+  Audit the live Foundry world against the campaign's plot document and report DRIFT — stale names
+  after a rename, contradictions, dropped plot elements still referenced, GM-only canon on
+  player-visible pages; READ-ONLY unless told to fix. Use when the user wants to "check for plot
+  drift", "audit the world against the plot doc", "did the rename propagate", "find stale references
+  to <name>", "consistency-check the campaign", "sync the world with the plot", or after any
+  plot-doc revision.
 ---
 
 # Plot-drift check

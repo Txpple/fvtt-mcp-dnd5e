@@ -1,16 +1,12 @@
 ---
 name: soundscape-builder
 description: >-
-  Give a Foundry scene ATMOSPHERIC SOUND — the house module fvtt-mod-soundscape (#6): a continuous
-  ambient bed plus pools of one-shots that fire at randomized intervals with silence between (a crow,
-  quiet, a distant dog). Use when the user wants to "add ambience to this scene", "make this scene
-  sound alive / creepy / busy", "sound for the crypt / tavern / forest", "random crows and wolf
-  howls", "atmosphere for this map", "day and night sounds", "why is this scene silent", or to tune /
-  audit an existing soundscape. NOT for music — a track, a theme, a boss cue, or anything with a
-  melody is `playlist-builder` (Soundscape never touches Playlists); a sound emitted from ONE SPOT on
-  the map (that waterfall, this hearth) is an AmbientSound placeable via `create-sounds`. YOU decide
-  which of the ~400 library templates belong, how many to layer, the timing, the mix, and the
-  day/night gates; `configure-soundscape` only STRUCTURES it (the per-scene flag array).
+  Give a Foundry scene ATMOSPHERIC SOUND (the Soundscape module) — an ambient bed plus randomized
+  one-shots with silence between. Use when the user wants to "add ambience to this scene", "make
+  this scene sound alive / creepy / busy", "sound for the crypt / tavern / forest", "random crows
+  and wolf howls", "atmosphere for this map", "day and night sounds", "why is this scene silent", or
+  to tune / audit an existing soundscape. NOT for music — that is playlist-builder; a sound from ONE
+  SPOT on the map is an AmbientSound (create-sounds).
 ---
 
 # Soundscape builder

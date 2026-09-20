@@ -2,14 +2,10 @@
 name: journal-builder
 description: >-
   Author D&D 5e journal entries in Foundry — quest logs, player handouts, lore/gazetteer entries,
-  read-aloud (boxed) text, GM notes, and session recaps / campaign logs. Use when the user wants to
+  read-aloud (boxed) text, GM notes, session recaps / campaign logs. Use when the user wants to
   "write a quest", "make a handout", "create a journal", "write up the lore / a gazetteer", "boxed /
   read-aloud text", "GM notes", "a session recap", "campaign log", "link this quest to the NPC", or
-  pastes adventure text to turn into a journal. YOU write the prose (the words are yours); the tools
-  only STRUCTURE it — typed blocks → the house style, per-page player/GM visibility, and real @UUID
-  links. Composes create-quest-journal / update-quest-journal / link-quest-to-npc / create-journal /
-  update-journal / add-journal-image / list-journals / search-journals with GMing judgment: which page
-  kind, what's player-facing vs GM-only, the quest layout, when to link a real NPC / compendium doc.
+  pastes adventure text to turn into a journal.
 ---
 
 # Journal builder

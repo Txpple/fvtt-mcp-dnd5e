@@ -1,16 +1,11 @@
 ---
 name: stat-block-builder
 description: >-
-  Build a COMPLETE D&D 5e NPC in Foundry from a pasted/described stat block — not just the mechanics,
-  the whole creature: all stats, special traits, actions/attacks, spells, effects, AND its inventory
-  (the magic weapon it fights with, worn armor, carried gear, consumables, loot, coins), biography, and
-  a finishing pass (art, ownership, folder). Use when the user wants to "build this monster", "make an
-  NPC from this stat block", "stat out <creature>", "create a creature from this text", "build the boss
-  with its gear and loot", or pastes a Monster-Manual-style block. Composes the actor-authoring tools
-  (create-actor-from-compendium, author-npc, update-actor, add-feature, manage-activity, manage-effect, apply-condition, add-item,
-  set-actor-art, set-actor-ownership, move-documents) into one coherent build with dnd5e judgment. The
-  tools own correctness (field paths, activity/effect/item shapes, name→id, soft validation); this skill
-  owns the parse, the orchestration, and the house rules.
+  Build a COMPLETE D&D 5e NPC in Foundry from a pasted/described stat block — stats, traits,
+  actions, spells, effects, AND its inventory, loot, coins, biography, art, ownership, folder. Use
+  when the user wants to "build this monster", "make an NPC from this stat block", "stat out
+  <creature>", "create a creature from this text", "build the boss with its gear and loot", or
+  pastes a Monster-Manual-style block. NPCs only — a player character is pc-builder.
 ---
 
 # Complete-NPC builder

@@ -1,14 +1,11 @@
 ---
 name: scene-builder
 description: >-
-  Turn a map image into a ready-to-play Foundry scene. Use when the user wants to "build a scene",
-  "make a scene from this map", "set up this battlemap", "turn this image into a scene", "create a
-  scene", "import a map", or asks to set scene mood/lighting/weather/fog (e.g. "make it night", "add
-  snow", "make this a dark cave", "attach this playlist/journal to the scene"). Prompts for a map if
-  none is given, auto-sizes the scene to the image, **looks for an accompanying sidecar JSON next to
-  the map to import its walls + lighting**, looks at the map to suggest big-brush mood (weather /
-  darkness / vision), and offers to attach a playlist or journal. The tools own correctness (field
-  paths, enum mapping, name→id, image probing); this skill owns the judgment.
+  Turn a map image into a ready-to-play Foundry scene (sized to the image, sidecar walls + lights,
+  mood, an attached playlist / journal). Use when the user wants to "build a scene", "make a scene
+  from this map", "set up this battlemap", "turn this image into a scene", "create a scene", "import
+  a map", or asks to set scene mood/lighting/weather/fog (e.g. "make it night", "add snow", "make
+  this a dark cave", "attach this playlist/journal to the scene").
 ---
 
 # Scene builder

@@ -1,21 +1,13 @@
 ---
 name: pc-builder
 description: >-
-  Build a COMPLETE D&D 5e player character (type:character) in Foundry — a real leveled PC, not an
-  NPC: class + species + background, ability scores, the level-1 player choices (skills, expertise,
-  fighting style, draconic ancestry…), spells for casters, starting equipment, and a finishing pass
-  (art, the player as owner, folder). Use when the user wants to "make a PC", "build a character",
-  "create a level 1 fighter", "roll up a wizard", "make my player's dragonborn paladin", "build a
-  character for <player>", or pastes a character concept/sheet. ALSO use when the user asks to
-  "import my D&D Beyond character" / "import from DDB" or pastes a dndbeyond.com link — that import
-  path was REMOVED (DDB exports strip embedded effect automation): refuse the import, explain why,
-  and offer to rebuild the PC natively from the premium books, reading the DDB sheet as reference
-  only. Composes create-pc /
-  inspect-pc-advancement (the leveling engine: advancement runs so @scale resolves NATIVELY, unlike
-  an NPC) with search-compendium-* / import-item / set-actor-art / set-actor-ownership /
-  move-documents and dnd5e judgment. The tools own correctness (name→uuid, advancement.apply
-  sequencing, choice-data shapes, persist, @scale reporting); this skill owns the parse, the
-  ability-score math, the choices, and the house rules.
+  Build a COMPLETE D&D 5e player character (type:character, not an NPC) in Foundry — class + species
+  + background, ability scores, the level-1 choices, spells, starting gear, art, owner, folder. Use
+  when the user wants to "make a PC", "build a character", "create a level 1 fighter", "roll up a
+  wizard", "make my player's dragonborn paladin", "build a character for <player>", or pastes a
+  character concept/sheet. ALSO use for "import my D&D Beyond character" / "import from DDB" or a
+  dndbeyond.com link — that path is removed; the skill refuses and rebuilds the PC natively from the
+  premium books.
 ---
 
 # Player-character builder

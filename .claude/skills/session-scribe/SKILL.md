@@ -2,16 +2,10 @@
 name: session-scribe
 description: >-
   Turn a Craig (Discord) session recording into a speaker-labeled transcript aligned with the
-  Foundry chat log, then write the session artifacts — four documents as HTML + PDF (player
-  recap, combat stats, GM notes · story, GM notes · mechanics) plus recap.md — committed to the
-  campaign repo under sessions/YYYY-MM-DD/. Use when the
-  user pastes a Craig download link (craig.chat/rec/... or craig.horse), or wants to "process the
-  session", "process last night's recording", "transcribe the session", "write the session recap",
-  "make the session log", or "run session scribe". The bundled script owns the deterministic work
-  (Craig API download, per-track faster-whisper transcription, wall-clock alignment with the chat
-  log); this skill owns the judgment: the recap voice, what is player-safe vs GM-only, loot/level
-  bookkeeping, and the loose-thread list. The user's ONLY jobs are /join, /stop, and pasting the
-  link — never ask them for more ceremony than that.
+  Foundry chat log, then write the session artifacts (player recap, combat stats, GM notes) into the
+  campaign repo. Use when the user pastes a Craig download link (craig.chat/rec/... or craig.horse),
+  or wants to "process the session", "process last night's recording", "transcribe the session",
+  "write the session recap", "make the session log", or "run session scribe".
 ---
 
 # Session scribe

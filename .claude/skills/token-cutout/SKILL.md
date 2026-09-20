@@ -1,13 +1,10 @@
 ---
 name: token-cutout
 description: >-
-  Put a token image into the world correctly after its background has been cut to alpha. Use when
-  the user wants a cut-out token assigned to an actor, or asks to "remove the background" / "make
-  it transparent" for a token: the PIXEL WORK is NOT here any more — it is the artificer server's
-  `cutout-image` tool (fvtt-mcp-artificer, 2026-09-19), which also runs automatically for every
-  `kind: "token"` render. This skill keeps only the Foundry-side judgment: uploading, assigning
-  with set-actor-art, resetting inherited prototype settings, and checking facing before
-  auto-rotate.
+  Put a cut-out token image into the world — upload, set-actor-art, the facing check. Use when the
+  user wants a cut-out token assigned to an actor, or asks to "remove the background" / "make it
+  transparent" for a token; the pixel work is the artificer server's cutout-image tool (automatic
+  for every kind: "token" render), not this skill.
 ---
 
 # Token cutout (Foundry install half)

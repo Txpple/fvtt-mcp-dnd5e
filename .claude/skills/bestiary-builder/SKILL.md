@@ -1,15 +1,11 @@
 ---
 name: bestiary-builder
 description: >-
-  Add a monster the party FOUGHT to the world's player-facing Bestiary journal — Monster Manual art
-  plus the MM narrative write-up (never the stat block), filed as a page in alphabetical order. Use
-  when the user says "add it to the bestiary", "the party killed a <monster> — log it", "bestiary
-  entry for <monster>", "add the monsters we fought", "what did we fight? put them in the bestiary",
-  or wraps a session and wants the kills recorded. Runs a bundled script that resolves the creature
-  in the premium Monster Manual pack, follows its lore embed, harvests the book art, strips the
-  non-narrative furniture, and upserts the page with the right ownership. The script owns the
-  fetch/parse/sort; this skill owns the judgment: whether it's earned, which creature it really was,
-  shared-lore variants, reskins, homebrew, and what stays hidden.
+  Add a monster the party FOUGHT to the world's player-facing Bestiary journal — the Monster Manual
+  art and narrative write-up (never the stat block), filed alphabetically. Use when the user says
+  "add it to the bestiary", "the party killed a <monster> — log it", "bestiary entry for <monster>",
+  "add the monsters we fought", "what did we fight? put them in the bestiary", or wraps a session
+  and wants the kills recorded.
 ---
 
 # Bestiary builder

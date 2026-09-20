@@ -1,17 +1,12 @@
 ---
 name: physical-item-builder
 description: >-
-  Author D&D 5e physical items — weapons, armor, shields, wondrous items, potions/scrolls, ammunition,
-  tools, gems/trade-goods loot, and containers — as Foundry items. Use when the user wants to "make a
-  magic sword", "create a +1 longsword", "add a healing potion", "give this NPC some loot / treasure /
-  gear", "stat out this magic item", "build a flame tongue", "fill this chest with loot", or pastes a
-  DMG-style item entry. COMPENDIUM-FIRST: it copies the real PHB/DMG 2024 item (correct stats + art)
-  with import-item, modifies + renames a copied base for custom items, and only authors from scratch
-  with add-item as a last resort. Composes import-item / add-item / update-actor (coins) /
-  update-actor-item / manage-activity / manage-effect with dnd5e judgment: itemType choice, rarity↔price
-  sanity, the magic-item rule, attunement defaults, equipped vs carried, identified vs mystery loot,
-  container nesting. The tools own correctness (field paths, shapes, soft validation); this skill owns
-  the parse, the choices, and the house rules.
+  Author D&D 5e physical items — weapons, armor, shields, wondrous items, potions/scrolls,
+  ammunition, tools, gems/loot, containers — as Foundry items, compendium-first (copy the real
+  PHB/DMG item, modify + rename for custom, author from scratch last). Use when the user wants to
+  "make a magic sword", "create a +1 longsword", "add a healing potion", "give this NPC some loot /
+  treasure / gear", "stat out this magic item", "build a flame tongue", "fill this chest with loot",
+  or pastes a DMG-style item entry.
 ---
 
 # Physical-item builder

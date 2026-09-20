@@ -1,14 +1,10 @@
 ---
 name: start-session
 description: >-
-  Boot the Foundry VTT world for a work session and report its state. Use when
-  the user wants to start, wake, launch, or "spin up" the Foundry instance or
-  world, or otherwise kick off a session — e.g. "start the world", "boot
-  Foundry", "open the table", "fire up the server", "wake the box", "get the
-  world up", "let's start a session". Drives the bridge's built-in cold-start
-  (Magic-URL wake → world launch), then reports world / system / Foundry
-  versions, active users, and the current scene. Read-only and safe to run any
-  time — if the world is already up it just reports state.
+  Boot the Foundry world and report its state; read-only, safe when it is already up. Use when the
+  user wants to start, wake, launch, or "spin up" the Foundry instance or world, or kick off a
+  session — "start the world", "boot Foundry", "open the table", "fire up the server", "wake the
+  box", "get the world up", "let's start a session".
 ---
 
 # Start a work session

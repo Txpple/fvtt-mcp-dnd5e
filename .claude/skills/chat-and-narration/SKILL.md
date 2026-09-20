@@ -1,14 +1,12 @@
 ---
 name: chat-and-narration
 description: >-
-  Post to the Foundry chat log with the right visibility, voice, and formatting — narration,
-  in-character NPC dialogue, GM whispers, blind/secret notes, player handouts with images, table-wide
-  roll requests, and rich dnd5e item/attack cards. Also save/export the chat transcript and prune old
-  messages. Use when the user wants to "post to chat", "say (something) in character as <npc>",
-  "narrate", "read the boxed text", "whisper the GM", "make it a blind/secret note", "ask everyone for
-  a DEX save / Perception check", "show the goblin's attack", "post <npc>'s <feature>", "export/save
-  the chat log", "clear the chat", or "purge old messages". Picks the tool + mode for you; the tools
-  themselves hold the correctness.
+  Post to the Foundry chat log with the right visibility, voice and formatting (narration, NPC
+  dialogue, whispers, secret notes, roll requests, item cards); also export or prune the log. Use
+  when the user wants to "post to chat", "say (something) in character as <npc>", "narrate", "read
+  the boxed text", "whisper the GM", "make it a blind/secret note", "ask everyone for a DEX save /
+  Perception check", "show the goblin's attack", "post <npc>'s <feature>", "export/save the chat
+  log", "clear the chat", or "purge old messages".
 ---
 
 # Chat & narration

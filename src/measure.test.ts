@@ -26,7 +26,7 @@ const BUDGET = {
   // the cost the plan accepted for refusing unknown arguments); M7 (prose diet) → ≤ 230,000
   toolsListChars: 288_200,
   nameChars: 11_200, // 11,147 at 2.2.0 — M8 (CRUD consolidation) → ≤ 7,000
-  skillDescriptionChars: 15_400, // 15,381 at 2.2.0 — M3 (six rewrites) → ≤ 8,000
+  skillDescriptionChars: 8_000, // 15,381 at 2.2.0; 7,998 after M3 (all 17 rewritten, 120/120 trigger phrases kept)
 };
 
 function fullSurface() {
@@ -63,7 +63,7 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
       line(
         'skill descriptions',
         skillChars,
-        `(${skills.length} skills; ≤ ${fmt(BUDGET.skillDescriptionChars)}; M3 → ≤ 8,000)`
+        `(${skills.length} skills; ≤ ${fmt(BUDGET.skillDescriptionChars)}; M3 done)`
       ),
       `  leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description)} · ` +
         `structural ${fmt(list.totals.structural)} · longest leaf ${fmt(list.totals.longestLeafDescription)}`,

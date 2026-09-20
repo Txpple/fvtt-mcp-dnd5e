@@ -1,19 +1,13 @@
 ---
 name: session-audit
 description: >-
-  Audit the NEXT SESSION before it is played — read the live world's maps, placed monsters, and PC
-  sheets, do the encounter arithmetic, and judge whether the fights are tuned right and whether the
-  night actually fits in the hours available — then audit CAMPAIGN progress and pacing against the
-  plot doc and the sessions played so far. Use when the user wants to "audit my next session",
-  "is this fight too hard / too easy", "evaluate the difficulty", "review the maps and monsters I
-  placed", "check the encounters before Tuesday", "will this dungeon fit in one session", "how is
-  the campaign pacing", "are we on track", "review <site> before we run it", or hands over a built
-  dungeon and asks what they should change. READ-ONLY: it produces a two-part report and changes
-  nothing in the world unless the user says go. The bundled script owns the arithmetic; this skill
-  owns what the numbers mean, which axis is actually off, and which fixes are worth the DM's time.
-  Composes the read tools (list-scenes/-tokens, get-actor, get-actor-entity, get-group,
-  list-journals, screenshot-scene, get-compendium-entry) with the campaign repo's plot and session
-  record.
+  Audit the NEXT SESSION before it is played — read the maps, placed monsters and PC sheets, do the
+  encounter arithmetic, judge whether the fights are tuned and the night fits the hours, then audit
+  campaign pacing. READ-ONLY report. Use when the user wants to "audit my next session", "is this
+  fight too hard / too easy", "evaluate the difficulty", "review the maps and monsters I placed",
+  "check the encounters before Tuesday", "will this dungeon fit in one session", "how is the
+  campaign pacing", "are we on track", "review <site> before we run it", or hands over a built
+  dungeon and asks what to change.
 ---
 
 # Session and campaign audit

@@ -1,17 +1,11 @@
 ---
 name: tom-cartos-import
 description: >-
-  Import a Tom-Cartos-style Foundry SCENE-PACK MODULE (an unzipped folder with a `module.json` and
-  `packs/` compendiums) into the live world. Use when the user wants to "import a Tom Cartos pack",
-  "install this map module", "bring this scene pack into my world", "import the dungeon/temple/keep
-  module", "import a Foundry module's scenes", or points at a module folder / a `module.json`. Reads
-  the pack off disk, detects its Foundry era, uploads and re-points all its assets, and recreates each
-  scene faithfully — dimensions, grid, background, thumbnail, environment/fog mood, every wall and
-  light, and the cross-scene teleporters (stairs between levels) — plus the pack's journal of legend
-  keys. Also makes any standalone TILES the pack ships (huts/roofs/props) available for the GM to drag
-  onto scenes. The tools own correctness (extraction, era detection, path rewrite, whole-placeable
-  creation, teleporter remap, tile discovery); this skill owns the judgment: which variants to import,
-  naming/foldering, the asset destination, the import order, and dedup.
+  Import a Tom-Cartos-style Foundry SCENE-PACK MODULE (an unzipped folder with a module.json and
+  packs/) into the live world — every scene with its walls, lights, mood, teleporters, legend
+  journal and standalone tiles. Use when the user wants to "import a Tom Cartos pack", "install this
+  map module", "bring this scene pack into my world", "import the dungeon/temple/keep module",
+  "import a Foundry module's scenes", or points at a module folder / a module.json.
 ---
 
 # Tom Cartos import
