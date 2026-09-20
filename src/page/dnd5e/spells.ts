@@ -266,6 +266,9 @@ export async function addSpellsToActor(data: any): Promise<unknown> {
 
   const spellNames: string[] = data.spellNames;
   const compendiumPacks: string[] = data.compendiumPacks ?? [...DEFAULT_SPELL_PACKS];
+  // Import as ALWAYS PREPARED (CONFIG.DND5E.spellPreparationStates.always = 2) — the house rule for
+  // known-style casters, and what free-cast.ts writes for a feature-granted spell.
+  const alwaysPrepared = data.alwaysPrepared === true;
   const warnings: string[] = [];
 
   // ── Phase A: deduplicate input (case-insensitive) ─────────────────────
@@ -371,8 +374,9 @@ export async function addSpellsToActor(data: any): Promise<unknown> {
     }
 
     // 4. Prepare data for embedding
-    const spellData = document.toObject() as Record<string, unknown>;
+    const spellData = document.toObject() as Record<string, any>;
     delete spellData._id; // Let Foundry assign a new local id; prevents id clash
+    if (alwaysPrepared) spellData.system = { ...(spellData.system ?? {}), prepared: 2 };
 
     // 5. Embed individually — per-spell error isolation
     try {

@@ -85,8 +85,12 @@ export interface PcBuildPlan {
   /** FINAL ability scores (skill owns the math). Omitted → left at the dnd5e defaults. */
   abilities?: PcAbilities;
   choices?: PcChoiceMap;
-  /** Caster spell picks by NAME (cantrips always-prepared; leveled go to the spellbook). */
-  spells?: { cantrips?: string[]; prepared?: string[] };
+  /**
+   * Caster spell picks by NAME. `alwaysPrepared` imports every one of them as ALWAYS PREPARED
+   * (`system.prepared: 2`) — the table's rule for known-style casters (sorcerer, bard, ranger,
+   * warlock); which classes get it is the skill's call (design.md §2.1).
+   */
+  spells?: { cantrips?: string[]; prepared?: string[]; alwaysPrepared?: boolean };
   /** Character level 1..20 (v2). The engine loops levels {0..level}; HP/subclass/slots scale with it. */
   level?: number;
   /**
@@ -108,6 +112,38 @@ export interface PcBuildPlan {
    * unsupplied picks (the skill decides proceed-with-defaults vs ask — design.md §2.1).
    */
   acceptDefaults?: boolean;
+  /**
+   * Default art (true unless the player brings an image): the portrait AND token texture of the
+   * PRIMARY class's PHB pregen — a fixed class → art mapping the book ships, so the same class always
+   * gets the same art. Skipped with a warning when no premium type:character pregen has the class's
+   * name. `set-actor-art` afterwards overrides it.
+   */
+  defaultArt?: boolean;
+}
+
+/**
+ * The PHB pregen for a class — the premium type:character actor whose NAME is the class name — and
+ * the two art paths it ships: the journal-art portrait and the cut-out token. Null when the book (or
+ * the pregen) is absent. The ids are `phbprg<Class>` zero-padded to 16, so the name is the key.
+ */
+export async function findClassPregenArt(
+  className: string
+): Promise<{ packId: string; actorId: string; img: string; token: string } | null> {
+  const wanted = className.toLowerCase();
+  for (const pack of game.packs) {
+    if (pack.documentName !== 'Actor' || !isPremiumBookPack(pack.metadata.id)) continue;
+    const idx = await pack.getIndex({ fields: ['type', 'img', 'prototypeToken.texture.src'] });
+    for (const e of idx as any) {
+      if (e.type !== 'character' || e.name?.toLowerCase() !== wanted || !e.img) continue;
+      return {
+        packId: pack.metadata.id,
+        actorId: e._id,
+        img: e.img,
+        token: e.prototypeToken?.texture?.src || e.img,
+      };
+    }
+  }
+  return null;
 }
 
 /** One choice point a class/species/background/subclass advancement exposes (descriptive — never auto-picked). */
@@ -232,6 +268,8 @@ export interface PcBuildResult {
     level: number;
     hp: number | null;
     folder: string | null;
+    /** create only: the default art applied (the primary class's PHB pregen), or null when opted out / absent. */
+    art?: { portrait: string; token: string; from: string } | null;
     /** level-up only: the new level IN the leveled class + the full class breakdown (multiclass). */
     classLevel?: number;
     classes?: Array<{ name: string; levels: number }>;
@@ -917,7 +955,11 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
     const spellNames = [...(plan.spells?.cantrips ?? []), ...(plan.spells?.prepared ?? [])];
     if (spellNames.length > 0) {
       try {
-        const spellRes: any = await addSpellsToActor({ actorIdentifier: tmp.id, spellNames });
+        const spellRes: any = await addSpellsToActor({
+          actorIdentifier: tmp.id,
+          spellNames,
+          alwaysPrepared: plan.spells?.alwaysPrepared === true,
+        });
         if (Array.isArray(spellRes?.notFound) && spellRes.notFound.length) {
           warnings.push(`Spells not found in the premium PHB: ${spellRes.notFound.join(', ')}`);
         }
@@ -957,6 +999,30 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
         })
       );
     }
+    // Default art: the primary class's PHB pregen (portrait + token cut-out), unless opted out.
+    let art: { portrait: string; token: string; from: string } | null = null;
+    if (plan.defaultArt !== false) {
+      const pregen = await findClassPregenArt(classRes.doc.name);
+      if (pregen) {
+        snapshot.img = pregen.img;
+        if (snapshot.prototypeToken) {
+          snapshot.prototypeToken.texture = {
+            ...(snapshot.prototypeToken.texture ?? {}),
+            src: pregen.token,
+          };
+        }
+        art = {
+          portrait: pregen.img,
+          token: pregen.token,
+          from: `${pregen.packId}.${pregen.actorId}`,
+        };
+      } else {
+        warnings.push(
+          `No premium pregen named "${classRes.doc.name}" (dnd-players-handbook.actors) — the PC has no ` +
+            'portrait; set one with set-actor-art.'
+        );
+      }
+    }
     if (folderId) snapshot.folder = folderId;
     const real = await ActorClass.create(snapshot);
     if (!real) throw new Error(`Failed to persist PC "${plan.name}"`);
@@ -992,6 +1058,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
         level: totalLevel,
         hp: fresh.system?.attributes?.hp?.max ?? null,
         folder: folderId ?? null,
+        art,
         ...(multiclassRes.length > 0
           ? {
               classes: fresh.items

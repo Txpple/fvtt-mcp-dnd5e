@@ -90,6 +90,59 @@ describe('createPcActor orchestration', () => {
     expect(persisted?.prototypeToken?.sight?.enabled).toBe(true);
   });
 
+  it("defaults the portrait + token to the primary class's PHB pregen art, reported as actor.art", async () => {
+    mock = installFoundryMock([fighter()], {
+      pregens: [
+        {
+          packId: 'dnd-players-handbook.actors',
+          name: 'Fighter',
+          img: 'modules/dnd-players-handbook/assets/journal-art/fighter.webp',
+          tokenSrc: 'modules/dnd-players-handbook/assets/tokens/fighter.webp',
+        },
+      ],
+    });
+    const res: any = await createPcActor({ name: 'Aria', className: 'Fighter', level: 1 });
+    expect(res.success).toBe(true);
+    const persisted = [...mock.store.actors.values()].find(a => a.name === 'Aria');
+    expect(persisted?.img).toBe('modules/dnd-players-handbook/assets/journal-art/fighter.webp');
+    expect(persisted?.prototypeToken?.texture?.src).toBe(
+      'modules/dnd-players-handbook/assets/tokens/fighter.webp'
+    );
+    expect(res.actor.art).toEqual({
+      portrait: 'modules/dnd-players-handbook/assets/journal-art/fighter.webp',
+      token: 'modules/dnd-players-handbook/assets/tokens/fighter.webp',
+      from: expect.stringMatching(/^dnd-players-handbook.actors./),
+    });
+    // The house token defaults still apply over the pregen's art (ring off, friendly, bars shown).
+    expect(persisted?.prototypeToken?.ring?.enabled).toBe(false);
+    expect(persisted?.prototypeToken?.disposition).toBe(1);
+  });
+
+  it('defaultArt:false leaves the art alone; a missing pregen warns instead of failing', async () => {
+    mock = installFoundryMock([fighter()], {
+      pregens: [{ packId: 'dnd-players-handbook.actors', name: 'Fighter', img: 'x/fighter.webp' }],
+    });
+    const optOut: any = await createPcActor({
+      name: 'Own Art',
+      className: 'Fighter',
+      defaultArt: false,
+    });
+    expect(optOut.success).toBe(true);
+    expect(optOut.actor.art).toBeNull();
+    const persisted = [...mock.store.actors.values()].find(a => a.name === 'Own Art');
+    expect(persisted?.img).toBeUndefined();
+    expect(optOut.warnings.some((w: string) => /pregen/.test(w))).toBe(false);
+
+    mock.uninstall();
+    mock = installFoundryMock([fighter()]); // no premium Actor pack at all
+    const absent: any = await createPcActor({ name: 'No Book', className: 'Fighter' });
+    expect(absent.success).toBe(true);
+    expect(absent.actor.art).toBeNull();
+    expect(absent.warnings.some((w: string) => /No premium pregen named "Fighter"/.test(w))).toBe(
+      true
+    );
+  });
+
   it('resolves a folder NAME to its Folder id before persisting (never passes a name as a folder id)', async () => {
     mock = installFoundryMock([fighter()]);
     // Seed an existing "DM Tools" Actor folder the resolver should match BY NAME and return its id.

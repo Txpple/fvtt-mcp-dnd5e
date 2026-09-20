@@ -130,4 +130,5 @@
     prepared* (`system.prepared: 2`), cantrips included: no prepared-toggle state, no unprepared
     spells lingering in the book. Feature-granted spells (rule 13's repertoire copies, subclass
     always-prepared lists) are `prepared: 2` for everyone. Prepared casters (cleric, druid, wizard,
-    paladin) keep the normal prepare/unprepare toggle for their class list.
+    paladin) keep the normal prepare/unprepare toggle for their class list. On a `create-pc` build
+    this is one flag — `spells.alwaysPrepared: true` — for the known-caster classes.

@@ -68,6 +68,41 @@ describe('handleCreatePc', () => {
     expect(call?.[1].level).toBe(1); // z.literal(1).default(1)
     expect(call?.[1].sourceRules).toBe('2024');
     expect(call?.[1].acceptDefaults).toBe(false);
+    expect(call?.[1].defaultArt).toBe(true); // the class pregen's art unless the player brings one
+  });
+
+  it('forwards spells.alwaysPrepared and defaultArt:false, and reports the art that landed', async () => {
+    const { tool, calls } = makeTool(name =>
+      name === 'createPcActor'
+        ? {
+            success: true,
+            actor: {
+              id: 'p2',
+              name: 'Vex',
+              className: 'Sorcerer',
+              level: 1,
+              hp: 8,
+              art: { portrait: 'pa/sorcerer.webp', token: 'tk/sorcerer.webp', from: 'x.y' },
+            },
+            applied: [],
+            warnings: [],
+          }
+        : {}
+    );
+    const res = await tool.handleCreatePc({
+      name: 'Vex',
+      className: 'Sorcerer',
+      spells: { cantrips: ['Fire Bolt'], prepared: ['Shield'], alwaysPrepared: true },
+      defaultArt: false,
+    });
+    const call = calls.find(([n]) => n === 'createPcActor');
+    expect(call?.[1].spells).toEqual({
+      cantrips: ['Fire Bolt'],
+      prepared: ['Shield'],
+      alwaysPrepared: true,
+    });
+    expect(call?.[1].defaultArt).toBe(false);
+    expect(res.message).toContain('**Art:** pa/sorcerer.webp · token tk/sorcerer.webp');
   });
 
   it('shapes a success response with the actor summary', async () => {

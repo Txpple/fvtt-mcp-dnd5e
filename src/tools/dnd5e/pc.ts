@@ -32,7 +32,14 @@ const AbilitiesSchema = z.object({
 
 /** One advancement's supplied pick — Trait → chosen[], ItemChoice → selected[], Subclass → uuid. */
 const ChoiceDataSchema = z.object({
-  chosen: z.array(z.string()).optional(),
+  chosen: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Trait keys: skills:<acr|ani|arc|ath|dec|his|ins|itm|inv|med|nat|prc|prf|per|rel|slt|ste|sur>, ' +
+        'languages:standard:<id>, tool:<group>:<id>, weapon:mar:<id>… A wildcard option ' +
+        '(languages:standard:*, tool:game:*) takes one concrete key in its pattern.'
+    ),
   selected: z.array(z.string()).optional(),
   uuid: z.string().optional(),
 });
@@ -52,8 +59,22 @@ const CreatePcSchema = z.object({
     .object({
       cantrips: z.array(z.string()).optional(),
       prepared: z.array(z.string()).optional(),
+      alwaysPrepared: z
+        .boolean()
+        .optional()
+        .describe(
+          'Import every listed spell as ALWAYS PREPARED (prepared:2, no toggle) — the known-caster ' +
+            "rule (sorcerer/bard/ranger/warlock); which classes get it is the skill's call."
+        ),
     })
     .optional(),
+  defaultArt: z
+    .boolean()
+    .default(true)
+    .describe(
+      "Portrait + token from the PRIMARY class's PHB pregen (a fixed class → art map). false when " +
+        'the player brings an image.'
+    ),
   // Character level 1..20. HP/subclass/spell-slots scale with it; subclass is granted at level 3.
   // For a multiclass PC this is the PRIMARY class's level (see `multiclass`).
   level: z.number().int().min(1).max(20).default(1),
@@ -133,22 +154,18 @@ const CreatePcFromPrefabSchema = z
 const CREATE_PC_DESCRIPTION =
   'Build a player character (type:character) headlessly from premium class + species + background by ' +
   'NAME, running real dnd5e advancement so @scale.* (rage damage, sneak attack, breath weapon, …) ' +
-  'resolves natively — unlike an NPC. Compendium-first, premium books only, never the SRD ' +
-  '(design.md §2.3); a missing class/species/background is an error, not invented. The SKILL owns ' +
-  'the math: pass FINAL ability scores (point-buy/array/ASI already applied) and the player CHOICES ' +
-  '(skills, fighting style, ancestry…) in `choices` (level → advancement-id → {chosen|selected|uuid}). ' +
-  'Call with no/partial choices first to get a `needsChoices[]` dry-run (legal options per choice — ' +
-  'incl. the available subclasses at level 3 — NOTHING is created); fill the map and re-call. ' +
-  'Levels 1-20: HP/features/subclass/spell-slots scale with `level` (subclass at L3 via a `choices` ' +
-  'uuid; HP per level `hpMode` avg|max). Multiclass in ONE call via `multiclass:[{className,levels}]` ' +
-  '(className/level is the primary; each multiclass class gets the 2024 proficiency subset; total ≤ 20). ' +
-  'Caster spell slots auto-derive from the class; pass ' +
-  '`spells.cantrips`/`spells.prepared` (names) to add chosen spells. ASI ability-increases ride in the ' +
-  'FINAL scores (not applied separately); a feat taken at an ASI tier is added by the skill via ' +
-  'add-feature/import-item, like equipment — this tool adds no gear or ASI-feats. If a required ' +
-  'advancement (a forced grant / supplied pick / subclass embed) FAILS to apply, the PC is NOT ' +
-  'persisted (no junk actor) and success:false is returned with errors[]. Returns ' +
-  '{success, actor, applied[], needsChoices[], unresolvedScale[], errors[], warnings[]}.';
+  'resolves natively — unlike an NPC. Premium books only, never the SRD (design.md §2.3); a missing ' +
+  'class/species/background is an error, not invented. The SKILL owns the math: pass FINAL ability ' +
+  'scores (point-buy/array/ASI applied) and the player CHOICES in `choices` (level → advancement-id ' +
+  '→ {chosen|selected|uuid}). Call with no/partial choices first for a `needsChoices[]` dry-run ' +
+  '(legal options per choice, incl. the subclasses at level 3 — NOTHING is created); fill and re-call. ' +
+  'Levels 1-20: HP/features/subclass/spell-slots scale with `level` (`hpMode` avg|max). Multiclass ' +
+  'in ONE call via `multiclass:[{className,levels}]` (className/level is the primary; each extra class ' +
+  'gets the 2024 proficiency subset; total ≤ 20). Slots auto-derive; `spells.cantrips`/`.prepared` ' +
+  "(names) add chosen spells. Default art = the class's PHB pregen. Adds no gear or ASI-feats (the " +
+  'skill does, via import-item/add-feature). A required advancement that FAILS → NOT persisted, ' +
+  'success:false + errors[]. Returns ' +
+  '{success, actor{…,art}, applied[], needsChoices[], unresolvedScale[], errors[], warnings[]}.';
 
 const INSPECT_PC_ADVANCEMENT_DESCRIPTION =
   'Read-only: report the player CHOICE points a premium class exposes up to a level — each ' +
@@ -157,29 +174,21 @@ const INSPECT_PC_ADVANCEMENT_DESCRIPTION =
   'className OR classUuid (exactly one); premium books only, never the SRD. Touches no actor.';
 
 const CREATE_PC_FROM_PREFAB_DESCRIPTION =
-  'Create a player character by COPYING a premium-book PREGEN (a complete type:character template — ' +
-  'e.g. the PHB class pregens Barbarian…Wizard in dnd-players-handbook.actors, each a ready level-1 ' +
-  'build with gear/feats/art) and layering your changes, INSTEAD of building via advancement. The PC ' +
-  "family's prefab-as-base path — the §6/§7 analog of create-actor-from-compendium for NPCs, but " +
-  'PC-correct (files under the PC folder, never the NPC one). Resolve the source by `prefab` NAME ' +
-  '(e.g. "Fighter") OR explicit packId+actorId; premium books only, never the SRD (design.md §2.3). ' +
-  "Override the pregen's ability array via `abilities` (final scores) and/or any update-actor-shaped " +
-  '`modifications` — applied to the COPY only, the source is never touched. @scale resolves natively ' +
-  '(it is a real character, no advancement run). Assign the player as owner afterward with ' +
-  'set-actor-ownership. Returns {success, from, actor, modificationsApplied, unresolvedScale, warnings}.';
+  'Create a player character by COPYING a premium-book PREGEN (the PHB class pregens Barbarian…Wizard ' +
+  'in dnd-players-handbook.actors: a ready level-1 build with gear/feats/art) instead of running ' +
+  'advancement; filed under the PC folder. Source by `prefab` NAME (e.g. "Fighter") OR packId+actorId; ' +
+  'premium books only, never the SRD (design.md §2.3). `abilities` (final scores) and update-actor-shaped ' +
+  '`modifications` apply to the COPY only. @scale resolves natively. Owner: set-actor-ownership. ' +
+  'Returns {success, from, actor, modificationsApplied, unresolvedScale, warnings}.';
 
 const LEVEL_UP_PC_DESCRIPTION =
-  "Add ONE level to an existing PC (type:character) and apply that level's advancement IN PLACE. " +
-  'Same `className` as a class the PC already has → a single-class level-up; a class it does NOT have → ' +
-  'a MULTICLASS add (the PC gets the 2024 multiclass proficiency SUBSET, not the full first-level kit). ' +
-  "HP/features/subclass(@ the class's level 3)/spell-slots scale; @scale stays native. Like create-pc: " +
-  'call with no/partial choices to get a `needsChoices[]` dry-run (e.g. the subclass options at level 3 — ' +
-  'the actor is NOT touched); fill `choices` (level → advancement-id → {chosen|selected|uuid}) and ' +
-  're-call. ASI ability bumps are NOT applied here — raise the final scores with update-actor; a feat ' +
-  'taken at an ASI tier is added with add-feature. If a required advancement FAILS to apply, the PC is ' +
-  'rolled back to its prior level and success:false is returned with errors[]. Required: ' +
-  'actorIdentifier, className. Returns ' +
-  '{success, actor (incl. classLevel + classes[]), applied[], needsChoices[], unresolvedScale[], errors[], warnings[]}.';
+  "Add ONE level to an existing PC (type:character) and apply that level's advancement IN PLACE. A " +
+  'class the PC has → a level-up; one it lacks → a MULTICLASS add (the 2024 proficiency SUBSET). ' +
+  "HP/features/subclass (the class's level 3)/spell-slots scale; @scale stays native. Like create-pc: " +
+  'no/partial choices → a `needsChoices[]` dry-run (actor untouched); fill `choices` and re-call. ' +
+  'ASI bumps and ASI-tier feats are NOT applied here (update-actor / add-feature). A required ' +
+  'advancement that FAILS → rolled back, success:false + errors[]. Returns {success, actor (incl. ' +
+  'classLevel + classes[]), applied[], needsChoices[], unresolvedScale[], errors[], warnings[]}.';
 
 // ---------------------------------------------------------------------------
 // Options interface
@@ -360,6 +369,7 @@ export class DnD5ePcTools {
       );
     }
     if (actor.folder) lines.push(`**Folder:** ${actor.folder}`);
+    if (actor.art) lines.push(`**Art:** ${actor.art.portrait} · token ${actor.art.token}`);
     if (Array.isArray(result?.applied)) {
       const choices = result.applied.filter((a: any) => /\+choice/.test(a.result));
       lines.push(

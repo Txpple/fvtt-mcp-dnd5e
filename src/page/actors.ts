@@ -383,7 +383,8 @@ function extractDerived(actor: any): Record<string, any> | undefined {
     out.hp = {
       value: hp.value ?? 0,
       max: hp.max,
-      effectiveMax: typeof hp.effectiveMax === 'number' ? hp.effectiveMax : hp.max + (hp.tempmax ?? 0),
+      effectiveMax:
+        typeof hp.effectiveMax === 'number' ? hp.effectiveMax : hp.max + (hp.tempmax ?? 0),
       temp: hp.temp ?? 0,
       tempmax: hp.tempmax ?? 0,
     };

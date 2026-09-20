@@ -160,12 +160,23 @@ describe('extractActorStats', () => {
     expect(extractActorStats(pc).hitPoints).toEqual({ current: 31, max: 38, temp: 0 });
     expect(extractActorBasicInfo(pc).hitPoints).toEqual({ current: 31, max: 38, temp: 0 });
     // tempmax (an Aid spell) is reported only when it is non-zero.
-    const aided = { ...pc, derived: { hp: { value: 31, max: 38, effectiveMax: 43, temp: 0, tempmax: 5 } } };
-    expect(extractActorStats(aided).hitPoints).toEqual({ current: 31, max: 38, temp: 0, tempmax: 5 });
+    const aided = {
+      ...pc,
+      derived: { hp: { value: 31, max: 38, effectiveMax: 43, temp: 0, tempmax: 5 } },
+    };
+    expect(extractActorStats(aided).hitPoints).toEqual({
+      current: 31,
+      max: 38,
+      temp: 0,
+      tempmax: 5,
+    });
     // Without a derived block (an NPC source read) the authored max still wins over 0.
     expect(
-      extractActorStats({ name: 'X', type: 'npc', system: { attributes: { hp: { value: 5, max: 9 } } } })
-        .hitPoints
+      extractActorStats({
+        name: 'X',
+        type: 'npc',
+        system: { attributes: { hp: { value: 5, max: 9 } } },
+      }).hitPoints
     ).toEqual({ current: 5, max: 9, temp: 0 });
   });
 

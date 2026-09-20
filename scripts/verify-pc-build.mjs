@@ -231,6 +231,27 @@ try {
     `B9: get-actor max HP from the derived block = 12 (basicInfo ${basicMax}, stats ${statsMax}; source ${info?.system?.attributes?.hp?.max})`
   );
 
+  // B10 (F32): default art = the primary class's PHB pregen (portrait + token cut-out), reported.
+  const artRead = await withNodeTimeout(
+    f.evaluate(id => {
+      const a = globalThis.game.actors.get(id);
+      return {
+        img: a.img,
+        token: a.prototypeToken?.texture?.src,
+        ring: a.prototypeToken?.ring?.enabled,
+      };
+    }, built.actor.id),
+    30_000,
+    'artRead'
+  );
+  assert(
+    artRead?.img === 'modules/dnd-players-handbook/assets/journal-art/fighter.webp' &&
+      artRead?.token === 'modules/dnd-players-handbook/assets/tokens/fighter.webp' &&
+      built?.actor?.art?.portrait === artRead?.img &&
+      artRead?.ring === false,
+    `B10: default art from the Fighter pregen — portrait ${artRead?.img}, token ${artRead?.token}, ring off (${artRead?.ring})`
+  );
+
   // ---- Test C: inspect-pc-advancement reports the same class choices ----
   const inspect = await withNodeTimeout(
     f.call('inspectAdvancementChoices', { className: 'Fighter', level: 1 }),
@@ -274,8 +295,9 @@ try {
       abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 },
       choices: wizChoices,
       acceptDefaults: true,
-      spells: { cantrips: ['Fire Bolt', 'Mage Hand'] },
+      spells: { cantrips: ['Fire Bolt', 'Mage Hand'], prepared: ['Shield'], alwaysPrepared: true },
       level: 1,
+      defaultArt: false,
     }),
     180_000,
     'wizBuild'
@@ -297,6 +319,8 @@ try {
         hpMax: a.system?.attributes?.hp?.max,
         ability: a.system?.attributes?.spellcasting,
         cantrips: a.items.filter(i => i.type === 'spell').map(i => i.name),
+        prepared: a.items.filter(i => i.type === 'spell').map(i => [i.name, i.system?.prepared]),
+        img: a.img,
       };
     }, wiz.actor.id),
     60_000,
@@ -310,6 +334,14 @@ try {
   assert(
     (wizRead?.cantrips?.length ?? 0) >= 2,
     `D3: chosen cantrips imported (${wizRead?.cantrips?.join(', ')})`
+  );
+  assert(
+    (wizRead?.prepared?.length ?? 0) === 3 && wizRead.prepared.every(([, p]) => p === 2),
+    `D3b: spells.alwaysPrepared → every imported spell prepared:2 (${JSON.stringify(wizRead?.prepared)})`
+  );
+  assert(
+    !wizRead?.img || !/dnd-players-handbook/.test(wizRead.img),
+    `D3c: defaultArt:false → no pregen art (img ${wizRead?.img})`
   );
   // restPcToFull: a freshly-CREATED PC comes out fully rested (full HP + full slots).
   assert(

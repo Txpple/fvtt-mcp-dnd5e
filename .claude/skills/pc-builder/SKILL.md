@@ -130,11 +130,10 @@ Level-1 PCs have **player choices** the engine won't invent (per design.md §2.1
   L3 subclass) and **creates nothing** — no litter. Fill the map and re-call.
 
 Build the `choices` map keyed **level → advancement-id → data**:
-- **Trait pick** (skills, expertise, languages, tools, weapon masteries) → `{ chosen: [keys] }`.
-  Skill keys are the 3-letter codes: `skills:acr ani arc ath dec his ins itm inv med nat prc prf per
-  rel slt ste sur`. When an option is a **wildcard category** (`languages:standard:*`, `tool:game:*`,
-  `weapon:mar:*`), supply a **concrete** key in that pattern (e.g. `languages:standard:elvish`); if
-  you're unsure of the exact key for a language/tool/weapon, see "defaults" below.
+- **Trait pick** (skills, expertise, languages, tools, weapon masteries) → `{ chosen: [keys] }` —
+  the key grammar (`skills:<3-letter>`, `languages:standard:<id>`, wildcard options take one
+  concrete key) is on the `chosen` leaf of the schema; unsure of an exact language/tool/weapon key,
+  see "defaults" below.
 - **ItemChoice pick** (fighting style, draconic ancestry, etc.) → `{ selected: [uuid] }` using a uuid
   from the option list (the options carry readable labels — e.g. "Archery", "Acid Breath Weapon").
 - **Subclass pick** (level 3+) → `{ uuid: "<subclass-uuid>" }`. The needsChoices/inspect Subclass entry
@@ -186,9 +185,10 @@ spells; more at higher levels); ask the player for signature picks. A name not i
 in `warnings` — fix or ask, don't invent a spell.
 
 **Always-prepared house rule (policy rule 14):** for a KNOWN-style caster — **sorcerer, bard,
-ranger, warlock** — finish by setting EVERY spell on the sheet (cantrips + leveled) to *always
-prepared*: `update-actor-item` patch `{"system.prepared": 2}` per spell. No prepared-toggle state on
-known casters at this table. Prepared casters (cleric/druid/wizard/paladin) keep the normal toggle.
+ranger, warlock** — pass `spells.alwaysPrepared: true` and every listed spell (cantrips + leveled)
+lands *always prepared*, no toggle state. Prepared casters (cleric/druid/wizard/paladin) leave it
+off. (A spell added later to a known caster — a level-up pick via `import-item` — gets the same
+`{"system.prepared": 2}` by `update-actor-item`; `level-up-pc` imports no spells.)
 
 ## Step 6 — Starting equipment + ASI-feats (your call, via `import-item` / `add-feature`)
 
@@ -214,22 +214,11 @@ known casters at this table. Prepared casters (cleric/druid/wizard/paladin) keep
 
 ## Step 7 — Finishing pass
 
-- **Art** → `set-actor-art` (portrait + token from a Data-relative path; upload first if needed).
-  - **Default portrait — DETERMINISTIC: the PC's class → that class's PHB pregen art.** A `create-pc`
-    build starts with no portrait (unlike a prefab copy, which carries book art). Unless the player gives
-    their own image, default the portrait to the **PHB pregen for the PC's class** — a fixed 1:1 mapping,
-    not a judgment call (this is the PC analog of the NPC builder's best-match portrait hunt, but for PCs
-    it must be *predictable*: same class always → same art). The premium book ships exactly one ready
-    pregen per class (Barbarian … Wizard) in `dnd-players-handbook.actors`, each with official class art
-    at the deterministic path **`modules/dnd-players-handbook/assets/journal-art/<class>.webp`** (class
-    lowercased — `ranger.webp`, `wizard.webp`, …). To be safe, confirm the path by resolving the pregen:
-    `search-compendium` `{ query: "<Class>", packType: "Actor" }` → the hit in `dnd-players-handbook.actors`
-    (id `phbprg<Class>0000`) → `get-compendium-entry` and read its `imageUrl`. Pass that path to
-    `set-actor-art` (sets portrait **and** token).
-  - **Multiclass:** use the art of the class whose **first level was selected** — i.e. the **primary
-    class** (`create-pc`'s `className` / the originalClass, the one that maxes its first-level HP), NOT
-    any later `multiclass[]` entry. Same deterministic rule, keyed on the starting class.
-  - Skip the default only when the player supplied their own art.
+- **Art** — `create-pc` already gave the PC its **primary class's PHB pregen art** (portrait + token
+  cut-out; the response's `art` line says which). That is the default for every PC at this table:
+  same class → same art. Only when the **player supplied their own image** do you act: pass
+  `defaultArt: false` on the build (or just overwrite afterwards) and `set-actor-art` from the
+  uploaded Data-relative path.
 - **Ownership** → `set-actor-ownership` — assign the **player** as owner (a PC should be controlled by
   its player, not GM-only like an NPC).
 - **Folder** → `move-documents` to file the PC (the engine already files new PCs under

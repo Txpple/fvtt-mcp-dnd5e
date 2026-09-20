@@ -120,6 +120,8 @@ export class MockActor {
    *  mock mirrors that so the createPcActor persist path (which must re-point it off the scratch name)
    *  can be regression-tested. */
   prototypeToken: any;
+  /** The portrait — what createPcActor's default-art step writes from the class pregen. */
+  img: string | undefined;
   folder: { id: string } | null = null;
   private _items: MockItem[] = [];
   private store: MockStore;
@@ -128,6 +130,7 @@ export class MockActor {
     this.id = data._id ?? genId();
     this.name = data.name ?? '';
     this.type = data.type ?? 'character';
+    this.img = data.img;
     this.system = clone(data.system ?? { attributes: { hp: {} }, spells: {}, details: {} });
     this.prototypeToken = data.prototypeToken ? clone(data.prototypeToken) : { name: this.name };
     this.store = store;
@@ -216,10 +219,19 @@ export class MockActor {
       name: this.name,
       type: this.type,
       system: clone(this.system),
+      ...(this.img !== undefined ? { img: this.img } : {}),
       prototypeToken: clone(this.prototypeToken),
       items: this._items.map(i => i.toObject()),
     };
   }
+}
+
+/** A premium-book type:character pregen (the PHB class pregens) in a fake Actor pack. */
+export interface FakePregenSpec {
+  packId: string;
+  name: string;
+  img: string;
+  tokenSrc?: string;
 }
 
 interface MockStore {
@@ -242,7 +254,10 @@ export interface MockHandle {
  * Install the mock onto globalThis (game/Actor/Roll/fromUuid). Returns a handle + uninstall.
  * `docs` are the fake premium-book class/species/background entries the engine resolves by name.
  */
-export function installFoundryMock(docs: FakeDocSpec[]): MockHandle {
+export function installFoundryMock(
+  docs: FakeDocSpec[],
+  opts: { pregens?: FakePregenSpec[] } = {}
+): MockHandle {
   const store: MockStore = {
     actors: new Map(),
     settings: new Map([['dnd5e.disableAdvancements', false]]),
@@ -290,6 +305,26 @@ export function installFoundryMock(docs: FakeDocSpec[]): MockHandle {
   }
 
   const packs: any[] = Object.keys(indexByPack).map(makePack);
+  // Fake premium Actor packs — the index shape findClassPregenArt reads (type, img, token texture).
+  const pregensByPack: Record<string, FakePregenSpec[]> = {};
+  for (const pg of opts.pregens ?? []) {
+    pregensByPack[pg.packId] = [...(pregensByPack[pg.packId] ?? []), pg];
+  }
+  for (const [packId, list] of Object.entries(pregensByPack)) {
+    packs.push({
+      documentName: 'Actor',
+      metadata: { id: packId },
+      async getIndex() {
+        return list.map(pg => ({
+          _id: genId(),
+          name: pg.name,
+          type: 'character',
+          img: pg.img,
+          prototypeToken: { texture: { src: pg.tokenSrc ?? pg.img } },
+        }));
+      },
+    });
+  }
   (packs as any).get = (id: string) => packs.find(p => p.metadata.id === id);
 
   const g = globalThis as any;
