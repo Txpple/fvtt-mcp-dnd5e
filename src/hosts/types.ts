@@ -3,8 +3,9 @@
 // A Host is WHERE a Foundry instance runs — Molten Hosting, this machine, a bare URL — and it is
 // the only thing in the codebase allowed to know. It gives the bridge (src/foundry.ts) the one
 // host-specific step of connecting (waking a sleeping box) and gives the tools the one
-// host-specific channel they use (the file plane into `Data/`). Everything else — /join, /setup,
-// the page-side library, every tool — is Foundry's own client and works on every host unchanged.
+// host-specific channel they may have (a DIRECT file plane into `Data/`). Everything else —
+// /join, /setup, the page-side library, every tool, and the bridge file plane (Foundry's own
+// FilePicker through the page) — is Foundry's own client and works on every host unchanged.
 //
 // Nothing here imports Playwright, node:fs or fetch: the interfaces are plain so the tools can be
 // unit-tested against a stub plane and the bridge against a stub host.
@@ -28,7 +29,8 @@ export interface FileEntry {
 /**
  * Error from a file-plane operation, carrying an HTTP-style status so the tools can give the
  * same friendly message whichever plane raised it (404 not found, 409/412 conflict, 400 bad path,
- * 0 unreachable, 500 anything else). The local plane maps errno codes onto the same numbers.
+ * 415 a format the plane cannot take, 501 an operation the plane does not have, 0 unreachable,
+ * 500 anything else). The local plane maps errno codes onto the same numbers.
  */
 export class FilePlaneError extends Error {
   constructor(
@@ -66,6 +68,14 @@ export interface FilePlane {
   copy(from: string, to: string, overwrite: boolean, isDirectory?: boolean): Promise<void>;
 }
 
+/**
+ * The bridge as the bridge file plane sees it: the tool seam, minus Playwright and minus the
+ * page-name typing (a structural subset of `FoundryBridge`).
+ */
+export interface PageCaller {
+  call<T = any>(name: string, args?: unknown): Promise<T>;
+}
+
 /** What the bridge lends a host to wake an instance: the real browser page, minus Playwright. */
 export interface WakeContext {
   /** Navigate the bridge's page to a URL (best-effort; the wake GET rides the real client). */
@@ -87,12 +97,12 @@ export interface Host {
   /** Strip this host's secrets (the wake token) out of a message before it reaches a log. */
   redact(msg: string): string;
   /**
-   * The host's file plane (WebDAV, or the `Data/` directory of an install on this machine), or
-   * `null` when none is configured — the tools then say so, by name.
+   * The host's DIRECT file plane (WebDAV, or the `Data/` directory of an install on this
+   * machine) — the fast path — or `null` when none is configured. Every host also has the bridge
+   * plane (Foundry's own FilePicker through the page); `filePlaneFor` composes the two, and that
+   * is what the tools use.
    */
   readonly files: FilePlane | null;
-  /** Why `files` is null, for a tool that needs it — names the variable to set. */
-  filesNotConfigured(tool: string): string;
   /** Public URL for a Data-relative path (every Foundry serves `Data/` at the server root). */
   publicUrl(dataRelativePath: string): string;
 }

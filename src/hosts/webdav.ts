@@ -3,7 +3,7 @@ import { FilePlaneError, type FileEntry, type FilePlane } from './types.js';
 import { toDataRelative } from './paths.js';
 
 /**
- * Minimal, dependency-free WebDAV client — the Molten host's FilePlane.
+ * Minimal, dependency-free WebDAV client — the WebDAV plane (FOUNDRY_WEBDAV_*; Molten's default).
  *
  * Molten's WebDAV endpoint is standard Apache 2.4 `mod_dav` (DAV class 1,2) behind HTTP Basic auth
  * (user `foundry-ftp`, password = the File-Manager token). The endpoint is rooted at the Foundry

@@ -60,7 +60,8 @@ export class FoundryHost implements Host {
         : cfg.wakeUrl
           ? 'Check FOUNDRY_URL / FOUNDRY_WAKE_URL, and that the instance actually woke.'
           : 'Check FOUNDRY_URL and that the world is launched on that server.';
-    // The direct plane: the filesystem when the install is on this machine, else WebDAV, else none.
+    // The direct plane: the filesystem when the install is on this machine, else WebDAV, else
+    // none — and then the tools use the bridge plane (filePlaneFor).
     this.files = cfg.dataDir
       ? new LocalFilePlane(cfg.dataDir)
       : cfg.webdav
@@ -94,28 +95,6 @@ export class FoundryHost implements Host {
     let out = msg;
     if (this.cfg.wakeUrl) out = out.split(this.cfg.wakeUrl).join('<FOUNDRY_WAKE_URL>');
     return out.replace(/([?&]s=)[^\s&"']+/gi, '$1<redacted>');
-  }
-
-  filesNotConfigured(tool: string): string {
-    switch (this.cfg.kind) {
-      case 'local':
-        return (
-          `${tool} is not configured for the local host: set FOUNDRY_DATA_DIR to the install's ` +
-          'Data directory (the same one scripts/local-foundry.mjs serves).'
-        );
-      case 'molten':
-        return (
-          `${tool} is not configured: set FOUNDRY_WEBDAV_PASSWORD (the File Manager password from ` +
-          'the Molten panel; the WebDAV URL and user are derived from FOUNDRY_URL). Never commit it.'
-        );
-      default:
-        return (
-          `${tool} is unavailable: the generic host has no file plane configured. Set ` +
-          "FOUNDRY_DATA_DIR (the install's Data directory, when it is on this machine) or " +
-          'FOUNDRY_WEBDAV_URL + FOUNDRY_WEBDAV_USER + FOUNDRY_WEBDAV_PASSWORD (a WebDAV endpoint ' +
-          'over Data/).'
-        );
-    }
   }
 
   publicUrl(dataRelativePath: string): string {

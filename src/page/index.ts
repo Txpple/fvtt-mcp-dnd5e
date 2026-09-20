@@ -161,6 +161,7 @@ import {
 } from './organization.js';
 import { manageEffect } from './effects.js';
 import { findAssetReferences, relinkAsset, setActorArt, addJournalImage } from './assets.js';
+import { browseFiles, createDirectory, readFileBase64, statFile, uploadFile } from './files.js';
 import { searchCompendiumFaceted } from './compendium-facets.js';
 import { createNpcActor } from './dnd5e/npc.js';
 import { applyCondition } from './dnd5e/conditions.js';
@@ -330,6 +331,12 @@ const api = {
   relinkAsset,
   setActorArt,
   addJournalImage,
+  // the bridge file plane (Foundry's own FilePicker — browse / stat / read / upload / mkdir)
+  browseFiles,
+  statFile,
+  readFileBase64,
+  uploadFile,
+  createDirectory,
   // dnd5e actor authoring (npc creation, feature/attack/aura/spell authoring, compendium import)
   createNpcActor,
   applyCondition,

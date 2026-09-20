@@ -151,10 +151,11 @@ fixed by which server it goes to — there is no runtime "switch instance" state
 
 What the local host does differently (deliberate):
 
-- **The file plane is the install's `Data/` directory** (`FOUNDRY_DATA_DIR`, alias
+- **The direct file plane is the install's `Data/` directory** (`FOUNDRY_DATA_DIR`, alias
   `LOCAL_FOUNDRY_DATA` — the same directory `local-foundry.mjs` serves) over `node:fs` — so the
   asset file tools (`upload-asset`, `list-assets`, …) work on the sandbox with exactly the WebDAV
-  contract, including the live world-DB refusal. A local-host process never dials WebDAV.
+  contract, including the live world-DB refusal. Without it they still work through Foundry's
+  own FilePicker (the bridge plane — no delete / move). A local-host process never dials WebDAV.
 - **No wake plumbing** — a local box doesn't sleep; if it isn't running the bridge fails fast
   naming `scripts/local-foundry.mjs start`.
 - **World launch needs the admin key** (`FOUNDRY_ADMIN_KEY`, alias `LOCAL_ADMIN_KEY`) — with it

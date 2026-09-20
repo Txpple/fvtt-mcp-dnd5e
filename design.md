@@ -100,8 +100,12 @@ These are not aspirations; they are the rules we hold each other to.
    `local` means *on this machine*, never "not Molten". Legacy names (`MOLTEN_*`, `LOCAL_*`) are
    read only in `src/hosts/env.ts`, as aliases under their own host. No file outside
    `src/hosts/**` may name a host, and a tool never changes behaviour by host except through the
-   plane the host provides (a host without a file plane makes the asset tools say so, by name).
-   The tool names are the same on every host, so skills never know which one they are on.
+   plane the host provides. **Every host has a file plane:** Foundry's own `FilePicker`, driven
+   through the joined page (browse / stat / read / upload / mkdir), is the bridge plane and needs
+   nothing configured; a direct plane (WebDAV, or the `Data/` directory of an install on this
+   machine) is the fast path when one is configured, and the only way to delete or move. A plane
+   that lacks an operation refuses it by name. The tool names are the same on every host, so
+   skills never know which one they are on.
 
 ---
 
@@ -311,7 +315,9 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   the `foundry.call()` seam; `src/index.ts` is the stdio MCP entry; page-side logic lives in
   `src/page/**` and is bundled into the browser context.
 - **Hosts.** `src/hosts/**` is the one place that knows where Foundry runs (§2.6). A `Host` gives
-  the bridge its optional `wake` and the tools their optional `FilePlane`; `resolveHostConfig`
+  the bridge its optional `wake` and the tools their optional direct `FilePlane`, composed with
+  the bridge plane (`filePlaneFor`; `src/hosts/bridge-files.ts` over `src/page/files.ts`);
+  `resolveHostConfig`
   (`hosts/env.ts`) is the single env selector (the `FOUNDRY_*` set; `FOUNDRY_HOST` picks the
   preset, default `generic`; the 2.x `MOLTEN_*` / `LOCAL_*` names as aliases) shared by the
   server, the verify scripts and the integration suite, and a placeholder `FOUNDRY_URL` is refused

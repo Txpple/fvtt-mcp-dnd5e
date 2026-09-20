@@ -16,8 +16,8 @@ import { guessContentType, toDataRelative } from './paths.js';
 import { FilePlaneError, type FileEntry, type FilePlane } from './types.js';
 
 /**
- * The local host's FilePlane: `node:fs` over the Foundry `Data/` directory of an install on THIS
- * machine (LOCAL_FOUNDRY_DATA — the same directory scripts/local-foundry.mjs serves).
+ * The filesystem plane: `node:fs` over the Foundry `Data/` directory of an install on THIS
+ * machine (FOUNDRY_DATA_DIR — the same directory scripts/local-foundry.mjs serves).
  *
  * It keeps the WebDAV plane's contract to the letter — one directory per mkdir, parents via
  * ensureParents, the same FilePlaneError statuses (404 / 409 / 412) — so the asset tools behave

@@ -4,6 +4,7 @@ import { dirname, join, relative } from 'node:path';
 import { Logger } from '../../logger.js';
 import type { FoundryBridge } from '../../foundry.js';
 import type { FileEntry, FilePlane, Host } from '../../hosts/types.js';
+import { filePlaneFor } from '../../hosts/index.js';
 import {
   guessContentType,
   humanSize,
@@ -17,19 +18,18 @@ import { toInputSchema } from '../../utils/schema.js';
 /**
  * Plane-B — the asset FILE tools (the asset-management library, Groups A/B).
  *
- * These talk to the host's file plane (src/hosts — WebDAV on Molten, the `Data/` directory on a
- * local install) — NOT to the Foundry bridge — so they take the Host + logger, and the bridge only
- * for reference checks. They never know which plane they are on: every handler is written against
- * the FilePlane contract and the Host's `publicUrl` / `filesNotConfigured`.
+ * These talk to the file plane (src/hosts): the host's DIRECT plane when one is configured
+ * (WebDAV, the `Data/` directory of an install on this machine), else the bridge plane —
+ * Foundry's own FilePicker through the joined page, which every host has. They never know which
+ * plane they are on: every handler is written against the FilePlane contract and the Host's
+ * `publicUrl`; a plane that lacks an operation (FilePicker has no delete / move) refuses it by
+ * name. The bridge is also what the destructive tools consult for reference checks.
  *
  * GROUPS:
  *  - A (discover, read-only): `asset-url` (pure mapping), `list-assets`, `asset-info`, `download-asset`.
  *  - B (manage files, write): `upload-asset`, `upload-asset-tree`, `create-asset-folder`,
  *    `delete-asset`, `move-asset`, `copy-asset` — the destructive ones wired to bridge-side
  *    reference-checking so they can't silently break the game.
- *
- * A host with no plane configured makes every tool here answer with the host's own
- * "not configured" message (naming the variable to set) instead of doing anything.
  *
  * HARD SAFETY RULES baked in (DESIGN §3/§5/§6):
  *  - The live world DB (LevelDB under `Data/worlds/<world>/data/`) is UNTOUCHABLE via the file plane
@@ -42,14 +42,14 @@ import { toInputSchema } from '../../utils/schema.js';
 
 interface AssetFileToolsOptions {
   logger: Logger;
-  /** Where Foundry runs — supplies the file plane and the public-URL mapping. */
+  /** Where Foundry runs — supplies the direct file plane (if any) and the public-URL mapping. */
   host: Host;
   /**
-   * Optional bridge client. When present, the destructive file tools (delete/move-asset) consult
-   * find-asset-references first so they don't silently break the game; when absent (or the bridge is
-   * down), they refuse unless `force` is set.
+   * The bridge: the plane itself when the host has no direct one, and what the destructive file
+   * tools (delete/move-asset) consult for find-asset-references first so they don't silently
+   * break the game (while it is down, they refuse unless `force` is set).
    */
-  foundry?: FoundryBridge;
+  foundry: FoundryBridge;
 }
 
 // Single source of truth for each tool's input contract: the handler parses with these schemas and
@@ -204,12 +204,14 @@ export function matchesIncludeExt(name: string, includeExt?: string[]): boolean 
 export class AssetFileTools {
   private logger: Logger;
   private host: Host;
-  private foundry: FoundryBridge | undefined;
+  private foundry: FoundryBridge;
+  private plane: FilePlane;
 
   constructor(options: AssetFileToolsOptions) {
     this.logger = options.logger;
     this.host = options.host;
     this.foundry = options.foundry;
+    this.plane = filePlaneFor(options.host, options.foundry);
   }
 
   getToolDefinitions() {
@@ -218,7 +220,7 @@ export class AssetFileTools {
         name: 'list-assets',
         description:
           'Plane B (file channel, read-only). List the immediate contents of a directory under the ' +
-          "Foundry `Data/` root through the host's file plane (folders + files, with size / type / " +
+          'Foundry `Data/` root through the file plane (folders + files, with size / type / ' +
           'public URL). Use to ' +
           'browse uploaded assets, e.g. `worlds/your-world/assets/audio`. Empty/omitted path lists the ' +
           '`Data/` root.',
@@ -236,7 +238,7 @@ export class AssetFileTools {
         name: 'download-asset',
         description:
           'Plane B (file channel, read-only). Download a file from under the Foundry `Data/` root ' +
-          "(through the host's file plane) to a local path on this machine. For grabbing an existing " +
+          '(through the file plane) to a local path on this machine. For grabbing an existing ' +
           'asset to inspect or re-process.',
         inputSchema: toInputSchema(DownloadAssetSchema),
       },
@@ -244,61 +246,62 @@ export class AssetFileTools {
         name: 'upload-asset',
         description:
           'Plane B (file channel, write). Upload an ASSET (map/token/audio/handout image) from a ' +
-          "local file to the Foundry data area through the host's file plane and return its public " +
-          'URL, so large media bypass the bridge entirely. Missing parent folders are created ' +
-          'automatically. ASSETS ONLY — never world-DB files (LevelDB writes while the server runs ' +
-          'corrupt it; such paths are refused). PRIVACY: anything under Data/ is served publicly with ' +
-          "no auth — do not upload anything sensitive. Needs the host's file plane configured (the " +
-          'tool names the variable when it is not).',
+          'local file to the Foundry data area through the file plane and return its public URL. ' +
+          'Missing parent folders are created automatically. ASSETS ONLY — never world-DB files ' +
+          '(LevelDB writes while the server runs corrupt it; such paths are refused). PRIVACY: ' +
+          'anything under Data/ is served publicly with no auth — do not upload anything sensitive. ' +
+          "Works on every host (Foundry's own FilePicker through the bridge takes media and text " +
+          'formats only; a direct plane takes any file).',
         inputSchema: toInputSchema(UploadAssetSchema),
       },
       {
         name: 'upload-asset-tree',
         description:
           'Plane B (file channel, write). Recursively upload a LOCAL directory tree of ASSETS to ' +
-          "the Foundry data area through the host's file plane, preserving the subtree layout (each file → " +
+          'the Foundry data area through the file plane, preserving the subtree layout (each file → ' +
           'remoteRoot/<rel>), creating parent folders as needed. Use for BULK imports — a scene ' +
           "pack's images, a tiles folder — instead of one upload-asset per file. Skips files that " +
           'already exist unless overwrite:true; optional includeExt filter (e.g. ["webp"]). ASSETS ' +
           'ONLY — refuses live world-DB paths. Reports uploaded/skipped/error counts. PRIVACY: ' +
-          "anything under Data/ is served publicly with no auth. Needs the host's file plane configured.",
+          'anything under Data/ is served publicly with no auth. A direct plane is the fast path for bulk.',
         inputSchema: toInputSchema(UploadAssetTreeSchema),
       },
       {
         name: 'create-asset-folder',
         description:
           'Plane B (file channel, write). Create a folder (and any missing parents) under the ' +
-          "Foundry `Data/` root through the host's file plane. Idempotent — succeeds if the folder " +
-          "already exists. Refuses paths inside a live world DB. Needs the host's file plane configured.",
+          'Foundry `Data/` root through the file plane. Idempotent — succeeds if the folder ' +
+          'already exists. Refuses paths inside a live world DB.',
         inputSchema: toInputSchema(CreateAssetFolderSchema),
       },
       {
         name: 'delete-asset',
         description:
-          "Plane B (file channel, write). Delete a file under the Foundry `Data/` root through the host's " +
+          'Plane B (file channel, write). Delete a file under the Foundry `Data/` root through the ' +
           'file plane. REFERENCE-AWARE: consults find-asset-references first and REFUSES if any scene/' +
           'actor/journal/playlist still points at it (pass force:true to override). Deleting a directory ' +
-          "requires recursive:true. Refuses live world-DB paths. Needs the host's file plane configured.",
+          'requires recursive:true. Refuses live world-DB paths. Needs a direct plane (FOUNDRY_DATA_DIR ' +
+          'or FOUNDRY_WEBDAV_*): FilePicker cannot delete.',
         inputSchema: toInputSchema(DeleteAssetSchema),
       },
       {
         name: 'move-asset',
         description:
           'Plane B (file channel, write). Move/rename a file under the Foundry `Data/` root through ' +
-          "the host's file plane; missing destination parent folders are created automatically. " +
+          'the file plane; missing destination parent folders are created automatically. ' +
           'REFERENCE-AWARE: by default REFUSES with a report if anything references the source ' +
           '(moving would break those pointers). Pass relink:true to move AND rewrite all references ' +
-          '(old→new), or force:true to move without relinking. Refuses live world-DB paths. Needs ' +
-          "the host's file plane configured.",
+          '(old→new), or force:true to move without relinking. Refuses live world-DB paths. Needs a ' +
+          'direct plane (FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_*): FilePicker cannot move.',
         inputSchema: toInputSchema(MoveAssetSchema),
       },
       {
         name: 'copy-asset',
         description:
-          "Plane B (file channel, write). Copy a file under the Foundry `Data/` root through the host's " +
+          'Plane B (file channel, write). Copy a file under the Foundry `Data/` root through the ' +
           'file plane; missing destination parent folders are created automatically. (Copying does not ' +
           'affect existing references, so no reference check is needed.) Refuses live world-DB ' +
-          "destination paths. Needs the host's file plane configured.",
+          'destination paths. A directory copy needs a direct plane.',
         inputSchema: toInputSchema(CopyAssetSchema),
       },
       {
@@ -318,9 +321,7 @@ export class AssetFileTools {
   async handleListAssets(args: any): Promise<string> {
     const { remotePath } = ListAssetsSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-
-    const plane = this.files();
-    if (!plane) return this.notConfigured('list-assets');
+    const plane = this.plane;
 
     try {
       const children = await plane.list(clean);
@@ -346,9 +347,7 @@ export class AssetFileTools {
   async handleAssetInfo(args: any): Promise<string> {
     const { remotePath } = AssetInfoSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-
-    const plane = this.files();
-    if (!plane) return this.notConfigured('asset-info');
+    const plane = this.plane;
 
     try {
       const entry = await plane.stat(clean);
@@ -372,9 +371,7 @@ export class AssetFileTools {
   async handleDownloadAsset(args: any): Promise<string> {
     const { remotePath, localPath } = DownloadAssetSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-
-    const plane = this.files();
-    if (!plane) return this.notConfigured('download-asset');
+    const plane = this.plane;
 
     try {
       const bytes = await plane.read(clean);
@@ -396,8 +393,7 @@ export class AssetFileTools {
       return this.worldDbRefusal(remotePath);
     }
 
-    const plane = this.files();
-    if (!plane) return this.notConfigured('upload-asset');
+    const plane = this.plane;
 
     let bytes: Uint8Array;
     try {
@@ -437,8 +433,7 @@ export class AssetFileTools {
     // The root guard covers the whole subtree (every leaf is remoteRoot/<rel>, no `..`).
     if (this.looksLikeWorldDbPath(root)) return this.worldDbRefusal(remoteRoot);
 
-    const plane = this.files();
-    if (!plane) return this.notConfigured('upload-asset-tree');
+    const plane = this.plane;
 
     // Enumerate local files (recursive). A missing/non-directory localRoot is a clear up-front error.
     let files: string[];
@@ -505,8 +500,7 @@ export class AssetFileTools {
       return this.worldDbRefusal(remotePath);
     }
 
-    const plane = this.files();
-    if (!plane) return this.notConfigured('create-asset-folder');
+    const plane = this.plane;
 
     try {
       const existing = await plane.stat(clean);
@@ -528,8 +522,7 @@ export class AssetFileTools {
     const clean = toDataRelative(remotePath);
 
     if (this.looksLikeWorldDbPath(clean)) return this.worldDbRefusal(remotePath);
-    const plane = this.files();
-    if (!plane) return this.notConfigured('delete-asset');
+    const plane = this.plane;
 
     try {
       const entry = await plane.stat(clean);
@@ -578,8 +571,7 @@ export class AssetFileTools {
 
     if (this.looksLikeWorldDbPath(cleanFrom)) return this.worldDbRefusal(fromPath);
     if (this.looksLikeWorldDbPath(cleanTo)) return this.worldDbRefusal(toPath);
-    const plane = this.files();
-    if (!plane) return this.notConfigured('move-asset');
+    const plane = this.plane;
 
     try {
       const entry = await plane.stat(cleanFrom);
@@ -623,7 +615,7 @@ export class AssetFileTools {
       this.logger.info('move-asset', { fromPath: cleanFrom, toPath: cleanTo, relink, force });
 
       let relinkNote = '';
-      if (relink && !entry.isDirectory && this.foundry) {
+      if (relink && !entry.isDirectory) {
         try {
           const r = await this.foundry.call('relinkAsset', {
             oldPath: cleanFrom,
@@ -648,8 +640,7 @@ export class AssetFileTools {
     // Guard BOTH ends: a live world's LevelDB must not be read or written over the file channel.
     if (this.looksLikeWorldDbPath(cleanFrom)) return this.worldDbRefusal(fromPath);
     if (this.looksLikeWorldDbPath(cleanTo)) return this.worldDbRefusal(toPath);
-    const plane = this.files();
-    if (!plane) return this.notConfigured('copy-asset');
+    const plane = this.plane;
 
     try {
       const entry = await plane.stat(cleanFrom);
@@ -675,15 +666,6 @@ export class AssetFileTools {
 
   // --- helpers --------------------------------------------------------------
 
-  /** The host's file plane; null when this host has none configured. */
-  private files(): FilePlane | null {
-    return this.host.files;
-  }
-
-  private notConfigured(tool: string): string {
-    return this.host.filesNotConfigured(tool);
-  }
-
   private worldDbRefusal(remotePath: string): string {
     return refuseWorldDb(remotePath);
   }
@@ -694,7 +676,6 @@ export class AssetFileTools {
 
   /** Ask the bridge what references an asset path. `checked:false` = bridge unavailable. */
   private async findReferences(dataRelPath: string): Promise<{ refs: any[]; checked: boolean }> {
-    if (!this.foundry) return { refs: [], checked: false };
     try {
       const result = await this.foundry.call('findAssetReferences', {
         paths: [dataRelPath],

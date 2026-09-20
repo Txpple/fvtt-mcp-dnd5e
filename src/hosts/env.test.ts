@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { hostConfigProblem, hostKindFromEnv, PLACEHOLDER_URL, resolveHostConfig } from './env.js';
-import { createHost } from './index.js';
+import { createHost, filePlaneFor } from './index.js';
 
 /** A 2.x-layout .env: the MOLTEN_* prod set plus the LOCAL_* sandbox overrides, side by side. */
 const legacyEnv = {
@@ -301,13 +301,13 @@ describe('createHost', () => {
     expect(host.unreachableHint).toMatch(/FOUNDRY_WAKE_URL/);
   });
 
-  it('molten: no password → no plane, and the message names FOUNDRY_WEBDAV_PASSWORD', () => {
+  it('molten: no password → no direct plane; the tools then get the bridge plane', () => {
     const host = createHost(
       resolveHostConfig({ ...legacyEnv, MOLTEN_WEBDAV_PASSWORD: '' }, 'molten'),
       noopLogger
     );
     expect(host.files).toBeNull();
-    expect(host.filesNotConfigured('upload-asset')).toMatch(/FOUNDRY_WEBDAV_PASSWORD/);
+    expect(filePlaneFor(host, { call: async () => null }).label).toBe('bridge (FilePicker)');
   });
 
   it('a wake nav error is logged, never thrown', async () => {
@@ -334,24 +334,23 @@ describe('createHost', () => {
     expect(host.unreachableHint).toMatch(/local-foundry\.mjs/);
   });
 
-  it('local: no FOUNDRY_DATA_DIR → no plane, and the message names it', () => {
+  it('local: no FOUNDRY_DATA_DIR → no direct plane (the bridge plane serves)', () => {
     const host = createHost(
       resolveHostConfig({ ...legacyEnv, LOCAL_FOUNDRY_DATA: '' }, 'local'),
       noopLogger
     );
     expect(host.files).toBeNull();
-    expect(host.filesNotConfigured('list-assets')).toMatch(/FOUNDRY_DATA_DIR/);
+    expect(filePlaneFor(host, { call: async () => null }).label).toBe('bridge (FilePicker)');
   });
 
-  it('generic: a wake when FOUNDRY_WAKE_URL is set, a plane from either extra, else the two named', () => {
+  it('generic: a wake when FOUNDRY_WAKE_URL is set, a direct plane from either extra, else the bridge plane', () => {
     const bare = createHost(
       resolveHostConfig({ FOUNDRY_URL: 'https://vtt.example.org' }),
       noopLogger
     );
     expect(bare.wake).toBeUndefined();
     expect(bare.files).toBeNull();
-    expect(bare.filesNotConfigured('upload-asset')).toMatch(/FOUNDRY_DATA_DIR/);
-    expect(bare.filesNotConfigured('upload-asset')).toMatch(/FOUNDRY_WEBDAV_URL/);
+    expect(filePlaneFor(bare, { call: async () => null }).label).toBe('bridge (FilePicker)');
     expect(bare.unreachableHint).toMatch(/FOUNDRY_URL/);
 
     const woken = createHost(resolveHostConfig(canonicalEnv), noopLogger);
@@ -373,5 +372,7 @@ describe('createHost', () => {
       noopLogger
     );
     expect(dav.files?.label).toBe('WebDAV');
+    // A direct plane wins over the bridge plane.
+    expect(filePlaneFor(dav, { call: async () => null }).label).toBe('WebDAV');
   });
 });

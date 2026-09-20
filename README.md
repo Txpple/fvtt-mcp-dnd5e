@@ -335,10 +335,12 @@ set on every host, `FOUNDRY_*`:
   than one world (unset = the one world there is launched).
 - **`FOUNDRY_WAKE_URL`** — a GET that wakes a sleeping instance (Molten's "Server Startup / Magic
   URL", `…?s=token`); redacted from logs.
-- **The file plane** (the asset file tools): `FOUNDRY_DATA_DIR` (the install's `Data/` directory,
-  when it is on this machine) or `FOUNDRY_WEBDAV_URL` / `_USER` / `_PASSWORD` (a WebDAV endpoint
-  over `Data/`). `FOUNDRY_HOST=molten` derives the WebDAV URL and user from `FOUNDRY_URL`, so it
-  needs only the password (the panel's File Manager password).
+- **A direct file plane** (optional — every host already uploads through Foundry's own FilePicker
+  via the bridge): `FOUNDRY_DATA_DIR` (the install's `Data/` directory, when it is on this
+  machine) or `FOUNDRY_WEBDAV_URL` / `_USER` / `_PASSWORD` (a WebDAV endpoint over `Data/`).
+  Faster for bulk, takes any file type, and the only way `delete-asset` / `move-asset` work.
+  `FOUNDRY_HOST=molten` derives the WebDAV URL and user from `FOUNDRY_URL`, so it needs only the
+  password (the panel's File Manager password).
 
 `FOUNDRY_HOST` (per registration; default `generic`) is the preset: `molten` (WebDAV derived, never
 a filesystem plane), `local` (`FOUNDRY_URL` defaults to `http://localhost:30000`, no wake, never
@@ -404,8 +406,10 @@ sidebar), `add-item` (author structured weapons/armor/consumables/loot/container
 (`list-actors`, `search-compendium`, `list-journals`, …), and organization (`create-folder`,
 `move-documents`, `bulk-delete`). See the `handlers` map in [`src/registry.ts`](src/registry.ts) for the full dispatch table.
 
-> Plane B file ops run over the host's file plane (WebDAV — `FOUNDRY_WEBDAV_*`, on Molten just the
-> password — or the `Data/` directory of an install on this machine, `FOUNDRY_DATA_DIR`).
+> Plane B file ops run over the file plane: Foundry's own FilePicker through the bridge on every
+> host (browse / upload / mkdir; media and text formats), with a direct plane as the fast path when
+> configured (WebDAV — `FOUNDRY_WEBDAV_*`, on Molten just the password — or the `Data/` directory
+> of an install on this machine, `FOUNDRY_DATA_DIR`); delete / move need a direct plane.
 > Plane A tools run over the headless bridge (need the world joined). Write tools refuse live
 > world-DB paths; destructive file ops consult `find-asset-references` first.
 

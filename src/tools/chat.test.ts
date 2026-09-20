@@ -18,7 +18,7 @@ function fakeDav(overrides: Record<string, any> = {}) {
   return d;
 }
 
-/** A stub Host over `files` (a fakeDav() or null for "not configured"). */
+/** A stub Host over `files` (a fakeDav(), or null = no direct plane → the bridge plane). */
 function fakeHost(files: any, serverUrl = 'https://srv'): any {
   return {
     kind: 'molten',
@@ -26,7 +26,6 @@ function fakeHost(files: any, serverUrl = 'https://srv'): any {
     unreachableHint: '',
     redact: (m: string) => m,
     files,
-    filesNotConfigured: (tool: string) => `${tool} is not configured: set FOUNDRY_WEBDAV_PASSWORD.`,
     publicUrl: (p: string) => `${serverUrl}/${p}`,
   };
 }
@@ -116,16 +115,43 @@ describe('send-chat-message', () => {
     expect(forwarded).toContain('<img src="https://srv/worlds/w/assets/chat/');
   });
 
-  it('refuses local image upload when the host has no file plane', async () => {
-    const { tools, calls } = build({ id: 'c4' }, null);
+  it('uploads a local image through the bridge plane when the host has no direct plane', async () => {
+    // No direct plane → FilePicker through the page: statFile (exists?) → createDirectory ×4
+    // (ensureParents) → uploadFile → postChatMessage.
+    const { tools, calls } = build((name: string) => {
+      if (name === 'statFile') return null;
+      if (name === 'createDirectory') return { ok: true, existed: true };
+      if (name === 'uploadFile')
+        return { ok: true, path: 'worlds/w/assets/chat/mcp-chat-test-pic2.webp' };
+      return { id: 'c4', alias: 'GM', visibility: 'public', whisperCount: 0 };
+    }, null);
 
     const img = tmpFile('pic2.webp');
     await writeFile(img, Buffer.from([1]));
 
-    const out = await tools.handleSendChatMessage({ content: '<p>x</p>', images: [{ path: img }] });
-    expect(out).toMatch(/not configured/);
-    // refusal short-circuits — the bridge is never called
-    expect(calls.length).toBe(0);
+    await tools.handleSendChatMessage({
+      content: '<p>x</p>',
+      images: [{ path: img }],
+      imageFolder: 'worlds/w/assets/chat',
+    });
+    const names = calls.map(c => c[0]);
+    expect(names).toEqual([
+      'statFile',
+      'createDirectory', // worlds
+      'createDirectory', // worlds/w
+      'createDirectory', // worlds/w/assets
+      'createDirectory', // worlds/w/assets/chat
+      'uploadFile',
+      'postChatMessage',
+    ]);
+    expect(calls[5][1]).toMatchObject({
+      path: 'worlds/w/assets/chat/mcp-chat-test-pic2.webp',
+      base64: 'AQ==',
+    });
+    const forwarded = calls[6][1].content as string;
+    expect(forwarded).toContain(
+      '<img src="https://srv/worlds/w/assets/chat/mcp-chat-test-pic2.webp"'
+    );
   });
 
   it('inlines a local image as a base64 data: URI with embed:"dataUri" (no upload)', async () => {
@@ -254,10 +280,34 @@ describe('export-chat-log', () => {
     expect(await readFile(p, 'utf8')).toBe('old'); // untouched
   });
 
-  it('reports not-configured for a remote-only export when the host has no file plane', async () => {
-    const { tools } = build({ format: 'markdown', messageCount: 0, content: '' }, null);
+  it('a remote-only export goes through the bridge plane when the host has no direct plane', async () => {
+    const { tools, calls } = build((name: string) => {
+      if (name === 'statFile') return null;
+      if (name === 'createDirectory') return { ok: true, existed: true };
+      if (name === 'uploadFile') return { ok: true, path: 'worlds/w/exports/log.md' };
+      return { format: 'markdown', messageCount: 2, content: '# Chat Log' };
+    }, null);
     const out = await tools.handleExportChatLog({ remotePath: 'worlds/w/exports/log.md' });
-    expect(out).toMatch(/not configured/);
+    expect(out).toContain('Exported 2 message(s)');
+    expect(out).toContain('public URL: https://srv/worlds/w/exports/log.md');
+    expect(calls.map(c => c[0])).toContain('uploadFile');
+  });
+
+  it('a remote export the bridge plane cannot take (.html) fails by name', async () => {
+    const { tools } = build((name: string) => {
+      if (name === 'statFile') return null;
+      if (name === 'createDirectory') return { ok: true, existed: true };
+      if (name === 'uploadFile')
+        return { ok: false, reason: 'extension', detail: 'accepts only md, txt — not ".html"' };
+      return { format: 'html', messageCount: 1, content: '<html></html>' };
+    }, null);
+    const out = await tools.handleExportChatLog({
+      remotePath: 'worlds/w/exports/log.html',
+      format: 'html',
+    });
+    expect(out).toMatch(/export-chat-log failed/);
+    expect(out).toMatch(/bridge plane/);
+    expect(out).toMatch(/FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_\*/);
   });
 });
 

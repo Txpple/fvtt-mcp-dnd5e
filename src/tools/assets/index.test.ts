@@ -54,23 +54,28 @@ const makeLogger = (): any => {
   return l;
 };
 
-/** A stub Host: the plane above when configured, `null` otherwise. */
+/** A stub Host: the direct plane above when configured, `null` otherwise (→ the bridge plane). */
 function makeHost(configured: boolean): any {
-  const serverUrl = 'https://eoh-test.moltenhosting.com';
+  const serverUrl = 'https://box.example.com';
   return {
     kind: 'molten',
     label: 'Molten Hosting (stub)',
     unreachableHint: '',
     redact: (m: string) => m,
     files: configured ? plane : null,
-    filesNotConfigured: (tool: string) =>
-      `${tool} is not configured: set FOUNDRY_WEBDAV_PASSWORD in your .env.`,
     publicUrl: (p: string) => buildPublicUrl(serverUrl, p),
   };
 }
 
+/** A bridge that is DOWN: every call rejects (reference checks then report `checked:false`). */
+const downBridge = () => ({
+  call: vi.fn(async () => {
+    throw new Error('bridge down');
+  }),
+});
+
 function build(opts: { configured?: boolean; foundry?: any } = {}) {
-  const { configured = true, foundry } = opts;
+  const { configured = true, foundry = downBridge() } = opts;
   return new AssetFileTools({ logger: makeLogger(), foundry, host: makeHost(configured) });
 }
 
@@ -135,11 +140,11 @@ describe('matchesIncludeExt (pure)', () => {
 describe('asset-url (pure mapping, no network)', () => {
   it('maps a Data-relative path to the public server-root URL', async () => {
     const out = await build().handleAssetUrl({ remotePath: 'worlds/w/maps/x.webp' });
-    expect(out).toBe('https://eoh-test.moltenhosting.com/worlds/w/maps/x.webp');
+    expect(out).toBe('https://box.example.com/worlds/w/maps/x.webp');
   });
   it('tolerates and strips a leading Data/ prefix', async () => {
     const out = await build().handleAssetUrl({ remotePath: '/Data/assets/a.png' });
-    expect(out).toBe('https://eoh-test.moltenhosting.com/assets/a.png');
+    expect(out).toBe('https://box.example.com/assets/a.png');
   });
   it('rejects an empty remotePath', async () => {
     await expect(build().handleAssetUrl({ remotePath: '' })).rejects.toThrow();
@@ -249,19 +254,44 @@ describe('world-DB write refusal (corruption guard)', () => {
   });
 });
 
-describe('not-configured behaviour (no WebDAV password)', () => {
-  it('list-assets returns a configuration hint and makes no WebDAV call', async () => {
-    const out = await build({ configured: false }).handleListAssets({ remotePath: 'assets' });
-    expect(out).toMatch(/not configured/);
-    expect(out).toMatch(/FOUNDRY_WEBDAV_PASSWORD/);
+describe("no direct plane → the bridge plane (Foundry's FilePicker through the page)", () => {
+  it('list-assets browses through the bridge and never touches the direct plane', async () => {
+    const foundry = {
+      call: vi.fn(async (name: string) => {
+        if (name === 'browseFiles')
+          return {
+            dirs: [{ path: 'assets/maps', name: 'maps' }],
+            files: [{ path: 'assets/a.webp', name: 'a.webp', size: 12, contentType: 'image/webp' }],
+          };
+        throw new Error(`unexpected ${name}`);
+      }),
+    };
+    const out = await build({ configured: false, foundry }).handleListAssets({
+      remotePath: 'assets',
+    });
+    expect(foundry.call).toHaveBeenCalledWith('browseFiles', { dir: 'assets' });
+    expect(out).toContain('[DIR ] maps/');
+    expect(out).toContain('[FILE] a.webp');
+    expect(out).toContain('https://box.example.com/assets/a.webp');
     expect(davInstance.list).not.toHaveBeenCalled();
   });
-  it('upload-asset (non-DB path) still reports not-configured', async () => {
-    const out = await build({ configured: false }).handleUploadAsset({
-      localPath: '/tmp/x',
+
+  it('delete-asset refuses by name on the bridge plane, pointing at the direct planes', async () => {
+    const foundry = {
+      call: vi.fn(async (name: string) => {
+        if (name === 'statFile') return { isDirectory: false, size: 1 };
+        if (name === 'findAssetReferences') return { references: {}, totalReferences: 0 };
+        throw new Error(`unexpected ${name}`);
+      }),
+    };
+    const out = await build({ configured: false, foundry }).handleDeleteAsset({
       remotePath: 'assets/x.png',
     });
-    expect(out).toMatch(/not configured/);
+    expect(out).toMatch(
+      /delete-asset failed: cannot delete "Data\/assets\/x.png" through the bridge plane/
+    );
+    expect(out).toMatch(/FOUNDRY_DATA_DIR/);
+    expect(out).toMatch(/FOUNDRY_WEBDAV_URL/);
   });
 });
 
@@ -423,14 +453,6 @@ describe('upload-asset-tree', () => {
     expect(davInstance.putFile).not.toHaveBeenCalled();
   });
 
-  it('reports not-configured when no password is set', async () => {
-    const out = await build({ configured: false }).handleUploadAssetTree({
-      localRoot: root,
-      remoteRoot: 'worlds/w/tiles',
-    });
-    expect(out).toMatch(/not configured/);
-  });
-
   it('errors clearly when the local directory is missing', async () => {
     const out = await build().handleUploadAssetTree({
       localRoot: join(root, 'does-not-exist'),
@@ -462,6 +484,6 @@ describe('list-assets formatting', () => {
     expect(out).toMatch(/1 folder\(s\), 1 file\(s\)/);
     expect(out).toMatch(/\[DIR \] maps\//);
     expect(out).toMatch(/\[FILE\] a\.png/);
-    expect(out).toMatch(/https:\/\/eoh-test\.moltenhosting\.com\/assets\/a\.png/);
+    expect(out).toMatch(/https:\/\/box.example.com\/assets\/a\.png/);
   });
 });

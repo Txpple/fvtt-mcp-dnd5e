@@ -3,7 +3,8 @@ import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, isAbsolute, basename } from 'node:path';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import type { Host } from '../hosts/types.js';
+import type { FilePlane, Host } from '../hosts/types.js';
+import { filePlaneFor } from '../hosts/index.js';
 import {
   guessContentType,
   humanSize,
@@ -20,10 +21,11 @@ import { fileErrorMessage } from './assets/access.js';
  * Chat-log tools — post / list / delete / export chat messages, plus rich dnd5e cards.
  *
  * send-chat-message covers all five visibility modes (public / public-as-character / gm / blind /
- * self) and embeds images as a first-class param (local files are uploaded over WebDAV, then linked).
+ * self) and embeds images as a first-class param (local files are uploaded through the file plane,
+ * then linked).
  * post-item-card drives the dnd5e Activity system so its Attack/Damage/Apply-Effects buttons actually
  * work (the only way without an installed module). export-chat-log writes to a local file AND/OR a
- * WebDAV Data/ path. GM-only writes; the bridge user is a GM.
+ * Data/ path through the file plane. GM-only writes; the bridge user is a GM.
  */
 
 const ImageSchema = z.object({
@@ -88,7 +90,7 @@ const SendChatMessageSchema = z.object({
     .array(ImageSchema)
     .optional()
     .describe(
-      'Images to embed. Local files are uploaded to the world over WebDAV and linked; Data-relative ' +
+      'Images to embed. Local files are uploaded to the world through the file plane and linked; Data-relative ' +
         'paths and https URLs are linked directly. PRIVACY: uploaded files are served publicly with ' +
         'no auth.'
     ),
@@ -176,9 +178,9 @@ const ExportChatLogSchema = z
       .min(1)
       .optional()
       .describe(
-        "Destination relative to the Foundry Data/ root for a copy through the host's file plane, " +
-          'e.g. "worlds/your-world/exports/session-3.md". Returns its public URL. Needs the host\'s ' +
-          'file plane configured.'
+        'Destination relative to the Foundry Data/ root for a copy through the file plane, ' +
+          'e.g. "worlds/your-world/exports/session-3.md". Returns its public URL. (Through the ' +
+          'bridge plane, md / txt / json only — no html.)'
       ),
     limit: z
       .number()
@@ -259,11 +261,14 @@ export class ChatTools {
   private foundry: FoundryBridge;
   private logger: Logger;
   private host: Host;
+  /** The file plane for image uploads and the export's remote copy (direct, else the bridge). */
+  private files: FilePlane;
 
   constructor({ foundry, logger, host }: ChatToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'ChatTools' });
     this.host = host;
+    this.files = filePlaneFor(host, foundry);
   }
 
   getToolDefinitions() {
@@ -273,7 +278,7 @@ export class ChatTools {
         description:
           'Post a message to the Foundry chat log as the GM bridge user. Content is HTML. Choose a ' +
           'visibility mode (public / gm whisper / blind / self) and optionally speak AS a character ' +
-          '(speakerActor). Embed images via the images param (local files upload over WebDAV; ' +
+          '(speakerActor). Embed images via the images param (local files upload through the file plane; ' +
           'Data-relative paths and https URLs link directly — uploaded files are PUBLIC). GM-only.',
         inputSchema: toInputSchema(SendChatMessageSchema),
       },
@@ -354,8 +359,9 @@ export class ChatTools {
   }
 
   /**
-   * Resolve each image to a public URL (uploading absolute local files over WebDAV) and build the
-   * <figure> HTML. Returns a plain refusal string on a WebDAV/world-DB guard rather than throwing.
+   * Resolve each image to a public URL (uploading absolute local files through the file plane) and
+   * build the <figure> HTML. Returns a plain refusal string on a plane / world-DB guard rather than
+   * throwing.
    */
   private async assembleImages(
     images: Array<{
@@ -396,10 +402,8 @@ export class ChatTools {
       if (/^https?:\/\//i.test(p)) {
         url = p;
       } else if (isAbsolute(p)) {
-        // Local file → upload through the host's file plane, then link the public URL.
-        const files = this.host.files;
-        if (!files)
-          return { refusal: this.host.filesNotConfigured('send-chat-message (image upload)') };
+        // Local file → upload through the file plane, then link the public URL.
+        const files = this.files;
         const remote = toDataRelative(`${folder}/${basename(p)}`);
         if (looksLikeWorldDbPath(remote)) return { refusal: worldDbRefusal(remote) };
         let bytes: Uint8Array;
@@ -503,25 +507,20 @@ export class ChatTools {
       }
     }
 
-    // Remote destination — the host's file plane.
+    // Remote destination — the file plane.
     if (parsed.remotePath) {
       const clean = toDataRelative(parsed.remotePath);
       if (looksLikeWorldDbPath(clean)) return worldDbRefusal(parsed.remotePath);
-      const files = this.host.files;
-      if (!files) {
-        if (!parsed.localPath) return this.host.filesNotConfigured('export-chat-log');
-        outLines.push('  (file plane not configured — remote copy skipped)');
-      } else {
-        try {
-          if (!parsed.overwrite && (await files.exists(clean))) {
-            return `Refused: "Data/${clean}" already exists. Pass overwrite:true to replace it.`;
-          }
-          await files.ensureParents(clean);
-          await files.write(clean, bytes, guessContentType(parsed.remotePath));
-          outLines.push(`  Data/${clean}\n  public URL: ${this.host.publicUrl(clean)}`);
-        } catch (err) {
-          return fileErrorMessage('export-chat-log', err, this.logger);
+      const files = this.files;
+      try {
+        if (!parsed.overwrite && (await files.exists(clean))) {
+          return `Refused: "Data/${clean}" already exists. Pass overwrite:true to replace it.`;
         }
+        await files.ensureParents(clean);
+        await files.write(clean, bytes, guessContentType(parsed.remotePath));
+        outLines.push(`  Data/${clean}\n  public URL: ${this.host.publicUrl(clean)}`);
+      } catch (err) {
+        return fileErrorMessage('export-chat-log', err, this.logger);
       }
     }
 

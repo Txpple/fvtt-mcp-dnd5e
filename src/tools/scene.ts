@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import type { Host } from '../hosts/types.js';
+import { filePlaneFor } from '../hosts/index.js';
 import { Logger } from '../logger.js';
 import { formatDeletionResult } from '../utils/format.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -933,13 +934,14 @@ export class SceneTools {
       foundry: {
         version: worldData.foundryVersion,
       },
-      // Where this instance runs (src/hosts) and whether the asset file tools have a plane here.
+      // Where this instance runs (src/hosts) and which file plane the asset file tools use here
+      // (the host's direct plane, else Foundry's own FilePicker through the bridge).
       ...(this.host
         ? {
             host: {
               kind: this.host.kind,
               label: this.host.label,
-              files: this.host.files ? this.host.files.label : 'none',
+              files: filePlaneFor(this.host, this.foundry).label,
             },
           }
         : {}),
