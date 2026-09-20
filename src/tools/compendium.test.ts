@@ -78,12 +78,20 @@ describe('CompendiumTools.getToolDefinitions', () => {
 });
 
 describe('handleSearchCompendium', () => {
-  it('forwards query + packType to searchCompendium (name-only) and shapes the result', async () => {
-    const bridgeResults = [
-      { id: 'i1', name: 'Goblin', type: 'npc', pack: 'p1', packLabel: 'Monsters' },
-      { id: 'i2', name: 'Goblin Boss', type: 'npc', pack: 'p1', packLabel: 'Monsters' },
-    ];
-    const { tools, calls } = build('dnd5e', bridgeResults);
+  const hit = (id: string, name: string, pack = 'p1') => ({
+    id,
+    name,
+    type: 'npc',
+    uuid: `Compendium.${pack}.Actor.${id}`,
+    pack,
+    img: 'icons/goblin.png',
+  });
+
+  it('forwards query + packType + limit to searchCompendium (name-only) and shapes the result', async () => {
+    const { tools, calls } = build('dnd5e', {
+      results: [hit('i1', 'Goblin'), hit('i2', 'Goblin Boss')],
+      totalFound: 2,
+    });
 
     const out = await tools.handleSearchCompendium({
       query: 'goblin',
@@ -93,48 +101,52 @@ describe('handleSearchCompendium', () => {
     // getWorldInfo (detection) then the search call — name-only, no filters forwarded.
     const searchCall = calls.find(c => c[0] === 'searchCompendium');
     expect(searchCall).toBeDefined();
-    expect(searchCall![1]).toEqual({
-      query: 'goblin',
-      packType: 'Actor',
-    });
+    expect(searchCall![1]).toEqual({ query: 'goblin', packType: 'Actor', limit: 50 });
 
-    expect(out.query).toBe('goblin');
-    expect(out.gameSystem).toBe('dnd5e');
-    expect(out.totalFound).toBe(2);
-    expect(out.showing).toBe(2);
-    expect(out.hasMore).toBe(false);
-    expect(out.results).toHaveLength(2);
-    expect(out.results[0]).toMatchObject({
-      id: 'i1',
-      name: 'Goblin',
-      type: 'npc',
-      pack: { id: 'p1', label: 'Monsters' },
+    // The one search body: head, compact hits, showing, totalFound — nothing else.
+    expect(out).toEqual({
+      query: 'goblin',
+      results: [
+        {
+          id: 'i1',
+          name: 'Goblin',
+          type: 'npc',
+          uuid: 'Compendium.p1.Actor.i1',
+          pack: 'p1',
+          img: 'icons/goblin.png',
+        },
+        {
+          id: 'i2',
+          name: 'Goblin Boss',
+          type: 'npc',
+          uuid: 'Compendium.p1.Actor.i2',
+          pack: 'p1',
+          img: 'icons/goblin.png',
+        },
+      ],
+      showing: 2,
+      totalFound: 2,
     });
   });
 
   it('reports an empty result set cleanly', async () => {
-    const { tools } = build('dnd5e', []);
+    const { tools } = build('dnd5e', { results: [], totalFound: 0 });
     const out = await tools.handleSearchCompendium({ query: 'zzzznothing' });
     expect(out.totalFound).toBe(0);
     expect(out.showing).toBe(0);
     expect(out.results).toEqual([]);
-    expect(out.hasMore).toBe(false);
   });
 
-  it('sets hasMore and caps results when more than limit are returned', async () => {
-    const many = Array.from({ length: 5 }, (_, i) => ({
-      id: `id${i}`,
-      name: `Item ${i}`,
-      type: 'weapon',
-      pack: 'p',
-      packLabel: 'Gear',
-    }));
-    const { tools } = build('dnd5e', many);
+  it('passes limit to the page and reports the full match count it returns', async () => {
+    const { tools, calls } = build('dnd5e', {
+      results: [hit('a', 'Sword A'), hit('b', 'Sword B')],
+      totalFound: 5,
+    });
     const out = await tools.handleSearchCompendium({ query: 'sword', limit: 2 });
+    expect(calls.find(c => c[0] === 'searchCompendium')![1].limit).toBe(2);
     expect(out.totalFound).toBe(5);
     expect(out.showing).toBe(2);
     expect(out.results).toHaveLength(2);
-    expect(out.hasMore).toBe(true);
   });
 
   it('rejects a query shorter than 2 characters', async () => {
@@ -158,21 +170,22 @@ describe('handleSearchCompendium', () => {
   });
 
   it('drops SRD (dnd5e.*) hits and counts only book results (enforced backstop)', async () => {
-    const bridgeResults = [
-      { id: 'b1', name: 'Goblin', type: 'npc', pack: 'dnd-monster-manual.actors', packLabel: 'MM' },
-      { id: 's1', name: 'Goblin', type: 'npc', pack: 'dnd5e.monsters', packLabel: 'SRD' },
-      { id: 's2', name: 'Goblin Boss', type: 'npc', pack: 'dnd5e.monsters', packLabel: 'SRD' },
-    ];
-    const { tools } = build('dnd5e', bridgeResults);
+    const { tools } = build('dnd5e', {
+      results: [
+        hit('b1', 'Goblin', 'dnd-monster-manual.actors'),
+        hit('s1', 'Goblin', 'dnd5e.monsters'),
+        hit('s2', 'Goblin Boss', 'dnd5e.monsters'),
+      ],
+      totalFound: 3,
+    });
 
     const out = await tools.handleSearchCompendium({ query: 'goblin' });
 
-    // Only the premium-book hit survives; SRD rows are not results and do not inflate counts.
-    expect(out.totalFound).toBe(1);
+    // Only the premium-book hit survives as a result (the page already excludes SRD packs; this
+    // is the backstop).
     expect(out.showing).toBe(1);
-    expect(out.hasMore).toBe(false);
     expect(out.results).toHaveLength(1);
-    expect(out.results[0]).toMatchObject({ id: 'b1', pack: { id: 'dnd-monster-manual.actors' } });
+    expect(out.results[0]).toMatchObject({ id: 'b1', pack: 'dnd-monster-manual.actors' });
   });
 });
 
@@ -308,18 +321,35 @@ describe('handleListCreaturesByCriteria', () => {
       documentType: 'creature',
       challengeRating: 17,
       creatureType: 'dragon',
-      limit: 500, // schema default
+      limit: 50, // schema default
     });
 
     expect(out.documentType).toBe('creature');
-    expect(out.criteriaDescription).toBe('CR 17, dragon');
+    expect(out.criteria).toBe('CR 17, dragon');
     expect(out.totalFound).toBe(1);
     expect(out.results).toHaveLength(1);
-    expect(out.results[0]).toMatchObject({
+    expect(out.results[0]).toEqual({
       id: 'c1',
       name: 'Adult Red Dragon',
+      type: 'npc',
+      uuid: 'Compendium.dnd-monster-manual.actors.Actor.c1',
       pack: 'dnd-monster-manual.actors',
+      img: 'icons/dragon.png',
+      facets: { challengeRating: 17, creatureType: 'dragon', size: 'huge' },
     });
+    expect(out.results[0]).not.toHaveProperty('packLabel');
+    expect(out.showing).toBe(1);
+  });
+
+  it("forwards the name facet and reports the page's full match count on a capped survey", async () => {
+    const { tools, calls } = build('dnd5e', { results: [hit()], totalFound: 493 });
+    const out = await tools.handleListCreaturesByCriteria({ name: 'goblin' });
+    expect(calls.find(c => c[0] === 'searchCompendiumFaceted')![1]).toMatchObject({
+      name: 'goblin',
+    });
+    expect(out.criteria).toBe('name ~ "goblin"');
+    expect(out.showing).toBe(1);
+    expect(out.totalFound).toBe(493);
   });
 
   it('describes a CR range and defaults the limit', async () => {
@@ -327,18 +357,18 @@ describe('handleListCreaturesByCriteria', () => {
     const out = await tools.handleListCreaturesByCriteria({
       challengeRating: { min: 10, max: 15 },
     });
-    expect(out.criteriaDescription).toBe('CR 10-15');
+    expect(out.criteria).toBe('CR 10-15');
     // An empty result must report a real count, not undefined.
     expect(out.totalFound).toBe(0);
     expect(out.results).toEqual([]);
     const call = calls.find(c => c[0] === 'searchCompendiumFaceted');
-    expect(call![1].limit).toBe(500);
+    expect(call![1].limit).toBe(50);
   });
 
   it('reports "no criteria" when called with no filters', async () => {
     const { tools } = build('dnd5e', []);
     const out = await tools.handleListCreaturesByCriteria({});
-    expect(out.criteriaDescription).toBe('no criteria');
+    expect(out.criteria).toBe('no criteria');
   });
 
   it('rejects an invalid size enum value', async () => {
@@ -346,9 +376,9 @@ describe('handleListCreaturesByCriteria', () => {
     await expect(tools.handleListCreaturesByCriteria({ size: 'colossal' })).rejects.toThrow();
   });
 
-  it('rejects a limit above the maximum of 1000', async () => {
+  it('rejects a limit above the maximum of 500', async () => {
     const { tools } = build();
-    await expect(tools.handleListCreaturesByCriteria({ limit: 1001 })).rejects.toThrow();
+    await expect(tools.handleListCreaturesByCriteria({ limit: 501 })).rejects.toThrow();
   });
 
   it('drops SRD (dnd5e.*) creatures and counts only book results (enforced backstop)', async () => {
@@ -399,7 +429,7 @@ describe('handleSearchCompendiumSpells', () => {
     });
 
     expect(out.documentType).toBe('spell');
-    expect(out.criteriaDescription).toBe('level 3, evocation, fire damage, name~"fire"');
+    expect(out.criteria).toBe('level 3, evocation, fire damage, name~"fire"');
     expect(out.totalFound).toBe(1);
     expect(out.results).toHaveLength(1);
     expect(out.results[0]).toMatchObject({ id: 's1', pack: 'dnd-players-handbook.spells' });
@@ -407,12 +437,9 @@ describe('handleSearchCompendiumSpells', () => {
 
   it('describes a cantrip and a level range', async () => {
     const { tools } = build('dnd5e', []);
-    expect((await tools.handleSearchCompendiumSpells({ spellLevel: 0 })).criteriaDescription).toBe(
-      'cantrip'
-    );
+    expect((await tools.handleSearchCompendiumSpells({ spellLevel: 0 })).criteria).toBe('cantrip');
     expect(
-      (await tools.handleSearchCompendiumSpells({ spellLevel: { min: 1, max: 3 } }))
-        .criteriaDescription
+      (await tools.handleSearchCompendiumSpells({ spellLevel: { min: 1, max: 3 } })).criteria
     ).toBe('level 1-3');
   });
 
@@ -439,7 +466,7 @@ describe('handleSearchCompendiumSpells', () => {
     const out = await tools.handleSearchCompendiumSpells({ spellLevel: 9 });
     expect(out.totalFound).toBe(0);
     expect(out.results).toEqual([]);
-    expect(out.criteriaDescription).toBe('level 9');
+    expect(out.criteria).toBe('level 9');
   });
 
   it('rejects a spell level above 9', async () => {
@@ -489,7 +516,7 @@ describe('handleSearchCompendiumItems', () => {
     });
 
     expect(out.documentType).toBe('gear');
-    expect(out.criteriaDescription).toBe('gear (very rare, wondrous, magical, name~"cloak")');
+    expect(out.criteria).toBe('gear (very rare, wondrous, magical, name~"cloak")');
     expect(out.totalFound).toBe(1);
     expect(out.results[0]).toMatchObject({ id: 'w1', pack: 'dnd-dungeon-masters-guide.items' });
   });
@@ -528,7 +555,7 @@ describe('handleSearchCompendiumItems', () => {
     const out = await tools.handleSearchCompendiumItems({ documentType: 'consumable' });
     expect(out.totalFound).toBe(0);
     expect(out.results).toEqual([]);
-    expect(out.criteriaDescription).toBe('consumable (no facets)');
+    expect(out.criteria).toBe('consumable (no facets)');
   });
 
   it('rejects an invalid documentType', async () => {

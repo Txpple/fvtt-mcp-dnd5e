@@ -316,8 +316,11 @@ export function passesPostFilters(hit: CompendiumHit, args: FacetedSearchArgs): 
  * Dispatch: build filters → run them through dnd5e's CompendiumBrowser.fetch (or a raw-getIndex
  * fallback) → exclude SRD packs (design.md §2.3) → optional two-stage spell-damage refine → apply
  * post-filters (name / hasSpells / hasLegendary / magical) → rank premium-first → cap to limit.
+ * Returns the capped hits AND the full match count, so a capped survey says how much it cut.
  */
-export async function searchCompendiumFaceted(args: FacetedSearchArgs): Promise<CompendiumHit[]> {
+export async function searchCompendiumFaceted(
+  args: FacetedSearchArgs
+): Promise<{ results: CompendiumHit[]; totalFound: number }> {
   const def = CONTENT_TYPES[args?.documentType];
   if (!def) {
     throw new Error(
@@ -355,7 +358,7 @@ export async function searchCompendiumFaceted(args: FacetedSearchArgs): Promise<
     return String(a.name).localeCompare(String(b.name));
   });
 
-  return hits.slice(0, limit);
+  return { results: hits.slice(0, limit), totalFound: hits.length };
 }
 
 /** Run the facet filters via CompendiumBrowser.fetch, falling back to raw per-pack getIndex. */

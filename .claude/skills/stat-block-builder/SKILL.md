@@ -32,8 +32,8 @@ each searches the premium books only and never the SRD, so you don't reason abou
 `get-actor-entity` to read back. Defer item judgment to the [[physical-item-builder]] skill.
 
 > **Faceted discovery returns minimal hits.** `search-compendium-creatures` / `-spells` / `-items`
-> each return `results: [{ id, name, type, uuid, pack, packLabel, img, facets }]`, premium-first
-> ranked. Pick a hit by name, then feed its **`pack` + `id`** straight into
+> each return `results: [{ id, name, type, uuid, pack, img, facets }]` plus `totalFound` (the
+> full match count — raise `limit` for a survey), premium-first ranked. Pick a hit by name, then feed its **`pack` + `id`** straight into
 > `create-actor-from-compendium`, `import-item`, or `get-compendium-entry` — no pack-id guesswork.
 
 > **`add-feature` invocation shape.** It takes a top-level `mode` — only `feature`,

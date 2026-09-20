@@ -1,12 +1,7 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import {
-  detectGameSystem,
-  getCreatureLevel,
-  getCreatureType,
-  type GameSystem,
-} from '../utils/system-detection.js';
+import { detectGameSystem, type GameSystem } from '../utils/system-detection.js';
 import { assertNoSrdPacks, isHiddenFromEnumeration } from '../utils/compendium-sources.js';
 import { toInputSchema } from '../utils/schema.js';
 
@@ -53,6 +48,10 @@ const GetCompendiumEntrySchema = z.object({
 });
 
 const ListCreaturesByCriteriaSchema = z.object({
+  name: z
+    .string()
+    .optional()
+    .describe('Case-insensitive substring to narrow by creature name (e.g., "goblin", "dragon").'),
   // D&D 5e: challengeRating
   challengeRating: z
     .union([
@@ -132,20 +131,18 @@ const ListCreaturesByCriteriaSchema = z.object({
 
   limit: z
     .union([
-      z.number().min(1).max(1000),
+      z.number().min(1).max(500),
       z
         .string()
         .refine(val => {
           const num = parseInt(val, 10);
-          return !Number.isNaN(num) && num >= 1 && num <= 1000;
+          return !Number.isNaN(num) && num >= 1 && num <= 500;
         })
         .transform(val => parseInt(val, 10)),
     ])
     .optional()
-    // Matches the advertised JSON-Schema default (500, "comprehensive surveys"); generated from
-    // this schema so the two can no longer diverge.
-    .default(500)
-    .describe('Maximum results to return (default: 500 for comprehensive surveys, max: 1000)'),
+    .default(50)
+    .describe('Maximum results to return (default: 50, max: 500); totalFound is the full count.'),
 });
 
 const ListCompendiumPacksSchema = z.object({
@@ -282,6 +279,47 @@ const SearchCompendiumItemsSchema = z.object({
     .describe('Maximum results to return (default: 50, max: 200)'),
 });
 
+/**
+ * THE search-hit shape, shared by all four search tools: `{id, name, type, uuid, pack, img?, facets?}`
+ * — `pack` is the pack id string everywhere (feed `pack` + `id` to get-compendium-entry /
+ * create-actor-from-compendium / import-item; `uuid` to a roll-table result). Nothing derivable or
+ * empty rides along (no packLabel, no index "description", no summary).
+ */
+export function compactHit(hit: any): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    id: hit?.id,
+    name: hit?.name,
+    type: hit?.type,
+    uuid: hit?.uuid,
+    pack: typeof hit?.pack === 'string' ? hit.pack : hit?.pack?.id,
+  };
+  if (hit?.img) out.img = hit.img;
+  if (hit?.facets && Object.keys(hit.facets).length) out.facets = hit.facets;
+  return out;
+}
+
+/** The one search body: what was asked, the hits, how many came back, how many matched. */
+function searchBody(
+  head: Record<string, unknown>,
+  hits: any[],
+  totalFound: number
+): Record<string, unknown> {
+  const results = hits.map(compactHit);
+  return { ...head, results, showing: results.length, totalFound };
+}
+
+/** The faceted tools' body, with the engine's SRD exclusion re-applied as a backstop (design.md §2.3). */
+function facetedBody(
+  documentType: string,
+  criteria: string,
+  found: { results?: any[]; totalFound?: number } | any[] | null | undefined
+): Record<string, unknown> {
+  const list: any[] = Array.isArray(found) ? found : (found?.results ?? []);
+  const visible = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
+  const total = Array.isArray(found) ? visible.length : (found?.totalFound ?? visible.length);
+  return searchBody({ documentType, criteria }, visible, total);
+}
+
 export interface CompendiumToolsOptions {
   foundry: FoundryBridge;
   logger: Logger;
@@ -315,7 +353,7 @@ export class CompendiumTools {
       {
         name: 'search-compendium',
         description:
-          'Broad NAME search across the premium book compendium packs (any document type). The SRD (dnd5e.*) packs are NOT searched and never appear in results — the authoring library is the premium books only (design.md §2.3). Matches entity NAMES only (all whitespace-separated terms must appear); descriptions and traits are NOT searchable. Premium-first ranked, exact-name first. For faceted discovery by real system data (CR/type/size, spell level/school, item rarity/type), use the type-specific tools instead: search-compendium-creatures, search-compendium-spells, search-compendium-items. Use this for a quick name lookup, then inspect with get-compendium-entry.',
+          'Broad NAME search across the premium book compendium packs (any document type). The SRD (dnd5e.*) packs are NOT searched and never appear in results — the authoring library is the premium books only (design.md §2.3). Matches entity NAMES only (all whitespace-separated terms must appear); descriptions and traits are NOT searchable. Premium-first ranked, exact-name first; hits are {id,name,type,uuid,pack,img} with totalFound. For faceted discovery by real system data (CR/type/size, spell level/school, item rarity/type), use the type-specific tools instead: search-compendium-creatures, search-compendium-spells, search-compendium-items. Use this for a quick name lookup, then inspect with get-compendium-entry.',
         inputSchema: toInputSchema(SearchCompendiumSchema),
       },
       {
@@ -327,19 +365,19 @@ export class CompendiumTools {
       {
         name: 'search-compendium-creatures',
         description:
-          'D&D 5e CREATURE DISCOVERY: find creatures matching faceted criteria (Challenge Rating, type, size, spellcasting, legendary actions) across the premium book Actor packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so CR/type/size check real system data (not name heuristics); hasSpells/hasLegendaryActions are approximate index flags. Returns minimal hits ({id,name,type,uuid,pack,packLabel,img,facets}) premium-first ranked — identify candidates by name, then pull full stat blocks with get-compendium-entry. High result limits for complete encounter-building surveys.',
+          'D&D 5e CREATURE DISCOVERY: find creatures matching faceted criteria (Challenge Rating, type, size, spellcasting, legendary actions) across the premium book Actor packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so CR/type/size check real system data (not name heuristics); hasSpells/hasLegendaryActions are approximate index flags. Returns compact hits ({id,name,type,uuid,pack,img,facets}) premium-first ranked with totalFound (the full match count — raise limit for a survey); identify candidates by name, then pull full stat blocks with get-compendium-entry.',
         inputSchema: toInputSchema(ListCreaturesByCriteriaSchema),
       },
       {
         name: 'search-compendium-spells',
         description:
-          'D&D 5e SPELL DISCOVERY: find spells matching faceted criteria (level, school, damage type, name) across the premium book packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so filters check real spell data (not name heuristics). Returns minimal hits ({id,name,type,uuid,pack,packLabel,img,facets}) premium-first ranked — identify candidates here, then pull full detail with get-compendium-entry. damageType is a two-stage refine (loads candidate spells to inspect their activities).',
+          'D&D 5e SPELL DISCOVERY: find spells matching faceted criteria (level, school, damage type, name) across the premium book packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so filters check real spell data (not name heuristics). Returns compact hits ({id,name,type,uuid,pack,img,facets}) premium-first ranked with totalFound — identify candidates here, then pull full detail with get-compendium-entry. damageType is a two-stage refine (loads candidate spells to inspect their activities).',
         inputSchema: toInputSchema(SearchCompendiumSpellsSchema),
       },
       {
         name: 'search-compendium-items',
         description:
-          'D&D 5e ITEM/GEAR DISCOVERY: find equipment, weapons, armor, consumables, and treasure matching faceted criteria (rarity, subtype, properties, magical, name) across the premium book packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so filters check real item data (not name heuristics). Returns minimal hits ({id,name,type,uuid,pack,packLabel,img,facets}) premium-first ranked — identify candidates here, then pull full detail with get-compendium-entry. Use documentType to narrow the item family (gear=all, or weapon/armor/consumable).',
+          'D&D 5e ITEM/GEAR DISCOVERY: find equipment, weapons, armor, consumables, and treasure matching faceted criteria (rarity, subtype, properties, magical, name) across the premium book packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so filters check real item data (not name heuristics). Returns compact hits ({id,name,type,uuid,pack,img,facets}) premium-first ranked with totalFound — identify candidates here, then pull full detail with get-compendium-entry. Use documentType to narrow the item family (gear=all, or weapon/armor/consumable).',
         inputSchema: toInputSchema(SearchCompendiumItemsSchema),
       },
       {
@@ -395,34 +433,23 @@ export class CompendiumTools {
     this.logger.info('Compendium name search', { gameSystem, query, packType });
 
     try {
-      const results = await this.foundry.call('searchCompendium', {
-        query,
-        packType,
-      });
+      const found = await this.foundry.call('searchCompendium', { query, packType, limit });
 
       // Enforced backstop to the page-side exclusion: an SRD (`dnd5e.*`) hit is never a result
       // (design.md §2.3). The page already drops SRD packs before indexing; we re-drop here so the
-      // contract holds even if a pack slips past that filter, and counts reflect only book hits.
-      const visibleResults = results.filter((item: any) => !isHiddenFromEnumeration(item?.pack));
-
-      // Limit results
-      const limitedResults = visibleResults.slice(0, limit);
+      // contract holds even if a pack slips past that filter.
+      const results = (found?.results ?? []).filter(
+        (hit: any) => !isHiddenFromEnumeration(hit?.pack)
+      );
 
       this.logger.debug('Compendium search completed', {
         query,
         gameSystem,
-        totalFound: visibleResults.length,
-        returned: limitedResults.length,
+        totalFound: found?.totalFound,
+        returned: results.length,
       });
 
-      return {
-        query,
-        gameSystem, // Include detected system in response
-        results: limitedResults.map((item: any) => this.formatCompendiumItem(item, gameSystem)),
-        totalFound: visibleResults.length,
-        showing: limitedResults.length,
-        hasMore: visibleResults.length > limit,
-      };
+      return searchBody({ query }, results, found?.totalFound ?? results.length);
     } catch (error) {
       this.logger.error('Failed to search compendium', error);
       throw new Error(
@@ -517,8 +544,9 @@ export class CompendiumTools {
     try {
       // Re-backed on the one faceted engine (documentType:'creature'); CR/type/size are index
       // filters, hasSpells/hasLegendaryActions are engine post-filters on approximate index facets.
-      const hits = await this.foundry.call('searchCompendiumFaceted', {
+      const found = await this.foundry.call('searchCompendiumFaceted', {
         documentType: 'creature',
+        name: params.name,
         challengeRating: params.challengeRating,
         creatureType: params.creatureType,
         size: params.size,
@@ -527,18 +555,7 @@ export class CompendiumTools {
         limit: params.limit,
       });
 
-      // Enforced backstop to the engine's by-uuid SRD exclusion (design.md §2.3); see the spell facade.
-      const list: any[] = Array.isArray(hits) ? hits : [];
-      const results = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
-
-      return {
-        documentType: 'creature',
-        criteriaDescription,
-        results,
-        totalFound: results.length,
-        criteria: params,
-        note: 'Premium book creatures only — the SRD is never a source (design.md §2.3). Use creature names to pick candidates, then get-compendium-entry for full stat blocks.',
-      };
+      return facetedBody('creature', criteriaDescription, found);
     } catch (error) {
       this.logger.error('Failed to list creatures by criteria', error);
       throw new Error(
@@ -611,7 +628,7 @@ export class CompendiumTools {
 
     try {
       // Thin facade: hard-code the content type and forward the spell facets to the one engine.
-      const hits = await this.foundry.call('searchCompendiumFaceted', {
+      const found = await this.foundry.call('searchCompendiumFaceted', {
         documentType: 'spell',
         name: params.name,
         spellLevel: params.spellLevel,
@@ -620,20 +637,7 @@ export class CompendiumTools {
         limit: params.limit,
       });
 
-      // Enforced backstop to the engine's by-uuid SRD exclusion: a dnd5e.* hit is never a result
-      // (design.md §2.3). The engine already drops SRD packs; re-drop here so the contract holds
-      // (and counts stay book-only) even if one slips past.
-      const list: any[] = Array.isArray(hits) ? hits : [];
-      const results = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
-
-      return {
-        documentType: 'spell',
-        criteriaDescription,
-        results,
-        totalFound: results.length,
-        criteria: params,
-        note: 'Premium book spells only — the SRD is never a source (design.md §2.3). Use get-compendium-entry for full spell detail.',
-      };
+      return facetedBody('spell', criteriaDescription, found);
     } catch (error) {
       this.logger.error('Failed to search compendium spells', error);
       throw new Error(
@@ -666,7 +670,7 @@ export class CompendiumTools {
 
     try {
       // Thin facade: forward the gear facets to the one engine (documentType picks the family).
-      const hits = await this.foundry.call('searchCompendiumFaceted', {
+      const found = await this.foundry.call('searchCompendiumFaceted', {
         documentType: params.documentType,
         name: params.name,
         rarity: params.rarity,
@@ -676,18 +680,7 @@ export class CompendiumTools {
         limit: params.limit,
       });
 
-      // Enforced backstop to the engine's by-uuid SRD exclusion (design.md §2.3); see the spell facade.
-      const list: any[] = Array.isArray(hits) ? hits : [];
-      const results = list.filter(hit => !isHiddenFromEnumeration(hit?.pack));
-
-      return {
-        documentType: params.documentType,
-        criteriaDescription,
-        results,
-        totalFound: results.length,
-        criteria: params,
-        note: 'Premium book items only — the SRD is never a source (design.md §2.3). Use get-compendium-entry for full item detail.',
-      };
+      return facetedBody(params.documentType, criteriaDescription, found);
     } catch (error) {
       this.logger.error('Failed to search compendium items', error);
       throw new Error(
@@ -734,87 +727,6 @@ export class CompendiumTools {
     return parts.length > 0 ? parts.join(', ') : 'no criteria';
   }
 
-  private formatCompendiumItem(item: any, gameSystem?: GameSystem): any {
-    const formatted: any = {
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      pack: {
-        id: item.pack,
-        label: item.packLabel,
-      },
-      description: this.extractDescription(item),
-      hasImage: !!item.img,
-      summary: this.createItemSummary(item),
-    };
-
-    // Add key stats for actors/creatures to reduce need for detail calls.
-    if (item.type === 'npc' || item.type === 'character') {
-      const stats: any = {};
-
-      if (gameSystem === 'dnd5e') {
-        // Challenge Rating
-        const level = getCreatureLevel(item, gameSystem);
-        if (level !== undefined) stats.challengeRating = level;
-
-        // Creature type
-        const creatureType = getCreatureType(item, gameSystem);
-        if (creatureType && typeof creatureType === 'string') stats.creatureType = creatureType;
-
-        const system = item.system || {};
-
-        // Hit Points
-        const hp = system.attributes?.hp?.value;
-        const maxHp = system.attributes?.hp?.max;
-        if (hp !== undefined || maxHp !== undefined) {
-          stats.hitPoints = { current: hp, max: maxHp };
-        }
-
-        // Armor Class
-        const ac = system.attributes?.ac?.value;
-        if (ac !== undefined) stats.armorClass = ac;
-
-        // Size
-        const size = system.traits?.size?.value || system.traits?.size || system.size;
-        if (size) stats.size = size;
-
-        // Alignment
-        const alignment =
-          system.details?.alignment?.value || system.details?.alignment || system.alignment;
-        if (alignment) stats.alignment = alignment;
-      } else {
-        // Fallback: Legacy D&D 5e extraction (system not detected)
-        const system = item.system || {};
-        const cr = system.details?.cr || system.cr;
-        if (cr !== undefined) stats.challengeRating = cr;
-
-        const hp = system.attributes?.hp?.value || system.hp?.value;
-        const maxHp = system.attributes?.hp?.max || system.hp?.max;
-        if (hp !== undefined || maxHp !== undefined) {
-          stats.hitPoints = { current: hp, max: maxHp };
-        }
-
-        const ac = system.attributes?.ac?.value || system.ac?.value;
-        if (ac !== undefined) stats.armorClass = ac;
-
-        const creatureType = system.details?.type?.value || system.type?.value;
-        if (creatureType) stats.creatureType = creatureType;
-
-        const size = system.traits?.size || system.size;
-        if (size) stats.size = size;
-
-        const alignment = system.details?.alignment || system.alignment;
-        if (alignment) stats.alignment = alignment;
-      }
-
-      if (Object.keys(stats).length > 0) {
-        formatted.stats = stats;
-      }
-    }
-
-    return formatted;
-  }
-
   private extractDescription(item: any): string {
     const system = item.system || {};
 
@@ -842,47 +754,11 @@ export class CompendiumTools {
     return this.stripHtml(description);
   }
 
-  private createItemSummary(item: any): string {
-    const parts = [];
-
-    parts.push(`${item.type} from ${item.packLabel}`);
-
-    const system = item.system || {};
-
-    // Add relevant summary information based on item type
-    switch (item.type.toLowerCase()) {
-      case 'spell':
-        if (system.level) parts.push(`Level ${system.level}`);
-        if (system.school) parts.push(system.school);
-        break;
-      case 'weapon':
-        if (system.damage?.parts?.length) {
-          const damage = system.damage.parts[0];
-          parts.push(`${damage[0]} ${damage[1]} damage`);
-        }
-        break;
-      case 'armor':
-        if (system.armor?.value) parts.push(`AC ${system.armor.value}`);
-        break;
-      case 'equipment':
-      case 'item': {
-        const rarity = firstRarity(system);
-        if (rarity) parts.push(rarity);
-        if (system.price?.value)
-          parts.push(`${system.price.value} ${system.price.denomination || 'gp'}`);
-        break;
-      }
-    }
-
-    return parts.join(' • ');
-  }
-
-  /**
-   * Helper method to describe criteria in human-readable format
-   */
+  /** Human-readable summary of the creature facets (transparency + logging). */
   private describeCriteria(params: any): string {
     const parts: string[] = [];
 
+    if (params.name) parts.push(`name ~ "${params.name}"`);
     if (params.challengeRating !== undefined) {
       if (typeof params.challengeRating === 'number') {
         parts.push(`CR ${params.challengeRating}`);

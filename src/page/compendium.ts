@@ -12,18 +12,16 @@ import { excludeSrdPacks, packPriority } from '../utils/compendium-sources.js';
 interface CompendiumSearchArgs {
   query: string;
   packType?: string;
+  limit?: number;
 }
 
 interface CompendiumSearchResult {
   id: string;
   name: string;
   type: string;
-  img?: string;
+  uuid: string;
   pack: string;
-  packLabel: string;
-  description?: string;
-  hasImage?: boolean;
-  summary?: string;
+  img?: string;
 }
 
 interface GetCompendiumDocumentArgs {
@@ -60,23 +58,19 @@ interface CompendiumEntryFull {
   fullData: Record<string, unknown>;
 }
 
-const RESULT_LIMIT = 100;
-
 /**
  * Search every (non-Scene) premium compendium pack's index for entries whose NAME matches all
  * whitespace-separated terms in the query. Name-only matching — descriptions/traits are not
  * indexed, and there is no faceted/heuristic filtering (use search-compendium-creatures/-spells/
- * -items for real-system-data facets). Results are ranked (premium-first, exact-name, then
- * alphabetical) and capped at 50.
- *
- * The Node tool re-applies its own limit on top of this; we return the same
- * CompendiumSearchResult[] shape it forwards from the bridge.
+ * -items for real-system-data facets). Every match is ranked (premium-first, exact-name, then
+ * alphabetical); the first `limit` (default 50) come back with the full match count.
  */
 export async function searchCompendium(
   args: CompendiumSearchArgs
-): Promise<CompendiumSearchResult[]> {
+): Promise<{ results: CompendiumSearchResult[]; totalFound: number }> {
   const query = args?.query;
   const packType = args?.packType;
+  const limit = args?.limit ?? 50;
 
   if (!query || typeof query !== 'string' || query.trim().length < 2) {
     throw new Error('Search query must be a string with at least 2 characters');
@@ -131,28 +125,20 @@ export async function searchCompendium(
             continue;
           }
 
+          const id = typedEntry._id || '';
           results.push({
-            id: typedEntry._id || '',
+            id,
             name: typedEntry.name,
             type: typedEntry.type || 'unknown',
-            img: typedEntry.img || undefined,
+            uuid: typedEntry.uuid || `Compendium.${pack.metadata.id}.${pack.documentName}.${id}`,
             pack: pack.metadata.id,
-            packLabel: pack.metadata.label,
-            description: typedEntry.description || '',
-            hasImage: !!typedEntry.img,
-            summary: `${typedEntry.type} from ${pack.metadata.label}`,
+            ...(typedEntry.img ? { img: typedEntry.img } : {}),
           });
-        } catch {
-          continue;
-        }
-
-        if (results.length >= RESULT_LIMIT) break;
+        } catch {}
       }
     } catch {
       // Skip packs that fail to index/search; keep going.
     }
-
-    if (results.length >= RESULT_LIMIT) break;
   }
 
   // Relevance ranking: premium-first, then exact name, then alphabetical.
@@ -170,7 +156,7 @@ export async function searchCompendium(
     return a.name.localeCompare(b.name);
   });
 
-  return results.slice(0, 50);
+  return { results: results.slice(0, limit), totalFound: results.length };
 }
 
 /**
