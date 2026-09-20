@@ -114,8 +114,9 @@ tokens. A **Clean** scene is a *different* scene (fewer walls, no lights), not a
 
 ## Step 3 — Skip anything already imported (dedup)
 
-`create-scene` is not idempotent. `list-scenes` and skip any scene already stamped with
-`flags["tom-cartos-import"].sourceId` equal to a survey `sceneIndex[].sourceId` you're about to import
+`create-scene` is not idempotent. `list-scenes { flagScope: "tom-cartos-import" }` prints each
+scene's stamp; skip any scene whose `flags["tom-cartos-import"].sourceId` equals a survey
+`sceneIndex[].sourceId` you're about to import
 (re-runs and resumes are safe this way). Dedup on the **stamped flag**, never the name — variant names
 like `01 Iris` collide across packs.
 

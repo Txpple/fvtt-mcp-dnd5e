@@ -46,10 +46,11 @@ Never pick from a name. Find out what the place *is*:
 
 - **`configure-soundscape { action: "list" }`** — what it already has. If the scene is at 4+ sets,
   you are **re-mixing**, not adding (see the budget below).
-- **`get-current-scene`** / **`list-scenes`** — the **darkness level** (this decides the day/night
-  question), weather, and whether it's the active scene.
-- **`screenshot-scene`**, or read the background image directly — it renders to you. This is the step
-  that actually earns the skill: *look at the map.*
+- **`get-current-scene`** / **`list-scenes`** — the **darkness level** (`darkness` 0–1; this decides
+  the day/night question), `weather`, and whether it's the active scene.
+- **`screenshot-scene`**, or read the background image directly (its path is `background` on
+  `get-current-scene`) — it renders to you. This is the step that actually earns the skill: *look
+  at the map.*
 - **`list-tokens`** — what **lives** here. A crypt with five wights in it is not the same soundscape
   as an empty crypt; a market with forty townsfolk needs voices, an abandoned one needs wind.
 - The scene's attached journal / notes, if any — the fiction often names the sound ("water drips

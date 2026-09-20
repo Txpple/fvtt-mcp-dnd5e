@@ -18,14 +18,8 @@ export interface SceneToolsOptions {
 // Single source of truth for each tool's input contract: the handler parses with these
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
 const GetCurrentSceneSchema = z.object({
-  includeTokens: z
-    .boolean()
-    .default(true)
-    .describe('Whether to include detailed token information (default: true)'),
-  includeHidden: z
-    .boolean()
-    .default(false)
-    .describe('Whether to include hidden tokens and elements (default: false)'),
+  includeTokens: z.boolean().default(true).describe('Include the placed tokens (default true).'),
+  includeHidden: z.boolean().default(false).describe('Include hidden tokens too (default false).'),
 });
 
 const GetWorldInfoSchema = z.object({});
@@ -339,10 +333,11 @@ const CreateSceneSchema = z.object({
 
 const ListScenesSchema = z.object({
   filter: z.string().optional().describe('Case-insensitive substring match on scene name.'),
-  includeActiveOnly: z
-    .boolean()
+  includeActiveOnly: z.boolean().optional().describe('Only the active scene (default false).'),
+  flagScope: z
+    .string()
     .optional()
-    .describe('Return only the currently active scene (default false).'),
+    .describe("Also print flags[<scope>] per scene (a scene pack's provenance stamp, for dedup)."),
 });
 
 const UpdateSceneSchema = z.object({
@@ -420,7 +415,8 @@ export class SceneTools {
       {
         name: 'get-current-scene',
         description:
-          'Get information about the currently active scene, including tokens and layout',
+          'The ACTIVE scene: size, background path, darkness 0–1, weather, element counts, ' +
+          'tokens (position, actor, disposition), note pins.',
         inputSchema: toInputSchema(GetCurrentSceneSchema),
       },
       {
@@ -453,8 +449,9 @@ export class SceneTools {
       {
         name: 'list-scenes',
         description:
-          'List Scene documents with id, name, active flag, dimensions, grid size, and background ' +
-          'path. Optionally filter by name substring or show only the active scene.',
+          'One line per scene: name, id, [active], W×H, grid, darkness 0–1, weather, token/wall ' +
+          'counts (+ flags[flagScope]). Filter by name substring or active only. Background path: ' +
+          'get-current-scene.',
         inputSchema: toInputSchema(ListScenesSchema),
       },
       {
@@ -472,14 +469,10 @@ export class SceneTools {
       {
         name: 'activate-scene',
         description:
-          'ACTIVATE a scene — make it the one active scene, which is where connected clients land ' +
-          'and where users log in. Foundry allows exactly ONE active scene world-wide, so this ' +
-          'deactivates whatever was active; the previous scene is reported back so you can put it ' +
-          'back. Activating an already-active scene is a no-op and says so (alreadyActive) rather ' +
-          'than pretending it did something. Kept separate from ' +
-          'update-scene (which is scene-DOCUMENT-only and never activates) because this changes ' +
-          "every connected player's screen. To move only SOME players, leave the active scene " +
-          'alone and use pull-users-to-scene instead. GM-only.',
+          'ACTIVATE a scene — the ONE active scene world-wide, where clients land and log in; ' +
+          'the previously active scene is reported back. Already active → a no-op (alreadyActive). ' +
+          "This changes every connected player's screen — to move only SOME players use " +
+          'pull-users-to-scene; update-scene never activates. GM-only.',
         inputSchema: toInputSchema(ActivateSceneSchema),
       },
       {
@@ -645,13 +638,22 @@ export class SceneTools {
       return 'No scenes found.';
     }
     const lines = scenes.map((s: any) => {
-      const dims = s.dimensions ? `${s.dimensions.width}×${s.dimensions.height}` : '?';
-      return (
-        `  - "${s.name}" (${s.id})${s.active ? ' [active]' : ''} — ${dims}px, grid ${s.gridSize}` +
-        `${s.background ? `\n      background: ${s.background}` : ''}`
-      );
+      const dims = s.width && s.height ? `${s.width}×${s.height}` : '?';
+      const facts = [
+        `${dims}px`,
+        `grid ${s.grid}`,
+        `darkness ${typeof s.darkness === 'number' ? s.darkness : '?'}`,
+        s.weather ? `weather ${s.weather}` : null,
+        `${s.tokens ?? 0} token(s)`,
+        `${s.walls ?? 0} wall(s)`,
+      ].filter(Boolean);
+      const flags =
+        parsed.flagScope !== undefined
+          ? `\n      flags[${parsed.flagScope}]: ${s.flags ? JSON.stringify(s.flags) : 'none'}`
+          : '';
+      return `  - "${s.name}" (${s.id})${s.active ? ' [active]' : ''} — ${facts.join(', ')}${flags}`;
     });
-    return `Scenes (${scenes.length}):\n${lines.join('\n')}`;
+    return `${scenes.length} scene(s):\n${lines.join('\n')}`;
   }
 
   async handleUpdateScene(args: any): Promise<string> {
@@ -837,7 +839,9 @@ export class SceneTools {
         height: sceneData.height,
         padding: sceneData.padding,
       },
-      hasBackground: !!sceneData.background,
+      background: sceneData.background || null,
+      darkness: sceneData.darkness,
+      weather: sceneData.weather || '',
       navigation: sceneData.navigation,
       elements: {
         walls: sceneData.walls || 0,

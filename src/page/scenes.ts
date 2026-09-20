@@ -338,6 +338,8 @@ export function getActiveScene(): unknown {
     padding: scene.padding,
     active: scene.active,
     navigation: scene.navigation,
+    darkness: sceneDarkness(scene),
+    weather: scene.weather || '',
     tokens: scene.tokens.map((token: any) => ({
       id: token.id,
       name: token.name,
@@ -362,12 +364,24 @@ export function getActiveScene(): unknown {
   };
 }
 
+/** The scene's darkness level 0–1 (v12+ `environment.darknessLevel`; the pre-v12 `darkness`). */
+function sceneDarkness(scene: any): number {
+  const level = scene.environment?.darknessLevel ?? scene.darkness;
+  return typeof level === 'number' ? level : 0;
+}
+
 /**
- * List scenes in the world, optionally filtered by name substring or to active
- * scenes only. Each entry carries id, name, active flag, dimensions, grid size,
- * background and element counts. Mirrors the old data-access.listScenes shape.
+ * List scenes in the world, optionally filtered by name substring or to active scenes only.
+ * Each entry carries what a skill decides on — id, name, active, size, grid, darkness, weather,
+ * token/wall counts — and, when `flagScope` is given, that scope's flags (a scene pack's
+ * provenance stamp, for dedup). The background path is a get-current-scene / screenshot-scene
+ * matter: no skill reads it from a list, and it was 67% of the list's bytes.
  */
-export function listScenes(args?: { filter?: string; includeActiveOnly?: boolean }): unknown {
+export function listScenes(args?: {
+  filter?: string;
+  includeActiveOnly?: boolean;
+  flagScope?: string;
+}): unknown {
   let scenes: any[] = game.scenes?.contents || [];
 
   if (args?.includeActiveOnly) {
@@ -379,21 +393,19 @@ export function listScenes(args?: { filter?: string; includeActiveOnly?: boolean
     scenes = scenes.filter((scene: any) => scene.name.toLowerCase().includes(filterLower));
   }
 
+  const scope = args?.flagScope;
   return scenes.map((scene: any) => ({
     id: scene.id,
     name: scene.name,
-    active: scene.active,
-    dimensions: {
-      width: scene.dimensions?.width || scene.width || 0,
-      height: scene.dimensions?.height || scene.height || 0,
-    },
-    gridSize: scene.grid?.size || 100,
-    background: readSceneBackground(scene) || '',
-    walls: scene.walls?.size || 0,
+    active: scene.active === true,
+    width: scene.dimensions?.width || scene.width || 0,
+    height: scene.dimensions?.height || scene.height || 0,
+    grid: scene.grid?.size || 100,
+    darkness: sceneDarkness(scene),
+    weather: scene.weather || '',
     tokens: scene.tokens?.size || 0,
-    lighting: scene.lights?.size || 0,
-    sounds: scene.sounds?.size || 0,
-    navigation: scene.navigation || false,
+    walls: scene.walls?.size || 0,
+    ...(scope ? { flags: scene.flags?.[scope] ?? null } : {}),
   }));
 }
 

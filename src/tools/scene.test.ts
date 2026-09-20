@@ -356,6 +356,8 @@ describe('handleGetCurrentScene', () => {
     height: 3000,
     padding: 0.25,
     background: 'tavern.webp',
+    darkness: 0.6,
+    weather: 'fog',
     navigation: true,
     walls: 12,
     lights: 3,
@@ -395,14 +397,16 @@ describe('handleGetCurrentScene', () => {
     expect(calls[0][0]).toBe('getActiveScene');
   });
 
-  it('shapes the scene response with dimensions, elements and background flag', async () => {
+  it('shapes the scene response with dimensions, elements, background path, darkness and weather', async () => {
     const { tools } = build(sceneData);
     const out = await tools.handleGetCurrentScene({});
     expect(out.id).toBe('scene1');
     expect(out.name).toBe('Tavern');
     expect(out.active).toBe(true);
     expect(out.dimensions).toEqual({ width: 4000, height: 3000, padding: 0.25 });
-    expect(out.hasBackground).toBe(true);
+    expect(out.background).toBe('tavern.webp');
+    expect(out.darkness).toBe(0.6);
+    expect(out.weather).toBe('fog');
     expect(out.navigation).toBe(true);
     expect(out.elements).toEqual({ walls: 12, lights: 3, sounds: 1, notes: 1 });
   });
@@ -911,18 +915,35 @@ describe('handleListScenes', () => {
         name: 'Cavern',
         id: 'sc1',
         active: true,
-        dimensions: { width: 4000, height: 3000 },
-        gridSize: 100,
-        background: 'maps/cavern.webp',
+        width: 4000,
+        height: 3000,
+        grid: 100,
+        darkness: 0.35,
+        weather: 'rain',
+        tokens: 7,
+        walls: 94,
       },
-      { name: 'Empty', id: 'sc2', active: false, gridSize: 50 },
+      { name: 'Empty', id: 'sc2', active: false, grid: 50, darkness: 0, weather: '' },
     ]);
     const out = await tools.handleListScenes({});
     expect(calls[0][0]).toBe('listScenes');
-    expect(out).toContain('Scenes (2):');
-    expect(out).toContain('- "Cavern" (sc1) [active] — 4000×3000px, grid 100');
-    expect(out).toContain('background: maps/cavern.webp');
-    expect(out).toContain('- "Empty" (sc2) — ?px, grid 50');
+    expect(out).toContain('2 scene(s):');
+    expect(out).toContain(
+      '- "Cavern" (sc1) [active] — 4000×3000px, grid 100, darkness 0.35, weather rain, 7 token(s), 94 wall(s)'
+    );
+    expect(out).toContain('- "Empty" (sc2) — ?px, grid 50, darkness 0, 0 token(s), 0 wall(s)');
+    expect(out).not.toContain('background');
+  });
+
+  it('prints flags[scope] per scene when flagScope is asked for', async () => {
+    const { tools, calls } = build([
+      { name: 'Iris', id: 'sc1', grid: 100, darkness: 0, flags: { sourceId: 'tc-iris-01' } },
+      { name: 'Camp', id: 'sc2', grid: 100, darkness: 0, flags: null },
+    ]);
+    const out = await tools.handleListScenes({ flagScope: 'tom-cartos-import' });
+    expect(calls[0][1]).toMatchObject({ flagScope: 'tom-cartos-import' });
+    expect(out).toContain('flags[tom-cartos-import]: {"sourceId":"tc-iris-01"}');
+    expect(out).toContain('flags[tom-cartos-import]: none');
   });
 
   it('passes filter and includeActiveOnly through', async () => {
