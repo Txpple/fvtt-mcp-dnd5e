@@ -208,7 +208,12 @@ export class Foundry implements FoundryBridge {
       .then(r =>
         this.log.info(`compendium indexes warm: ${r.built} built of ${r.packs} in ${r.ms} ms`)
       )
-      .catch(err => this.log.warn(`compendium index warm-up failed: ${(err as Error).message}`));
+      .catch(err => {
+        // A script that connects, does one thing and disposes closes the page mid-warm-up: that
+        // is not a failure worth a line (every sibling harness printed it on every run).
+        if (this.isReady())
+          this.log.warn(`compendium index warm-up failed: ${(err as Error).message}`);
+      });
   }
 
   /**
