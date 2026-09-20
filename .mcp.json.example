@@ -3,7 +3,7 @@
   "mcpServers": {
     "foundry-molten5e": {
       "command": "C:/Program Files/nodejs/node.exe",
-      "args": ["C:/Users/<you>/path/to/fvtt-mcp-molten5e/dist/index.js"]
+      "args": ["C:/Users/<you>/path/to/fvtt-mcp-dnd5e/dist/index.js"]
     }
   }
 }

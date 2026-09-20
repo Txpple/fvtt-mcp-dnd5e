@@ -89,7 +89,7 @@ run build && npm run knip`). Live, on the sandbox (`FOUNDRY_HOST=local`):
 
 ## Milestones
 
-- [ ] **2.2.0 — hosts, toolsets, rename** (#1–#7).
+- [x] **2.2.0 — hosts, toolsets, rename** (#1–#7) — built 2026-09-20; tag + push are the owner's (docs/RELEASE.md).
 
 ### Progress
 

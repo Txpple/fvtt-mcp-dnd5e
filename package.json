@@ -1,7 +1,7 @@
 {
-  "name": "fvtt-mcp-molten5e",
-  "version": "2.1.4",
-  "description": "D&D 5e–only, Molten-Hosting–optimized Foundry VTT MCP server, driven by Claude Code.",
+  "name": "fvtt-mcp-dnd5e",
+  "version": "2.2.0",
+  "description": "A D&D 5e Dungeon Master's assistant for Foundry VTT — an MCP server that drives any live Foundry world (Molten Hosting, a local install, a URL) through Claude Code.",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -48,7 +48,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Txpple/fvtt-mcp-molten5e.git"
+    "url": "https://github.com/Txpple/fvtt-mcp-dnd5e.git"
   },
   "keywords": [
     "foundry-vtt",

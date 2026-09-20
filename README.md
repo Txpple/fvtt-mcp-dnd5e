@@ -1,10 +1,12 @@
-# fvtt-mcp-molten5e
+# fvtt-mcp-dnd5e
 
-A **D&D 5e–only**, **[Molten Hosting](https://moltenhosting.com)–optimized** [Model Context
-Protocol](https://modelcontextprotocol.io) server for [Foundry VTT](https://foundryvtt.com),
-driven by **Claude Code**. It lets an AI GM assistant read and edit a live Foundry world (actors,
-items, journals, scenes, compendia, roll tables, cards…) and manage a Molten-hosted server's
-static files.
+A **D&D 5e** Dungeon Master's assistant for [Foundry VTT](https://foundryvtt.com) — a [Model
+Context Protocol](https://modelcontextprotocol.io) server driven by **Claude Code**. It lets an AI
+GM assistant read and edit a **live** Foundry world (actors, items, journals, scenes, compendia,
+roll tables, cards…) and manage its static files. It is a Foundry MCP first: the world can run on
+**[Molten Hosting](https://moltenhosting.com)**, on **this machine**, or at **any URL** — where it
+runs is a *host*, an option chosen per registration (`FOUNDRY_HOST`), never the product
+([design.md §2.6](design.md)). *(Formerly `fvtt-mcp-molten5e`.)*
 
 Paired with its bundled **skills**, it goes well beyond CRUD: it can author a **complete, table-ready
 adventure end to end** — scene, monsters, NPCs, a pregen PC or party, treasure, linked journals, and
@@ -112,6 +114,24 @@ validated against the 6.0.1 source and proven live (`scripts/verify-effects-6.mj
 - The PC leveling engine applies 6.0's **ModifyItem** advancement (an enchantment placed on an
   identified item) as a forced step, like ItemGrant.
 
+## 2.2 — a Foundry MCP first, hosts as options
+
+No tool behaviour changed in 2.2; what changed is what the project *is*. It was named for one host
+(`fvtt-mcp-molten5e`) while the code had long been host-agnostic in fact — so the host left the
+name and became a **[seam](design.md)** (§2.6, [`docs/plan-2.2-hosts.md`](docs/plan-2.2-hosts.md)):
+
+- **`FOUNDRY_HOST`** = `molten` (Magic-URL wake, WebDAV file plane) · `local` (an install on this
+  machine — no wake, and the asset file tools work straight on its `Data/` directory, which the
+  sandbox never had before) · `generic` (a URL, nothing else). One `.env`, one registration per
+  instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 151 tools (13 named toolsets;
+  `world` always on); an out-of-set call is refused by name. `chat,combat` is 16 tools at ~6k tokens
+  instead of ~79k.
+- **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
+
+Parked for **3.0**: folding the 17 `list/create/update/delete-X` families (70 of 151 tools) into
+`kind` + `op` tools — the biggest context lever left, and a change to every skill, so its own line.
+
 ---
 
 > 📐 **Design north star — [`design.md`](design.md).** The mission, scope, the *skills decide, tools
@@ -121,28 +141,33 @@ validated against the 6.0.1 source and proven live (`scripts/verify-effects-6.mj
 
 ## Why this shape
 
-Managed Foundry hosts (like Molten) don't expose a general control API and you can't run a process
-next to the game server. The only supported way in is Foundry's own authenticated client.
+Foundry has no server-side plugin API, and managed hosts (like Molten) don't expose a control API
+either — you can't run a process next to the game server. The only supported way in, on *every*
+host, is Foundry's own authenticated client.
 
 So the MCP server drives a **headless Chromium** client (via [Playwright](https://playwright.dev)):
-it wakes the (sleeping) Molten box with the **Magic URL**, joins the world as a dedicated Foundry user, waits for `game.ready`, and injects a page-side library that exposes the
-world's own client APIs. Claude Code talks to the MCP server over stdio; the server turns each tool
-call into a call inside that live page.
+it lets the host wake a sleeping instance (Molten's **Magic URL**), joins the world as a dedicated
+Foundry user, waits for `game.ready`, and injects a page-side library that exposes the world's own
+client APIs. Claude Code talks to the MCP server over stdio; the server turns each tool call into a
+call inside that live page. Everything that depends on **where** the world runs — the wake step,
+the file channel into `Data/`, the env vars — lives behind one seam, `src/hosts/**`; the rest of
+the server never knows.
 
 ```
 Claude Code  ──stdio──>  MCP server  (dist/index.js, on your PC)
                               │  Playwright → headless Chromium (src/foundry.ts)
+                              │  + the host (src/hosts: molten | local | generic)
                               ▼
                     Headless Foundry client
-                    (wakes the box, joins the live world as a dedicated GM user)
+                    (host wakes the instance if it sleeps; joins as a dedicated GM user)
                               │  the world's own client APIs (window.__fvtt)
                               ▼
-                    Foundry VTT world (Molten-hosted)
+                    Foundry VTT world (Molten, this machine, or any URL)
 ```
 
 The headless client connects **lazily**: `tools/list` answers without touching Foundry, and the
-first actual tool call is what wakes the box and joins the world. The whole tool tree depends on one
-seam — `foundry.call(name, args)` — and only `src/foundry.ts` ever imports Playwright.
+first actual tool call is what wakes the instance and joins the world. The whole tool tree depends
+on one seam — `foundry.call(name, args)` — and only `src/foundry.ts` ever imports Playwright.
 
 ### Two-plane model
 
@@ -412,7 +437,7 @@ through the `foundry.call(name, args)` seam, plus a page-side library (`src/page
 
 ## Support
 
-Issues: [GitHub Issues](https://github.com/Txpple/fvtt-mcp-molten5e/issues)
+Issues: [GitHub Issues](https://github.com/Txpple/fvtt-mcp-dnd5e/issues)
 
 ## Acknowledgments
 
