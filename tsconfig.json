@@ -18,5 +18,12 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "src/tools/test-helpers.ts",
+    "src/page/dnd5e/foundry-doc-mock.ts"
+  ]
 }

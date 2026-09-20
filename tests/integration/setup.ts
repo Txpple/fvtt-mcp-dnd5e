@@ -10,10 +10,8 @@
 //
 // The integration tests import the BUILT bridge from dist/ (mirroring the proven
 // scripts/verify-*.mjs), so `npm run test:integration` runs `npm run build` first.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-// The built host seam, like the built bridge the suites import.
+// The built host seam and the built .env reader, like the built bridge the suites import.
+import { loadEnv } from '../../dist/env.js';
 import {
   bridgeConfigOf,
   createHost,
@@ -22,27 +20,7 @@ import {
   resolveHostConfig,
 } from '../../dist/hosts/index.js';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, '..', '..');
-
-export type Env = Record<string, string>;
-
-/** Parse the gitignored .env (KEY=value, # comments). Returns {} if absent. */
-export function loadEnv(): Env {
-  try {
-    const txt = readFileSync(join(repoRoot, '.env'), 'utf8');
-    const env: Env = {};
-    for (const line of txt.split(/\r?\n/)) {
-      if (line.trimStart().startsWith('#')) continue;
-      const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-      if (m) env[m[1]] = m[2].trim();
-    }
-    return env;
-  } catch {
-    return {};
-  }
-}
-
+/** The gitignored .env (or FVTT_MCP_ENV), parsed once — {} if absent (src/env.ts). */
 export const ENV = loadEnv();
 
 /** The host this run targets (process.env picks it, exactly as for the server and the scripts). */

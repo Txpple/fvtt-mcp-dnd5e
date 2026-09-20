@@ -323,6 +323,12 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   server, the verify scripts and the integration suite, and a placeholder `FOUNDRY_URL` is refused
   at startup. An unset `FOUNDRY_WORLD_ID` is discovered on `/setup`. The asset file tools
   (`src/tools/assets/**`) are written against the plane, never a host.
+- **The library surface.** `src/client.ts` is what the sister repos import
+  (`fvtt-mcp-dnd5e/client`, the package's `exports`): `Foundry`, `connectFoundry` (.env → host →
+  identity → connect, with the watchdog and the raced teardown), `loadEnv` (`src/env.ts`, also
+  `fvtt-mcp-dnd5e/env` — the one .env reader the server, the scripts, the suite and the siblings
+  share) and the host seam (`fvtt-mcp-dnd5e/hosts`). It never imports `src/config.ts`, which reads
+  process.env and refuses a placeholder at import — right for the server, wrong for a library.
 - **One registry.** `src/registry.ts` is the single source of truth wiring tool name → handler; the
   advertised tool list is derived from it so the two can't drift.
 - **Generated schemas.** Every tool's input schema is generated from one hoisted zod (`io: 'input'`)

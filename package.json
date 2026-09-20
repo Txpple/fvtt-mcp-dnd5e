@@ -4,8 +4,38 @@
   "description": "A D&D 5e Dungeon Master's assistant for Foundry VTT — an MCP server that drives any live Foundry world (Molten Hosting, a local install, a URL) through Claude Code.",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
+    },
+    "./hosts": {
+      "types": "./dist/hosts/index.d.ts",
+      "default": "./dist/hosts/index.js"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "fvtt-mcp-dnd5e": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "images",
+    ".claude/skills",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc && node esbuild.page.mjs",
@@ -31,6 +61,7 @@
     "@foundryvtt/foundryvtt-cli": "^3.0.3",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^16.3.0",
+    "playwright": "^1.61.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -38,7 +69,6 @@
     "@types/node": "^26.0.0",
     "esbuild": "~0.25.0",
     "knip": "^5.64.0",
-    "playwright": "^1.61.0",
     "typescript": "^6.0.3",
     "vitest": "~3.2.6"
   },

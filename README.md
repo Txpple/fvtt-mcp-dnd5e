@@ -233,8 +233,8 @@ tests/              gated live integration suites (offline unit tests live besid
 
 - **Node.js 22+** (developed/tested on Node 24; see `.nvmrc`; CI runs 22 + 24). On Windows, if Node
   isn't on `PATH`, use the full path to `node.exe` (see wiring below).
-- A **Chromium for Playwright** — `npx playwright install chromium` (Playwright is a devDependency;
-  the headless bridge drives this browser).
+- A **Chromium for Playwright** — `npx playwright install chromium` (Playwright is a runtime
+  dependency; the headless bridge drives this browser).
 - **Foundry VTT 14.368+** with the **D&D 5e system 6.0.3+** (2.x is the dnd5e **6.x** line and
   refuses to author against an older system; v1.5.2 is the last release that runs on dnd5e 5.3.x),
   anywhere it runs (Molten Hosting, this machine, a URL — `FOUNDRY_HOST`), plus a dedicated
@@ -264,6 +264,34 @@ climbs past its ceiling in `src/measure.test.ts`). Live integration suites are g
 `npm run measure` prints the same budgets in detail (per tool, per toolset, per skill) from
 `scripts/measure/`; the live per-call result sizes are `FOUNDRY_HOST=local node
 scripts/measure/tool-results.mjs`.
+
+### As a library (the sister repos)
+
+The house modules' `tools/` harnesses and the artificer drive a live world through the same
+headless bridge, never through the server. The package declares that surface — add
+`"fvtt-mcp-dnd5e": "file:../fvtt-mcp-dnd5e"` to the sibling's `package.json` (the family is
+cloned side by side) and:
+
+```js
+import { connectFoundry } from 'fvtt-mcp-dnd5e/client';
+
+const { f, dispose } = await connectFoundry({ host: 'local', identity: 'suite', tag: 'smoke', watchdogMs: 300_000 });
+try {
+  const id = await f.evaluate(() => game.world.id, null);
+} finally {
+  await dispose(); // Foundry#dispose() raced against a ceiling; the watchdog is cleared
+}
+```
+
+`connectFoundry` reads this repo's `.env` (or `FVTT_MCP_ENV`), picks the host (`FOUNDRY_HOST`,
+or the `host` option), joins as the bridge user, the suite user (`FOUNDRY_SUITE_USER` /
+`_PASSWORD` — a distinct account, so a bridge left connected shows up as a second user instead of
+an invisible collision) or the player user (`FOUNDRY_PLAYER_USER` / `_PASSWORD`, no admin key),
+and returns the live `Foundry` (`evaluate` / `call` / `screenshot` / `dispose`, alias
+`disconnect`). The lower-level pieces are exported too: `Foundry`, `loadEnv`
+(`fvtt-mcp-dnd5e/env`), and the host seam (`fvtt-mcp-dnd5e/hosts`: `resolveHostConfig`,
+`createHost`, `bridgeConfigOf`, `filePlaneFor`). The package is not published; "clone and build"
+is the install.
 
 > **Dev watch:** `npm run dev` rebuilds the page bundle once, then runs `tsc --watch` for `src/**`.
 > Because the page library is a **separate** esbuild artifact, editing anything under `src/page/**`

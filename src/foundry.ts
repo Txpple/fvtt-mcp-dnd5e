@@ -641,6 +641,16 @@ export class Foundry implements FoundryBridge {
     this.browser = undefined;
     this.page = undefined;
   }
+
+  /**
+   * `dispose()` under the name the sibling harnesses call. Sixteen battleflow suites ended with
+   * `await f.disconnect?.()` — an optional chain on a method that did not exist, so nothing ever
+   * hung up (found 2026-08-23 by the hook ledger, which needed a teardown seam). One teardown,
+   * both names.
+   */
+  async disconnect(): Promise<void> {
+    return this.dispose();
+  }
 }
 
 function loadPageBundle(): string {

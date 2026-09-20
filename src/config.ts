@@ -1,30 +1,30 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { envPath, repoRoot } from './env.js';
 import { hostConfigProblem, resolveHostConfig, type HostConfig } from './hosts/env.js';
 import { parseToolsetsEnv } from './toolsets.js';
 
-// Load .env from the repo root regardless of the process's CWD, so the server picks up its
-// config whether it's launched from the repo root or wired into Claude Code from another directory.
-// The compiled file lives at <repo>/dist/config.js, so the repo-root .env is one level up.
-// (If import.meta.url is ever unavailable — e.g. an esbuild bundle replaces it with a sentinel —
-// fileURLToPath throws and we fall back to dotenv's default CWD lookup.)
+// Layer the family's .env (src/env.ts: <repo>/.env, or FVTT_MCP_ENV) UNDER process.env, whatever
+// the process's cwd — the server is launched by an MCP client from anywhere. dotenv never
+// overrides a variable that is already set, which is what lets a registration's `env` block beat
+// the shared file. (If import.meta.url is ever unavailable — an esbuild bundle replacing it with a
+// sentinel — envPath throws and we fall back to dotenv's default cwd lookup.)
 try {
-  dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') });
+  dotenv.config({ path: envPath() });
 } catch {
   dotenv.config();
 }
 
 /**
- * Single source of truth for the version the MCP server advertises: package.json (one level up
- * from the compiled dist/config.js). Reading it here keeps the wire version, the npm package
- * version, and the docs from drifting apart. Falls back gracefully if the file can't be read.
+ * Single source of truth for the version the MCP server advertises: package.json at the repo
+ * root. Reading it here keeps the wire version, the npm package version, and the docs from
+ * drifting apart. Falls back gracefully if the file can't be read.
  */
 function readPackageVersion(): string {
   try {
-    const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), '../package.json');
+    const pkgPath = resolve(repoRoot(), 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string };
     return pkg.version ?? '0.0.0';
   } catch {

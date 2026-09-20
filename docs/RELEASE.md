@@ -3,7 +3,8 @@
 > The default `npm test` gate is fast but **mocks `foundry.call`** — it proves Node-side arg shaping and
 > the pure page-side logic, **not** that the code which mutates the live Foundry DB actually works. The
 > live integration suite is the gate for that, and it is **off by default**. Before tagging a release, run
-> it against a live Molten world so a green tag means the write paths were exercised end-to-end.
+> it against a live world — the local sandbox by preference — so a green tag means the write paths
+> were exercised end-to-end.
 
 ## Before every release tag
 
@@ -16,18 +17,16 @@
    npm run knip
    ```
 
-2. **Live integration suite green** — needs a live Molten box and a populated `.env`
-   (`FOUNDRY_URL`, `FOUNDRY_WAKE_URL`, `FOUNDRY_USER`, and `FOUNDRY_ADMIN_KEY` (+ `FOUNDRY_WORLD_ID`)
-   for a cold-box launch). This runs `npm run build` first, then the suites that page-eval-inspect the
-   real data model:
-   ```sh
-   RUN_LIVE=1 npm run test:integration
-   ```
-   Against the LOCAL sandbox instead of prod (the house preference — prod stays pure), prefix the
-   host; the same switch works for every `scripts/verify-*.mjs` (`FOUNDRY_PROFILE=local` is an alias):
+2. **Live integration suite green** — the host `FOUNDRY_HOST` selects, from the same `.env` the
+   server reads (`FOUNDRY_URL`, `FOUNDRY_USER`, `FOUNDRY_ADMIN_KEY` for a cold launch; a wake URL on
+   a host that sleeps). The house gate is the LOCAL sandbox (prod stays pure); the same switch works
+   for every `scripts/verify-*.mjs`. This runs `npm run build` first, then the suites that
+   page-eval-inspect the real data model:
    ```sh
    FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration
    ```
+   Without `FOUNDRY_HOST` the run targets `generic` (whatever `FOUNDRY_URL` names); with a
+   placeholder URL every suite skips and says why.
    Confirm these suites actually ran (not skipped) and passed:
    - `tests/integration/pc.int.test.ts` — PC build + advancement (HP, spell slots, multiclass, subclass,
      **zero unresolved @scale**).
