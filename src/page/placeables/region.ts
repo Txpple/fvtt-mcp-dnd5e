@@ -37,7 +37,13 @@ import {
 } from '../../utils/dnd5e-canonical.js';
 import { resolveEffectRefs, type ResolvedEffect } from '../dnd5e/effect-refs.js';
 import { TOKEN_DISPOSITION } from '../dnd5e/token-defaults.js';
-import { gridRectShape, resolveSceneStrict, sceneGrid, TOM_CARTOS_FLAG_SCOPE } from '../scenes.js';
+import {
+  gridRectShape,
+  resolveSceneStrict,
+  resolveTargetScene,
+  sceneGrid,
+  TOM_CARTOS_FLAG_SCOPE,
+} from '../scenes.js';
 
 // --- dnd5e 6.0 behavior conveniences (pure) --------------------------------------
 
@@ -612,7 +618,7 @@ export async function createSceneTeleporter(args: {
  */
 export async function addRegionBehavior(
   args: {
-    sceneIdentifier: string;
+    sceneIdentifier?: string;
     regionIdentifier: string;
     type: string;
     name?: string;
@@ -621,10 +627,9 @@ export async function addRegionBehavior(
     teleportTo?: { sceneIdentifier: string; regionIdentifier: string };
   } & Dnd5eBehaviorOpts
 ): Promise<Record<string, unknown>> {
-  if (!args?.sceneIdentifier) throw new Error('sceneIdentifier is required');
   if (!args?.regionIdentifier) throw new Error('regionIdentifier is required');
   if (!args?.type) throw new Error('type is required');
-  const scene = resolveSceneStrict(args.sceneIdentifier);
+  const scene = resolveTargetScene(args.sceneIdentifier);
   if (!scene) return { success: true, notFound: args.sceneIdentifier };
   const region = resolveRegionStrict(scene, args.regionIdentifier);
   if (!region) {

@@ -14,7 +14,7 @@
 // name→id resolution, the coordinate anchor) lives in the descriptor, NOT here — same "tools own
 // correctness" rule as the rest of src/page.
 
-import { resolveSceneStrict } from './scenes.js';
+import { resolveTargetScene } from './scenes.js';
 
 /** One create-doc result: the built document, OR a per-item error (isolated), plus any warnings. */
 export interface CreateDocResult {
@@ -82,15 +82,14 @@ export interface CrudCreateResult {
  */
 export async function crudCreate(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier: string; items: any[] }
+  args: { sceneIdentifier?: string; items: any[] }
 ): Promise<CrudCreateResult> {
   if (!desc.toCreateDoc) throw new Error(`${desc.docName}: create is not supported`);
-  if (!args?.sceneIdentifier) throw new Error('sceneIdentifier is required');
-  if (!Array.isArray(args.items) || args.items.length === 0) {
+  if (!Array.isArray(args?.items) || args.items.length === 0) {
     throw new Error('items array is required and must contain at least one entry');
   }
-  const scene = resolveSceneStrict(args.sceneIdentifier);
-  if (!scene) return { success: true, created: 0, notFound: args.sceneIdentifier };
+  const scene = resolveTargetScene(args.sceneIdentifier);
+  if (!scene) return { success: true, created: 0, notFound: args.sceneIdentifier! };
 
   const data: Array<Record<string, unknown>> = [];
   const errors: string[] = [];
@@ -142,6 +141,8 @@ export interface CrudListResult {
   notFound?: string;
   sceneId?: string;
   sceneName?: string;
+  /** Whether the listed scene is the world's active one (the default when no identifier is given). */
+  sceneActive?: boolean;
   count?: number;
   items?: Array<Record<string, unknown>>;
 }
@@ -149,13 +150,19 @@ export interface CrudListResult {
 /** List every placeable of one type on a scene (id + salient fields via `dump`). Read-only. */
 export function crudList(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier: string }
+  args?: { sceneIdentifier?: string }
 ): CrudListResult {
-  if (!args?.sceneIdentifier) throw new Error('sceneIdentifier is required');
-  const scene = resolveSceneStrict(args.sceneIdentifier);
-  if (!scene) return { found: false, notFound: args.sceneIdentifier };
+  const scene = resolveTargetScene(args?.sceneIdentifier);
+  if (!scene) return { found: false, notFound: args!.sceneIdentifier! };
   const items = toArray(desc.collection(scene)).map(d => desc.dump(d));
-  return { found: true, sceneId: scene.id, sceneName: scene.name, count: items.length, items };
+  return {
+    found: true,
+    sceneId: scene.id,
+    sceneName: scene.name,
+    sceneActive: scene.active === true,
+    count: items.length,
+    items,
+  };
 }
 
 export interface CrudUpdateResult {
@@ -177,15 +184,14 @@ export interface CrudUpdateResult {
  */
 export async function crudUpdate<P extends { id: string }>(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier: string; patches: P[] }
+  args: { sceneIdentifier?: string; patches: P[] }
 ): Promise<CrudUpdateResult> {
   if (!desc.buildPatch) throw new Error(`${desc.docName}: update is not supported`);
-  if (!args?.sceneIdentifier) throw new Error('sceneIdentifier is required');
-  if (!Array.isArray(args.patches) || args.patches.length === 0) {
+  if (!Array.isArray(args?.patches) || args.patches.length === 0) {
     throw new Error('patches array is required and must contain at least one entry');
   }
-  const scene = resolveSceneStrict(args.sceneIdentifier);
-  if (!scene) return { success: true, matched: 0, updated: 0, notFound: args.sceneIdentifier };
+  const scene = resolveTargetScene(args.sceneIdentifier);
+  if (!scene) return { success: true, matched: 0, updated: 0, notFound: args.sceneIdentifier! };
   const coll = desc.collection(scene);
 
   const updates: Array<Record<string, unknown>> = [];
@@ -239,14 +245,13 @@ export interface CrudDeleteResult {
 /** Delete N placeables of one type by id. Partitions present vs notFoundIds, one batched call. */
 export async function crudDelete(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier: string; ids: string[] }
+  args: { sceneIdentifier?: string; ids: string[] }
 ): Promise<CrudDeleteResult> {
-  if (!args?.sceneIdentifier) throw new Error('sceneIdentifier is required');
-  if (!Array.isArray(args.ids) || args.ids.length === 0) {
+  if (!Array.isArray(args?.ids) || args.ids.length === 0) {
     throw new Error('ids array is required and must contain at least one entry');
   }
-  const scene = resolveSceneStrict(args.sceneIdentifier);
-  if (!scene) return { success: true, deleted: 0, notFound: args.sceneIdentifier };
+  const scene = resolveTargetScene(args.sceneIdentifier);
+  if (!scene) return { success: true, deleted: 0, notFound: args.sceneIdentifier! };
   const coll = desc.collection(scene);
 
   const present = args.ids.filter(id => coll?.get?.(id));

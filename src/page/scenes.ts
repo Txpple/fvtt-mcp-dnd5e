@@ -321,9 +321,11 @@ function tokenDisposition(disposition: unknown): number {
  * Throws if there is no active scene.
  */
 export function getActiveScene(): unknown {
-  const scene = game.scenes?.current;
+  // The ACTIVE scene (one per world), not `game.scenes.current` — the bridge's viewed scene,
+  // which screenshot-scene's view() moves.
+  const scene = game.scenes?.active;
   if (!scene) {
-    throw new Error('Scene not found');
+    throw new Error('No active scene in this world');
   }
 
   return {
@@ -1281,6 +1283,21 @@ export function resolveSceneStrict(identifier: string): any {
   return (
     game.scenes?.get(identifier) || game.scenes?.find((s: any) => s.name === identifier) || null
   );
+}
+
+/**
+ * The scene a placeable tool targets: the identifier when one is given (strict — null when it
+ * does not resolve, so the caller reports the miss), else `game.scenes.active` — the ONE
+ * world-wide active scene, the same answer for every client (never `game.scenes.current`, the
+ * bridge's own viewed scene, which a screenshot-scene view() moves). No active scene throws.
+ */
+export function resolveTargetScene(identifier?: string): any {
+  if (identifier) return resolveSceneStrict(identifier);
+  const active = game.scenes?.active ?? null;
+  if (!active) {
+    throw new Error('No active scene in this world — pass sceneIdentifier or activate-scene first');
+  }
+  return active;
 }
 
 /**

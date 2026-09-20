@@ -125,11 +125,12 @@ describe('tile handlers', () => {
 
   it('create-tiles reports scene-not-found and rejects invalid input', async () => {
     const { tools } = build({ success: true, created: 0, notFound: 'Nowhere' });
-    const out = await tools.handle('create-tiles', {
-      sceneIdentifier: 'Nowhere',
-      tiles: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
-    });
-    expect(out).toBe('Scene not found: "Nowhere". No tiles created.');
+    await expect(
+      tools.handle('create-tiles', {
+        sceneIdentifier: 'Nowhere',
+        tiles: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
+      })
+    ).rejects.toThrow('Scene not found: "Nowhere". No tiles created.');
     await expect(
       tools.handle('create-tiles', {
         sceneIdentifier: 'Cave',
@@ -155,8 +156,8 @@ describe('tile handlers', () => {
     expect(out).toEqual(result);
 
     const { tools: t2 } = build({ found: false, notFound: 'Ghost' });
-    expect(await t2.handle('list-tiles', { sceneIdentifier: 'Ghost' })).toBe(
-      'Scene not found: "Ghost" (no tiles).'
+    await expect(t2.handle('list-tiles', { sceneIdentifier: 'Ghost' })).rejects.toThrow(
+      'Scene not found: "Ghost". No tiles listed.'
     );
   });
 
@@ -629,11 +630,12 @@ describe('note handlers', () => {
     expect(out).toContain('warning(s):');
 
     const { tools: t2 } = build({ success: true, created: 0, notFound: 'Ghost' });
-    const out2 = await t2.handle('create-scene-notes', {
-      sceneIdentifier: 'Ghost',
-      notes: [{ journal: 'X', x: 1, y: 2 }],
-    });
-    expect(out2).toBe('Scene not found: "Ghost". No map-note pins created.');
+    await expect(
+      t2.handle('create-scene-notes', {
+        sceneIdentifier: 'Ghost',
+        notes: [{ journal: 'X', x: 1, y: 2 }],
+      })
+    ).rejects.toThrow('Scene not found: "Ghost". No map-note pins created.');
   });
 
   it('update-note wraps the single note into a kernel patch and confirms', async () => {
@@ -709,9 +711,9 @@ describe('note handlers', () => {
     expect(out).toContain('1 id(s) not found: ghost');
 
     const { tools: t2 } = build({ success: true, deleted: 0, notFound: 'Ghost' });
-    expect(await t2.handle('delete-note', { sceneIdentifier: 'Ghost', noteIds: ['a'] })).toBe(
-      'Scene not found: "Ghost". Nothing deleted.'
-    );
+    await expect(
+      t2.handle('delete-note', { sceneIdentifier: 'Ghost', noteIds: ['a'] })
+    ).rejects.toThrow('Scene not found: "Ghost". Nothing deleted.');
   });
 });
 
@@ -744,11 +746,12 @@ describe('region handlers', () => {
         regions: [{ name: 'X', shapes: [] }],
       })
     ).rejects.toThrow();
-    const out = await tools.handle('create-region', {
-      sceneIdentifier: 'Nowhere',
-      regions: [{ shapes: [{ type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }] }],
-    });
-    expect(out).toContain('Scene not found');
+    await expect(
+      tools.handle('create-region', {
+        sceneIdentifier: 'Nowhere',
+        regions: [{ shapes: [{ type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }] }],
+      })
+    ).rejects.toThrow('Scene not found');
   });
 
   it('update-region wraps the single region into a kernel patch and reports the new shape', async () => {
@@ -829,7 +832,7 @@ describe('region handlers', () => {
     expect(out).toEqual(result);
 
     const { tools: t2 } = build({ found: false, notFound: 'Nope' });
-    expect(await t2.handle('list-regions', { sceneIdentifier: 'Nope' })).toContain(
+    await expect(t2.handle('list-regions', { sceneIdentifier: 'Nope' })).rejects.toThrow(
       'Scene not found'
     );
   });

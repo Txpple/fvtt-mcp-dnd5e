@@ -20,7 +20,7 @@ import {
   formatDeletePlaceables,
   formatListPlaceables,
 } from '../../utils/placeable-format.js';
-import { type PlaceableModuleFactory } from './_module.js';
+import { type PlaceableModuleFactory, sceneTarget } from './_module.js';
 
 const RegionShapeSchema = z.object({ type: z.string().optional() }).passthrough();
 const RegionBehaviorSchema = z
@@ -28,7 +28,7 @@ const RegionBehaviorSchema = z
   .passthrough();
 
 const CreateRegionSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name to add the region(s) to.'),
+  sceneIdentifier: sceneTarget,
   regions: z
     .array(
       z.object({
@@ -61,13 +61,11 @@ const CreateRegionSchema = z.object({
     .describe('One or more regions to create.'),
 });
 
-const ListRegionsSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name.'),
-});
+const ListRegionsSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateRegionSchema = z
   .object({
-    sceneIdentifier: z.string().min(1).describe('Scene id or exact name holding the region.'),
+    sceneIdentifier: sceneTarget,
     regionId: z
       .string()
       .min(1)
@@ -117,7 +115,7 @@ const UpdateRegionSchema = z
   );
 
 const DeleteRegionSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name holding the region(s).'),
+  sceneIdentifier: sceneTarget,
   regionIds: z.array(z.string().min(1)).min(1).describe('Region ids to delete.'),
 });
 
@@ -168,7 +166,7 @@ const CreateTeleporterSchema = z.object({
 });
 
 const AddRegionBehaviorSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name holding the region.'),
+  sceneIdentifier: sceneTarget,
   regionIdentifier: z
     .string()
     .min(1)

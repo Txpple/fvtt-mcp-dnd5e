@@ -34,8 +34,8 @@ describe('formatCreatePlaceables', () => {
     expect(out).toContain('- w1');
   });
 
-  it('short-circuits on a not-found scene', () => {
-    expect(formatCreatePlaceables({ notFound: 'Ghost' }, 'light')).toBe(
+  it('throws a curated error on a not-found scene (isError on the wire, never prose)', () => {
+    expect(() => formatCreatePlaceables({ notFound: 'Ghost' }, 'light')).toThrow(
       'Scene not found: "Ghost". No lights created.'
     );
   });
@@ -47,9 +47,9 @@ describe('formatListPlaceables', () => {
     expect(formatListPlaceables(r, 'tile')).toBe(r);
   });
 
-  it('renders a not-found scene as a message', () => {
-    expect(formatListPlaceables({ found: false, notFound: 'Ghost' }, 'tile')).toBe(
-      'Scene not found: "Ghost" (no tiles).'
+  it('throws a curated error on a not-found scene', () => {
+    expect(() => formatListPlaceables({ found: false, notFound: 'Ghost' }, 'tile')).toThrow(
+      'Scene not found: "Ghost". No tiles listed.'
     );
   });
 });
@@ -72,8 +72,8 @@ describe('formatUpdatePlaceables', () => {
     expect(out).toContain('not found: x, y');
   });
 
-  it('short-circuits on a not-found scene', () => {
-    expect(formatUpdatePlaceables({ notFound: 'Ghost' }, 'tile')).toBe(
+  it('throws a curated error on a not-found scene', () => {
+    expect(() => formatUpdatePlaceables({ notFound: 'Ghost' }, 'tile')).toThrow(
       'Scene not found: "Ghost". Nothing changed.'
     );
   });
@@ -88,8 +88,8 @@ describe('formatDeletePlaceables', () => {
     expect(out).toBe('Deleted 1 tile(s) from "Cave" (sc1) (1 id(s) not found: ghost).');
   });
 
-  it('short-circuits on a not-found scene', () => {
-    expect(formatDeletePlaceables({ notFound: 'Ghost' }, 'tile')).toBe(
+  it('throws a curated error on a not-found scene', () => {
+    expect(() => formatDeletePlaceables({ notFound: 'Ghost' }, 'tile')).toThrow(
       'Scene not found: "Ghost". Nothing deleted.'
     );
   });

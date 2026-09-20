@@ -49,11 +49,7 @@ const DeleteTokensSchema = z.object({
 // --- update-token (bespoke — actor→all-copies matching + the lockRotation gotcha) ---
 const UpdateTokenSchema = z
   .object({
-    sceneIdentifier: z
-      .string()
-      .min(1)
-      .optional()
-      .describe('Scene id or exact name holding the token(s). Omit to use the ACTIVE scene.'),
+    sceneIdentifier: sceneTarget,
     tokenIds: z
       .array(z.string().min(1))
       .optional()

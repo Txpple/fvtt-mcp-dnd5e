@@ -3,6 +3,14 @@
 // The four string renderers every per-type placeable tool would otherwise duplicate, lifted from the
 // hand-written Region/Note handlers so a new type's four handlers become one-liners. Pure string/JSON
 // shaping — no I/O. `noun` is the singular placeable name (e.g. "tile"), rendered as "N tile(s)".
+// A scene that does not resolve is an ERROR (FormattedToolError → isError on the wire), never a
+// prose "not found" inside a success-shaped result.
+
+import { FormattedToolError } from './error-handler.js';
+
+function sceneMiss(notFound: string, tail: string): never {
+  throw new FormattedToolError(`Scene not found: "${notFound}". ${tail}`);
+}
 
 interface CreateResult {
   notFound?: string;
@@ -45,7 +53,7 @@ function warningBlock(warnings?: string[]): string {
 
 /** "Created N tile(s) on "Scene" (id)" + one line per created id, + per-item errors + warnings. */
 export function formatCreatePlaceables(r: CreateResult, noun: string): string {
-  if (r?.notFound) return `Scene not found: "${r.notFound}". No ${noun}s created.`;
+  if (r?.notFound) sceneMiss(r.notFound, `No ${noun}s created.`);
   // Display label: `name` where the type has one, else `text` (a Note pin's label lives there).
   const lines = Array.isArray(r?.items)
     ? r.items
@@ -66,13 +74,13 @@ export function formatCreatePlaceables(r: CreateResult, noun: string): string {
 
 /** List: pass the structured result straight through (ids + fields), or a not-found message. */
 export function formatListPlaceables(r: ListResult, noun: string): unknown {
-  if (r?.found === false) return `Scene not found: "${r?.notFound}" (no ${noun}s).`;
+  if (r?.found === false) sceneMiss(r?.notFound ?? '', `No ${noun}s listed.`);
   return r;
 }
 
 /** "Updated N of M matched tile(s) on "Scene" (id)" + unresolved ids + warnings. */
 export function formatUpdatePlaceables(r: UpdateResult, noun: string): string {
-  if (r?.notFound) return `Scene not found: "${r.notFound}". Nothing changed.`;
+  if (r?.notFound) sceneMiss(r.notFound, 'Nothing changed.');
   const missing =
     Array.isArray(r?.notFoundIds) && r.notFoundIds.length > 0
       ? `\n  (not found: ${r.notFoundIds.join(', ')})`
@@ -90,7 +98,7 @@ export function formatUpdatePlaceables(r: UpdateResult, noun: string): string {
 
 /** "Deleted N tile(s) from "Scene" (id)" + a not-found-ids tail + integrity warnings. */
 export function formatDeletePlaceables(r: DeleteResult, noun: string): string {
-  if (r?.notFound) return `Scene not found: "${r.notFound}". Nothing deleted.`;
+  if (r?.notFound) sceneMiss(r.notFound, 'Nothing deleted.');
   const missing =
     Array.isArray(r?.notFoundIds) && r.notFoundIds.length > 0
       ? ` (${r.notFoundIds.length} id(s) not found: ${r.notFoundIds.join(', ')})`

@@ -18,7 +18,7 @@ import {
 } from '../_placeables.js';
 import { normalizeAssetPath } from '../_shared.js';
 import { imgResolves } from '../img-resolve.js';
-import { resolveSceneStrict } from '../scenes.js';
+import { resolveTargetScene } from '../scenes.js';
 
 const DISPOSITION_NAME: Record<number, string> = {
   [-2]: 'secret',
@@ -310,17 +310,8 @@ export async function updateSceneTokens(
   warnings?: string[];
   unmatched?: { tokenIds?: string[]; actorIds?: string[] };
 }> {
-  const scene = args?.sceneIdentifier
-    ? resolveSceneStrict(args.sceneIdentifier)
-    : (game.scenes?.current ?? null);
-  if (!scene) {
-    return {
-      success: true,
-      matched: 0,
-      updated: 0,
-      notFound: args?.sceneIdentifier ?? '(no active scene)',
-    };
-  }
+  const scene = resolveTargetScene(args?.sceneIdentifier);
+  if (!scene) return { success: true, matched: 0, updated: 0, notFound: args!.sceneIdentifier! };
 
   // Resolve actor targets (id or exact name) → a set of actor ids; collect names that resolved to nothing.
   const wantActorIds = new Set<string>();
