@@ -1,5 +1,5 @@
 // Measure what a client actually RECEIVES per tool call — the bytes of tools/call results over the
-// real stdio server (dist/index.js), after capResponse — for a curated set of read-only tools.
+// real stdio server (dist/index.js), after the response cap — for a curated set of read-only tools.
 // This is the number that costs context in Claude Code (where tool schemas are deferred and the
 // results are the bulk of what an MCP puts into the conversation).
 //
@@ -43,8 +43,8 @@ const CALLS = [
   ['list-users', {}],
   ['list-compendium-packs', {}],
   ['search-compendium', { query: 'sword' }],
-  ['search-compendium-creatures', { query: 'goblin' }],
-  ['search-compendium-spells', { query: 'fire' }],
+  ['search-compendium-creatures', { name: 'goblin' }],
+  ['search-compendium-spells', { name: 'fire' }],
   ['list-chat-messages', { limit: 50 }],
   ['list-tokens', {}],
   ['list-walls', {}],

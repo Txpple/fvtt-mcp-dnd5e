@@ -128,6 +128,16 @@ This is the architectural backbone that makes principle #1 real.
   answer is usually a *new or extended tool*, not a skill workaround.
 - **A skill is a playbook.** It encodes "how a good DM would do this," not "which property to set." If
   a skill keeps re-deriving the same correctness detail, that detail belongs *down* in a tool.
+- **A result has a shape by kind, and it is a diet.** A tool returns what a skill decides on — ids,
+  names, the documented fields — never what is merely available (art paths, echoes of the
+  arguments, doctrine prose, counts a client can take from an array). **List / search** results are
+  one line per record in a fixed, documented field order under a header `<N> <noun>(s)` (`of M`
+  when cut); a search body always says `totalFound`, the full match count. **Single reads**
+  (`get-*`) are JSON with a `compact` / `fields` selector. **Mutations** are a one-line
+  confirmation plus warnings. **A miss is an error** (`isError`), never a prose "not found" inside
+  a success-shaped result. An unknown argument is refused by name, never stripped. A result over
+  the response cap is cut at record boundaries with a `truncation` stamp, never mid-record.
+  (Decision #10 of the 3.0 plan; the line format lands per family as each is consolidated.)
 - **The boundary is the test.** Before adding code, decide which side it's on. Mixed-concern code is
   the thing this contract exists to prevent.
 
