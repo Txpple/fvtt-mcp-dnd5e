@@ -224,7 +224,7 @@ src/
   config.ts         env/config loader (reads .env from the repo root; FOUNDRY_HOST picks the host)
   tools/            MCP tool classes — Plane A world tools + assets/ (Plane B file tools over the host's plane)
   page/             page-side domain library, bundled into dist/page.bundle.js and injected
-scripts/            dev/maintenance scripts (verify-*.mjs live acceptance, spike-headless)
+scripts/            the live proof (verify-*.mjs), the sandbox toolkit, the measurements — scripts/README.md
   measure/          the context budgets — tools/list bytes, tool-name bytes, skill descriptions (`npm run measure`)
 tests/              gated live integration suites (offline unit tests live beside the code in src/**)
 ```

@@ -4,8 +4,8 @@
 // (design.md §7): type:character + advancement (which resolves @scale.* natively), never bolted onto
 // createNpcActor.
 //
-// The whole approach is de-risked by scripts/spike-pc-build.mjs (11/11 on sandbox). The non-obvious
-// findings it proved, encoded below:
+// The whole approach is de-risked by the pc-build spike (7b87026, 11/11 on the sandbox; archived
+// under docs/history/spikes/). The non-obvious findings it proved, encoded below:
 //   • Advancement levels can be STRINGS ("0"/"1") — ALWAYS coerce to Number before matching.
 //   • Species + background creation features live at advancement level 0; class features at level 1.
 //     So a level-1 PC applies the union of levels {0,1} across class + species + background.
@@ -640,7 +640,7 @@ async function embedClassAndApply(
   );
 
   // Subclass (level 3+): the class's Subclass advancement EMBEDS the subclass item but does NOT run its
-  // own advancements; run them now so subclass features land (proven: scripts/spike-pc-level.mjs).
+  // own advancements; run them now so subclass features land (proven by the pc-level spike, 8307520).
   // Matched by classIdentifier so a multiclass build never runs class A's subclass against class B.
   const classId = classDoc.system?.identifier;
   const subclassItem = tmp.items.find(
@@ -1095,7 +1095,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
 // levelUpPc — add ONE class level to an existing persisted PC (the page op behind level-up-pc).
 //
 // Same class as a current one → a single-class level-up; a class the PC doesn't have → a MULTICLASS
-// add. Mutates the actor IN PLACE (proven in scripts/spike-pc-v3.mjs): bump/embed the class, apply
+// add. Mutates the actor IN PLACE (proven by the pc-v3 spike, 7436136): bump/embed the class, apply
 // ONLY the new level's advancements (prior value-state is preserved, so L1..N don't re-apply, and the
 // classRestriction filter gives a multiclass its 2024 proficiency subset), then persist via
 // actor.update(toObject). Ability-score increases at ASI tiers stay the skill's job (final scores +

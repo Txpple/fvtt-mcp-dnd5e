@@ -22,8 +22,7 @@ for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r
 }
 
 const TAG = 'ZZ-REGION-IT';
-const BG =
-  'worlds/the-broken-heart-of-greenrest/assets/tom-cartos/tomcartos-troll-bridge/maps/TC_Troll Bridge Wreckage_No Grid_22x17.webp';
+const BG = 'icons/svg/dice-target.svg'; // always present in core Foundry (explicit dimensions below)
 let passes = 0;
 let fails = 0;
 function assert(cond, msg) {

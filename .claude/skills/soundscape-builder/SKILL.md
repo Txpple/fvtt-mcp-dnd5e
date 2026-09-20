@@ -336,7 +336,7 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
 7. **`remove` with `setIdentifier: "all"` clears the entire scene.** Only on an explicit ask, and say
    what you're about to delete first.
 
-8. **If the library files ever move**, existing scene sets break. `scripts/remap-soundscape-scene-paths.mjs`
+8. **If the library files ever move**, existing scene sets break. `fvtt-mod-soundscape-sfx/tools/remap-soundscape-scene-paths.mjs`
    (`--dry` first) repoints every scene by basename — that's a maintenance script, not something to
    run mid-authoring.
 

@@ -172,6 +172,39 @@ export function quietLogger(): Logger {
 }
 
 /**
+ * The `new Foundry(...)` config for a host and an identity, with the Host attached (so the bridge
+ * can wake a sleeping instance and the caller can reach `cfg.host.files`). For a script that
+ * manages its own connect / dispose; `connectFoundry` is this plus the harness around it.
+ * A placeholder FOUNDRY_URL is refused here, naming the .env it read.
+ */
+export function foundryConfig(
+  env: Env,
+  kind: HostKind = hostKindFromEnv(process.env),
+  identity: Identity = 'bridge'
+): FoundryConfig & { host: Host } {
+  const hostConfig = resolveHostConfig(env, kind);
+  const problem = hostConfigProblem(hostConfig);
+  if (problem) throw new Error(`${problem} (.env: ${envPath()})`);
+  const who = resolveIdentity(identity, env, hostConfig);
+  const base = bridgeConfigOf(hostConfig);
+  return {
+    serverUrl: base.serverUrl,
+    user: who.user,
+    ...(who.password ? { password: who.password } : {}),
+    // A player never launches the world (and is not allowed to): the world is up by the time a
+    // second client joins.
+    ...(base.adminKey && identity !== 'player' ? { adminKey: base.adminKey } : {}),
+    ...(base.worldId ? { worldId: base.worldId } : {}),
+    host: createHost(hostConfig, quietLogger()),
+  };
+}
+
+/** The one-line target announcement a script prints before it connects (stderr). */
+export function targetLabel(kind: HostKind): string {
+  return kind === 'local' ? 'local sandbox' : kind === 'molten' ? 'prod (Molten)' : kind;
+}
+
+/**
  * Connect to the selected Foundry as the given identity: the harness every sibling had copied
  * (read the .env, pick the host, build the config, arm a watchdog, `new Foundry`, `connect`)
  * in one call. Returns the live bridge; `dispose()` is the raced teardown.
@@ -183,26 +216,16 @@ export async function connectFoundry(opts: ConnectOptions = {}): Promise<Connect
   const tag = opts.tag ?? 'client';
   const env = opts.env ?? loadEnv();
   const kind = opts.host ?? hostKindFromEnv(process.env);
+  let cfg: FoundryConfig & { host: Host };
+  try {
+    cfg = foundryConfig(env, kind, opts.identity ?? 'bridge');
+  } catch (err) {
+    throw new Error(`[${tag}] ${(err as Error).message}`);
+  }
+  const { host } = cfg;
   const hostConfig = resolveHostConfig(env, kind);
-  const problem = hostConfigProblem(hostConfig);
-  if (problem) throw new Error(`[${tag}] ${problem} (.env: ${envPath()})`);
-  const identity = opts.identity ?? 'bridge';
-  const who = resolveIdentity(identity, env, hostConfig);
-  const host = createHost(hostConfig, quietLogger());
-  const base = bridgeConfigOf(hostConfig);
-  const cfg: FoundryConfig = {
-    serverUrl: base.serverUrl,
-    user: who.user,
-    ...(who.password ? { password: who.password } : {}),
-    // A player never launches the world (and is not allowed to): the world is up by the time a
-    // second client joins.
-    ...(base.adminKey && identity !== 'player' ? { adminKey: base.adminKey } : {}),
-    ...(base.worldId ? { worldId: base.worldId } : {}),
-    host,
-  };
   if (opts.announce ?? true) {
-    const label = kind === 'local' ? 'local sandbox' : kind === 'molten' ? 'prod (Molten)' : kind;
-    console.error(`[${tag}] target: ${label} (${cfg.serverUrl}) as "${who.user}"`);
+    console.error(`[${tag}] target: ${targetLabel(kind)} (${cfg.serverUrl}) as "${cfg.user}"`);
   }
 
   let watchdog: NodeJS.Timeout | undefined;

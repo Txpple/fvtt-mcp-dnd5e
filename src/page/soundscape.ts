@@ -29,7 +29,7 @@ export const SOUNDSCAPE_MODULE_ID = 'fvtt-mod-soundscape';
 /**
  * The prebaked template manifest, at the Data ROOT rather than inside the module folder — Foundry's
  * installPackage clean-reinstalls `modules/<id>/` on every update and would wipe a library stored
- * there. Written by scripts/upload-soundscape-library.mjs.
+ * there. Written by fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs.
  */
 export const SOUNDSCAPE_LIBRARY_PATH = 'soundscape-sfx/library.json';
 
@@ -445,7 +445,7 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promis
         matches: [],
         warnings: [
           `no template library at "${SOUNDSCAPE_LIBRARY_PATH}" — sets can still be authored by ` +
-            'passing explicit `files` paths. Run scripts/upload-soundscape-library.mjs to publish one.',
+            'passing explicit `files` paths. Publish one with fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs.',
         ],
       };
     }
@@ -565,7 +565,7 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promis
       if (!templates) {
         throw new Error(
           `Cannot add from template: no library at "${SOUNDSCAPE_LIBRARY_PATH}". Pass explicit ` +
-            '`files` instead, or publish a library (scripts/upload-soundscape-library.mjs).'
+            '`files` instead, or publish a library (fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs).'
         );
       }
       const match = resolveTemplate(templates, args.template, args);

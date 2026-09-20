@@ -146,7 +146,7 @@ export function getActorOwnership(args?: {
  * Both paths write the whole ownership object with `{ diff: false, recursive: false }`.
  * That is load-bearing for the delete: the `{"ownership.-=<id>": null}` deletion idiom
  * SILENTLY NO-OPS on this field (verified live 2026-08-12 — it left 14 stale entries
- * across three actors; see scripts/clean-stale-ownership.mjs), and a recursive update
+ * across three actors; see fvtt-mod-partystash/tools/clean-stale-ownership.mjs), and a recursive update
  * would merge the removed key straight back in.
  *
  * Best-effort: returns a { success, message, error? } result rather than throwing.

@@ -1,22 +1,15 @@
 // Live acceptance for update-actor's prototype-token DISPLAY fields (tokenDisplayName /
 // tokenDisplayBars): drive the tool's bridge path on a real actor and read the prototype back.
-//   node scripts/verify-token-display.mjs [actorId]     # default: a Greenrest "Extras" actor
-// Build first if dist is stale: npm run build.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+//   FOUNDRY_HOST=local node scripts/verify-token-display.mjs [actorId]
+// Default: a throwaway ZZ-* NPC, created here and deleted in `finally`. Build first if dist is stale.
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
-
-const ACTOR = process.argv[2] || 'w4bENQ7PaWf8upSo'; // "Villager 01" (Greenrest > Extras > Crowds)
+const env = loadEnv();
+const TAG = 'ZZ-TOKEN-DISPLAY-IT';
+let ACTOR = process.argv[2] || '';
+let ownFixture = false;
 
 const f = new Foundry(bridgeConfig(env));
 
@@ -40,6 +33,14 @@ const check = (label, cond, detail = '') => {
 try {
   console.log('[verify-token-display] connecting…');
   await f.connect();
+  if (!ACTOR) {
+    const made = await f.evaluate(
+      async name => (await Actor.create({ name, type: 'npc' })).id,
+      TAG
+    );
+    ACTOR = made;
+    ownFixture = true;
+  }
   console.log(`[verify-token-display] connected; test actor ${ACTOR}\n`);
 
   // 1) set a visible mode via the tool path → expect the mapped numbers on the prototype.
@@ -90,5 +91,8 @@ try {
   console.log(`\n==== verify-token-display: ${fails ? `${fails} FAIL(s)` : 'PASS'} ====`);
   process.exitCode = fails ? 1 : 0;
 } finally {
+  if (ownFixture && ACTOR) {
+    await f.call('deleteActor', { identifiers: [ACTOR] }).catch(() => {});
+  }
   await f.dispose().catch(() => {});
 }

@@ -181,7 +181,7 @@ try {
   process.exitCode = 1;
 } finally {
   // Clean up the fixtures — a leftover user id on an actor is exactly the stale-entry mess
-  // scripts/clean-stale-ownership.mjs had to sweep up.
+  // fvtt-mod-partystash/tools/clean-stale-ownership.mjs had to sweep up.
   try {
     const left = await f.evaluate(
       async ids => {

@@ -1,36 +1,40 @@
-// Live acceptance for the NEW create-scene sidecar import (walls + lights from a
-// Foundry scene-export sidecar JSON that ships next to a battlemap). It builds
-// the real "Eerie Temple" scene from the user's Desktop scene folder
-// (map.jpg + map.json), then reads it back to assert the legacy→v14 conversion:
-// wall `sense`→`sight`(+`light`) with small-int→spaced enums, and flat light
-// fields nested under `config`. The scene is LEFT IN PLACE (it's a deliverable),
-// but any prior "Eerie Temple" is deleted first so the script is re-runnable.
+// Live acceptance for the create-scene sidecar import (walls + lights from a Foundry
+// scene-export sidecar JSON that ships next to a battlemap, in the LEGACY shape): the scene is
+// built from the sidecar, then read back to assert the legacy→v14 conversion — wall
+// `sense`→`sight`(+`light`) with small-int→spaced enums, and flat light fields nested under
+// `config`. The fixture is a ZZ-* scene over a core icon, deleted in `finally`; pass a real
+// sidecar with SCENE_SIDECAR=<path> to run the same checks against it.
 //
-// Prereq: the map image is already uploaded to BACKGROUND (see upload-asset).
-// Build first: npm run build. Run: node scripts/verify-scene-sidecar.mjs
+// Build first: npm run build. Run: FOUNDRY_HOST=local node scripts/verify-scene-sidecar.mjs
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCENE_NAME = 'Eerie Temple';
-// Machine-local fixture — set SCENE_SIDECAR to where the scene folder lives on this box.
-const SIDECAR = process.env.SCENE_SIDECAR ?? join(homedir(), 'Desktop', 'scene', 'map.json');
-const BACKGROUND = 'worlds/sandbox/assets/maps/eerie-temple.jpg';
+const SCENE_NAME = 'ZZ-SIDECAR-IT';
+const BACKGROUND = 'icons/svg/dice-target.svg'; // always present in core Foundry
 
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
+/** A legacy (pre-v14) Foundry scene export, stripped to what the converter reads. */
+const FIXTURE = {
+  width: 2800,
+  height: 2100,
+  grid: 100,
+  gridDistance: 5,
+  gridUnits: 'ft',
+  padding: 0.1,
+  gridColor: '#0f0f0f',
+  gridAlpha: 0.3,
+  globalLight: false,
+  darkness: 0.6,
+  walls: [
+    { c: [100, 100, 900, 100], move: 1, sense: 1, sound: 1, door: 0 },
+    { c: [900, 100, 900, 700], move: 1, sense: 2, sound: 1, door: 1 },
+  ],
+  lights: [
+    { x: 500, y: 400, dim: 30, bright: 15, tintColor: '#ff9a00', tintAlpha: 0.4, angle: 360 },
+    { x: 1500, y: 1200, dim: 20, bright: 10, tintColor: '#4a90e2', tintAlpha: 0.25, angle: 360 },
+  ],
+};
 
 const env = loadEnv();
 const foundry = new Foundry(bridgeConfig(env));
@@ -45,8 +49,11 @@ const fail = (n, e) => {
   console.log(`FAIL  ${n} -> ${e}`);
 };
 
+let createdId;
 try {
-  const sidecar = JSON.parse(readFileSync(SIDECAR, 'utf8'));
+  const sidecar = process.env.SCENE_SIDECAR
+    ? JSON.parse(readFileSync(process.env.SCENE_SIDECAR, 'utf8'))
+    : FIXTURE;
   console.log(
     `Sidecar: ${sidecar.walls?.length ?? 0} walls, ${sidecar.lights?.length ?? 0} lights, ` +
       `${sidecar.width}x${sidecar.height}px, grid ${sidecar.grid}px = ${sidecar.gridDistance}${sidecar.gridUnits}`
@@ -80,6 +87,7 @@ try {
       (created?.placeableErrors ? `, errs ${JSON.stringify(created.placeableErrors)}` : '')
   );
 
+  createdId = created?.sceneId;
   created?.sceneId ? pass('scene created', created.sceneId) : fail('scene created', 'no sceneId');
   created?.wallsCreated === sidecar.walls.length
     ? pass('all walls placed', `${created.wallsCreated}/${sidecar.walls.length}`)
@@ -176,6 +184,11 @@ try {
 } catch (e) {
   fail('SUITE', e?.stack || e?.message || String(e));
 } finally {
+  if (createdId) {
+    await foundry
+      .call('deleteScenes', { identifiers: [createdId] })
+      .catch(e => console.log(`(cleanup failed: ${e.message})`));
+  }
   await foundry.dispose?.();
   const failed = results.filter(r => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

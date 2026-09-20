@@ -3,7 +3,7 @@
  * coercion, the per-advancement choice summary, and the choice-satisfaction / missing-choice logic.
  * No Foundry globals — these guard the choice-data contract the engine + inspect-pc-advancement
  * expose, against plain mock advancement descriptors. The build/apply path is page-side and proven
- * live by scripts/spike-pc-build.mjs + scripts/verify-pc-build.mjs.
+ * live by the pc-build spike (7b87026, docs/history/spikes/) + scripts/verify-pc-build.mjs.
  */
 
 import { describe, it, expect } from 'vitest';
