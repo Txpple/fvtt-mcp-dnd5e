@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { buildToolRegistry } from '../registry.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
+import { TOOLSETS, TOOLSET_NAMES, parseToolsetsEnv } from '../toolsets.js';
 import { createHost, resolveHostConfig } from '../hosts/index.js';
 
 /** A generic host (no wake, no file plane) — enough for the registry to wire every tool. */
@@ -442,5 +443,72 @@ describe('tool registry', () => {
     expect(ops.filter(op => op === 'inspectAdvancementChoices').length).toBe(1);
     expect(ops.filter(op => op === 'levelUpPc').length).toBe(1);
     expect(ops.filter(op => op === 'createPcFromPrefab').length).toBe(1);
+  });
+});
+
+describe('toolsets (src/toolsets.ts) — a registration advertises a subset', () => {
+  it('every dispatchable tool is in exactly one toolset, and every listed tool dispatches', () => {
+    const { handlers } = build();
+    const seen = new Map<string, string>();
+    for (const set of TOOLSET_NAMES) {
+      for (const name of TOOLSETS[set]) {
+        expect(seen.has(name), `"${name}" listed in both ${seen.get(name)} and ${set}`).toBe(false);
+        seen.set(name, set);
+        expect(handlers[name], `toolset "${set}" lists "${name}" which has no handler`).toBeTypeOf(
+          'function'
+        );
+      }
+    }
+    const unlisted = Object.keys(handlers).filter(n => !seen.has(n));
+    expect(unlisted, 'handlers in no toolset').toEqual([]);
+    expect(seen.size).toBe(Object.keys(handlers).length);
+  });
+
+  it('unset = the whole surface, in every toolset', () => {
+    const { tools, enabledToolsets } = build();
+    expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
+    expect(tools.length).toBe(151);
+  });
+
+  it('a selection advertises only those toolsets — plus world, always', () => {
+    const { foundry } = makeFoundry();
+    const { tools, enabledToolsets } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      toolsets: ['chat', ' combat '],
+    });
+    expect([...enabledToolsets].sort()).toEqual(['chat', 'combat', 'world']);
+    const names = tools.map(t => t.name).sort();
+    expect(names).toEqual([...TOOLSETS.world, ...TOOLSETS.chat, ...TOOLSETS.combat].sort());
+    expect(names).not.toContain('create-scene');
+    expect(names).toContain('get-world-info');
+  });
+
+  it('a call outside the enabled toolsets is refused by name, not as an unknown tool', async () => {
+    const { foundry } = makeFoundry();
+    const { dispatch } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      toolsets: ['chat'],
+    });
+    await expect(dispatch('create-scene', {})).rejects.toThrow(
+      /"create-scene" is in the "scenes" toolset.*FOUNDRY_TOOLSETS=world,chat/
+    );
+    await expect(dispatch('not-a-tool', {})).rejects.toThrow(/Unknown tool/);
+  });
+
+  it('an unknown toolset name fails loudly at build time with the valid names', () => {
+    const { foundry } = makeFoundry();
+    expect(() =>
+      buildToolRegistry({ foundry, logger: makeLogger(), host, toolsets: ['scenes', 'sceens'] })
+    ).toThrow(/"sceens" is not a toolset \(one of: world, actors/);
+  });
+
+  it('parseToolsetsEnv splits a comma list and ignores blanks', () => {
+    expect(parseToolsetsEnv(undefined)).toEqual([]);
+    expect(parseToolsetsEnv('')).toEqual([]);
+    expect(parseToolsetsEnv(' world, chat ,,assets ')).toEqual(['world', 'chat', 'assets']);
   });
 });

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { resolveHostConfig, type HostConfig } from './hosts/env.js';
+import { parseToolsetsEnv } from './toolsets.js';
 
 // Load .env from the repo root regardless of the process's CWD, so the server picks up its
 // config whether it's launched from the repo root or wired into Claude Code from another directory.
@@ -42,6 +43,11 @@ const ConfigSchema = z.object({
     // Default only applies if rawConfig provides nothing; rawConfig reads package.json (see below).
     version: z.string().default('0.0.0'),
   }),
+  /**
+   * Which toolsets this registration advertises (FOUNDRY_TOOLSETS, comma-separated; empty = all).
+   * Validated by the registry against src/toolsets.ts — the single source of truth for the names.
+   */
+  toolsets: z.array(z.string().min(1)).default([]),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & {
@@ -64,6 +70,7 @@ const rawConfig = {
     name: process.env.SERVER_NAME || 'foundry-mcp-server',
     version: process.env.SERVER_VERSION || readPackageVersion(),
   },
+  toolsets: parseToolsetsEnv(process.env.FOUNDRY_TOOLSETS),
 };
 
 export const config: Config = {

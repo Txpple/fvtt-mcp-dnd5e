@@ -59,7 +59,13 @@ async function main(): Promise<void> {
   const foundry = new Foundry({ ...bridgeConfigOf(config.host), host });
 
   // The whole tool surface: definitions + dispatch, wired in one place (src/registry.ts).
-  const { tools, dispatch } = buildToolRegistry({ foundry, logger, host });
+  const { tools, dispatch, enabledToolsets } = buildToolRegistry({
+    foundry,
+    logger,
+    host,
+    toolsets: config.toolsets,
+  });
+  logger.info('Tool surface', { tools: tools.length, toolsets: [...enabledToolsets] });
 
   // Central error mapper for the dispatch wrapper: turns raw failures (esp. cold-box / bridge
   // errors) from EVERY tool into actionable messages, while passing through messages the tools

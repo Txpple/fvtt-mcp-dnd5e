@@ -8,6 +8,14 @@
 
 import type { FoundryBridge } from './foundry.js';
 import type { Host } from './hosts/types.js';
+import {
+  TOOLSETS,
+  TOOLSET_NAMES,
+  resolveToolsets,
+  toolsetOf,
+  type ToolsetName,
+} from './toolsets.js';
+import { FormattedToolError } from './utils/error-handler.js';
 import { Logger } from './logger.js';
 
 import { ActorTools } from './tools/actor.js';
@@ -53,12 +61,20 @@ import { PackReaderTools } from './tools/pack-reader.js';
 import { BridgeTools } from './tools/bridge.js';
 
 export interface ToolRegistry {
-  /** Advertised tool definitions — one per dispatchable handler, derived from `handlers`. */
+  /**
+   * Advertised tool definitions — one per dispatchable handler in an ENABLED toolset, derived
+   * from `handlers` (src/toolsets.ts decides which; unset = all).
+   */
   tools: any[];
   /** Tool name -> handler. The single source of truth; `tools` is derived from its keys. */
   handlers: Record<string, (args: any) => Promise<any>>;
-  /** Route a tool call to its handler (throws `Unknown tool` for an unregistered name). */
+  /**
+   * Route a tool call to its handler. Throws `Unknown tool` for an unregistered name, and a
+   * by-name refusal (which toolset, how to enable it) for a tool outside the enabled toolsets.
+   */
   dispatch(name: string, args: any): Promise<any>;
+  /** The toolsets this registry advertises. */
+  enabledToolsets: ReadonlySet<ToolsetName>;
 }
 
 export interface ToolRegistryDeps {
@@ -66,6 +82,8 @@ export interface ToolRegistryDeps {
   logger: Logger;
   /** Where Foundry runs (src/hosts): the file plane for the asset + chat tools, the host block in get-world-info. */
   host: Host;
+  /** Toolset names to advertise (FOUNDRY_TOOLSETS). Empty/omitted = all; `world` is always on. */
+  toolsets?: readonly string[];
 }
 
 /**
@@ -75,6 +93,7 @@ export interface ToolRegistryDeps {
  */
 export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const { foundry, logger, host } = deps;
+  const enabledToolsets = resolveToolsets(deps.toolsets ?? []);
 
   const actorTools = new ActorTools({ foundry, logger });
   const itemTools = new ItemTools({ foundry, logger });
@@ -425,23 +444,52 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'bulk-delete': args => organizationTools.handleBulkDelete(args),
   };
 
-  // Advertise exactly what we can dispatch; a handler with no matching definition is a wiring bug
-  // that should fail loudly at startup, not ship a tool that can't describe itself.
-  const tools = Object.keys(handlers).map(name => {
-    const def = defByName.get(name);
-    if (!def) {
-      throw new Error(`Tool "${name}" has a handler but no advertised definition`);
+  // Every dispatchable tool must sit in exactly one toolset (src/toolsets.ts) — a handler the
+  // table doesn't know is a wiring bug that should fail loudly at startup, like a missing definition.
+  const toolsetByTool = toolsetOf();
+  for (const name of Object.keys(handlers)) {
+    if (!toolsetByTool.has(name)) {
+      throw new Error(`Tool "${name}" has a handler but is in no toolset (src/toolsets.ts)`);
     }
-    return def;
-  });
+  }
+  for (const set of TOOLSET_NAMES) {
+    for (const name of TOOLSETS[set]) {
+      if (!handlers[name])
+        throw new Error(`Toolset "${set}" lists "${name}", which has no handler`);
+    }
+  }
+  const isEnabled = (name: string): boolean => enabledToolsets.has(toolsetByTool.get(name)!);
+
+  // Advertise exactly what we can dispatch (within the enabled toolsets); a handler with no
+  // matching definition is a wiring bug that should fail loudly at startup, not ship a tool that
+  // can't describe itself.
+  const tools = Object.keys(handlers)
+    .filter(isEnabled)
+    .map(name => {
+      const def = defByName.get(name);
+      if (!def) {
+        throw new Error(`Tool "${name}" has a handler but no advertised definition`);
+      }
+      return def;
+    });
 
   const dispatch = async (name: string, args: any): Promise<any> => {
     const handler = handlers[name];
     if (!handler) {
       throw new Error(`Unknown tool: ${name}`);
     }
+    if (!isEnabled(name)) {
+      const set = toolsetByTool.get(name);
+      // FormattedToolError: the dispatch wrapper passes it through verbatim instead of remapping it
+      // by tool-name heuristics into a "failed to modify the scene" style hint.
+      throw new FormattedToolError(
+        `Tool "${name}" is in the "${set}" toolset, which this registration does not advertise ` +
+          `(FOUNDRY_TOOLSETS=${[...enabledToolsets].join(',')}). Add "${set}" to FOUNDRY_TOOLSETS in ` +
+          'the MCP registration (or unset it for the whole surface) and restart the client.'
+      );
+    }
     return handler(args ?? {});
   };
 
-  return { tools, handlers, dispatch };
+  return { tools, handlers, dispatch, enabledToolsets };
 }

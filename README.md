@@ -240,33 +240,76 @@ Register the built MCP server in your Claude Code config. Copy
 ```json
 {
   "mcpServers": {
-    "foundry-molten5e": {
+    "foundry-prod": {
       "command": "C:/Program Files/nodejs/node.exe",
-      "args": ["C:/path/to/fvtt-mcp-molten5e/dist/index.js"]
+      "args": ["C:/path/to/fvtt-mcp-dnd5e/dist/index.js"],
+      "env": { "FOUNDRY_HOST": "molten" }
+    },
+    "foundry-sandbox": {
+      "command": "C:/Program Files/nodejs/node.exe",
+      "args": ["C:/path/to/fvtt-mcp-dnd5e/dist/index.js"],
+      "env": { "FOUNDRY_HOST": "local" }
     }
   }
 }
 ```
 
+- **One registration per Foundry instance.** `FOUNDRY_HOST` in the registration's `env` says where
+  that instance runs — `molten` (the default), `local` (an install on this machine), or `generic`
+  (a bare URL) — and one `.env` serves all of them ([design.md §2.6](design.md)). Which instance a
+  call touches is fixed by which server it goes to.
 - Use an **absolute** path to the root `dist/index.js` (Claude Code may launch the server from any
   directory).
 - On Windows, point `command` at the full `node.exe` path if Node isn't on `PATH`.
 - The server loads its `.env` from the repo root regardless of working directory.
-- The headless client connects lazily — the first tool call wakes the Molten box and joins the
-  world, so the initial call after a cold box can take a while.
+- The headless client connects lazily — the first tool call wakes the instance (on a host that
+  sleeps) and joins the world, so the initial call after a cold box can take a while.
+
+### Toolsets — advertise less
+
+The full surface is 151 tools, and `tools/list` for it is ~79k tokens. A client that loads MCP
+schemas eagerly pays that on every registration before the first word (Claude Code defers them and
+only lists names, so it pays far less). A registration that only ever does part of the job can say
+so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
+
+```json
+"env": { "FOUNDRY_HOST": "molten", "FOUNDRY_TOOLSETS": "chat,combat" }
+```
+
+| Toolset | What it holds |
+| --- | --- |
+| `world` | `get-world-info`, `get-current-scene`, `disconnect-bridge`, users, dnd5e settings, calendar — **always on** |
+| `actors` | NPCs and PCs: sheets, effects, activities, inventory, groups, art, ownership |
+| `items` · `compendium` · `journals` · `tables` · `cards` · `audio` | the document families |
+| `scenes` | scenes, who-sees-what routing, every placeable kind |
+| `chat` · `combat` | the chat log; combat tracker + analytics |
+| `assets` | the Plane-B file tools + reference integrity |
+| `organization` | folders, moves, bulk delete, macros |
+
+Unset = everything (the bundled skills need the whole surface). `chat,combat` advertises 16 tools
+at ~6k tokens. A call to a tool outside the enabled set is refused **by name** — which toolset it
+is in and how to enable it — never as "unknown tool"; a misspelt toolset stops the server at
+startup with the valid names. The table is [`src/toolsets.ts`](src/toolsets.ts).
 
 ## Configuration
 
-Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your instance:
+Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your instance. The host
+(`FOUNDRY_HOST`) picks which variables apply:
 
-- **Non-secret, per-instance:** `MOLTEN_SERVER_URL`, `MOLTEN_WORLD_ID`, `MOLTEN_WEBDAV_URL`,
-  `MOLTEN_FILEBROWSER_URL`, `FOUNDRY_USER` (the dedicated passwordless user to join as; defaults to
-  `MCP-Claude`). The committed defaults are neutral `your-server`/`your-world` placeholders.
-- **Wake (optional but recommended):** `MOLTEN_MAGIC_URL` — Molten's "Server Startup / Magic URL"
-  (`…?s=token`), GET to wake a sleeping box before joining.
-- **Secrets (never commit — env only):** `MOLTEN_WEBDAV_PASSWORD` (upload-asset / asset file ops),
-  `MOLTEN_ADMIN_KEY`. Read them from your Molten panel → Server Details. Each tool reports which
-  variable to set if its secret is missing.
+- **`molten`** — `MOLTEN_SERVER_URL`, `MOLTEN_WORLD_ID`, `MOLTEN_WEBDAV_URL`,
+  `MOLTEN_FILEBROWSER_URL`, `FOUNDRY_USER` (the dedicated user to join as; defaults to
+  `MCP-Claude`) / `FOUNDRY_PASSWORD`. The committed defaults are neutral `your-server`/`your-world`
+  placeholders. **Wake (optional but recommended):** `MOLTEN_MAGIC_URL` — Molten's "Server
+  Startup / Magic URL" (`…?s=token`), GET to wake a sleeping box before joining. **Secrets (never
+  commit — env only):** `MOLTEN_WEBDAV_PASSWORD` (the asset file tools), `MOLTEN_ADMIN_KEY`. Read
+  them from your Molten panel → Server Details.
+- **`local`** — `LOCAL_SERVER_URL` (default `http://localhost:30000`), `LOCAL_ADMIN_KEY`,
+  `LOCAL_FOUNDRY_DATA` (the install's `Data/` directory — the asset file tools' plane); the world id
+  and join user fall back to the `MOLTEN_*` / `FOUNDRY_*` values (a sandbox is a copy of prod).
+- **`generic`** — `FOUNDRY_URL`, `FOUNDRY_USER` / `FOUNDRY_PASSWORD`, optionally `FOUNDRY_ADMIN_KEY` +
+  `FOUNDRY_WORLD_ID` for a remote world launch. No wake, no file plane.
+
+Each tool reports which variable to set if something it needs is missing.
 
 ## Tools
 

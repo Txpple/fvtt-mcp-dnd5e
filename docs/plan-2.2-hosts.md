@@ -107,6 +107,12 @@ run build && npm run knip`). Live, on the sandbox (`FOUNDRY_HOST=local`):
   `FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration` 85 passed / 1 pre-existing skip — the
   chat suite's remote-export test now runs on the sandbox through the local plane instead of
   skipping.
+- 2026-09-20 — **#6 built.** `src/toolsets.ts` is the table (13 toolsets; every handler in exactly
+  one, enforced at build time and by `registry.test.ts`); `FOUNDRY_TOOLSETS` in the registration's
+  env selects; `world` always on; an out-of-set call is refused by name (a `FormattedToolError`, so
+  the central error mapper leaves it alone); a misspelt name stops the server at startup with the
+  valid names. Measured over the real stdio server (`scripts/verify-toolsets.mjs`, 9/9): unset =
+  151 tools / 283,948 chars ≈ 79k tokens; `chat,combat` = 16 tools / 22,659 chars ≈ 6.3k tokens.
 
 ## Parked for 3.0 — CRUD consolidation (owner, 2026-09-20: out of scope for 2.2)
 
