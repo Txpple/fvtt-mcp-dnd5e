@@ -92,7 +92,7 @@ describe('handleListFolders', () => {
     expect(out).toContain('Folders (3 across 2 type(s)):');
     expect(out).toContain('Actor (2):');
     expect(out).toContain('  - "_DM" (fA) — #7c4dff, sort 100000, 1 doc(s), 1 subfolder(s)');
-    expect(out).toContain('    - "Corpses" (fB) — sort 0, 4 doc(s)'); // depth 1 → deeper indent, no color
+    expect(out).toContain('    - "Corpses" (fB) — 4 doc(s)'); // depth 1 → deeper indent; no color, sort 0 unsaid
     expect(out).toContain('Scene (1):');
   });
 

@@ -543,22 +543,16 @@ describe('handleGetWorldInfo', () => {
     );
   });
 
-  it('passes through description and background (world metadata is read-only)', async () => {
+  it('leaves the world description HTML and join background out (no skill reads them)', async () => {
     const { tools } = build({
       ...worldData,
       description: '<p>hook</p>',
       background: 'assets/join-bg.webp',
     });
     const out = await tools.handleGetWorldInfo({});
-    expect(out.description).toBe('<p>hook</p>');
-    expect(out.background).toBe('assets/join-bg.webp');
-  });
-
-  it('defaults description/background when the bridge omits them', async () => {
-    const { tools } = build({ id: 'w', title: 't', system: 'dnd5e' });
-    const out = await tools.handleGetWorldInfo({});
-    expect(out.description).toBe('');
-    expect(out.background).toBeNull();
+    expect(out).not.toHaveProperty('description');
+    expect(out).not.toHaveProperty('background');
+    expect(out.title).toBe(worldData.title);
   });
 });
 

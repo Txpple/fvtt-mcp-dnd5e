@@ -284,15 +284,16 @@ function extractSpellcastingData(actor: any): SpellcastingEntry[] {
  * List world actors as { id, name, type, img? }, optionally filtered by type.
  * (The old module filtered in the query handler; we fold that filter in here.)
  */
-export function listActors(args?: { type?: string }): unknown {
+export function listActors(args?: { type?: string; nameFilter?: string }): unknown {
   const type = args?.type;
+  const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
   return Array.from(game.actors ?? [])
     .filter((actor: any) => !type || actor.type === type)
+    .filter((actor: any) => !nameLower || (actor.name ?? '').toLowerCase().includes(nameLower))
     .map((actor: any) => ({
       id: actor.id || '',
       name: actor.name || '',
       type: actor.type,
-      ...(actor.img ? { img: actor.img } : {}),
     }));
 }
 

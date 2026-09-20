@@ -452,30 +452,31 @@ describe('handleGetCharacterEntity', () => {
 });
 
 describe('handleListCharacters', () => {
-  it('forwards the type filter and shapes the list result', async () => {
+  it('forwards the type + name filters and shapes the compact list', async () => {
     const { tools, calls } = build({
       listActors: [
-        { id: 'a1', name: 'Aria', type: 'character', img: 'a.png' },
+        { id: 'a1', name: 'Aria', type: 'character' },
         { id: 'a2', name: 'Goblin', type: 'npc' },
       ],
     });
 
-    const out = await tools.handleListCharacters({ type: 'character' });
+    const out = await tools.handleListCharacters({ type: 'character', nameFilter: 'ari' });
 
     const c = callFor(calls, 'listActors');
-    expect(c![1]).toEqual({ type: 'character' });
-    expect(out.total).toBe(2);
-    expect(out.filtered).toBe('Filtered by type: character');
-    expect(out.characters).toEqual([
-      { id: 'a1', name: 'Aria', type: 'character', hasImage: true },
-      { id: 'a2', name: 'Goblin', type: 'npc', hasImage: false },
-    ]);
+    expect(c![1]).toEqual({ type: 'character', nameFilter: 'ari' });
+    expect(out).toEqual({
+      characters: [
+        { id: 'a1', name: 'Aria', type: 'character' },
+        { id: 'a2', name: 'Goblin', type: 'npc' },
+      ],
+      total: 2,
+    });
   });
 
-  it('reports "All characters" when no type filter is supplied', async () => {
-    const { tools } = build({ listActors: [] });
+  it('sends no filter keys when none are supplied', async () => {
+    const { tools, calls } = build({ listActors: [] });
     const out = await tools.handleListCharacters({});
-    expect(out.filtered).toBe('All characters');
+    expect(callFor(calls, 'listActors')![1]).toEqual({});
     expect(out.total).toBe(0);
   });
 });

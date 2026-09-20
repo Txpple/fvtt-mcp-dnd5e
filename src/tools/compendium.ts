@@ -558,8 +558,6 @@ export class CompendiumTools {
           id: pack.id,
           label: pack.label,
           type: pack.type,
-          system: pack.system,
-          private: pack.private,
         })),
         total: filteredPacks.length,
         availableTypes: [...new Set(packs.map((pack: any) => pack.type))],

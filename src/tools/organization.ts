@@ -185,7 +185,7 @@ export class OrganizationTools {
       for (const f of ofType) {
         const bits = [
           f.color ? `${f.color}` : null,
-          `sort ${f.sort ?? 0}`,
+          f.sort ? `sort ${f.sort}` : null,
           `${f.documentCount} doc(s)`,
           f.subfolderCount > 0 ? `${f.subfolderCount} subfolder(s)` : null,
           f.orphaned ? 'ORPHANED (dangling parent)' : null,

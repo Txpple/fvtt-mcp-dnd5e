@@ -582,13 +582,8 @@ describe('handleListCompendiumPacks', () => {
     expect(calls[0][0]).toBe('getAvailablePacks');
     expect(out.total).toBe(2);
     expect(out.packs).toHaveLength(2);
-    expect(out.packs[0]).toEqual({
-      id: 'p1',
-      label: 'Monsters',
-      type: 'Actor',
-      system: 'dnd5e',
-      private: false,
-    });
+    // id, label, type — the world is one system, and privacy is a GM-side matter.
+    expect(out.packs[0]).toEqual({ id: 'p1', label: 'Monsters', type: 'Actor' });
     expect(out.availableTypes.sort()).toEqual(['Actor', 'Item']);
   });
 

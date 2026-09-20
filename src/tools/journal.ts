@@ -88,6 +88,7 @@ const UpdateQuestJournalSchema = z.object({
 });
 
 const ListJournalsSchema = z.object({
+  nameFilter: z.string().optional().describe('Case-insensitive substring match on journal name.'),
   filterQuests: z
     .boolean()
     .optional()
@@ -287,7 +288,7 @@ export class JournalTools {
       {
         name: 'list-journals',
         description:
-          "List all journal entries, or read a specific journal/page. Without parameters: lists all journals with their pages (id, name, type). With journalId: reads the journal's first text page content and shows all available pages. With journalId + pageId: reads a specific page's full content.",
+          "List journal entries, or read one. Without journalId: every journal (or a name-substring match) with its pages (id, name, type, playerVisible). With journalId: the journal's first text page content and its page list. With journalId + pageId: that page's full content.",
         inputSchema: toInputSchema(ListJournalsSchema),
       },
       {
@@ -540,7 +541,9 @@ export class JournalTools {
     }
 
     // Mode: List all journals
-    const journals = await this.foundry.call('listJournals', {});
+    const journals = await this.foundry.call('listJournals', {
+      ...(request.nameFilter !== undefined ? { nameFilter: request.nameFilter } : {}),
+    });
 
     if (!journals || journals.error) {
       throw new Error('Failed to retrieve journals');
@@ -572,7 +575,6 @@ export class JournalTools {
       mode: 'list',
       journals: filteredJournals,
       total: filteredJournals.length,
-      filtered: request.filterQuests,
     };
   }
 
@@ -597,7 +599,7 @@ export class JournalTools {
       const matchInfo: any = {
         id: journal.id,
         name: journal.name,
-        pageCount: journal.pageCount || 0,
+        pageCount: journal.pages?.length ?? journal.pageCount ?? 0,
         matchType: [],
         matchedPages: [],
       };

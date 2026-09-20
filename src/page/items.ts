@@ -28,8 +28,6 @@ interface WorldItemSummary {
   name: string;
   trueName?: string; // unmasked source name when dnd5e identity-masks an unidentified item
   type: string;
-  img?: string;
-  folderId: string | null;
   folderName: string | null;
 }
 
@@ -73,13 +71,13 @@ export function listWorldItems(args?: ListWorldItemsArgs): unknown {
     if (folderId && item.folder?.id !== folderId) continue;
     if (nameLower && !(item.name ?? '').toLowerCase().includes(nameLower)) continue;
 
+    // id, name (+ the true name behind an unidentified mask), type, folder — what a skill
+    // decides on. Art and the folder id are a get-item / list-folders matter.
     result.push({
       id: item.id ?? '',
       name: item.name ?? '',
       ...trueNameField(item),
       type: item.type,
-      ...(item.img ? { img: item.img } : {}),
-      folderId: item.folder?.id ?? null,
       folderName: item.folder?.name ?? null,
     });
   }

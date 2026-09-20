@@ -27,8 +27,6 @@ interface JournalPageSummary {
 interface JournalSummary {
   id: string;
   name: string;
-  type: string;
-  pageCount: number;
   pages: JournalPageSummary[];
 }
 
@@ -63,15 +61,16 @@ function mapPages(journal: any): JournalPageSummary[] {
   );
 }
 
-/** List every journal entry with a per-entry page manifest. */
-export function listJournals(): JournalSummary[] {
-  return game.journal.map((journal: any) => ({
-    id: journal.id || '',
-    name: journal.name || '',
-    type: 'JournalEntry',
-    pageCount: journal.pages?.size || 0,
-    pages: mapPages(journal),
-  }));
+/** List every journal entry (optionally by name substring) with a per-entry page manifest. */
+export function listJournals(args?: { nameFilter?: string }): JournalSummary[] {
+  const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
+  return game.journal
+    .filter((journal: any) => !nameLower || (journal.name ?? '').toLowerCase().includes(nameLower))
+    .map((journal: any) => ({
+      id: journal.id || '',
+      name: journal.name || '',
+      pages: mapPages(journal),
+    }));
 }
 
 /**

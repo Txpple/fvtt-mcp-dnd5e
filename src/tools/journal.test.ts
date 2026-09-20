@@ -314,13 +314,14 @@ describe('handleListJournals', () => {
 
     const out = await tools.handleListJournals({});
     expect(calls[0][0]).toBe('listJournals');
-    expect(out).toMatchObject({
-      success: true,
-      mode: 'list',
-      journals,
-      total: 2,
-      filtered: false,
-    });
+    expect(calls[0][1]).toEqual({});
+    expect(out).toEqual({ success: true, mode: 'list', journals, total: 2 });
+  });
+
+  it('forwards a name filter to the page', async () => {
+    const { tools, calls } = build((method: string) => (method === 'listJournals' ? [] : {}));
+    await tools.handleListJournals({ nameFilter: 'lore' });
+    expect(calls[0][1]).toEqual({ nameFilter: 'lore' });
   });
 
   it('filters to quest-related journals when filterQuests is true', async () => {
@@ -332,7 +333,6 @@ describe('handleListJournals', () => {
     const { tools } = build((method: string) => (method === 'listJournals' ? journals : {}));
     const out = await tools.handleListJournals({ filterQuests: true });
     expect(out.total).toBe(2); // "Quest One" + "The Mission"
-    expect(out.filtered).toBe(true);
     expect(out.journals.map((j: any) => j.id)).toEqual(['a', 'c']);
   });
 

@@ -422,11 +422,9 @@ export class SceneTools {
       {
         name: 'get-world-info',
         description:
-          'Get basic information about the Foundry world and system, including the world ' +
-          'description (HTML) and join-page background path. READ-ONLY: world metadata has no ' +
-          'write tool (the /setup editWorld route needs a role-4 GAMEMASTER session; the bridge ' +
-          'user is deliberately an ASSISTANT) — hand edits go through the in-app "Edit World" ' +
-          'dialog.',
+          'The world: id, title, system + Foundry versions, host (and whether the asset file ' +
+          'tools have a plane here), user counts, who is online, and the dnd5e automation switches. ' +
+          'READ-ONLY — world metadata has no write tool; edit it in the in-app "Edit World" dialog.',
         inputSchema: toInputSchema(GetWorldInfoSchema),
       },
       {
@@ -924,11 +922,11 @@ export class SceneTools {
   }
 
   private formatWorldResponse(worldData: any): any {
+    // The world description (HTML, ~760 chars) and join-page background are not returned: no
+    // skill reads them and they rode along on every session start (start-session, session-audit).
     return {
       id: worldData.id,
       title: worldData.title,
-      description: worldData.description ?? '',
-      background: worldData.background ?? null,
       system: {
         id: worldData.system,
         version: worldData.systemVersion,

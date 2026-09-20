@@ -59,10 +59,8 @@ const ExportActorSchema = z.object({
 });
 
 const ListActorsSchema = z.object({
-  type: z
-    .string()
-    .optional()
-    .describe('Optional filter by character type (e.g., "character", "npc")'),
+  type: z.string().optional().describe('Filter by actor type ("character", "npc", "group").'),
+  nameFilter: z.string().optional().describe('Case-insensitive substring match on actor name.'),
 });
 
 const SearchActorContentsSchema = z.object({
@@ -136,7 +134,7 @@ export class ActorTools {
       },
       {
         name: 'list-actors',
-        description: 'List all available characters with basic information',
+        description: 'List world actors: id, name, type. Filter by type and/or name substring.',
         inputSchema: toInputSchema(ListActorsSchema),
       },
       {
@@ -294,24 +292,24 @@ export class ActorTools {
   }
 
   async handleListCharacters(args: any): Promise<any> {
-    const { type } = ListActorsSchema.parse(args);
+    const { type, nameFilter } = ListActorsSchema.parse(args);
 
-    this.logger.info('Listing characters', { type });
+    this.logger.info('Listing actors', { type, nameFilter });
 
-    const actors = await this.foundry.call('listActors', { type });
+    const actors = await this.foundry.call('listActors', {
+      ...(type !== undefined ? { type } : {}),
+      ...(nameFilter !== undefined ? { nameFilter } : {}),
+    });
 
-    this.logger.debug('Successfully retrieved character list', { count: actors.length });
+    this.logger.debug('Successfully retrieved actor list', { count: actors.length });
 
-    // Format the response for Claude
     return {
       characters: actors.map((actor: any) => ({
         id: actor.id,
         name: actor.name,
         type: actor.type,
-        hasImage: !!actor.img,
       })),
       total: actors.length,
-      filtered: type ? `Filtered by type: ${type}` : 'All characters',
     };
   }
 
