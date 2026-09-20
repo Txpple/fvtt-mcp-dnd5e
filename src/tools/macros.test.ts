@@ -95,16 +95,45 @@ describe('list-macros', () => {
           name: 'Graze',
           type: 'script',
           author: 'Claude',
+          commandPreview: 'const t = canvas.tokens.controlled[0];\n  t.actor.rollAbility("str");',
           hotbar: [{ userId: 'p1', userName: 'Anthony', slot: 1 }],
         },
-        { id: 'm2', name: 'Rest', type: 'chat', author: null, hotbar: [] },
+        { id: 'm2', name: 'Rest', type: 'chat', author: null, commandPreview: '', hotbar: [] },
       ],
     });
     const out = await tools.handleListMacros({});
     expect(calls[0][0]).toBe('listMacros');
+    expect(calls[0][1]).toEqual({});
     expect(out).toContain('2 macro(s):');
-    expect(out).toContain('- **Graze** (`m1`) — script · by Claude · hotbar: Anthony slot 1');
-    expect(out).toContain('- **Rest** (`m2`) — chat');
+    // A pin COUNT and no command by default.
+    expect(out).toContain(
+      '- **Graze** (`m1`) — script · by Claude · 1 pin(s)\n- **Rest** (`m2`) — chat'
+    );
+  });
+
+  it('forwards the filters; verbose prints every pin and the command preview', async () => {
+    const { tools, calls } = build({
+      count: 1,
+      macros: [
+        {
+          id: 'm1',
+          name: 'Graze',
+          type: 'script',
+          author: null,
+          commandPreview: 'const t = canvas.tokens.controlled[0];\n  t.actor.rollAbility("str");',
+          hotbar: [
+            { userId: 'p1', userName: 'Anthony', slot: 1 },
+            { userId: 'p2', userName: 'Tom', slot: 3 },
+          ],
+        },
+      ],
+    });
+    const out = await tools.handleListMacros({ nameFilter: 'gra', user: 'Tom', verbose: true });
+    expect(calls[0][1]).toEqual({ nameFilter: 'gra', user: 'Tom' });
+    // Every pin, and the command preview on its own line with whitespace folded.
+    expect(out).toContain(
+      '- **Graze** (`m1`) — script · hotbar: Anthony slot 1, Tom slot 3\n    const t = canvas.tokens.controlled[0]; t.actor.rollAbility("str");'
+    );
   });
 
   it('reports an empty world', async () => {

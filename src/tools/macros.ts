@@ -22,10 +22,9 @@ const CreateMacroSchema = z
       .string()
       .min(1)
       .describe(
-        "The macro body. For type 'script': JavaScript run as the clicking user — e.g. " +
-          'dnd5e.documents.macro.rollItem("Graze") rolls the item named Graze on that user\'s ' +
-          "assigned character. For type 'chat': text posted to chat verbatim (inline rolls like " +
-          '[[/roll 1d6]] work).'
+        "The macro body: JavaScript for 'script' (run as the clicking user, e.g. " +
+          'dnd5e.documents.macro.rollItem("Graze") rolls that item on their assigned character); ' +
+          "chat text for 'chat' (inline rolls like [[/roll 1d6]] work)."
       ),
     type: z
       .enum(['script', 'chat'])
@@ -36,8 +35,8 @@ const CreateMacroSchema = z
       .min(1)
       .optional()
       .describe(
-        "Icon path or URL for the hotbar button. Omit for Foundry's stock macro icon. A path " +
-          'that does not resolve on the server is replaced with the stock icon (rule 8) with a warning.'
+        "Icon path or URL for the hotbar button (default: Foundry's stock macro icon; a path that " +
+          'does not resolve is replaced with it, with a warning).'
       ),
     owner: z
       .string()
@@ -52,8 +51,8 @@ const CreateMacroSchema = z
       .min(1)
       .optional()
       .describe(
-        "User id or name whose hotbar gets the button (also granted OWNER so it's theirs to see " +
-          'and edit). Omit to create the macro without pinning it anywhere.'
+        'User id or name whose hotbar gets the button (also granted OWNER). Omit to create the ' +
+          'macro unpinned.'
       ),
     hotbarSlot: z
       .number()
@@ -70,7 +69,14 @@ const CreateMacroSchema = z
     message: 'hotbarSlot requires hotbarUser',
   });
 
-const ListMacrosSchema = z.object({});
+const ListMacrosSchema = z.object({
+  nameFilter: z.string().optional().describe('Case-insensitive substring match on macro name.'),
+  user: z.string().optional().describe("Only macros pinned on this user's hotbar (id or name)."),
+  verbose: z
+    .boolean()
+    .optional()
+    .describe('Add each pin (user + slot) and a command preview; default: a pin count.'),
+});
 
 const DeleteMacroSchema = z.object({
   macros: z
@@ -98,20 +104,18 @@ export class MacroTools {
       {
         name: 'create-macro',
         description:
-          'Create a world Macro — a hotbar button. type "script" (default) runs JavaScript as the ' +
-          'clicking user (e.g. dnd5e.documents.macro.rollItem("Graze") rolls that item on their ' +
-          'assigned character); type "chat" posts its text to chat. Optionally grant a player ' +
-          'OWNER access and pin the button to their hotbar (hotbarUser + optional hotbarSlot, ' +
-          'default first free slot) in the same call — the way to hand a player a one-click ' +
-          'ability. GM-only.',
+          'Create a world Macro — a hotbar button (type "script" runs JavaScript as the clicking ' +
+          'user; "chat" posts text). Optionally grant a player OWNER and pin it to their hotbar ' +
+          '(hotbarUser + hotbarSlot) in the same call — how to hand a player a one-click ability. ' +
+          'GM-only.',
         inputSchema: toInputSchema(CreateMacroSchema),
       },
       {
         name: 'list-macros',
         description:
-          'List every macro in the world: id, name, type (script/chat), author, icon, a command ' +
-          'preview, and every user hotbar slot it is pinned to. The read to run before ' +
-          'delete-macro.',
+          'List macros, one line each: name, id, type (script/chat), author, hotbar pin count ' +
+          '(verbose: each pin + a command preview). Filter by name substring or by the user whose ' +
+          'hotbar pins it. The read to run before delete-macro.',
         inputSchema: toInputSchema(ListMacrosSchema),
       },
       {
@@ -139,16 +143,23 @@ export class MacroTools {
   }
 
   async handleListMacros(args: any): Promise<string> {
-    ListMacrosSchema.parse(args ?? {});
-    const r = await this.foundry.call('listMacros');
+    const { nameFilter, user, verbose } = ListMacrosSchema.parse(args ?? {});
+    const r = await this.foundry.call('listMacros', {
+      ...(nameFilter !== undefined ? { nameFilter } : {}),
+      ...(user !== undefined ? { user } : {}),
+    });
     const macros = Array.isArray(r?.macros) ? r.macros : [];
     if (macros.length === 0) return 'No macros in this world.';
     const lines = macros.map((m: any) => {
       const pins = Array.isArray(m.hotbar) ? m.hotbar : [];
-      const pinText = pins.length
-        ? ` · hotbar: ${pins.map((p: any) => `${p.userName} slot ${p.slot}`).join(', ')}`
-        : '';
-      return `- **${m.name}** (\`${m.id}\`) — ${m.type}${m.author ? ` · by ${m.author}` : ''}${pinText}`;
+      const pinText = !pins.length
+        ? ''
+        : verbose
+          ? ` · hotbar: ${pins.map((p: any) => `${p.userName} slot ${p.slot}`).join(', ')}`
+          : ` · ${pins.length} pin(s)`;
+      const preview =
+        verbose && m.commandPreview ? `\n    ${String(m.commandPreview).replace(/\s+/g, ' ')}` : '';
+      return `- **${m.name}** (\`${m.id}\`) — ${m.type}${m.author ? ` · by ${m.author}` : ''}${pinText}${preview}`;
     });
     return `${macros.length} macro(s):\n${lines.join('\n')}`;
   }

@@ -151,10 +151,24 @@ export async function createMacro(args: {
   };
 }
 
-export function listMacros(): unknown {
+/**
+ * Every macro (or a name-substring / pinned-by-user subset), each with its hotbar pins. `user`
+ * keeps the macros pinned on that user's hotbar (id or exact name).
+ */
+export function listMacros(args?: { nameFilter?: string; user?: string }): unknown {
   const assignments = hotbarAssignments();
+  const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
+  const userId = args?.user ? resolveUserOrThrow(args.user).id : null;
   const macros = (game.macros?.contents ?? [])
     .map((m: any) => ({ ...describeMacro(m), hotbar: assignments.get(m.id) ?? [] }))
+    .filter(
+      (m: any) =>
+        !nameLower ||
+        String(m.name ?? '')
+          .toLowerCase()
+          .includes(nameLower)
+    )
+    .filter((m: any) => !userId || m.hotbar.some((p: any) => p.userId === userId))
     .sort((a: any, b: any) => a.name.localeCompare(b.name));
   return { success: true, count: macros.length, macros };
 }
