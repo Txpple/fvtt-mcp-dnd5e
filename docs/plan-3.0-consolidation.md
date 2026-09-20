@@ -61,7 +61,7 @@ diet and must land **after** the prose diet, or a deferred client loads a family
 | **M1** | **The 6.0.3 pin (official 6.x)** ✅ `c53c2de` 2026-09-20 | F40 | done — left: the #7470 elevation check and `sourceItem.*` in the manage-effect prose (fold into M2) |
 | **M2** | **Results diet** ✅ 2026-09-20 (12 commits, `1a38440`…) — the raw message on every mapped error (#15); bestiary through the host seam (#18); the record-level cap with a `truncation` stamp; ownership compact by default; the 32 placeable tools default to the ACTIVE scene and a scene miss is `isError`; one search-hit shape `{id,name,type,uuid,pack,img?,facets?}` + the creature `name` facet + limit 50 + a true `totalFound`; unknown arguments refused by name (the closed top level, +4,379 on tools/list); `list-scenes` fields (darkness / weather / `flags[flagScope]`, the background path on `get-current-scene`); the list projections + `nameFilter` on actors / journals; list-macros filters; the index warm-up at connect; the result-shape rule in design.md §3 (#10); the M1 leftovers | F6 F7 F8 F9 F17 F18 F19 F20 F41 F43 (+F5/F4/F40 parts) | done — 24-call baseline (corrected args) **101,203 chars ≈ 28.1k tokens** (was 155,100; target ≤ ~112,600); **0** capped; **0** errors on bare placeable `list-*`; `totalFound` on all four search bodies; `search-compendium` first call **175 ms** 20 s after connect (warm-up 15 packs in 9.7 s; a search that is the very first call still waits for it); tools/list 288,175 (ratchet 288,200) |
 | **M3** | **Skill descriptions + line fixes** ✅ 2026-09-20 (6 commits, `af5cdd4`…`f8156d9`) — all 17 descriptions on the trigger rule (the six as measured, the other 11 by the same rule); the two stale claims fixed; scene-builder hands the sidecar file to `create-scene` by `placeablesPath`; `hp` in `extractDerived` (a PC's real max HP on `get-actor`); `create-pc` `defaultArt` (the primary class's pregen portrait + token cut-out) and `spells.alwaysPrepared`, the trait-key grammar on the `chosen` leaf; `set-actor-art` `normalizePrototype` / `autoRotate` + the placed-token report | F16 F28 F29 F30 F31 F32 | done — descriptions **7,998 chars** (was 15,381; 120/120 quoted trigger phrases kept, ratchet 15,400 → 8,000); scene-builder's sidecar section **15** prose lines (was 65); **0** skill lines prescribing the post-art fix-up; tools/list 287,850 (the 6 new leaves paid for in their families' prose: 288,175 → 287,850); live: verify-pc-build 70/70, verify-scene-tools 16/16, verify-actor-tooling 38/38 |
-| **M4** | **Config contract + hosts** — `FOUNDRY_*` canonical (`FOUNDRY_URL / _USER / _PASSWORD / _ADMIN_KEY / _WORLD_ID / _HOST / _WAKE_URL / _TOOLSETS`; plane extras `FOUNDRY_DATA_DIR`, `FOUNDRY_WEBDAV_*`), **default host `generic`**, the placeholder refused at startup, aliases only in `src/hosts/env.ts`, worldId discovery, the bridge `FilePlane` (FilePicker) on every host, `send-chat-message` drops `webdav`, `library:{book: present|missing}` in `get-world-info`, a role warning after join, one default bridge-user name | F1 F12 F15 F36 F38 F46 | `git grep MOLTEN_ src` → `src/hosts/env.ts` only; `resolveHostConfig({})` → `generic` and a refusal in < 1 s; a generic registry advertises **0** "unavailable" asset tools; live: `upload-asset` / `list-assets` / `create-asset-folder` on `local` through the bridge plane |
+| **M4** | **Config contract + hosts** ✅ 2026-09-20 (3 commits, `0a1e665` `ef011f1` `46f5623`) — `FOUNDRY_*` canonical (`FOUNDRY_URL / _USER / _PASSWORD / _ADMIN_KEY / _WORLD_ID / _HOST / _WAKE_URL / _TOOLSETS`; plane extras `FOUNDRY_DATA_DIR`, `FOUNDRY_WEBDAV_*`), **default host `generic`**, one `FoundryHost` with `molten` / `local` / `generic` as presets, the placeholder refused at startup, aliases only in `src/hosts/env.ts` (logged once), worldId discovery on `/setup` + `bridge.worldId()`, the bridge `FilePlane` (FilePicker through the page) on every host composed with the direct plane (`filePlaneFor`), `send-chat-message` drops `webdav`, `library:{book: present|missing}` + `bridgeUser:{name,role}` in `get-world-info`, a role warning after join, one default bridge-user name | F1 F12 F15 F36 F38 F46 | done — `git grep -l MOLTEN_ src` → `src/hosts/env.ts` + its test (was 6 files); `resolveHostConfig({})` → `generic`, the startup refusal in **236 ms** naming `FOUNDRY_URL`; **0** tools answer "unavailable" on any host (delete / move refuse by name on the bridge plane, the rest work); live on `local`: verify-wake cold bring-up **12 s** with the world discovered on `/setup`, verify-asset-plane **27/27** through the bridge plane and **29/29** direct, integration **80 passed / 6 skipped**, the C proof 6/6; tools/list 287,838 (was 287,850) |
 | **M5** | **Package + sibling contract + scripts** — `exports` (`.` / `./client` / `./hosts` / `./env`), `bin`, `files`, `src/client.ts` (`Foundry`, `loadEnv`, `connectFoundry`, `disconnect()` alias), playwright → dependencies; the integration gate on the host selector; scripts classified (60 keep / 22 out / 17 archive), knip covers `scripts/`, the `.env` loop codemod; every sibling switched to `fvtt-mcp-dnd5e/client` | F2 F3 F25(a) F26 F27 | battleflow `node tools/smoke-saves.mjs --list` passes; **0** files in any sibling name `fvtt-mcp-molten5e`; **0** hand-rolled `.env` loops in `scripts/`; `FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration` runs without `MOLTEN_SERVER_URL`; `.env.example` declares every key the family reads |
 | **M6** | **Error contract + seam typing** — the raw message always appended; the page encodes an error code in the Error's `name` (the channel that survives `page.evaluate`); the 74 page returns and 26 arg shapes typed, then `foundry.call` typed end to end | F5 F24 | 12/12 scratch error cases keep their text (unit test); **0** `any` results from `foundry.call` |
 | **M7** | **Schema prose diet + toolsets** — prose budget (leaf ≤ 120, description ≤ 400) enforced by a test; 15 descriptions rewritten to contract-only; doctrine moved into the skills; `actorTarget` / `actorTargetStrict` shared instances; `world` → `session` + `settings`. **Before M8.** | F10 F22 F23 | `tools/list` **≤ 230,000 chars**; every leaf ≤ 120 / description ≤ 400; always-on set **≤ 2,100 chars** |
@@ -71,7 +71,7 @@ diet and must land **after** the prose diet, or a deferred client loads a family
 
 Sequence: M0 → M2 → M3 (the largest per-prompt savings, no renames) → M4 → M5 (a stranger can run
 it; the siblings are whole) → M6 → M7 (name-neutral hardening; the prose diet) → M8 (the only
-renaming milestone) → M9 → M10.
+renaming milestone) → M9 → M10. M0–M4 done 2026-09-20.
 
 ## Decisions
 
@@ -156,9 +156,30 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   `phbprg<Class>0000` was wrong for most classes (the ids are zero-padded to 16) — the tool
   resolves by name; (b) the pregens ship a separate token cut-out (`assets/tokens/<class>.webp`),
   which the skill never used — `defaultArt` takes both. Decision #6 revised the same day (the
-  sandbox keeps the full surface everywhere). **Next: M4** (config contract + hosts; default host
-  `generic`, the bridge file plane). Open for the owner:
-  `verify-wake.mjs` ran against prod for
-  ~2 min before `96ed726` (its first step is a world shutdown; the wake was in progress when
-  killed) — check the Molten panel; a bridge connect relaunches the world if it went down.
-  Nothing pushed yet.
+  sandbox keeps the full surface everywhere). **M4 done** (3 commits): the `FOUNDRY_*` contract
+  with `generic` as the default and the three hosts collapsed into one class over
+  {wakeUrl, dataDir, webdav} (a host is a preset; the wake GET and its redaction are any host's);
+  the legacy names read only in `env.ts`, only under their own host, alias-over-canonical so the
+  owner's one 2.x `.env` keeps serving both registrations (3 alias notes under local, 7 under
+  molten, logged at startup); the placeholder refused in 236 ms where it used to sit behind the
+  600 s budget; `FOUNDRY_WORLD_ID` optional — the one world on the authenticated `/setup` is
+  launched (`game.worlds`, the tiles as fallback; several = a refusal naming them), and the live
+  `game.world.id` replaces config for world-scoped default paths. The bridge file plane: probed
+  first (14.368, role 3 — browse returns URL-encoded paths and throws on a missing dir;
+  createDirectory has no parents; upload overwrites silently and answers `false` with no reason
+  for a bad extension or a missing dir; no delete / move exists), then built page-side over
+  `FilePicker.implementation` + same-origin HEAD / GET and composed with the direct plane in
+  `filePlaneFor` — so no tool says "not configured" any more; delete / move refuse by name with
+  the direct-plane variables, `copy` is a download + upload, `.html` is refused (Foundry's
+  uploadable set). Then the chat enum, `library` + `bridgeUser` in `get-world-info` (the sandbox:
+  MM / PHB / DMG / heroes-faerun present, ravenloft missing), the role warning. Pulled forward
+  from M5: the integration gate runs on the selector. Left for M5 as planned: the 19 scripts
+  that read `MOLTEN_*` by hand (`local-foundry.mjs`, `pull-prod-to-local.mjs`, `hostFor(env)`
+  callers). **Owner step before restarting Claude Code:** the `foundry-molten5e` registration
+  (`~/.claude.json`, `.mcp.json`) must set `"env": {"FOUNDRY_HOST": "molten"}` — today it sets
+  nothing and resolves to `generic`, where `MOLTEN_SERVER_URL` is not read and startup refuses
+  naming `FOUNDRY_URL` (loud, not silent); `foundry-local5e`'s `FOUNDRY_PROFILE=local` keeps
+  working (one alias note). **Next: M5** (package + sibling contract + scripts). Open for the
+  owner: `verify-wake.mjs` ran against prod for ~2 min before `96ed726` (its first step is a
+  world shutdown; the wake was in progress when killed) — check the Molten panel; a bridge
+  connect relaunches the world if it went down. Nothing pushed yet.
