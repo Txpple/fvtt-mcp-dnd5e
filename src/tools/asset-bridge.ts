@@ -39,20 +39,33 @@ const SetActorArtSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'Data-relative path to the PORTRAIT image. Must be a STILL image — actor.img rejects video. ' +
-        'Also used for the token texture unless tokenImagePath is given.'
+      'Data-relative path to the PORTRAIT (a STILL image). Also the token texture unless ' +
+        'tokenImagePath is given.'
     ),
   tokenImagePath: z
     .string()
     .optional()
     .describe(
-      'Optional Data-relative path for the prototype TOKEN texture, which (unlike the portrait) ' +
-        'accepts an animated VIDEO (.webm/.mp4/.m4v/.ogg) — e.g. a JB2A effect. Defaults to imagePath.'
+      'Data-relative path for the prototype TOKEN texture — may be a VIDEO (.webm/.mp4/.m4v/.ogg). ' +
+        'Defaults to imagePath.'
     ),
   applyToToken: z
     .boolean()
     .default(true)
     .describe('Also set the prototype token texture (default true).'),
+  normalizePrototype: z
+    .boolean()
+    .default(true)
+    .describe(
+      'When the token texture changes, reset the inherited texture scale to 1 and turn the dynamic ' +
+        'ring off (a 2024-book copy ships scale 2 + ring on). false keeps them.'
+    ),
+  autoRotate: z
+    .boolean()
+    .optional()
+    .describe(
+      'Set lockRotation (true = the token turns to face its movement). Check the art faces up first.'
+    ),
 });
 
 const AddJournalImageSchema = z.object({
@@ -85,33 +98,31 @@ export class AssetBridgeTools {
       {
         name: 'find-asset-references',
         description:
-          'Reference integrity. Find every world document (scenes, actors, items, journals, ' +
-          'playlists, macros, roll tables) that references a given asset path under `Data/`. Use this ' +
-          'BEFORE deleting or moving a file to see what would break. Read-only.',
+          'Find every world document (scenes, actors, items, journals, playlists, macros, roll ' +
+          'tables) that references an asset path under `Data/` — run BEFORE deleting or moving a ' +
+          'file. Read-only.',
         inputSchema: toInputSchema(FindAssetReferencesSchema),
       },
       {
         name: 'relink-asset',
         description:
-          'Reference integrity. Rewrite every reference from one asset path to another (e.g. after ' +
-          'moving/renaming a file) so nothing breaks. Pass dryRun:true to preview the documents that ' +
-          'would change without writing. GM-only.',
+          'Rewrite every reference from one asset path to another (after a move/rename). dryRun:true ' +
+          'previews the documents that would change. GM-only.',
         inputSchema: toInputSchema(RelinkAssetSchema),
       },
       {
         name: 'set-actor-art',
         description:
-          "Composition. Set an actor's portrait image, and by default its prototype token art too, " +
-          'from a Data-relative path. The portrait (actor.img) must be a STILL image; pass ' +
-          'tokenImagePath to give the prototype TOKEN an animated video (.webm/.mp4) while keeping a ' +
-          'still portrait (the JB2A-effect pattern). GM-only.',
+          "Set an actor's portrait and, by default, its prototype token art from a Data-relative " +
+          'path; a changed token texture also gets its inherited scale/ring normalized. Lists placed ' +
+          'tokens still carrying the old art (prototype edits never reach them). GM-only.',
         inputSchema: toInputSchema(SetActorArtSchema),
       },
       {
         name: 'add-journal-image',
         description:
-          'Composition. Append an image page to a journal entry from a Data-relative image path, ' +
-          'with an optional caption. GM-only by default; set playerVisible to expose it as a handout.',
+          'Append an image page (optional caption) to a journal entry from a Data-relative path. ' +
+          'GM-only unless playerVisible (a handout).',
         inputSchema: toInputSchema(AddJournalImageSchema),
       },
     ];
@@ -177,7 +188,22 @@ export class AssetBridgeTools {
       result?.appliedToToken && tokenSrc && tokenSrc !== img
         ? `portrait ${img ?? '(unchanged)'} · token ${tokenSrc}`
         : `${img ?? tokenSrc}${result?.appliedToToken ? ' (portrait + prototype token)' : ' (portrait only)'}`;
-    return `Set art for actor "${result?.actorName}" (${result?.actorId}) → ${artDesc}.${warnSection}`;
+    const normalized =
+      Array.isArray(result?.normalized) && result.normalized.length
+        ? ` Prototype normalized: ${result.normalized.join(', ')}.`
+        : '';
+    const placed =
+      Array.isArray(result?.placedTokens) && result.placedTokens.length
+        ? `\n\n⚠️ ${result.placedTokensStale} placed token(s) still carry the old art/settings — ` +
+          'update-token each or delete + re-drop:\n' +
+          result.placedTokens
+            .map((t: any) => `- ${t.scene} · ${t.name} (${t.tokenId}): ${t.stale.join(', ')}`)
+            .join('\n') +
+          (result.placedTokensStale > result.placedTokens.length
+            ? `\n- … ${result.placedTokensStale - result.placedTokens.length} more`
+            : '')
+        : '';
+    return `Set art for actor "${result?.actorName}" (${result?.actorId}) → ${artDesc}.${normalized}${placed}${warnSection}`;
   }
 
   async handleAddJournalImage(args: any): Promise<string> {

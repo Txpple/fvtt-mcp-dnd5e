@@ -32,17 +32,13 @@ survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade m
      `tokenImagePath` = the new cutout. The portrait write becomes a no-op and only the token changes.
      (`export-actor` is also how you tell two same-named actors apart — `folder` gives it away.)
    - **Portrait-only** is the plain `applyToToken: false`.
-3. **Reset the inherited prototype config — `set-actor-art` only swaps the texture.** A module or
-   compendium actor keeps the rest of its prototype token exactly as imported, so fresh art lands on
-   someone else's settings. The 2024 `dnd-monster-manual` actors ship a **dynamic ring on** and
-   **`texture.scaleX`/`scaleY` at 2** (their art is a small subject on a big plate; a 512-square
-   cutout is already trimmed and centred, so 2 overflows the token's footprint and the ring draws a
-   dark disc under it) — and **`lockRotation: true`**, so the token won't turn to face its movement
-   like every other token at the table. After every art swap, `update-actor` with **`tokenScale: 1`,
-   `tokenRing: false`, `tokenAutoRotate: true`** (house rules — `_shared/authoring-policy.md` rule 10).
-4. **Prototype vs placed.** Setting the prototype only affects **newly dropped** tokens. A copy already
-   sitting on a scene won't change — `list-tokens` the scene and patch each with `update-token`
-   (`scale`, `ring`, `lockRotation: false`), or have the user delete + re-drop it.
+3. **The inherited prototype config is normalized for you.** A 2024 `dnd-monster-manual` copy ships
+   a dynamic ring on and `texture.scaleX`/`scaleY` at 2 (a small subject on a big plate — wrong for a
+   trimmed, centred cut-out); `set-actor-art` resets both with the new texture and says so in its
+   reply. Auto-rotate is NOT part of that — pass `autoRotate: true` yourself, after step 5.
+4. **Prototype vs placed.** Setting the prototype only affects **newly dropped** tokens; the reply
+   lists the copies already on a scene that still carry the old art or settings — patch each with
+   `update-token` (`scale`, `ring`, `lockRotation: false`), or have the user delete + re-drop it.
 5. **Check which way the art faces before you enable auto-rotate.** Foundry treats the **top** of the
    image as the token's front at rotation 0, so art drawn head-down (or side-on) will move backwards
    once auto-rotate is live. Look at the cutout and say so — the fix is rotating the source PNG, which

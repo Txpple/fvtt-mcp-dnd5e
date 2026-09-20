@@ -747,6 +747,119 @@ try {
       : fail('R2 get-item effect change key', JSON.stringify(giEff));
     if (ringId) await foundry.call('deleteWorldItems', { identifiers: [ringId] });
   }
+
+  // =========================================================================
+  // STEP 6 — set-actor-art normalizes the inherited prototype settings (F30) and reports placed
+  // tokens the prototype edit cannot reach. The fixture forces what a 2024-book copy ships
+  // (scale 2, ring on, lockRotation) so the check does not depend on the book's values.
+  // =========================================================================
+  {
+    const art = await makeTempNpc('ZZ-MCP-AT Art Swap');
+    const placed = await foundry.evaluate(async id => {
+      const a = globalThis.game.actors.get(id);
+      await a.update({
+        'prototypeToken.texture.src': 'icons/svg/mystery-man.svg',
+        'prototypeToken.texture.scaleX': 2,
+        'prototypeToken.texture.scaleY': 2,
+        'prototypeToken.ring.enabled': true,
+        'prototypeToken.lockRotation': true,
+      });
+      const scene = globalThis.game.scenes.active;
+      if (!scene) return null;
+      const td = await a.getTokenDocument({ x: 100, y: 100 });
+      const [tok] = await scene.createEmbeddedDocuments('Token', [td.toObject()]);
+      return { sceneId: scene.id, sceneName: scene.name, tokenId: tok.id };
+    }, art.id);
+    try {
+      // 6a: a NEW texture → scale reset to 1, ring off, lockRotation untouched (no autoRotate passed).
+      const r1 = await foundry.call('setActorArt', {
+        actorIdentifier: art.id,
+        imagePath: 'icons/svg/cowled.svg',
+      });
+      const p1 = await foundry.evaluate(id => {
+        const pt = globalThis.game.actors.get(id).prototypeToken;
+        return {
+          src: pt.texture.src,
+          sx: pt.texture.scaleX,
+          sy: pt.texture.scaleY,
+          ring: pt.ring.enabled,
+          lock: pt.lockRotation,
+        };
+      }, art.id);
+      p1.src === 'icons/svg/cowled.svg' &&
+      p1.sx === 1 &&
+      p1.sy === 1 &&
+      p1.ring === false &&
+      p1.lock === true &&
+      (r1?.normalized ?? []).length === 2
+        ? pass(
+            'set-actor-art normalizes scale 2 → 1 + ring off on a texture change; lockRotation untouched',
+            JSON.stringify(r1.normalized)
+          )
+        : fail(
+            'set-actor-art normalizes on a texture change',
+            JSON.stringify({ p1, normalized: r1?.normalized })
+          );
+      // 6b: the placed token is reported stale (texture + scale + ring), never edited.
+      const stale = r1?.placedTokens?.find(x => x.tokenId === placed?.tokenId);
+      placed &&
+      r1?.placedTokensStale >= 1 &&
+      stale &&
+      ['texture', 'scale', 'ring'].every(k => stale.stale.includes(k))
+        ? pass(
+            'placed token reported stale (texture, scale, ring), not touched',
+            `${stale.scene} · ${stale.tokenId}`
+          )
+        : fail(
+            'placed token reported stale',
+            JSON.stringify({ placed, placedTokens: r1?.placedTokens })
+          );
+      // 6c: the same texture again + autoRotate:true → only auto-rotate changes (no re-normalize).
+      const r2 = await foundry.call('setActorArt', {
+        actorIdentifier: art.id,
+        imagePath: 'icons/svg/cowled.svg',
+        autoRotate: true,
+      });
+      const p2 = await foundry.evaluate(
+        id => globalThis.game.actors.get(id).prototypeToken.lockRotation,
+        art.id
+      );
+      p2 === false && JSON.stringify(r2?.normalized) === JSON.stringify(['auto-rotate on'])
+        ? pass(
+            'autoRotate:true is its own opt-in; a no-op texture does not re-normalize',
+            JSON.stringify(r2.normalized)
+          )
+        : fail('autoRotate opt-in', JSON.stringify({ p2, normalized: r2?.normalized }));
+      // 6d: normalizePrototype:false keeps the inherited scale on a texture change.
+      await foundry.evaluate(
+        id =>
+          globalThis.game.actors
+            .get(id)
+            .update({ 'prototypeToken.texture.scaleX': 2, 'prototypeToken.texture.scaleY': 2 }),
+        art.id
+      );
+      const r3 = await foundry.call('setActorArt', {
+        actorIdentifier: art.id,
+        imagePath: 'icons/svg/mystery-man.svg',
+        normalizePrototype: false,
+      });
+      const p3 = await foundry.evaluate(
+        id => globalThis.game.actors.get(id).prototypeToken.texture.scaleX,
+        art.id
+      );
+      p3 === 2 && !r3?.normalized
+        ? pass('normalizePrototype:false keeps the inherited scale', `scaleX ${p3}`)
+        : fail('normalizePrototype:false', JSON.stringify({ p3, normalized: r3?.normalized }));
+    } finally {
+      if (placed) {
+        await foundry.evaluate(
+          ({ sceneId, tokenId }) =>
+            globalThis.game.scenes.get(sceneId)?.deleteEmbeddedDocuments('Token', [tokenId]),
+          placed
+        );
+      }
+    }
+  }
 } catch (e) {
   fail('SUITE', e?.message || String(e));
 } finally {

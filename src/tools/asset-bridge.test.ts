@@ -201,6 +201,53 @@ describe('handleSetActorArt', () => {
     expect(out).toContain('⚠️ 1 warning(s):');
   });
 
+  it('forwards normalizePrototype (default true) + autoRotate, and reports what was reset', async () => {
+    const { tools, calls } = build({
+      updated: true,
+      actorName: 'Wight',
+      actorId: 'w1',
+      img: 'art/wight.webp',
+      tokenSrc: 'art/wight.webp',
+      appliedToToken: true,
+      normalized: ['texture scale 2 → 1', 'dynamic ring off', 'auto-rotate on'],
+    });
+    const out = await tools.handleSetActorArt({
+      actorIdentifier: 'Wight',
+      imagePath: 'art/wight.webp',
+      autoRotate: true,
+    });
+    expect(calls[0][1]).toMatchObject({ normalizePrototype: true, autoRotate: true });
+    expect(out).toBe(
+      'Set art for actor "Wight" (w1) → art/wight.webp (portrait + prototype token). ' +
+        'Prototype normalized: texture scale 2 → 1, dynamic ring off, auto-rotate on.'
+    );
+  });
+
+  it('lists placed tokens still carrying the old art/settings, capped with a count', async () => {
+    const { tools, calls } = build({
+      updated: true,
+      actorName: 'Wight',
+      actorId: 'w1',
+      img: 'art/wight.webp',
+      tokenSrc: 'art/wight.webp',
+      appliedToToken: true,
+      placedTokensStale: 3,
+      placedTokens: [
+        { scene: 'Crypt', tokenId: 't1', name: 'Wight', stale: ['texture', 'scale', 'ring'] },
+        { scene: 'Crypt', tokenId: 't2', name: 'Wight', stale: ['texture'] },
+      ],
+    });
+    const out = await tools.handleSetActorArt({
+      actorIdentifier: 'Wight',
+      imagePath: 'art/wight.webp',
+      normalizePrototype: false,
+    });
+    expect(calls[0][1]).toMatchObject({ normalizePrototype: false });
+    expect(out).toContain('⚠️ 3 placed token(s) still carry the old art/settings');
+    expect(out).toContain('- Crypt · Wight (t1): texture, scale, ring');
+    expect(out).toContain('- … 1 more');
+  });
+
   it('rejects an empty actorIdentifier', async () => {
     const { tools } = build();
     await expect(

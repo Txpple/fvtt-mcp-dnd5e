@@ -127,12 +127,23 @@ export async function relinkAsset(data: {
  * nothing changed). So a video `imagePath` is kept off the portrait (with a warning), and `tokenImagePath`
  * lets the token carry an animated `.webm`/`.mp4` while the portrait stays a valid still. When no
  * `tokenImagePath` is given, the token defaults to `imagePath` (the common "same art on both" call).
+ *
+ * A swapped token texture lands on whatever prototype settings the actor inherited — a 2024-book
+ * compendium copy ships `texture.scaleX/Y: 2` (a small subject on a big plate) and the dynamic ring
+ * on, which put a trimmed cut-out over its footprint on a dark disc. `normalizePrototype` (default
+ * true) writes exactly `{texture.scaleX: 1, scaleY: 1, ring.enabled: false}` alongside a texture that
+ * actually CHANGES — never on applyToToken:false or a no-op — and reports what it reset. `autoRotate`
+ * is a separate opt-in (`lockRotation: false`): whether the art faces up is a judgment the caller
+ * makes first. Placed tokens are never touched; those still carrying the old art or settings are
+ * listed so the caller can `update-token` or re-drop them.
  */
 export async function setActorArt(data: {
   actorIdentifier: string;
   imagePath: string;
   tokenImagePath?: string;
   applyToToken?: boolean;
+  normalizePrototype?: boolean;
+  autoRotate?: boolean;
 }): Promise<unknown> {
   if (!data.actorIdentifier || !data.imagePath) {
     throw new Error('actorIdentifier and imagePath are both required');
@@ -180,6 +191,28 @@ export async function setActorArt(data: {
   if (img !== undefined) update.img = img;
   if (tokenSrc !== undefined) update['prototypeToken.texture.src'] = tokenSrc;
 
+  // Inherited prototype settings, reset only when the token texture really changes.
+  const proto = actor.prototypeToken ?? {};
+  const textureChanges = tokenSrc !== undefined && proto.texture?.src !== tokenSrc;
+  const normalized: string[] = [];
+  if (textureChanges && data.normalizePrototype !== false) {
+    const sx = proto.texture?.scaleX ?? 1;
+    const sy = proto.texture?.scaleY ?? 1;
+    if (sx !== 1 || sy !== 1) {
+      update['prototypeToken.texture.scaleX'] = 1;
+      update['prototypeToken.texture.scaleY'] = 1;
+      normalized.push(`texture scale ${sx}${sy !== sx ? `×${sy}` : ''} → 1`);
+    }
+    if (proto.ring?.enabled) {
+      update['prototypeToken.ring.enabled'] = false;
+      normalized.push('dynamic ring off');
+    }
+  }
+  if (typeof data.autoRotate === 'boolean' && proto.lockRotation !== !data.autoRotate) {
+    update['prototypeToken.lockRotation'] = !data.autoRotate;
+    normalized.push(data.autoRotate ? 'auto-rotate on' : 'auto-rotate off');
+  }
+
   if (Object.keys(update).length === 0) {
     // Nothing valid to write (e.g. a video imagePath with applyToToken:false).
     return {
@@ -192,6 +225,30 @@ export async function setActorArt(data: {
   }
 
   await actor.update(update);
+
+  // Prototype edits never reach tokens already on a scene — name the ones still carrying the old
+  // texture or the settings just reset (cap the list; the count is the number).
+  const placedTokens: Array<{ scene: string; tokenId: string; name: string; stale: string[] }> = [];
+  if (tokenSrc !== undefined) {
+    for (const scene of game.scenes || []) {
+      for (const token of scene.tokens || []) {
+        if (token.actorId !== actor.id) continue;
+        const stale: string[] = [];
+        if (token.texture?.src !== tokenSrc) stale.push('texture');
+        if (
+          normalized.some(n => n.startsWith('texture scale')) &&
+          (token.texture?.scaleX ?? 1) !== 1
+        )
+          stale.push('scale');
+        if (normalized.includes('dynamic ring off') && token.ring?.enabled) stale.push('ring');
+        if (typeof data.autoRotate === 'boolean' && token.lockRotation !== !data.autoRotate)
+          stale.push('lockRotation');
+        if (stale.length)
+          placedTokens.push({ scene: scene.name, tokenId: token.id, name: token.name, stale });
+      }
+    }
+  }
+
   return {
     success: true,
     updated: true,
@@ -200,6 +257,10 @@ export async function setActorArt(data: {
     img,
     tokenSrc,
     appliedToToken: applyToToken,
+    ...(normalized.length ? { normalized } : {}),
+    ...(placedTokens.length
+      ? { placedTokensStale: placedTokens.length, placedTokens: placedTokens.slice(0, 20) }
+      : {}),
     ...(warnings.length ? { warnings } : {}),
   };
 }
