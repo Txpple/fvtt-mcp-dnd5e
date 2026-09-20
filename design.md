@@ -9,8 +9,11 @@
 
 ## 1. Mission
 
-**`fvtt-mcp-molten5e` is a Dungeon Master's assistant for Foundry VTT (D&D 5e, 2024 rules).**
-It helps a DM **create and run** adventures and campaigns, driven through Claude.
+**`fvtt-mcp-dnd5e` is a Dungeon Master's assistant for Foundry VTT (D&D 5e, 2024 rules).**
+It helps a DM **create and run** adventures and campaigns, driven through Claude. It is a Foundry
+MCP **first**: it drives any live Foundry world — on Molten Hosting, on this machine, at a URL —
+and *where* that world runs is a **host**, an option chosen per registration (§2.6), never the
+product.
 
 There are two halves to that mission, in priority order:
 
@@ -85,6 +88,18 @@ These are not aspirations; they are the rules we hold each other to.
    architectures** because they are genuinely different problems (see §6 and §7). We never force one
    to masquerade as the other.
 
+6. **A host-agnostic core; hosts are options.** The bridge is Foundry's own client, so the whole
+   tool surface works against *any* Foundry instance. Everything that depends on **where** the
+   instance runs — how a sleeping box is woken, how a file reaches its `Data/` directory, which
+   env vars name it — lives behind one seam, `src/hosts/**`, as a **host**: `molten` (Molten
+   Hosting: Magic-URL wake, WebDAV file plane), `local` (an install on this machine: no wake,
+   direct filesystem plane), `generic` (a URL and nothing else). `local` means *on this machine*,
+   never "not Molten" — a self-hosted box elsewhere is its own host when we need it. No file
+   outside `src/hosts/**` may name a host, and a tool never changes behaviour by host except
+   through the plane the host provides (a host without a file plane makes the asset tools say so,
+   by name). The registration picks the host (`FOUNDRY_HOST`); the tool names are the same on all
+   of them, so skills never know which one they are on.
+
 ---
 
 ## 3. The skills ↔ tools contract
@@ -138,6 +153,10 @@ This is the architectural backbone that makes principle #1 real.
 | | Export chats | 2 | ◻️ partial (`export-chat-log`) |
 | | Audio → text (Craig AI + Whisper) | 2 | ✅ done (`session-scribe` — per-track Whisper, chat-aligned) |
 | | Session + audio → summaries / logs | 2 | ✅ done (`session-scribe` → recap / gm-notes / player-safe recap.html) |
+| **Platform** | **Hosts** — one seam for where Foundry runs (`molten` / `local` / `generic`), the file plane per host | 2.2 | 🔨 active (§2.6; `docs/plan-2.2-hosts.md`) |
+| | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | 2.2 | 🔨 active |
+| | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | 2.2 | 🔨 active |
+| | **CRUD consolidation** — the 17 `list/create/update/delete-X` families → `kind` + `op` tools; every skill re-pointed in the same line | 3.0 | 🧭 parked (owner, 2026-09-20 — not inside 2.x) |
 
 Legend: ✅ done · 🔨 active · 🧭 future, architecture must not preclude · ◻️ pieces exist, not the
 focus · ⛔ not started.
@@ -352,6 +371,11 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 - **Headless bridge.** Playwright drives a real headless-Chromium Foundry session. `src/foundry.ts` is
   the `foundry.call()` seam; `src/index.ts` is the stdio MCP entry; page-side logic lives in
   `src/page/**` and is bundled into the browser context.
+- **Hosts.** `src/hosts/**` is the one place that knows where Foundry runs (§2.6). A `Host` gives
+  the bridge its optional `wake` and the tools their optional `FilePlane`; `resolveHostConfig`
+  (`hosts/env.ts`) is the single env selector (`FOUNDRY_HOST`, with the `LOCAL_*` → `MOLTEN_*`
+  fallbacks) shared by the server, the verify scripts and the integration suite. The asset file
+  tools (`src/tools/assets/**`) are written against the plane, never a host.
 - **One registry.** `src/registry.ts` is the single source of truth wiring tool name → handler; the
   advertised tool list is derived from it so the two can't drift.
 - **Generated schemas.** Every tool's input schema is generated from one hoisted zod (`io: 'input'`)
@@ -361,7 +385,8 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
   `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-scribe`,
   `session-audit`, `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
-- **Target stack.** Foundry v14, dnd5e 6.x (the 2.x line; 1.x = dnd5e 5.3.x), Molten Hosting.
+- **Target stack.** Foundry v14, dnd5e 6.x (the 2.x line; 1.x = dnd5e 5.3.x), on any host
+  (§2.6) — the owner's production world is on Molten Hosting, the sandbox is a local install.
   D&D-5e-only by design.
 - **Quality gate.** biome · `tsc --noEmit` · vitest · build · knip, all green before any commit. No
   pre-commit hook — run `biome check --write .` manually.
