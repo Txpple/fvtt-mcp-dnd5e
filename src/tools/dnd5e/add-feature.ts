@@ -3,7 +3,6 @@ import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
 import { formatImportReport } from '../../utils/format.js';
-import { toInputSchema } from '../../utils/schema.js';
 import { DEFAULT_SPELL_PACKS, assertNoSrdPacks } from '../../utils/compendium-sources.js';
 import { DAMAGE_TYPES, WEAPON_PROPERTIES } from '../../utils/dnd5e-canonical.js';
 
@@ -33,7 +32,8 @@ const CLASS_DEFAULT_ABILITY: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 // Single source of truth for a damage component — used both by the per-mode enforcement schemas
-// (handleSave/handleAttack/…) and, via the advertised umbrella schema, by getToolDefinitions().
+// (handleSave/handleAttack/…) and, via the advertised umbrella schema, by add-feature's 'feature'
+// mode (buildAddFeatureTool, grant-to-actor.ts).
 // `z.literal([...])` enforces the same die-size set the old `.refine()` did and also renders as a
 // JSON-Schema `enum`, so the advertised denomination list cannot drift from what is enforced.
 const damagePart = z.object({
@@ -173,7 +173,8 @@ function unknownDamageWarnings(
 // add-feature is a discriminated tool: featureType selects one of seven per-mode handlers, each of
 // which strictly validates its own subset with its own zod schema below. This umbrella is the FLAT
 // advertised surface — every parameter any mode accepts, all optional except the two universal
-// keys — and getToolDefinitions() generates its inputSchema from it via toInputSchema().
+// keys — and buildAddFeatureTool (grant-to-actor.ts) composes it into the advertised add-feature
+// tool as the 'feature' mode params.
 //
 // CAVEAT: the umbrella's field SET and per-field wrappers (.optional()/.default()) are still
 // hand-MAINTAINED in parallel with the per-mode enforcement schemas (a true discriminated union
@@ -549,59 +550,6 @@ export class DnD5eAddFeatureTool {
   constructor({ foundry, logger }: DnD5eAddFeatureToolOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'DnD5eAddFeatureTool' });
-  }
-
-  getToolDefinitions() {
-    return [
-      {
-        name: 'add-feature',
-        description:
-          '[D&D 5e only] Add a feature, attack, spellcasting setup, or spells to an existing actor. ' +
-          'Set featureType to select the mode — each mode uses only its own parameters:\n\n' +
-          '• passive — descriptive trait, no roll (Magic Resistance, Spider Climb).\n' +
-          '  Required: actorIdentifier, featureName\n' +
-          '  Optional: description, featType (monster/class/feat/...), requirements, sourceRules, sourceBook, sourcePage\n\n' +
-          '• save — feature that forces a saving throw (breath weapon, cone of cold, etc.).\n' +
-          '  Required: actorIdentifier, featureName, saveAbility, saveDC, damageParts\n' +
-          '  Optional: description, activationType, halfOnSave, areaType, areaSize ' +
-          '(required if areaType set), areaUnits, affectsType\n\n' +
-          '• attack — weapon attack with to-hit roll (Claw, Bite, Scimitar, etc.).\n' +
-          '  Required: actorIdentifier, featureName, attackType, damageParts\n' +
-          '  Required when ranged: rangeFt\n' +
-          '  Optional: description, activationType, weaponClass, abilityModifier, attackBonus, ' +
-          'proficient, equipped, reachFt, longRangeFt, properties, sourceRules, sourceBook, sourcePage\n\n' +
-          '• attack-with-save — attack roll on hit + forced save for bonus damage ' +
-          '(e.g. Stinger: piercing hit + CON save or poison damage).\n' +
-          '  Required: actorIdentifier, featureName, attackType, damageParts, ' +
-          'saveAbility, saveDC, saveDamageParts\n' +
-          '  Required when ranged: rangeFt\n' +
-          '  Optional: description, activationType, weaponClass, abilityModifier, attackBonus, ' +
-          'proficient, equipped, reachFt, longRangeFt, properties, saveOnSave, ' +
-          'sourceRules, sourceBook, sourcePage\n\n' +
-          '• aura — automatic-damage area, no to-hit, no save (all creatures in range take damage).\n' +
-          '  Required: actorIdentifier, featureName, damageParts, areaType, areaSize\n' +
-          '  Optional: description, activationType, areaUnits, affectsType, ' +
-          'sourceRules, sourceBook, sourcePage\n\n' +
-          '• spellcasting — configure spell slots and casting ability. ' +
-          'Run this BEFORE featureType "spells".\n' +
-          '  Required: actorIdentifier, spellcastingClass, spellcastingLevel\n' +
-          '  Optional: spellcastingAbility (default per class: wizard/artificer→INT, ' +
-          'cleric/druid/ranger→WIS, sorcerer/warlock/bard/paladin→CHA), sourceRules\n\n' +
-          '• spells — import EXISTING named spells from compendium. Names must be in English.\n' +
-          '  Required: actorIdentifier, spellNames (max 50)\n' +
-          `  Optional: compendiumPacks (default ${JSON.stringify([...DEFAULT_SPELL_PACKS])} — premium PHB; never the dnd5e.* SRD)\n\n` +
-          '• homebrew-spell — author a NEW spell from scratch (vs "spells" which imports).\n' +
-          '  Required: actorIdentifier, featureName, spellLevel\n' +
-          '  Optional: description, spellSchool, spellMethod (atwill/innate/ritual/pact/spell), ' +
-          'spellPrepared (0/1/2), spellComponents, spellMaterials, spellRange(+Units), ' +
-          'spellDuration(+Units), activationType, sourceRules, and an optional spellActivity ' +
-          '(attack/save/damage/heal/utility) with its params (damageParts, attackType, ' +
-          'saveAbility+saveDC+saveOnSave, or healAmount)\n\n' +
-          'Use list-actors or get-actor first to find the actorIdentifier.',
-
-        inputSchema: toInputSchema(AddFeatureSchema),
-      },
-    ];
   }
 
   // ---------------------------------------------------------------------------

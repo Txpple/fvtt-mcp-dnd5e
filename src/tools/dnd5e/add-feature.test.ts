@@ -54,20 +54,6 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// getToolDefinitions
-// ---------------------------------------------------------------------------
-
-describe('DnD5eAddFeatureTool.getToolDefinitions', () => {
-  it('exposes the single add-feature tool with an object schema', () => {
-    const { tools } = build();
-    const defs = tools.getToolDefinitions();
-    expect(defs.map(d => d.name)).toEqual(['add-feature']);
-    expect(defs[0].inputSchema.type).toBe('object');
-    expect(defs[0].inputSchema.required).toEqual(['featureType', 'actorIdentifier']);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------
 

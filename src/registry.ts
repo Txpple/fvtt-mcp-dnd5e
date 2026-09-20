@@ -444,6 +444,16 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'bulk-delete': args => organizationTools.handleBulkDelete(args),
   };
 
+  // The two maps must be the same set of names. A definition with no handler is an orphan — a tool
+  // module advertising something the server cannot dispatch (the F44 case: a getToolDefinitions()
+  // that survived its tool's removal) — and fails loudly here, like the reverse case below.
+  const orphans = [...defByName.keys()].filter(name => !Object.hasOwn(handlers, name));
+  if (orphans.length) {
+    throw new Error(
+      `Tool definition(s) with no handler (advertised by a module, never dispatched): ${orphans.join(', ')}`
+    );
+  }
+
   // Every dispatchable tool must sit in exactly one toolset (src/toolsets.ts) — a handler the
   // table doesn't know is a wiring bug that should fail loudly at startup, like a missing definition.
   const toolsetByTool = toolsetOf();

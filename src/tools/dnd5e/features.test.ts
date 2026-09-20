@@ -1,14 +1,13 @@
 /**
  * Unit tests for DnD5eFeaturesFromCompendiumTools
- * (add-features-from-compendium → addFeaturesFromCompendium).
+ * (the add-feature "compendium-features" mode → addFeaturesFromCompendium).
  *
  * Covers:
- *   1. getToolDefinitions — tool name + object inputSchema.
- *   2. zod input validation — required actorIdentifier/featureNames, the
+ *   1. zod input validation — required actorIdentifier/featureNames, the
  *      .min(1)/.max(50) array bounds, non-empty string items.
- *   3. bridge forwarding — method name + parsed payload (incl. the default
+ *   2. bridge forwarding — method name + parsed payload (incl. the default
  *      compendiumPacks) reach foundry.
- *   4. response formatting — the added/skipped/notFound/failed/warnings
+ *   3. response formatting — the added/skipped/notFound/failed/warnings
  *      sections and the status-icon branches of the summary line.
  *
  * handleAddFeaturesFromCompendium calls detectGameSystem() (calls
@@ -47,21 +46,6 @@ function result(overrides: Record<string, any> = {}) {
 
 beforeEach(() => {
   clearSystemCache();
-});
-
-describe('DnD5eFeaturesFromCompendiumTools.getToolDefinitions', () => {
-  it('exposes the single add-features-from-compendium tool', () => {
-    const { tools } = build();
-    const defs = tools.getToolDefinitions();
-    expect(defs.map(d => d.name)).toEqual(['add-features-from-compendium']);
-  });
-
-  it('definition has an object inputSchema with required fields', () => {
-    const { tools } = build();
-    const def = tools.getToolDefinitions()[0];
-    expect(def.inputSchema.type).toBe('object');
-    expect(def.inputSchema.required).toEqual(['actorIdentifier', 'featureNames']);
-  });
 });
 
 describe('handleAddFeaturesFromCompendium — bridge forwarding & formatting', () => {

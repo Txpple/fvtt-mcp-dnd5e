@@ -7,6 +7,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc && node esbuild.page.mjs",
     "build:page": "node esbuild.page.mjs",
     "dev": "npm run build:page && tsc --watch",
@@ -23,6 +24,7 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "knip": "knip",
+    "measure": "node scripts/measure/schema-decompose.mjs && node scripts/measure/schema-toolsets.mjs && node scripts/measure/names-cost.mjs && node scripts/measure/skills-matrix.mjs",
     "spike": "node scripts/spike-headless.mjs"
   },
   "dependencies": {
@@ -56,7 +58,6 @@
     "mcp",
     "claude",
     "claude-code",
-    "molten-hosting",
     "ai",
     "tabletop",
     "rpg"

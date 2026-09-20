@@ -3,7 +3,7 @@
 // This is the number that costs context in Claude Code (where tool schemas are deferred and the
 // results are the bulk of what an MCP puts into the conversation).
 //
-//   FOUNDRY_HOST=local node scripts/measure-tool-results.mjs [--json out.json] [--bodies dir]
+//   FOUNDRY_HOST=local node scripts/measure/tool-results.mjs [--json out.json] [--bodies dir]
 //
 // --bodies writes each call's full result text to <dir>/<tool>[.<n>].txt so the SHAPE of what a
 // client receives can be read, not just its size (which fields a list returns, where a cap cuts).
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SERVER = join(__dirname, '..', 'dist', 'index.js');
+const SERVER = join(__dirname, '..', '..', 'dist', 'index.js');
 const jsonOut = process.argv.includes('--json')
   ? process.argv[process.argv.indexOf('--json') + 1]
   : null;
@@ -102,7 +102,7 @@ try {
   await send('initialize', {
     protocolVersion: '2025-06-18',
     capabilities: {},
-    clientInfo: { name: 'measure-tool-results', version: '0' },
+    clientInfo: { name: 'measure/tool-results', version: '0' },
   });
   const list = await send('tools/list', {});
   const tools = list.result?.tools ?? [];

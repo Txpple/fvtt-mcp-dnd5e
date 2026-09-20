@@ -225,6 +225,7 @@ src/
   tools/            MCP tool classes — Plane A world tools + assets/ (Plane B file tools over the host's plane)
   page/             page-side domain library, bundled into dist/page.bundle.js and injected
 scripts/            dev/maintenance scripts (verify-*.mjs live acceptance, spike-headless)
+  measure/          the context budgets — tools/list bytes, tool-name bytes, skill descriptions (`npm run measure`)
 tests/              gated live integration suites (offline unit tests live beside the code in src/**)
 ```
 
@@ -246,10 +247,15 @@ npx playwright install chromium   # one-time: the headless browser the bridge dr
 npm run build                     # tsc → dist/, then esbuild bundles the in-page library
 ```
 
-`npm run build` runs `tsc && node esbuild.page.mjs`: TypeScript compiles `src/**` to `dist/`, then
-esbuild bundles the page-side library (`src/page/**`) into `dist/page.bundle.js` for injection.
-Tests: `npm test` (offline unit suite on vitest). Live integration suites are gated — see
+`npm run build` clears `dist/` (`prebuild`), then runs `tsc && node esbuild.page.mjs`: TypeScript
+compiles `src/**` to `dist/`, then esbuild bundles the page-side library (`src/page/**`) into
+`dist/page.bundle.js` for injection. Tests: `npm test` (offline unit suite on vitest; it prints the
+context budgets — `tools/list` bytes, tool-name bytes, skill-description bytes — and fails when one
+climbs past its ceiling in `src/measure.test.ts`). Live integration suites are gated — see
 [`vitest.integration.config.ts`](vitest.integration.config.ts) and `npm run test:integration`.
+`npm run measure` prints the same budgets in detail (per tool, per toolset, per skill) from
+`scripts/measure/`; the live per-call result sizes are `FOUNDRY_HOST=local node
+scripts/measure/tool-results.mjs`.
 
 > **Dev watch:** `npm run dev` rebuilds the page bundle once, then runs `tsc --watch` for `src/**`.
 > Because the page library is a **separate** esbuild artifact, editing anything under `src/page/**`

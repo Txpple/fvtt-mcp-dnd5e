@@ -5,8 +5,8 @@ import { toInputSchema } from '../utils/schema.js';
 
 /**
  * Asset-bridge tools — reference integrity + asset→document composition over the live bridge.
- * Unlike the WebDAV file tools in tools/molten, these manipulate live Foundry documents via
- * foundry.call, so they need the world loaded. Scenes moved to tools/scene.ts and playlists to
+ * Unlike the file-plane tools in tools/assets (which talk to the host's file plane, never the
+ * world), these manipulate live Foundry documents via foundry.call, so they need the world loaded. Scenes moved to tools/scene.ts and playlists to
  * tools/playlist.ts so the Node-side classes mirror the page-side domain split (page/assets.ts is the
  * art/reference home); what remains here is the cohesive "asset" pair: reference integrity
  * (find/relink) and asset→document art composition (set-actor-art, add-journal-image).

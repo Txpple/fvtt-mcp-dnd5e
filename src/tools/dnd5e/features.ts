@@ -3,13 +3,12 @@ import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
 import { formatImportReport } from '../../utils/format.js';
-import { toInputSchema } from '../../utils/schema.js';
 import { DEFAULT_FEATURE_PACKS, assertNoSrdPacks } from '../../utils/compendium-sources.js';
 
-// Single source of truth for this tool's input contract: the handler parses with this schema and
-// getToolDefinitions() advertises toInputSchema(...) of the same schema, so the advertised and
-// enforced contracts cannot drift. buildAddFeatureTool imports this schema to compose the
-// add-feature 'compendium-features' mode params from the same zod.
+// Single source of truth for this handler's input contract: the handler parses with this schema
+// and buildAddFeatureTool (grant-to-actor.ts) composes it into the advertised add-feature tool as
+// the 'compendium-features' mode params, so the advertised and enforced contracts cannot drift.
+// (Not advertised as a standalone tool — add-feature is the one MCP entry.)
 export const AddFeaturesFromCompendiumSchema = z.object({
   actorIdentifier: z
     .string()
@@ -57,44 +56,6 @@ export class DnD5eFeaturesFromCompendiumTools {
   constructor({ foundry, logger }: DnD5eFeaturesFromCompendiumToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'DnD5eFeaturesFromCompendiumTools' });
-  }
-
-  getToolDefinitions() {
-    return [
-      {
-        name: 'add-features-from-compendium',
-        description:
-          '[D&D 5e only] Import class features and monster features from an official compendium ' +
-          'pack onto an actor (NPC or PC). Each feature is looked up by EXACT name ' +
-          '(case-insensitive) and embedded onto the actor as-is from the compendium data.\n\n' +
-          'USE THIS TOOL when you need to:\n' +
-          '  - Add monster features by name (e.g. "Pack Tactics", "Nimble Escape", "Multiattack")\n' +
-          '  - Add class features to an NPC caster (e.g. "Spellcasting", "Action Surge", "Font of Magic")\n' +
-          '  - Mix features from monster and class compendiums on a custom NPC\n' +
-          '  - Example: "add Spellcasting, Font of Magic and Metamagic to this sorcerer NPC"\n\n' +
-          '⚠️ IMPORTANT — feature names must be in English: the compendium uses English names. ' +
-          'Translate BEFORE calling if the user provided names in another language.\n\n' +
-          'compendiumPacks controls which premium-book pack(s) to search (priority order, first match wins):\n' +
-          `  - Default ${JSON.stringify([...DEFAULT_FEATURE_PACKS])} → MM monster ` +
-          'features, then PHB class features\n' +
-          '  - SOURCE ONLY from the premium MM/PHB/DMG books — NEVER the dnd5e.* SRD packs (design.md §2.3)\n\n' +
-          'NOTE: CLASS features ARE importable — the individual feature feats live in the classes ' +
-          'pack (dnd-players-handbook.classes) alongside the class items. But a ' +
-          'class/racial feature copied onto an NPC may carry an unresolved @scale.* formula (its ' +
-          'ScaleValue comes from the absent PC class/species advancement). The report flags these as ' +
-          'a fact (unresolvedScale: [{path, formula}] per added feature) — set an explicit die for ' +
-          'the creature; the tool reports the token but never chooses the value (design.md §2.1).\n\n' +
-          'DO NOT USE THIS TOOL for:\n' +
-          '  - Importing spell items → use add-feature with featureType "spells" instead\n' +
-          '  - Setting up spellcasting class or spell slots → use add-feature with featureType "spellcasting"\n' +
-          '  - Creating custom/homebrew features from scratch → compendium-only, no homebrew\n' +
-          '  - Non-dnd5e systems → this tool is dnd5e-exclusive\n\n' +
-          'Returns a detailed report: features added ✅, skipped (already on actor) ⏭️, ' +
-          'not found in compendium ❌, and failed during import ⚠️.\n' +
-          'Use list-actors or get-actor first to find the actorIdentifier.',
-        inputSchema: toInputSchema(AddFeaturesFromCompendiumSchema),
-      },
-    ];
   }
 
   async handleAddFeaturesFromCompendium(args: any): Promise<any> {

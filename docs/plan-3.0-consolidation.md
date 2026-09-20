@@ -57,7 +57,7 @@ diet and must land **after** the prose diet, or a deferred client loads a family
 
 | # | Milestone | Findings | Definition of done (numbers) |
 | --- | --- | --- | --- |
-| **M0** | **Measure & guard** — promote `measure-tool-results`, `perf-schema-decompose`, `perf-schema-toolsets`, `skills-matrix`, `siblings-names-cost` to `scripts/measure/`; unit tests that print the budgets; delete the two dead `getToolDefinitions()`; `prebuild` clean | F44, F48 | the scripts reproduce today's numbers (283,948 · 154,534 · 15,382 · 11,147); `dist/tools/molten` gone |
+| **M0** | **Measure & guard** ✅ 2026-09-20 — `scripts/measure/` (`schema-decompose`, `schema-toolsets`, `names-cost`, `skills-matrix`, the live `tool-results`; `npm run measure`); `src/measure.ts` + `src/measure.test.ts` print and ratchet the three offline budgets on every `npm test`; the two dead `getToolDefinitions()` deleted and the registry refuses an orphan definition at build; `prebuild` clears `dist/` | F44, F48 | done — reproduced 283,945 · 155,100 · 15,381 · 11,147 (the −3 / −1 are the Phase-2 scrub of `7aff73e`; the +566 is world drift: two loot items and the chat log grew since the capture, the other 22 calls byte-identical); `dist/tools/molten` gone |
 | **M1** | **The 6.0.3 pin (official 6.x)** ✅ `c53c2de` 2026-09-20 | F40 | done — left: the #7470 elevation check and `sourceItem.*` in the manage-effect prose (fold into M2) |
 | **M2** | **Results diet** — `name` facet + `limit: 50` + `.strict()` on top-level schemas; ownership reshape; record-level cap; compact projections (search hits keep `uuid`); `list-scenes` fields (+ background on `get-current-scene`); active-scene default for the 32 placeable tools; `nameFilter` on list-actors / list-journals; one search-hit shape; the compendium index warm-up; one list/get/mutation format rule | F6 F7 F8 F9 F17 F18 F19 F20 F41 F43 | 24-call baseline (corrected creature/spell args) **≤ ~112,600 chars**; **0** capped results; **0** zod errors on bare placeable `list-*`; `totalFound` on every search body; `search-compendium` first call **< 1 s** |
 | **M3** | **Skill descriptions + line fixes** — six descriptions applied, the other 11 trimmed; the two stale claims fixed; sidecar → `placeablesPath`; `hp` in `extractDerived`; `defaultArt` / `spells.alwaysPrepared`; `normalizePrototype` | F16 F28 F29 F30 F31 F32 | descriptions **≤ 8,000 chars** with all 40 trigger phrases (`skills-desc-check`); scene-builder's sidecar section ≤ 15 lines; 0 skill lines prescribing the post-art fix-up |
@@ -131,7 +131,12 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   (`docs/architecture-review-2026-09.md`, `c327ac6`) measured the baselines; **M1 done**
   (`c53c2de`) with the launcher / verify-wake fix (`96ed726`); this tracker opened; design.md
   scrubbed of Phase 2 and its §4 updated; HANDOFF.md retired; owner decisions #2, #8, #9, #16, #17
-  answered (`d42dd93`). **Next: M0.** Open for the owner: `verify-wake.mjs` ran against prod for
+  answered (`d42dd93`). **M0 done** (measure & guard): `scripts/measure/` + `npm run measure`,
+  `src/measure.test.ts` prints the budgets on every `npm test` and ratchets them (284,000 /
+  11,200 / 15,400 today; each milestone lowers its own), the F44 orphan guard in `registry.ts`,
+  the F48 `prebuild` clean; the numbers reproduced (283,945 · 155,100 · 15,381 · 11,147).
+  **Next: M2** (the results diet; its first commit carries decision #15's 3-line raw-message fix
+  and decision #18's `bridgeConfig` fix). Open for the owner: `verify-wake.mjs` ran against prod for
   ~2 min before `96ed726` (its first step is a world shutdown; the wake was in progress when
   killed) — check the Molten panel; a bridge connect relaunches the world if it went down.
   Nothing pushed yet.
