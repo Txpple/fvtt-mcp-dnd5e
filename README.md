@@ -43,7 +43,7 @@ speaks 6.x natively — armor class, conditions (including leveled exhaustion), 
 and durations, movement, item rarities, and typed chat messages are all read and written in the 6.0
 shapes, and the compendium readers cope with premium book packs that are still built for 5.x. The
 audit behind it, tool by tool, is in
-[`docs/dnd5e-6.0-compat-review.md`](docs/dnd5e-6.0-compat-review.md).
+[`docs/history/dnd5e-6.0-compat-review.md`](docs/history/dnd5e-6.0-compat-review.md).
 
 What changed at the tool surface:
 
@@ -67,7 +67,7 @@ What changed at the tool surface:
 authored monster trait, magic item or map area can express what a 2024 book entry can. Every shape is
 validated against the 6.0.1 source, re-checked against the 6.0.3 diff, and proven live (`scripts/verify-effects-6.mjs`,
 `scripts/verify-region-effects.mjs`); the plan and status are in
-[`docs/plan-2.1-dnd5e-6-features.md`](docs/plan-2.1-dnd5e-6-features.md).
+[`docs/history/plan-2.1-dnd5e-6-features.md`](docs/history/plan-2.1-dnd5e-6-features.md).
 
 - **`manage-effect`** — **conditions** (the system's Filter JSON, on the whole effect or on one
   change: "+2 AC while Bloodied", "only ranged or thrown weapons"), **rules-type changes** that modify
@@ -118,7 +118,7 @@ validated against the 6.0.1 source, re-checked against the 6.0.3 diff, and prove
 
 No tool behaviour changed in 2.2; what changed is what the project *is*. It was named for one host
 (`fvtt-mcp-molten5e`) while the code had long been host-agnostic in fact — so the host left the
-name and became a **[seam](design.md)** (§2.6, [`docs/plan-2.2-hosts.md`](docs/plan-2.2-hosts.md)):
+name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md`](docs/history/plan-2.2-hosts.md)):
 
 - **`FOUNDRY_HOST`** = `molten` (Magic-URL wake, WebDAV file plane) · `local` (an install on this
   machine — no wake, and the asset file tools work straight on its `Data/` directory, which the
@@ -199,12 +199,12 @@ faithfully into your world. Authoring prefers the **2024** dnd5e data model, sou
 **PHB / DMG / MM**; if the requested content isn't in those packs the tool says so rather than
 inventing it.
 
-**Out of scope (for now):** non-5e game systems; **live session assistance** — monitoring a running
-game and interjecting during play (live chat, running the monsters' combat turns) is the next phase
-(see [`design.md`](design.md) §8), not built yet; AI **map-image** generation (Claude reads a
-*provided* map, it does not draw one); scripting the Molten management panel. (Scene placeables —
-walls, lights, tokens, regions — _are_ authored and edited as scene contents; what's out of scope is
-driving them live on the canvas during a running session.)
+**Out of scope:** non-5e game systems; **live session assistance** — monitoring a running game and
+interjecting during play — by decision (there is no in-session assistant in this project; see
+[`design.md`](design.md) §1); AI **map-image** generation (Claude reads a *provided* map, it does not
+draw one); scripting a hosting provider's management panel. (Scene placeables — walls, lights,
+tokens, regions — _are_ authored and edited as scene contents; what's out of scope is driving them
+live on the canvas during a running session.)
 
 **Removed deliberately: D&D Beyond import.** DDB character exports strip the embedded effect
 automation the premium compendium items carry, so an imported PC looks right and silently fails at

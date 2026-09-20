@@ -24,7 +24,7 @@ scenes **in the user's own world**, without enabling the module as a permanent d
 Strategy is **extract-and-recreate**, not install-as-module: Molten's hosting blocks flipping a
 module's enable-flag and the bridge has no enable-module driver, so "drop the folder and enable it"
 dead-ends. We read the pack off disk, upload its images, and recreate the documents through the tools.
-See [`docs/tom-cartos-import-plan.md`](../../../docs/tom-cartos-import-plan.md) for the full design.
+See [`docs/history/tom-cartos-import-plan.md`](../../../docs/history/tom-cartos-import-plan.md) for the full design.
 
 Tools used: **`read-pack`** (the off-line extractor/detector — owns all the LevelDB/NeDB reading,
 era detection, tile discovery, and asset path-rewrite math), `upload-asset` / **`upload-asset-tree`**

@@ -215,7 +215,7 @@ export async function settleCachedSpellCopies(
     copies = await waitForStability(Date.now() + stableMs + pollMs); // sweep photo-finish arrivals
   }
 
-  // Phase 2: converge to one named copy.
+  // Later: converge to one named copy.
   let { keep, removed } = await convergeToOne(copies);
   let removedTotal = removed;
 

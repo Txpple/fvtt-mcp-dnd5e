@@ -1,9 +1,9 @@
 // Live acceptance: prove the bridge auto-recovers a COLD box end to end.
-//   Phase 1: take the world DOWN to create the cold "no world" state — POST /setup
+//   Step 1: take the world DOWN to create the cold "no world" state — POST /setup
 //            {action:"worldShutdown", adminPassword} (Foundry 14.368's own route, the one
 //            scripts/local-foundry.mjs uses; an admin key gates it, so a GM's bare
 //            game.shutDown() is refused when one is set — it is the fallback without a key).
-//   Phase 2: a fresh bridge.connect() must, with NO human steps, wake the box -> detect
+//   Step 2: a fresh bridge.connect() must, with NO human steps, wake the box -> detect
 //            'no world active' -> launch the world via admin /setup (game.post) -> join ->
 //            game.ready, then round-trip getWorldInfo.
 // DESTRUCTIVE: phase 1 shuts the world down. It therefore refuses to run without an explicit
@@ -53,8 +53,8 @@ async function isDown() {
   }
 }
 
-// ---- Phase 1: take the world down ---------------------------------------------------------
-console.log('PHASE 1 — take the running world down to create the cold state');
+// ---- Step 1: take the world down ---------------------------------------------------------
+console.log('STEP 1 — take the running world down to create the cold state');
 const shutter = new Foundry(cfg, log);
 await shutter.connect();
 const probe = await shutter.evaluate(() => {
@@ -115,8 +115,8 @@ if (!down) {
   process.exit(3);
 }
 
-// ---- Phase 2: cold bring-up entirely via the bridge ---------------------------------------
-console.log('\nPHASE 2 — COLD bring-up via the bridge (wake -> detect no-world -> launch -> join)');
+// ---- Step 2: cold bring-up entirely via the bridge ---------------------------------------
+console.log('\nSTEP 2 — COLD bring-up via the bridge (wake -> detect no-world -> launch -> join)');
 const t0 = Date.now();
 const bridge = new Foundry(cfg, log);
 await bridge.connect();

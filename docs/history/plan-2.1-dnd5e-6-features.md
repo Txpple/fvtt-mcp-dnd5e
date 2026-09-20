@@ -115,7 +115,7 @@ Sizes are single-session estimates for tool + unit tests + skill section; live p
   done over MCP after the CC restart (sandbox): `configure-dnd5e-settings` read, `manage-calendar`
   read, `get-world-info` automation block, and a `manage-effect` create → list round trip of a
   conditional rules effect on a tagged Scout (deleted after). **Maintenance mode resumes** (owner):
-  bug fixes + small dogfood gaps only; Phase 2 stays shelved unless asked.
+  bug fixes + small dogfood gaps only. *(The session-assistance line this referred to was removed on 2026-09-20 — see design.md §1.)*
 
 - [x] **2.1.3 — the review fixes (2026-09-15)**: an owner-requested review of the 2.0/2.1 line
   (11 static lenses + a second independent source-vs-code audit) confirmed six P1s and found four

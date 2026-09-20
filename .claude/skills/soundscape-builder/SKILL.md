@@ -358,5 +358,5 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
   two thin layers with the one template that already contains both.
 - **Surface every warning the tool returns** — missing module, 404 pools, clamps. Don't report a
   working soundscape over a disabled module.
-- **Authoring, not live mixing.** Building and tuning a scene's sets is this phase; riding volumes
-  during play is not.
+- **Authoring, not live mixing.** Building and tuning a scene's sets is the job; riding volumes
+  during play is out of scope.

@@ -110,14 +110,14 @@ viewed). So: build the playlist here, then **hand off to `scene-builder`** (or `
 the scene's `playlist` to this one. Building the audio is this skill; wiring it onto a scene is the
 scene's job.
 
-## Phase boundary — authoring, not live mixing
+## Scope boundary — authoring, not live mixing
 
-Build and wire playlists now. The playlist plays via **scene activation**; manually starting/stopping
-individual tracks, ducking, or live-mixing during a session is **out of scope** (a later, in-play
-phase).
+Build and wire playlists. The playlist plays via **scene activation**; manually starting/stopping
+individual tracks, ducking, or live-mixing during a session is **out of scope** (this project
+authors content and does not run the table).
 
 ## Don't
 
 - Don't invent sound paths — every track is a real uploaded file; offer `upload-asset` if there's none.
 - Don't expect per-track volume — one volume covers the list (pre-balance the files instead).
-- Don't try to start/stop/duck tracks live — that's not this phase; activation plays the playlist.
+- Don't try to start/stop/duck tracks live — out of scope; activation plays the playlist.

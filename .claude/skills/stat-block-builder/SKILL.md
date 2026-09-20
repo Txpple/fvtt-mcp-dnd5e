@@ -64,7 +64,7 @@ with the actor-authoring tools.
   `system.activities.<id>.damage.parts.0.custom.formula` (a 2024 Breath Weapon has TWO activities — a
   cone and a line — patch both). `@prof` resolves fine on NPCs; only advancement-fed `@scale.*` dangles.
   The tool reports the token; **the die is your judgment, never the tool's** (design.md §2.1). (The full
-  advancement-driven experience belongs to the future PC-actor builder — see project notes.)
+  advancement-driven experience is the PC path — `pc-builder` / `create-pc`, design.md §7.)
 
 ## Step 0 — Walk the §6 ladder (prefab first, author last)
 

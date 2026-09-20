@@ -279,7 +279,7 @@ export class JournalTools {
         name: 'update-quest-journal',
         description:
           'Append a new styled section to a quest/journal page from typed blocks (e.g. a heading ' +
-          '"Session 3" + paragraphs of what happened) — the §8 session-log/progress path. You supply ' +
+          '"Session 3" + paragraphs of what happened) — the session-log/progress path. You supply ' +
           'the words as blocks; the tool styles + appends them. By default appends to the first text ' +
           'page; use pageId to target a page, or newPageName to start a new page. Structuring only.',
         inputSchema: toInputSchema(UpdateQuestJournalSchema),
@@ -434,8 +434,8 @@ export class JournalTools {
   }
 
   /**
-   * Append a new styled section (from typed blocks) to a quest/journal page — the progress / §8
-   * session-log path. Structuring only: the words are the caller's blocks; the tool styles + appends.
+   * Append a new styled section (from typed blocks) to a quest/journal page — the progress /
+   * session-recap path. Structuring only: the words are the caller's blocks; the tool styles + appends.
    */
   async handleUpdateQuestJournal(args: any): Promise<any> {
     const request = UpdateQuestJournalSchema.parse(args);

@@ -31,7 +31,7 @@
    type, a guessed price/rarity, a fabricated save DC).
 
 6. **Authoring, not play.** These skills build content. They don't place tokens on a scene, roll dice,
-   spend charges, or run combat — that is out of scope (a future phase).
+   spend charges, or run combat — that is out of scope (there is no in-session assistant in this project).
 
 7. **Finish the reskin — swap off-theme content for REAL content; never a "pretend" note.** When you
    copy-and-modify (rule 4) and the result's theme differs from the base — a radiant Priest reused as a

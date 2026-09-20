@@ -7,8 +7,8 @@ description: >-
   cards", "import a standard deck of cards", or stat out a set of cards. YOU decide the deck's cards —
   their names, face text, art; the tools only STRUCTURE it (the v14 Cards/Card shape) or import a core
   preset deck. Cards have no premium-book compendium, so decks are asset-driven (like scenes): the card
-  art is uploaded, the flavor text is yours. Creation only — dealing / drawing / shuffling in play is a
-  later phase. Composes create-cards / import-cards / list-cards / delete-cards.
+  art is uploaded, the flavor text is yours. Creation only — dealing / drawing / shuffling in play is
+  out of scope. Composes create-cards / import-cards / list-cards / delete-cards.
 ---
 
 # Cards builder
@@ -68,7 +68,7 @@ combine (illustrated card with a caption).
 - **`hand`** — a player's held cards (usually created empty; populated in play later).
 - **`pile`** — a discard / shared table area.
 
-For authoring (this phase) you almost always build a **deck**.
+For authoring you almost always build a **deck**.
 
 ## Deck kinds — pick the contents
 
@@ -86,14 +86,14 @@ Card art is an uploaded image (upload-asset / the scene-style asset path), not a
 the user gives you images, reference them by their Data-relative path in `img`; otherwise build a
 text-only deck (cards still work, they just show text, not a picture).
 
-## Phase boundary — creation only
+## Scope boundary — creation only
 
-Build decks now. **Dealing, drawing, shuffling, and passing cards in play are out of scope** (a later,
-in-play phase) — `create-cards` / `import-cards` set up the stack; running it at the table comes later.
+Build decks. **Dealing, drawing, shuffling, and passing cards in play are out of scope** — this
+project authors content and does not run the table; `create-cards` / `import-cards` set up the stack.
 
 ## Don't
 
 - Don't invent the contents of a **canonical** deck — transcribe the book (Deck of Many Things), or
   **STOP and ASK**.
 - Don't fabricate card art — it's an uploaded asset; a text-only deck is fine without it.
-- Don't try to deal/draw/shuffle — that's not this phase.
+- Don't try to deal/draw/shuffle — out of scope.

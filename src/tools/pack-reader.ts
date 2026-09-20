@@ -19,7 +19,7 @@ import { toInputSchema } from '../utils/schema.js';
 
 // ---------------------------------------------------------------------------
 // read-pack — the deterministic "tool does" half of the tom-cartos-import skill
-// (design.md §2.1 "skills decide, tools do"; build plan docs/tom-cartos-import-plan.md §6.1).
+// (design.md §2.1 "skills decide, tools do"; build plan docs/history/tom-cartos-import-plan.md §6.1).
 //
 // It reads a Tom-Cartos-style Foundry SCENE-PACK MODULE off disk — a `module.json` + LevelDB/NeDB
 // compendium packs — and returns era-normalized documents the create-scene/journal tools consume.

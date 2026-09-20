@@ -5,9 +5,9 @@
 // placeables) — the two axes stay hard-split. Each placeable type is one module file here (schemas,
 // defs, handlers keyed by tool name); this facade composes them and asserts defs↔handlers can't
 // drift. Full library: Tile, AmbientLight, AmbientSound, Drawing, Wall, Token (place/update/delete),
-// Note (pins), Region (+ teleporter special ops). MeasuredTemplate is deferred to the DM-session
-// phase (combat ephemera, not world-building) — the descriptor recipe in
-// docs/scene-placeables-architecture.md §3.6 makes it a cheap add when needed.
+// Note (pins), Region (+ teleporter special ops). MeasuredTemplate is out of scope (combat
+// ephemera, not world-building) — the descriptor recipe in
+// docs/history/scene-placeables-architecture.md §3.6 makes it a cheap add if ever wanted.
 
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';

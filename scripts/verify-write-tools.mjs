@@ -1,4 +1,4 @@
-// Phase-2 WRITE acceptance (Wave 1): exercise the NEW page-side write functions
+// Write acceptance (wave 1): exercise the NEW page-side write functions
 // end-to-end against the live Molten world via the foundry.call seam. Unit tests
 // mock the seam, so these live create -> verify -> delete cycles are the only real
 // correctness gate for the write code. Everything is namespaced "ZZ-MCP-WT" and

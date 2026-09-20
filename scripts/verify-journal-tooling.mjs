@@ -1,4 +1,4 @@
-// Live verification for the Phase-2 journal de-leak — the page-model deepening (per-page ownership) +
+// Live verification for the journal de-leak — the page-model deepening (per-page ownership) +
 // the pure block renderer round-trip + the @UUID-link / append primitives.
 //
 // Drives a real headless Foundry session through the foundry.call seam (fresh dist/, no CC restart).

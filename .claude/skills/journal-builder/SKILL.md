@@ -15,8 +15,8 @@ description: >-
 # Journal builder
 
 The judgment + prose layer for the **written** side of an adventure (design.md §5): handouts, lore,
-read-aloud (boxed) text, quest logs, GM notes — and the §8 landing zone for **session recaps / campaign
-logs**. This is the deliberate inverse of the old behaviour, where the *tool* fabricated quest prose
+read-aloud (boxed) text, quest logs, GM notes — and **session recaps / campaign logs** (where
+`session-scribe` files its output). This is the deliberate inverse of the old behaviour, where the *tool* fabricated quest prose
 (read-aloud, NPC dialogue, hooks). Now **you write the words; the tools only structure + style them.**
 
 ## The line that matters — yours vs the tool's
@@ -45,7 +45,7 @@ SRD · ask-don't-invent). One journal-specific clarification:
   playerVisible?, blocks[] }]` → renders each page's blocks into the house style. Despite the name it
   builds ANY structured journal (handout, lore, notes), not just quests.
 - **`update-quest-journal`** — append a new styled section (from `blocks`) to a page, or start a new
-  page (`newPageName`). The progress-log / §8 session-recap path.
+  page (`newPageName`). The progress-log / session-recap path.
 - **`link-quest-to-npc`** — insert a real `@UUID[Actor.id]{Name}` link to a world NPC, labelled by
   `relationship` (questGiver / target / ally / enemy / contact). Refuses an unknown NPC (no dead links).
 - **`create-journal`** / **`update-journal`** — generic pages: raw HTML content (+ per-page
@@ -84,7 +84,7 @@ page from players, use `playerVisible` (below).
 - **Read-aloud / boxed text** — a `readaloud` block (optionally `playerVisible` as a handout).
 - **GM notes** — `gmnote` + `list`; GM-only (omit `playerVisible`).
 - **Quest log** — the template below; GM-only, often paired with a separate player-handout page.
-- **Session recap / campaign log** — see §8 below.
+- **Session recap / campaign log** — see the section below.
 
 ## The quest page-template (you fill every blank with prose)
 
@@ -137,10 +137,10 @@ house convention — keep it consistent so the sidebar stays trustworthy at a gl
   `@UUID[…]{Label}` link in a `paragraph`/`html` block (get the uuid from `search-compendium-*`). Link
   the real document; don't transcribe its stats into the prose.
 
-## Session recaps & logs (§8 landing zone)
+## Session recaps & logs
 
-design.md §8: later, automated session output (chat + Craig/Whisper transcripts) is **authored as
-journals** — this skill's structures are where it lands. Build that now by hand:
+Session output (`session-scribe`: chat + Craig/Whisper transcripts → recaps) is **authored as
+journals** — this skill's structures are where it lands. The same shapes, by hand:
 
 - A **"Campaign Log"** journal; each session is a `update-quest-journal` append (`heading "Session N —
   <date>"` + `paragraph` recap) onto one log page, OR a new page per session (`newPageName`).

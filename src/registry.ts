@@ -144,7 +144,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const organizationTools = new OrganizationTools({ foundry, logger });
 
   // read-pack: a Node-only tool (no Foundry) — it reads a scene-pack MODULE off disk via the
-  // foundryvtt-cli child process. Seeds the tom-cartos-import skill (docs/tom-cartos-import-plan.md).
+  // foundryvtt-cli child process. Seeds the tom-cartos-import skill (docs/history/tom-cartos-import-plan.md).
   const packReaderTools = new PackReaderTools({ logger });
 
   // Bridge session lifecycle: disconnect-bridge logs the DM Assistant user out of the live world

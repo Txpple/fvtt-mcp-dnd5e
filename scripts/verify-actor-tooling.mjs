@@ -1,5 +1,5 @@
 // Live acceptance for the ACTOR TOOLING build (update-actor, apply-condition, update-actor-item,
-// manage-activity, add-feature spell mode, manage-effect) + the Phase 0 read-fixes. Exercises the
+// manage-activity, add-feature spell mode, manage-effect) + the step-0 read-fixes. Exercises the
 // page-side write/read seams against the live Molten world; unit tests mock the seam, so this is the
 // real correctness gate. Test docs are tagged ZZ-MCP-AT and cleaned up in a finally.
 //
@@ -47,7 +47,7 @@ async function makeTempNpc(name) {
 
 try {
   // =========================================================================
-  // PHASE 0 — R1: get-actor surfaces real derived modifiers (end-to-end).
+  // STEP 0 — R1: get-actor surfaces real derived modifiers (end-to-end).
   // A tagged world copy of the Monster Manual's Barbed Devil (the sandbox mirror carries no
   // hand-placed world actors we can rely on); the checks are for internal consistency between
   // the page's derived block and the Node extractors, not for one creature's numbers.
@@ -106,7 +106,7 @@ try {
   }
 
   // =========================================================================
-  // PHASE 1 — update-actor: full stat-block round-trip on a temp NPC.
+  // STEP 1 — update-actor: full stat-block round-trip on a temp NPC.
   // =========================================================================
   {
     const npc = await makeTempNpc('ZZ-MCP-AT-NPC');
@@ -202,7 +202,7 @@ try {
       : fail('update-actor Set add/remove', `got ${di2.join(',')}`);
   }
 
-  // PHASE 1 — NPC-only fields warn (not error) on a character.
+  // STEP 1 — NPC-only fields warn (not error) on a character.
   {
     const pc = await foundry.evaluate(async () => {
       const a = await globalThis.Actor.create({ name: 'ZZ-MCP-AT-PC', type: 'character' });
@@ -343,7 +343,7 @@ try {
   }
 
   // =========================================================================
-  // PHASE 2 — update-actor-item: dot-path patch + deletePaths on an embedded item.
+  // STEP 2 — update-actor-item: dot-path patch + deletePaths on an embedded item.
   // =========================================================================
   {
     const npc = await makeTempNpc('ZZ-MCP-AT-ITEM');

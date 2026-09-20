@@ -1,4 +1,4 @@
-// Phase-2 WRITE acceptance (Wave 2, dnd5e): drive the dnd5e actor-authoring tools
+// Write acceptance (wave 2, dnd5e): drive the dnd5e actor-authoring tools
 // end-to-end against the live Molten world, then INSPECT the constructed dnd5e
 // system data models (activities, damage, save DCs, spell slots, embedded items)
 // via the page-eval escape hatch. This is the data-model correctness gate that the

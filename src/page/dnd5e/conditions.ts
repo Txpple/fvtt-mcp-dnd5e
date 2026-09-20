@@ -4,7 +4,7 @@
 // supported way to add/remove a status effect by id). It is authoring-only: it sets a creature's
 // condition state, it does NOT run combat automation (no duration tick-down, no save-ends loop).
 //
-// dnd5e 6.0.1 / Foundry 14.367 facts (read from the system source, docs/dnd5e-6.0-compat-review.md):
+// dnd5e 6.0.1 / Foundry 14.367 facts (read from the system source, docs/history/dnd5e-6.0-compat-review.md):
 //  - Valid ids are CONFIG.DND5E.conditionTypes keys (the 26 D&D conditions) plus the broader
 //    CONFIG.statusEffects ids (cover, concentrating, dead, ...). We validate against their union.
 //    ⚠️ dnd5e 6.0 builds CONFIG.statusEffects as a plain OBJECT keyed by id (5.x built an array;

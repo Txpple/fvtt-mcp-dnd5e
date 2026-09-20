@@ -9,23 +9,21 @@
 
 ## 1. Mission
 
-**`fvtt-mcp-dnd5e` is a Dungeon Master's assistant for Foundry VTT (D&D 5e, 2024 rules).**
-It helps a DM **create and run** adventures and campaigns, driven through Claude. It is a Foundry
-MCP **first**: it drives any live Foundry world — on Molten Hosting, on this machine, at a URL —
-and *where* that world runs is a **host**, an option chosen per registration (§2.6), never the
-product.
+**`fvtt-mcp-dnd5e` is a Dungeon Master's content assistant for Foundry VTT (D&D 5e, 2024 rules).**
+It builds and maintains the content of a campaign in a live Foundry world, driven through Claude —
+scenes, NPCs and PCs, items, journals, tables, cards, playlists — table-ready, edition-correct and
+art-bearing, sourced from the premium books; and it records what happened at the table afterwards
+(chat export, combat analytics, session recaps written into the journal). It is a Foundry MCP
+**first**: it drives any live Foundry world — on Molten Hosting, on this machine, at a URL — and
+*where* that world runs is a **host**, an option chosen per registration (§2.6), never the product.
+It is user-facing: anyone can clone it and point it at their own world.
 
-There are two halves to that mission, in priority order:
+**It does not run the game.** There is no live in-session assistant in this project — no event
+feed, no interjecting during play — by decision (owner, 2026-09-20). **3.0 is the last feature
+line** (`docs/plan-3.0-consolidation.md`); after it the project is in maintenance: Foundry / dnd5e
+compatibility events, bug fixes, premium books brought into scope. There is no roadmap beyond it.
 
-1. **Content creation** — *the current focus.* Build the stuff of an adventure: scenes, actors
-   (NPCs and PCs), tables, cards, playlists. Make it table-ready, edition-correct, and art-bearing.
-2. **DM session assistance** — *later.* Monitor a live chat session, interject when useful, and
-   afterward turn the session's chat + audio into logs and adventure summaries.
-
-We are building **half 1** now. Every choice we make in half 1 must leave the door open for half 2,
-but we do not build half 2 yet.
-
-**Where half 1 stands today.** The content-creation building blocks are built — and, crucially, they
+**Where it stands today.** The content-creation building blocks are built — and, crucially, they
 *compose*. The same skills that make one scene or one NPC now assemble a **complete, table-ready
 adventure end to end**, scaled to however much the DM brings:
 
@@ -61,7 +59,9 @@ These are not aspirations; they are the rules we hold each other to.
 3. **Compendium-first — the books are the library; never the SRD.** Our **entire** authoring library
    is the **premium 2024 published books**: the **Monster Manual**, **Player's Handbook**, and
    **Dungeon Master's Guide** (the `dnd-monster-manual.*`, `dnd-players-handbook.*`,
-   `dnd-dungeon-masters-guide.*` packs), assumed always installed.
+   `dnd-dungeon-masters-guide.*` packs), assumed always installed — required for authoring; two
+   further premium books are already in scope as optional extensions (`dnd-heroes-faerun.*`,
+   `dnd-ravenloft-horrors-within.*`) and the non-authoring tools work with none of them.
    **The SRD packs — both the 2024 SRD (`dnd5e.*24`, e.g. `dnd5e.spells24`, `dnd5e.monsterfeatures24`,
    `dnd5e.classes24`) and the older `dnd5e.*` SRD — are NEVER a source. The MM/PHB/DMG supersede them
    in ALL cases.** (The books are supersets of the SRD, so this loses nothing.) **This premium-book set is
@@ -135,46 +135,38 @@ This is the architectural backbone that makes principle #1 real.
 
 ## 4. Scope & roadmap
 
-| Area | Sub-area | Phase | Status |
-| --- | --- | --- | --- |
-| **Content creation** | Scenes | 1 | ✅ working |
-| | Actors → **NPCs** | 1 | ✅ done (§6 ladder; `stat-block-builder`) |
-| | Actors → **PCs** | 1 | ✅ done (`pc-builder`; `create-pc` / `level-up-pc` / `create-pc-from-prefab`, advancement-native `@scale`) |
-| | Actors → PCs → ~~D&D Beyond import~~ | 1 | ❌ **removed 2026-08-17** (§7 — DDB exports strip embedded effects; refuse + build natively) |
-| | **Adventures** (end-to-end assembly) | 1 | ✅ emergent — the blocks compose (§1, §5) |
-| | Journals (handouts, lore, quests, notes) | 1 | ✅ done (`journal-builder`; prose de-leaked) |
-| | Tables (roll tables) | 1 | ✅ done (`table-builder`; v14 results + `@UUID` loot + import) |
-| | Playable cards | 1 | ✅ done (`cards-builder`; face text + preset import) |
-| | Playlists | 1 | ✅ done (`playlist-builder`; scene-builder delegates) |
-| | **dnd5e 6.0 features** — conditional / rules-type effects, expiry events, region + activity behaviors, teleport / transform activities, rarities | 1 | ✅ done 2.1.0–2.1.1 (`manage-effect`, `manage-activity`, `add-region-behavior`; `docs/plan-2.1-dnd5e-6-features.md`) |
-| | **System automation settings + calendar** | 1 | ✅ done 2.1.1 (`configure-dnd5e-settings` read + allow-listed set; `manage-calendar` read / advance / set) |
-| **DM session assistance** | **Event bridge** — live world → Claude (`wait-for-events`) | 2 | ⛔ not started (§8.1 — build first) |
-| | Chat messages & integration | 2 | ◻️ partial (chat tools exist) |
-| | Export chats | 2 | ◻️ partial (`export-chat-log`) |
-| | Audio → text (Craig AI + Whisper) | 2 | ✅ done (`session-scribe` — per-track Whisper, chat-aligned) |
-| | Session + audio → summaries / logs | 2 | ✅ done (`session-scribe` → recap / gm-notes / player-safe recap.html) |
-| **Platform** | **Hosts** — one seam for where Foundry runs (`molten` / `local` / `generic`), the file plane per host | 2.2 | 🔨 active (§2.6; `docs/plan-2.2-hosts.md`) |
-| | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | 2.2 | 🔨 active |
-| | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | 2.2 | 🔨 active |
-| | **CRUD consolidation** — the 17 `list/create/update/delete-X` families → `kind` + `op` tools; every skill re-pointed in the same line | 3.0 | 🧭 parked (owner, 2026-09-20 — not inside 2.x) |
+| Area | Sub-area | Status |
+| --- | --- | --- |
+| **Content creation** | Scenes | ✅ done (`scene-builder`) |
+| | Actors → **NPCs** | ✅ done (§6 ladder; `stat-block-builder`) |
+| | Actors → **PCs** | ✅ done (`pc-builder`; `create-pc` / `level-up-pc` / `create-pc-from-prefab`, advancement-native `@scale`) |
+| | Actors → PCs → ~~D&D Beyond import~~ | ❌ **removed 2026-08-17** (§7 — DDB exports strip embedded effects; refuse + build natively) |
+| | **Adventures** (end-to-end assembly) | ✅ emergent — the blocks compose (§1, §5) |
+| | Journals (handouts, lore, quests, notes) | ✅ done (`journal-builder`; prose de-leaked) |
+| | Tables (roll tables) | ✅ done (`table-builder`; v14 results + `@UUID` loot + import) |
+| | Playable cards | ✅ done (`cards-builder`; face text + preset import) |
+| | Playlists | ✅ done (`playlist-builder`; scene-builder delegates) |
+| | **dnd5e 6.0 features** — conditional / rules-type effects, expiry events, region + activity behaviors, teleport / transform activities, rarities | ✅ done 2.1.0–2.1.1 (`manage-effect`, `manage-activity`, `add-region-behavior`; `docs/history/plan-2.1-dnd5e-6-features.md`) |
+| | **System automation settings + calendar** | ✅ done 2.1.1 (`configure-dnd5e-settings` read + allow-listed set; `manage-calendar` read / advance / set) |
+| **Session record** | Chat: post, list, export (`send-chat-message`, `export-chat-log` …) | ✅ done (`chat-and-narration`) |
+| | Combat analytics (`get-combat-stats`) | ✅ done (reads the house module's stamps) |
+| | Audio → text → recap (`session-scribe`: per-track Whisper, chat-aligned, recaps filed as journals) | ✅ done |
+| **Platform** | **Hosts** — one seam for where Foundry runs (`molten` / `local` / `generic`), the file plane per host | ✅ done 2.2 (§2.6; `docs/history/plan-2.2-hosts.md`) |
+| | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | ✅ done 2.2 |
+| | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | ✅ done 2.2 |
+| | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/plan-3.0-consolidation.md` M1) |
+| | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `op`, every skill re-pointed in the same commit), owner content out, the user-facing docs | 🔨 active (`docs/plan-3.0-consolidation.md`; measured in `docs/architecture-review-2026-09.md`) |
 
-Legend: ✅ done · 🔨 active · 🧭 future, architecture must not preclude · ◻️ pieces exist, not the
-focus · ⛔ not started.
+Legend: ✅ done · 🔨 active (the 3.0 line — the last one).
 
-**We do not start a Phase-2 capability until Phase-1 content creation is where we want it.** The one
-exception is that Phase-1 work must not architecturally block Phase-2 (e.g. keep chat/transcript
-plumbing clean).
-
-**Phase 1 is now feature-complete.** Every content building block above is built, and they compose
-into **end-to-end adventures** (§1, §5) — from "here's a map, make me a module" to "here's my module,
-put it in the VTT." With Phase 1 there, the first **Phase-2** increment has landed: the post-session
-**audio → transcript → recap** pipeline (`session-scribe`), on top of the chat/export plumbing it uses.
-The remaining Phase-2 frontier is **live** assistance — the §8.1 event bridge (`wait-for-events`) and
-the in-session loop that rides it — still to build.
+Every content building block is built, and they compose into **end-to-end adventures** (§1, §5) —
+from "here's a map, make me a module" to "here's my module, put it in the VTT." What remains is
+3.0: make it cheap in context, make it the dnd5e MCP for anyone, and stop. After 3.0 the §4 table
+only ever gains compatibility notes and premium books.
 
 ---
 
-## 5. Content creation — the current phase
+## 5. Content creation — the building blocks
 
 The DM's adventure is assembled from these building blocks. Each gets its own skill(s) for judgment
 and its own deterministic tools for correctness — and the blocks **compose end to end**: a single
@@ -184,11 +176,10 @@ or as little as they like (§1).
 - **Scenes** *(working)* — turn a map image into a ready-to-play scene: auto-size to the image, set
   mood/lighting/weather/fog, attach playlists and journals.
 - **Actors** — the creatures and characters. Split hard into **NPCs** (§6) and **PCs** (§7) — both
-  built. This split is the most important structural decision in the content phase.
+  built. This split is the most important structural decision in the content surface.
 - **Journals** — the written layer of an adventure: handouts, lore/gazetteer entries, read-aloud
   (boxed) text, quest logs, and the GM's own notes. Includes quest journals and linking quests to the
-  NPCs that give them. This is also the **landing zone for Phase-2 session summaries & logs** (§8) — we
-  build the journal capability now, and later session output writes into it.
+  NPCs that give them. This is also where session recaps are filed (`session-scribe`).
 - **Tables** — roll tables for loot, encounters, rumors, wild magic, etc.
 - **Playable cards** — Foundry card decks/hands/piles for in-play use.
 - **Playlists** — audio ambiences and tracks, attachable to scenes.
@@ -198,7 +189,7 @@ make the building blocks usable; it is not itself a headline scope item.
 
 ---
 
-## 6. NPC authoring doctrine *(current focus — follow this exactly)*
+## 6. NPC authoring doctrine *(follow this exactly)*
 
 NPCs are **`type: npc`** actors. The skill's job is to produce a complete, table-ready creature using
 the **premium 2024 MM/PHB/DMG books** as its library — **never the SRD** (§2.3). There is a strict
@@ -265,7 +256,7 @@ These are correctness truths the tools must honor (carried from prior dogfooding
 
 ---
 
-## 7. PC authoring *(built — current phase)*
+## 7. PC authoring *(built)*
 
 PCs are a **different product** with their **own skill + tool architecture** — the `pc-builder` skill
 over `create-pc` / `inspect-pc-advancement` / `level-up-pc` / `create-pc-from-prefab`. They are
@@ -299,72 +290,7 @@ player's choices, never as a data source.
 
 ---
 
-## 8. DM session assistance *(future phase)*
-
-When Phase 1 is where we want it, this is next. Captured here so we plumb toward it, not into a
-corner.
-
-- **Chat integration** — read and post to the Foundry chat log; monitor a live session and interject
-  with narration, NPC dialogue, GM whispers, roll requests, item/attack cards. Live monitoring rides
-  the **event bridge** (§8.1), never polling.
-- **Export** — capture the session transcript (`export-chat-log` is the seed of this).
-- **Audio capture & transcription** — ingest **Craig** (Discord) recordings and run **Whisper**
-  speech-to-text to get a spoken transcript alongside the chat transcript.
-- **Summaries & logs** — fuse the chat transcript and the Craig/Whisper audio transcript into session
-  recaps and ongoing campaign logs, **authored as journals** (the §5 building block): Phase 1 builds
-  the journal capability, Phase 2 writes session output into it.
-
-### 8.1 The event bridge — how the live world reaches Claude
-
-Live assistance means the world **pushes** to Claude, not Claude polling the world. This
-architecture is binding for Phase 2, and it splits on §3 exactly.
-
-**Ground truth (why this shape).** The Foundry server broadcasts every document change — chat
-message, combat turn, token move, actor update — over its websocket to **every connected client**,
-and each client fires local `Hooks` events as those land. Our headless bridge **is a logged-in
-client**, so it already receives the entire live feed in real time; we only have to listen. Foundry
-has no server-side plugin API (and Molten would not permit one), so a listening client is not a
-workaround — it is the only correct architecture. **No module is required for the event feed.**
-
-**The tool side (deterministic).**
-
-- A page-side listener (`src/page/**`) subscribes a curated hook set (chat, combat, token/scene
-  activity, user connect/disconnect) and normalizes each firing into a compact envelope:
-  `{seq, ts, type, userId, sceneId, payload}`. It records; it never judges relevance.
-- Playwright's `exposeBinding` delivers each envelope to the Node process the instant the hook
-  fires — genuine push, zero polling.
-- Node keeps a bounded ring buffer with a monotonic cursor.
-- One new tool, **`wait-for-events`**, exposes the buffer as a long-poll contract:
-  `{since, filter, timeoutMs}` → returns immediately if matching events are buffered, otherwise
-  blocks until the first match or the timeout (then returns an empty batch). Every response carries
-  the next cursor; if `since` has fallen off the buffer, the response **says so explicitly** —
-  events are never silently dropped. The contract is deterministic and unit-testable like any other
-  tool.
-
-MCP is client-driven — a server cannot spontaneously prompt Claude. The long-poll is what makes push
-effective anyway: while a `wait-for-events` call is outstanding, reaction latency is the hook
-firing.
-
-**The skill side (judgment).** A `session-assist` skill owns the loop: call `wait-for-events`,
-judge, act through the existing tools, repeat. All discretion lives here — which event types to
-subscribe, when to interject versus stay silent, the voice and visibility of each interjection (GM
-whisper vs. table-visible), when chat assistance escalates into running the monsters' combat turns,
-and when the session is over. The tool never decides that an event is "interesting"; the skill never
-re-implements delivery.
-
-**The companion module (separate, later).** A published module (an `openserver` sibling, outside
-this repo) adds the human-facing half the broadcast cannot carry: UI on the players'/GM's clients
-(an "ask" button, suggestion panels, a "Claude is thinking" indicator) and a module socket channel
-(`game.socket`) for events that aren't document CRUD. Its emissions arrive at the bridge client and
-enter the same envelope pipe. This document fixes only that contract; the module is never a
-prerequisite for the feed.
-
-**Build order.** The listener + `wait-for-events` land first — pure this-repo work, and they alone
-unlock live chat monitoring and the combat loop. The module follows as the player-facing face.
-
----
-
-## 9. Implementation snapshot (where the architecture stands)
+## 8. Implementation snapshot (where the architecture stands)
 
 This is *how* the contract in §3 is realized today. (Mechanism, not mission — update as it evolves.)
 
@@ -385,18 +311,18 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
   `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-scribe`,
   `session-audit`, `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
-- **Target stack.** Foundry v14, dnd5e 6.x (the 2.x line; 1.x = dnd5e 5.3.x), on any host
-  (§2.6) — the owner's production world is on Molten Hosting, the sandbox is a local install.
-  D&D-5e-only by design.
+- **Target stack.** Foundry v14 (14.368 verified), dnd5e 6.x (6.0.3 verified; the 2.x/3.x line —
+  1.x = dnd5e 5.3.x), on any host (§2.6). D&D-5e-only by design.
 - **Quality gate.** biome · `tsc --noEmit` · vitest · build · knip, all green before any commit. No
   pre-commit hook — run `biome check --write .` manually.
 
 ---
 
-## 10. How we use this document
+## 9. How we use this document
 
 - **Before building**, locate the work on this page. If it isn't here, decide whether it's in scope —
-  and if so, add it here first. (The 2.1 line added three capability areas this way after the fact:
+  and if so, add it here first. After 3.0 the answer is almost always "no": maintenance changes
+  what exists, it does not add. (The 2.1 line added three capability areas this way after the fact:
   system automation settings + calendar (`configure-dnd5e-settings`, `manage-calendar`) and areas
   with dnd5e behaviors (`add-region-behavior`, activity `behaviors`) — now rows in the §4 table.)
 - **When a skill and a tool seem to overlap**, re-read §2.1 and §3 and put each concern on the correct
