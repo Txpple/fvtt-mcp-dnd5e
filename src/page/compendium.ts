@@ -58,6 +58,40 @@ interface CompendiumEntryFull {
   fullData: Record<string, unknown>;
 }
 
+/** The packs a name search walks: every non-SRD pack that is not a Scene pack. */
+function searchablePacks(packType?: string): any[] {
+  return excludeSrdPacks(
+    Array.from(game.packs.values()) as any[],
+    (pack: any) => pack.metadata.id
+  ).filter((pack: any) => {
+    if (packType && pack.metadata.type !== packType) return false;
+    return pack.metadata.type !== 'Scene';
+  });
+}
+
+// The one in-flight index build per browser session. Foundry indexes a pack lazily on its first
+// getIndex — one pack of the premium set costs ~10 s cold (measured 2026-09-20: 91% of a 12 s
+// first search) — and remembers the index for the session, so warming once after the bundle is
+// injected moves that cost off the first search. A search that arrives while the warm-up runs
+// awaits the same promise instead of racing it.
+let indexWarmUp: Promise<{ packs: number; built: number; ms: number }> | null = null;
+
+/**
+ * Index every searchable pack that is not indexed yet, all in flight at once. Idempotent per
+ * session: a second call returns the first call's promise. Never throws — a pack that fails to
+ * index is skipped (the search skips it too).
+ */
+export function warmCompendiumIndexes(): Promise<{ packs: number; built: number; ms: number }> {
+  if (indexWarmUp) return indexWarmUp;
+  const started = Date.now();
+  const packs = searchablePacks();
+  const cold = packs.filter((pack: any) => !pack.indexed);
+  indexWarmUp = Promise.all(cold.map((pack: any) => pack.getIndex({}).catch(() => undefined))).then(
+    () => ({ packs: packs.length, built: cold.length, ms: Date.now() - started })
+  );
+  return indexWarmUp;
+}
+
 /**
  * Search every (non-Scene) premium compendium pack's index for entries whose NAME matches all
  * whitespace-separated terms in the query. Name-only matching — descriptions/traits are not
@@ -85,18 +119,11 @@ export async function searchCompendium(
     throw new Error('Search query must contain valid search terms');
   }
 
-  // Filter packs by requested type; never search Scene packs; never search SRD packs.
-  // SRD (`dnd5e.*`) packs are excluded outright (design.md §2.3) — dropping them here, before we
-  // index, also keeps the RESULT_LIMIT budget reserved for the premium books.
-  const packs: any[] = excludeSrdPacks(
-    Array.from(game.packs.values()) as any[],
-    (pack: any) => pack.metadata.id
-  ).filter((pack: any) => {
-    if (packType && pack.metadata.type !== packType) {
-      return false;
-    }
-    return pack.metadata.type !== 'Scene';
-  });
+  // Never search Scene packs; never search SRD packs (design.md §2.3). The session's index
+  // warm-up (warmCompendiumIndexes, fired at connect) has usually built every index by now; if
+  // it is still running, wait for it rather than building the same indexes a second time.
+  const packs = searchablePacks(packType);
+  await warmCompendiumIndexes();
 
   const results: CompendiumSearchResult[] = [];
 

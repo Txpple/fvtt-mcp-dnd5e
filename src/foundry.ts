@@ -155,6 +155,20 @@ export class Foundry implements FoundryBridge {
     await this.injectBundle(this.page);
     this.ready = true;
     this.log.info(`connected as "${this.cfg.user}" — game.ready`);
+    this.warmIndexes();
+  }
+
+  /**
+   * Fire the page's compendium index warm-up and move on: the first search of a session paid
+   * ~11 s of cold getIndex (one premium pack is 91% of it) before this; now that build overlaps
+   * whatever the session does first. A search that lands mid-warm-up awaits the same build.
+   */
+  private warmIndexes(): void {
+    void this.invoke<{ packs: number; built: number; ms: number }>('warmCompendiumIndexes')
+      .then(r =>
+        this.log.info(`compendium indexes warm: ${r.built} built of ${r.packs} in ${r.ms} ms`)
+      )
+      .catch(err => this.log.warn(`compendium index warm-up failed: ${(err as Error).message}`));
   }
 
   /**

@@ -90,7 +90,12 @@ import {
   updateActor,
   updateActorItem,
 } from './actors.js';
-import { searchCompendium, getAvailablePacks, getCompendiumDocumentFull } from './compendium.js';
+import {
+  searchCompendium,
+  getAvailablePacks,
+  getCompendiumDocumentFull,
+  warmCompendiumIndexes,
+} from './compendium.js';
 import {
   listJournals,
   getJournalContent,
@@ -249,6 +254,7 @@ const api = {
   updateActorItem,
   // compendium
   searchCompendium,
+  warmCompendiumIndexes,
   getAvailablePacks,
   getCompendiumDocumentFull,
   searchCompendiumFaceted,
