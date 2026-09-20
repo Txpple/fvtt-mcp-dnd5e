@@ -16,20 +16,12 @@
 //
 // Drives a real headless Foundry session (fresh dist/, no CC restart). Throwaway fixture user +
 // actor, cleaned in finally. Build first: npm run build. Run: node scripts/verify-ownership-inherit.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { OwnershipTools } from '../dist/tools/ownership.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2].trim();
-}
+const env = loadEnv();
 
 const TAG = 'ZZ-OWNTEST';
 // A distinct name for the bystander player — the tool's player lookup does PARTIAL matching, so

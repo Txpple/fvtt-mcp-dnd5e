@@ -13,19 +13,11 @@
 // — these are world-level switches, not tagged documents.
 //
 // Build first: npm run build. Run: FOUNDRY_PROFILE=local node scripts/verify-settings-calendar.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2].trim();
-}
+const env = loadEnv();
 
 let passes = 0;
 let fails = 0;

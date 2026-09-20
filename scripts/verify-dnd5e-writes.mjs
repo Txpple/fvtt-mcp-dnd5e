@@ -6,28 +6,15 @@
 // from wave 1). Everything is on one disposable NPC, deleted at the end.
 //
 // Build first: `npm run build`. Run: node scripts/verify-dnd5e-writes.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { DnD5eNpcTools } from '../dist/tools/dnd5e/npc.js';
 import { DnD5eAddFeatureTool } from '../dist/tools/dnd5e/add-feature.js';
 import { DnD5eFeaturesFromCompendiumTools } from '../dist/tools/dnd5e/features.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const NAME = 'ZZ-MCP-WT Dragon';
 
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 const logger = {
   debug() {},
   info() {},

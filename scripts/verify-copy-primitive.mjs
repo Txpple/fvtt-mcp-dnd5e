@@ -15,19 +15,11 @@
 // Everything created is namespaced with TAG and cleaned up in `finally`.
 //
 // Build first: npm run build. Run: node scripts/verify-copy-primitive.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
-import { hostFor } from './lib/bridge-config.mjs';
+import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
 
 const TAG = 'ZZ-COPY-IT';
 let passes = 0;
@@ -60,15 +52,8 @@ async function expectThrow(label, fn, re) {
   }
 }
 
-const f = new Foundry({
-  serverUrl: env.MOLTEN_SERVER_URL,
-  host: hostFor(env),
-  user: env.FOUNDRY_USER || 'MCP-Claude',
-  password: env.FOUNDRY_PASSWORD,
-  // Allow the script to bring up a fully-cold Molten box on its own (mirrors the integration setup).
-  adminKey: env.MOLTEN_ADMIN_KEY,
-  worldId: env.MOLTEN_WORLD_ID,
-});
+// The host FOUNDRY_HOST selects (the admin key rides along, so a cold box comes up on its own).
+const f = new Foundry(bridgeConfig(env));
 
 let actorId; // created world actor (cleaned up in finally)
 let worldItemId; // created world item (cleaned up in finally)
@@ -83,8 +68,8 @@ try {
     f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 }),
     f.call('searchCompendiumFaceted', { documentType: 'weapon', limit: 1 }),
   ]);
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
-  const wHit = (Array.isArray(weapons) ? weapons : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound};
+  const wHit = (weapons?.results ?? [])[0]; // M2: one search shape {results, totalFound};
   assert(cHit?.pack && cHit?.id, `found a source creature: ${cHit?.name} (${cHit?.pack})`);
   assert(wHit?.pack && wHit?.id, `found a source weapon: ${wHit?.name} (${wHit?.pack})`);
   if (!cHit?.pack || !wHit?.pack) throw new Error('could not resolve source creature/weapon hits');

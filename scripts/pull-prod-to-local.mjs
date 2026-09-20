@@ -7,7 +7,7 @@
 // modules via scripts/deploy-house-module.mjs) — never content.
 //
 // What it does, in order:
-//   1. Wakes the Molten box if it is asleep (MOLTEN_MAGIC_URL), since WebDAV needs the VM live.
+//   1. Wakes the Molten box if it is asleep (FOUNDRY_WAKE_URL), since WebDAV needs the VM live.
 //   2. Refuses to snapshot the world DB while a session is being PLAYED (users connected) —
 //      copying LevelDB mid-write can tear the snapshot. Idle-but-active (0 users) is fine.
 //   3. Refuses to overwrite the LOCAL world while the local Foundry has it ACTIVE (same risk,
@@ -27,15 +27,17 @@
 //
 //   node scripts/pull-prod-to-local.mjs [targets...] [--to <localDataRoot>] [--dry-run] [--force] [--no-delete]
 //
-//   node scripts/pull-prod-to-local.mjs                       # full refresh into LOCAL_FOUNDRY_DATA
+//   node scripts/pull-prod-to-local.mjs                       # full refresh into FOUNDRY_DATA_DIR
 //   node scripts/pull-prod-to-local.mjs --dry-run             # show the plan, change nothing
 //   node scripts/pull-prod-to-local.mjs modules/lootshelf     # one module only
 //   node scripts/pull-prod-to-local.mjs "C:\...\Data" assets  # legacy positional root still works
 //
-// Config comes from the repo .env: MOLTEN_WEBDAV_URL / _USER / _PASSWORD, MOLTEN_WORLD_ID,
-// MOLTEN_SERVER_URL, MOLTEN_MAGIC_URL, and LOCAL_FOUNDRY_DATA (the local Data dir --to defaults
-// to). First proven as a full clone 2026-08-07 (world 444 MB + modules 3.0 GB, 10,959 files,
-// 0 failures); incremental mirror since 2026-08-19.
+// Config is the two hosts' — a host-PAIR op, the one script that reads both presets from the
+// same .env (src/hosts/env.ts; the 2.x MOLTEN_* / LOCAL_* names as aliases): the `molten` host's
+// WebDAV plane (derived from FOUNDRY_URL + FOUNDRY_WEBDAV_PASSWORD), world id and wake URL, and
+// the `local` host's FOUNDRY_DATA_DIR (what --to defaults to). First proven as a full clone
+// 2026-08-07 (world 444 MB + modules 3.0 GB, 10,959 files, 0 failures); incremental mirror since
+// 2026-08-19.
 import {
   existsSync,
   mkdirSync,
@@ -48,16 +50,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { loadEnv } from '../dist/env.js';
+import { resolveHostConfig } from '../dist/hosts/index.js';
 import { WebDavClient } from '../dist/hosts/webdav.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
+const PROD = resolveHostConfig(env, 'molten');
+const LOCAL = resolveHostConfig(env, 'local');
 
 // ---------------------------------------------------------------------------
 // Arguments
@@ -66,7 +65,7 @@ const rawArgs = process.argv.slice(2);
 const force = rawArgs.includes('--force');
 const noDelete = rawArgs.includes('--no-delete');
 const dryRun = rawArgs.includes('--dry-run');
-let localRoot = env.LOCAL_FOUNDRY_DATA || '';
+let localRoot = LOCAL.dataDir ?? '';
 const positionals = [];
 for (let i = 0; i < rawArgs.length; i++) {
   const a = rawArgs[i];
@@ -88,13 +87,14 @@ if (!localRoot) {
   console.error(
     'usage: node scripts/pull-prod-to-local.mjs [targets...] [--to <localDataRoot>] [--dry-run] [--force] [--no-delete]'
   );
-  console.error('No local Data root: pass --to or set LOCAL_FOUNDRY_DATA in .env');
-  console.error('  e.g. LOCAL_FOUNDRY_DATA=C:\\Users\\me\\AppData\\Local\\FoundryVTT\\Data');
+  console.error('No local Data root: pass --to or set FOUNDRY_DATA_DIR in .env');
+  console.error('  e.g. FOUNDRY_DATA_DIR=C:\\Users\\me\\AppData\\Local\\FoundryVTT\\Data');
   process.exit(2);
 }
-if (!env.MOLTEN_WEBDAV_PASSWORD) {
+if (!PROD.webdav) {
   console.error(
-    'MOLTEN_WEBDAV_PASSWORD is not set in .env (File Manager password from the Molten panel).'
+    'FOUNDRY_WEBDAV_PASSWORD is not set in .env (the File Manager password from the Molten panel; ' +
+      'the URL and user are derived from FOUNDRY_URL under FOUNDRY_HOST=molten).'
   );
   process.exit(2);
 }
@@ -102,17 +102,17 @@ if (!env.MOLTEN_WEBDAV_PASSWORD) {
 const noop = () => {};
 const silent = { info: noop, warn: noop, error: noop, debug: noop };
 const dav = new WebDavClient({
-  webdavUrl: env.MOLTEN_WEBDAV_URL,
-  user: env.MOLTEN_WEBDAV_USER || 'foundry-ftp',
-  password: env.MOLTEN_WEBDAV_PASSWORD,
+  webdavUrl: PROD.webdav.url,
+  user: PROD.webdav.user,
+  password: PROD.webdav.password,
   logger: silent,
   timeoutMs: 60000,
 });
 // Short-timeout twin for liveness probes (a sleeping box should fail fast, not hang 60s).
 const probe = new WebDavClient({
-  webdavUrl: env.MOLTEN_WEBDAV_URL,
-  user: env.MOLTEN_WEBDAV_USER || 'foundry-ftp',
-  password: env.MOLTEN_WEBDAV_PASSWORD,
+  webdavUrl: PROD.webdav.url,
+  user: PROD.webdav.user,
+  password: PROD.webdav.password,
   logger: silent,
   timeoutMs: 8000,
 });
@@ -129,14 +129,14 @@ async function boxAwake() {
   }
 }
 if (!(await boxAwake())) {
-  if (!env.MOLTEN_MAGIC_URL) {
-    console.error('Molten box is unreachable over WebDAV and MOLTEN_MAGIC_URL is not set.');
+  if (!PROD.wakeUrl) {
+    console.error('Molten box is unreachable over WebDAV and FOUNDRY_WAKE_URL is not set.');
     console.error('Wake the server from the Molten panel, then re-run.');
     process.exit(1);
   }
   console.error('box asleep — waking via Magic URL ...');
   try {
-    await fetch(env.MOLTEN_MAGIC_URL, { signal: AbortSignal.timeout(30000) });
+    await fetch(PROD.wakeUrl, { signal: AbortSignal.timeout(30000) });
   } catch {
     /* the GET itself often times out while the VM boots; the poll below is the real check */
   }
@@ -160,9 +160,9 @@ if (!(await boxAwake())) {
 // ---------------------------------------------------------------------------
 // 2. Prod-side LevelDB guard: never snapshot a world that is being actively played.
 // ---------------------------------------------------------------------------
-if (env.MOLTEN_SERVER_URL) {
+{
   try {
-    const res = await fetch(`${env.MOLTEN_SERVER_URL.replace(/\/+$/, '')}/api/status`, {
+    const res = await fetch(`${PROD.serverUrl.replace(/\/+$/, '')}/api/status`, {
       signal: AbortSignal.timeout(15000),
     });
     const status = res.ok ? await res.json() : null;
@@ -229,12 +229,12 @@ let targets = positionals.map(t => t.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '
 if (!targets.length) {
   const worldEntries = await dav.propfind('worlds', '1');
   const worldIds = worldEntries.filter(e => e.isDirectory && e.path !== 'worlds').map(e => e.name);
-  let worldId = env.MOLTEN_WORLD_ID;
+  let worldId = PROD.worldId;
   if (worldId && !worldIds.includes(worldId)) {
     console.error(
-      `MOLTEN_WORLD_ID "${worldId}" is not on the box. Worlds found: ${worldIds.join(', ') || '(none)'}`
+      `FOUNDRY_WORLD_ID "${worldId}" is not on the box. Worlds found: ${worldIds.join(', ') || '(none)'}`
     );
-    console.error('Fix MOLTEN_WORLD_ID in .env (worlds are deleted+recreated during setup).');
+    console.error('Fix FOUNDRY_WORLD_ID in .env (worlds are deleted+recreated during setup).');
     process.exit(1);
   }
   if (!worldId) {
@@ -242,7 +242,7 @@ if (!targets.length) {
       console.error(
         `Cannot pick a world automatically. Worlds on the box: ${worldIds.join(', ') || '(none)'}`
       );
-      console.error('Set MOLTEN_WORLD_ID in .env or pass worlds/<id> explicitly.');
+      console.error('Set FOUNDRY_WORLD_ID in .env or pass worlds/<id> explicitly.');
       process.exit(1);
     }
     worldId = worldIds[0];

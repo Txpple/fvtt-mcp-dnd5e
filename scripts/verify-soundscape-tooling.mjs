@@ -14,22 +14,15 @@
 // scene ends exactly as it started. Defaults to the LOCAL sandbox; --prod targets Molten.
 //
 // Build first: npm run build.
-// Run: node scripts/verify-soundscape-tooling.mjs [--prod] [--scene "<name>"]
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+// Run: FOUNDRY_HOST=local node scripts/verify-soundscape-tooling.mjs [--prod] [--scene "<name>"]
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
-import { hostFor } from './lib/bridge-config.mjs';
+import { bridgeConfig } from './lib/bridge-config.mjs';
+import { hostKindFromEnv } from '../dist/hosts/index.js';
 import { buildToolRegistry } from '../dist/registry.js';
 import { Logger } from '../dist/logger.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
 
 const argv = process.argv.slice(2);
 const prod = argv.includes('--prod');
@@ -40,24 +33,9 @@ const MODULE_ID = 'fvtt-mod-soundscape';
 // Seeded in the sandbox's Data root; its audio resolves, so the clean-add path is provable.
 const RESOLVING_TEMPLATE = 'Combat Muffled 1';
 
-const f = new Foundry(
-  prod
-    ? {
-        serverUrl: env.MOLTEN_SERVER_URL,
-        host: hostFor(env),
-        user: env.FOUNDRY_USER || 'DM Assistant',
-        password: env.FOUNDRY_PASSWORD,
-        adminKey: env.MOLTEN_ADMIN_KEY,
-        worldId: env.MOLTEN_WORLD_ID,
-      }
-    : {
-        serverUrl: env.LOCAL_SERVER_URL || 'http://localhost:30000',
-        user: env.LOCAL_FOUNDRY_USER || env.FOUNDRY_USER || 'DM Assistant',
-        password: env.LOCAL_FOUNDRY_PASSWORD ?? env.FOUNDRY_PASSWORD,
-        adminKey: env.LOCAL_ADMIN_KEY,
-        worldId: env.LOCAL_WORLD_ID || env.MOLTEN_WORLD_ID,
-      }
-);
+const kind = prod ? 'molten' : process.env.FOUNDRY_HOST ? hostKindFromEnv(process.env) : 'local';
+const cfg = bridgeConfig(env, { host: kind, quiet: true });
+const f = new Foundry(cfg);
 
 let pass = 0;
 let fail = 0;
@@ -86,6 +64,7 @@ const rejects = async (label, fn, pattern) => {
 
 const registry = buildToolRegistry({
   foundry: f,
+  host: cfg.host,
   logger: new Logger({ level: 'error', format: 'simple' }),
 });
 const call = args => registry.dispatch('configure-soundscape', args);

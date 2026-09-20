@@ -4,24 +4,11 @@
 // real correctness gate. Test docs are tagged ZZ-MCP-AT and cleaned up in a finally.
 //
 // Build first: npm run build. Run: node scripts/verify-actor-tooling.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { extractActorStats, extractActorBasicInfo } from '../dist/tools/dnd5e/actor-stats.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 const env = loadEnv();
 const foundry = new Foundry(bridgeConfig(env));
 

@@ -9,23 +9,12 @@
 // DESTRUCTIVE: phase 1 shuts the world down. It therefore refuses to run without an explicit
 // host — `FOUNDRY_HOST=local node scripts/verify-wake.mjs` (the sandbox: no wake, straight to
 // /join, then the /setup relaunch) or `FOUNDRY_HOST=molten …` (prod: the Magic-URL wake first).
-// Needs the host's admin key (LOCAL_ADMIN_KEY / MOLTEN_ADMIN_KEY) — or a GM bridge user as fallback.
+// Needs the host's admin key (FOUNDRY_ADMIN_KEY) — or a GM bridge user as fallback.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m && !line.trimStart().startsWith('#')) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 const env = loadEnv();
 // No implicit target for a script that takes the world down: the selector's default is prod.
 if (!process.env.FOUNDRY_HOST && !process.env.FOUNDRY_PROFILE) {

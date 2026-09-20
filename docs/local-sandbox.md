@@ -34,7 +34,7 @@ node scripts/local-foundry.mjs restart
 `start --no-world` boots to Setup only; `stop` refuses while users are connected
 (`disconnect-bridge` first) and `--force` overrides. Server console output appends to
 `<dataPath>/Logs/headless-console.log`; the pid rides `Logs/headless.pid`. Requires
-`LOCAL_ADMIN_KEY` — world launch and world stop are admin-gated — and passes `--adminPassword`
+`FOUNDRY_ADMIN_KEY` (alias `LOCAL_ADMIN_KEY`) — world launch and world stop are admin-gated — and passes `--adminPassword`
 at boot so Foundry rewrites `Config/admin.txt` itself: the installed hash can never drift from
 `.env`.
 
@@ -57,7 +57,7 @@ That's the whole process. The script:
 2. **Guards both LevelDBs**: refuses while prod's world has users connected (mid-write snapshot
    would tear), and refuses while the *local* Foundry has the world active (same risk, receiving
    side). Prod idle-but-active (0 users) and local-on-setup-screen are both fine.
-3. **Mirrors** `worlds/<id>` + `systems` + `modules` + `assets` into `LOCAL_FOUNDRY_DATA`:
+3. **Mirrors** `worlds/<id>` + `systems` + `modules` + `assets` into `FOUNDRY_DATA_DIR` (the `local` host's; alias `LOCAL_FOUNDRY_DATA`):
    incremental (size+mtime — a no-change refresh downloads nothing), and **deletes local files
    that no longer exist on prod**. The delete half is load-bearing for the world: a stale
    `.ldb`/`MANIFEST` mixed into a fresh LevelDB set corrupts it.
@@ -68,7 +68,7 @@ That's the whole process. The script:
    surfaces later as a Foundry error that says nothing about the copy.
 
 Flags: `--dry-run` (show the plan, change nothing), `--force` (override both activity guards),
-`--no-delete` (copy without mirroring), `--to <dataRoot>` (override `LOCAL_FOUNDRY_DATA`),
+`--no-delete` (copy without mirroring), `--to <dataRoot>` (override `FOUNDRY_DATA_DIR`),
 explicit targets (`node scripts/pull-prod-to-local.mjs modules/lootshelf`).
 
 After a refresh: **restart** local Foundry if it was running (Foundry scans the package registry
@@ -100,9 +100,9 @@ another process". That is also why CLI flags like `--adminPassword` can't be app
 app is up. (A *killed* process leaves `Config/options.json.lock` behind; Foundry treats it as
 stale after ~10s, and the launcher's `start` waits that window out automatically.)
 
-With `LOCAL_ADMIN_KEY` set the whole stop→refresh→start loop is scriptable; raw HTTP, if you
+With `FOUNDRY_ADMIN_KEY` set the whole stop→refresh→start loop is scriptable; raw HTTP, if you
 need it without the launcher, is `POST /setup {action: "launchWorld", world: <id>, adminPassword:
-<LOCAL_ADMIN_KEY>}` (the key rides the JSON body — the old `/auth` cookie dance predates v14's
+<FOUNDRY_ADMIN_KEY>}` (the key rides the JSON body — the old `/auth` cookie dance predates v14's
 gates), then poll `/api/status` until `active` is true (~25s for a heavy dnd5e world).
 
 ## What is deliberately NOT pulled
@@ -125,7 +125,7 @@ app binary is a manual install.
 
 1. Install Foundry VTT (same generation as prod), sign the license, set an admin password.
 2. Launch it once so `%LOCALAPPDATA%\FoundryVTT\{Config,Data}` exist, then quit.
-3. In the repo `.env`, set `LOCAL_FOUNDRY_DATA=<that Data dir>` (see `.env.example`).
+3. In the repo `.env`, set `FOUNDRY_DATA_DIR=<that Data dir>` (see `.env.example`).
 4. `node scripts/pull-prod-to-local.mjs` and launch the world.
 
 ## Pointing the MCP at the sandbox — hosts
@@ -152,7 +152,7 @@ fixed by which server it goes to — there is no runtime "switch instance" state
 What the local host does differently (deliberate):
 
 - **The direct file plane is the install's `Data/` directory** (`FOUNDRY_DATA_DIR`, alias
-  `LOCAL_FOUNDRY_DATA` — the same directory `local-foundry.mjs` serves) over `node:fs` — so the
+  `FOUNDRY_DATA_DIR` — the same directory `local-foundry.mjs` serves) over `node:fs` — so the
   asset file tools (`upload-asset`, `list-assets`, …) work on the sandbox with exactly the WebDAV
   contract, including the live world-DB refusal. Without it they still work through Foundry's
   own FilePicker (the bridge plane — no delete / move). A local-host process never dials WebDAV.
@@ -172,7 +172,7 @@ What the local host does differently (deliberate):
   (`--dataPath=<tmp> --port=30099 --adminPassword=<pw>`) and copy its `Config/admin.txt` across:
   the hash is portable between installs whose `options.json` has `passwordSalt: null` (Foundry
   falls back to a build constant), and it takes effect at the next restart. Put the same
-  plaintext in `LOCAL_ADMIN_KEY`. To undo: delete `Config/admin.txt`.
+  plaintext in `FOUNDRY_ADMIN_KEY`. To undo: delete `Config/admin.txt`.
 
 ## Testing a sister module against the sandbox
 

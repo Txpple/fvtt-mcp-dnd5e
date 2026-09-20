@@ -1,6 +1,6 @@
 // Uninstall modules from the Foundry server — the mirror of register-module.mjs.
 //
-//   node scripts/uninstall-modules.mjs --ids some-module,another-module
+//   FOUNDRY_HOST=molten node scripts/uninstall-modules.mjs --ids some-module,another-module
 //
 // DISABLE THEM IN THE WORLD FIRST (configure-modules.mjs). Uninstalling a module a world still
 // has enabled leaves that world booting against a missing package.
@@ -22,18 +22,12 @@
 // remote call raced against a timeout, plus a process-level watchdog. Leaves the world UP.
 //
 // Run FOREGROUND.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { chromium } from 'playwright';
+import { loadEnv } from '../dist/env.js';
+import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
+const HOST = resolveHostConfig(env, hostKindFromEnv(process.env));
 
 const arg = name => {
   const i = process.argv.indexOf(`--${name}`);
@@ -47,9 +41,46 @@ if (!IDS.length) {
   console.error('usage: node scripts/uninstall-modules.mjs --ids <module-id>[,<module-id>…]');
   process.exit(2);
 }
-const BASE = env.MOLTEN_SERVER_URL.replace(/\/$/, '');
+if (!HOST.adminKey) {
+  console.error('FOUNDRY_ADMIN_KEY is not set — the /setup package installer is admin-gated');
+  process.exit(2);
+}
+const BASE = HOST.serverUrl.replace(/\/$/, '');
+console.log(`[uninstall] target: ${HOST.kind} (${BASE})`);
 console.log(`[register] uninstalling: ${IDS.join(', ')}`);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/**
+ * The world to launch: FOUNDRY_WORLD_ID, else the ONE world the authenticated /setup lists
+ * (several = a refusal naming them) — the bridge's own rule (src/foundry.ts discoverWorld).
+ */
+async function worldToLaunch(page, tag) {
+  if (HOST.worldId) return HOST.worldId;
+  const ids = await page
+    .evaluate(() => {
+      const fromApi = globalThis.game?.worlds
+        ? [...globalThis.game.worlds].map(w => w.id ?? '').filter(Boolean)
+        : [];
+      if (fromApi.length) return fromApi;
+      return [
+        ...document.querySelectorAll(
+          '#worlds-list li[data-package-id], [data-package-type="world"] li[data-package-id]'
+        ),
+      ]
+        .map(li => li.dataset.packageId ?? '')
+        .filter(Boolean);
+    })
+    .catch(() => []);
+  if (ids.length === 1) {
+    console.log(`[${tag}] world discovered on /setup: ${ids[0]}`);
+    return ids[0];
+  }
+  throw new Error(
+    ids.length
+      ? `/setup lists ${ids.length} worlds (${ids.join(', ')}) — set FOUNDRY_WORLD_ID`
+      : 'no world found on /setup — create one, or set FOUNDRY_WORLD_ID'
+  );
+}
 
 // Nothing in this script may run past 4 minutes, ever.
 setTimeout(() => {
@@ -117,7 +148,7 @@ async function ensureSetup(page) {
   const viaJoin = await page.$('#join-game-setup input[name="adminPassword"]');
   if (viaJoin) {
     console.log('[register] world active — submitting the join page "Return to Setup" form');
-    await viaJoin.fill(env.MOLTEN_ADMIN_KEY);
+    await viaJoin.fill(HOST.adminKey);
     await page.click('#join-game-setup button[type="submit"]');
     // v14 pops a confirm dialog when other users are connected ("… will be disconnected.
     // Do you wish to proceed? Yes/No") — answer Yes.
@@ -142,7 +173,7 @@ async function ensureSetup(page) {
     );
   } else {
     console.log('[register] idle auth form — logging in');
-    await page.fill('input[name="adminPassword"]', env.MOLTEN_ADMIN_KEY);
+    await page.fill('input[name="adminPassword"]', HOST.adminKey);
     await page.click(
       'button[name="action"], form:has(input[name="adminPassword"]) button[type="submit"]'
     );
@@ -195,14 +226,16 @@ try {
   // --- 3. relaunch the world -------------------------------------------------------------------
   const launch = await setupPost(
     page,
-    { action: 'launchWorld', world: env.MOLTEN_WORLD_ID },
+    { action: 'launchWorld', world: await worldToLaunch(page, 'uninstall') },
     'launchWorld'
   );
   if (!launch.ok) throw new Error(`launchWorld failed: ${launch.error}`);
 
   console.log('[register] waiting for /join form…');
   await page.goto(`${BASE}/join`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await page.waitForSelector('select[name="userid"]', { timeout: 150_000 });
+  await page.waitForSelector('select[name="userid"], input[name="username"]', {
+    timeout: 150_000,
+  });
   console.log('[register] world is up and joinable');
   ok = true;
 } catch (e) {

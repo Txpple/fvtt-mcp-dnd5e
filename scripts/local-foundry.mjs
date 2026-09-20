@@ -31,29 +31,35 @@
 //     POST /join {action:"shutdown"} route is gone: the join view now handles only join/loginAs
 //     and answers {} to anything else — a silent no-op, which is how it was found. Without an
 //     admin password the route falls back to "is this session a GM"; ours is stateless JSON, so
-//     LOCAL_ADMIN_KEY stays required kit.
+//     FOUNDRY_ADMIN_KEY stays required kit.
 //   - There is NO process-exit route in v14; the desktop app quits via its Electron shell. So
 //     `stop` deactivates the world first, then terminates the Setup-idle node process. A killed
 //     process leaves Config/options.json.lock behind; Foundry treats it as stale after ~10s
 //     (mtime-based), so `start` retries once when it hits the lock error.
 //
-// Config comes from the repo .env: LOCAL_FOUNDRY_DATA (the Data dir; its parent is the Foundry
-// --dataPath), LOCAL_SERVER_URL (default http://localhost:30000), LOCAL_ADMIN_KEY (required —
-// see above), world id from LOCAL_WORLD_ID || MOLTEN_WORLD_ID, and optionally LOCAL_FOUNDRY_APP
-// to override the default app install path. --adminPassword is passed at boot so Foundry
-// (re)writes Config/admin.txt itself and the installed hash can never drift from .env.
+// Config is the `local` host's, through the one env selector (src/hosts/env.ts; the 2.x LOCAL_* names
+// are read as aliases): FOUNDRY_DATA_DIR (the Data dir; its parent is the Foundry --dataPath),
+// FOUNDRY_URL (default http://localhost:30000), FOUNDRY_ADMIN_KEY (required — see above), the
+// world id from FOUNDRY_WORLD_ID or, unset, the ONE world under Data/worlds (several = a refusal
+// naming them), and optionally FOUNDRY_APP (alias LOCAL_FOUNDRY_APP) to override the default app
+// install path. --adminPassword is passed at boot so Foundry (re)writes Config/admin.txt itself
+// and the installed hash can never drift from .env.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { loadEnv } from '../dist/env.js';
+import { resolveHostConfig } from '../dist/hosts/index.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
+const HOST = resolveHostConfig(env, 'local');
 
 const args = process.argv.slice(2);
 const command = args.find(a => !a.startsWith('--'));
@@ -67,14 +73,41 @@ function die(msg) {
   throw new Fail(msg);
 }
 
-const dataRoot = env.LOCAL_FOUNDRY_DATA || '';
-if (!dataRoot) die('LOCAL_FOUNDRY_DATA missing from .env');
+const dataRoot = HOST.dataDir ?? '';
+if (!dataRoot) die("FOUNDRY_DATA_DIR missing from .env (the local install's Data/ directory)");
 const dataPath = dirname(dataRoot); // .../FoundryVTT/Data -> .../FoundryVTT (what --dataPath wants)
-const baseUrl = (env.LOCAL_SERVER_URL || 'http://localhost:30000').replace(/\/+$/, '');
-const worldId = env.LOCAL_WORLD_ID || env.MOLTEN_WORLD_ID || '';
-const adminKey = env.LOCAL_ADMIN_KEY || '';
+const baseUrl = HOST.serverUrl.replace(/\/+$/, '');
+const adminKey = HOST.adminKey ?? '';
 const appMain =
-  env.LOCAL_FOUNDRY_APP || 'C:\\Program Files\\Foundry Virtual Tabletop\\resources\\app\\main.js';
+  env.FOUNDRY_APP ||
+  env.LOCAL_FOUNDRY_APP ||
+  (process.platform === 'win32'
+    ? 'C:\\Program Files\\Foundry Virtual Tabletop\\resources\\app\\main.js'
+    : process.platform === 'darwin'
+      ? '/Applications/Foundry Virtual Tabletop.app/Contents/Resources/app/main.js'
+      : '/opt/foundryvtt/resources/app/main.js');
+
+/**
+ * The world to launch: FOUNDRY_WORLD_ID, else the one world under Data/worlds — the same rule
+ * the bridge applies on /setup, read off the disk because this launcher is HTTP-only.
+ */
+function discoverWorldId() {
+  if (HOST.worldId) return HOST.worldId;
+  let ids = [];
+  try {
+    ids = readdirSync(join(dataRoot, 'worlds'), { withFileTypes: true })
+      .filter(d => d.isDirectory() && existsSync(join(dataRoot, 'worlds', d.name, 'world.json')))
+      .map(d => d.name);
+  } catch {
+    return '';
+  }
+  if (ids.length === 1) return ids[0];
+  if (ids.length > 1) {
+    die(`Data/worlds holds ${ids.length} worlds (${ids.join(', ')}) — set FOUNDRY_WORLD_ID`);
+  }
+  return '';
+}
+const worldId = discoverWorldId();
 const logsDir = join(dataPath, 'Logs');
 const consoleLog = join(logsDir, 'headless-console.log');
 const pidFile = join(logsDir, 'headless.pid');
@@ -151,7 +184,7 @@ async function postJson(path, body) {
 }
 
 function requireAdminKey() {
-  if (!adminKey) die('LOCAL_ADMIN_KEY missing from .env — launch/stop are admin-gated');
+  if (!adminKey) die('FOUNDRY_ADMIN_KEY missing from .env — launch/stop are admin-gated');
 }
 
 function printStatus(status) {
@@ -169,7 +202,7 @@ function printStatus(status) {
 }
 
 async function launchWorld() {
-  if (!worldId) die('no world id (LOCAL_WORLD_ID / MOLTEN_WORLD_ID missing from .env)');
+  if (!worldId) die('no world id — no world under Data/worlds; set FOUNDRY_WORLD_ID');
   requireAdminKey();
   console.log(`launching world "${worldId}"…`);
   const { status, payload } = await postJson('/setup', {
@@ -213,8 +246,7 @@ async function start() {
   if (status) {
     console.log('already running.');
   } else {
-    if (!existsSync(appMain))
-      die(`Foundry app not found at ${appMain} — set LOCAL_FOUNDRY_APP in .env`);
+    if (!existsSync(appMain)) die(`Foundry app not found at ${appMain} — set FOUNDRY_APP in .env`);
     if (!existsSync(dataRoot)) die(`local Data dir not found: ${dataRoot}`);
     let pid = spawnServer();
     status = await poll(apiStatus, 60_000);

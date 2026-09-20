@@ -5,25 +5,11 @@
 // cleaned up (best-effort) in a finally block.
 //
 // Build first: `npm run build`. Run: node scripts/verify-write-tools.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const TAG = 'ZZ-MCP-WT';
-
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 
 const env = loadEnv();
 const foundry = new Foundry(bridgeConfig(env));

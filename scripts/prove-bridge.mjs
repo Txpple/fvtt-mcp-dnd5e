@@ -2,24 +2,9 @@
 //   foundry.connect() -> foundry.call('getWorldInfo') / call('listActors') against live Molten.
 // Requires a build first: `npm run build` (tsc) + `node esbuild.page.mjs`.
 // Run: node scripts/prove-bridge.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2];
-  }
-  return env;
-}
 
 const env = loadEnv();
 const f = new Foundry(bridgeConfig(env));

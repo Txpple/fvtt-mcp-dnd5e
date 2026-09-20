@@ -1,16 +1,17 @@
-// Hot-deploy a house module to the live Molten box over WebDAV (Plane B), and prove the
-// bytes landed. Generalizes scripts/deploy-partystash.mjs + scripts/check-prod-bytes.mjs,
+// Hot-deploy a house module into a Foundry's Data/modules through the host's own file plane,
+// and prove the bytes landed. Generalizes scripts/deploy-partystash.mjs + scripts/check-prod-bytes.mjs,
 // which were written per-module and had to be cloned for every new one.
 //
-//   node scripts/deploy-house-module.mjs fvtt-mod-lootshelf
-//   node scripts/deploy-house-module.mjs fvtt-mod-partystash --check   (compare only)
-//   node scripts/deploy-house-module.mjs fvtt-mod-battleflow --local   (LOCAL sandbox, not prod)
+//   node scripts/deploy-house-module.mjs fvtt-mod-battleflow --local     (the LOCAL sandbox)
+//   FOUNDRY_HOST=molten node scripts/deploy-house-module.mjs fvtt-mod-lootshelf
+//   FOUNDRY_HOST=molten node scripts/deploy-house-module.mjs fvtt-mod-partystash --check   (compare only)
 //
-// TARGETS: by default this deploys to PROD over WebDAV. `--local` instead writes straight into
-// the local sandbox's Data/modules (LOCAL_FOUNDRY_DATA — see docs/local-sandbox.md); it is a
-// plain filesystem copy with the same byte read-back proof, and it never touches prod. That is
-// the loop a sister module repo wants: build → --local → test against foundry-local5e → only
-// then deploy for real. ⚠️ A sandbox REFRESH (pull-prod-to-local.mjs) mirrors prod's modules/
+// TARGETS: the host FOUNDRY_HOST selects (src/hosts/env.ts), through its DIRECT file plane — the
+// WebDAV plane on a managed box, the Data/ directory of an install on this machine; a host with
+// neither is refused by name. `--local` is shorthand for the local sandbox (docs/local-sandbox.md):
+// a plain filesystem copy with the same byte read-back proof, and it never touches prod. That is
+// the loop a sister module repo wants: build → --local → test against the sandbox → only then
+// deploy for real. ⚠️ A sandbox REFRESH (pull-prod-to-local.mjs) mirrors prod's modules/
 // and will overwrite or delete a locally-deployed module — re-run --local after every refresh.
 //
 // WHAT IT UPLOADS: module.json plus everything the module SERVES — scripts/, styles/,
@@ -27,11 +28,13 @@
 // built from that boot-time scan, so a module.json edit (a new version string, a new `styles`
 // entry) does NOT take effect until the process next restarts. It is uploaded anyway, so the
 // box is right whenever that happens, and the lag is REPORTED rather than pretended away.
-import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { WebDavClient } from '../dist/hosts/webdav.js';
+import { loadEnv } from '../dist/env.js';
+import { createHost, hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
+import { quietLogger, targetLabel } from '../dist/client.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -75,56 +78,40 @@ function servedFiles() {
   return out;
 }
 
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
 /**
- * One write/read-back target so the deploy loop below is identical for both planes: prod goes
- * over WebDAV, the sandbox goes straight to disk. Both re-READ what they wrote — a successful
- * write is not proof the bytes landed.
+ * The write/read-back target: the selected host's direct file plane (src/hosts — WebDAV on a
+ * managed box, the Data/ directory of a local install), so the deploy loop below is the same
+ * code on every host. It re-READS what it wrote — a successful write is not proof the bytes
+ * landed.
  */
-let target;
-if (toLocal) {
-  const dataRoot = env.LOCAL_FOUNDRY_DATA;
-  if (!dataRoot) {
-    console.error('LOCAL_FOUNDRY_DATA is not set in .env (see docs/local-sandbox.md).');
-    process.exit(2);
-  }
-  if (!existsSync(dataRoot)) {
-    console.error(`LOCAL_FOUNDRY_DATA does not exist: ${dataRoot}`);
-    process.exit(2);
-  }
-  const abs = rel => join(dataRoot, ...rel.split('/'));
-  target = {
-    label: `local sandbox (${dataRoot})`,
-    ensureParents: async rel => mkdirSync(dirname(abs(rel)), { recursive: true }),
-    put: async (rel, body) => writeFileSync(abs(rel), body),
-    get: async rel => readFileSync(abs(rel)),
-    liveHint:
-      'Restart the local Foundry process to pick up module.json changes; a world reload is ' +
-      'enough for scripts, styles and templates.',
-  };
-} else {
-  if (!env.MOLTEN_WEBDAV_PASSWORD) throw new Error('MOLTEN_WEBDAV_PASSWORD is not set in .env');
-  const dav = new WebDavClient({
-    webdavUrl: env.MOLTEN_WEBDAV_URL,
-    user: env.MOLTEN_WEBDAV_USER || 'foundry-ftp',
-    password: env.MOLTEN_WEBDAV_PASSWORD,
-  });
-  target = {
-    label: 'prod (Molten, over WebDAV)',
-    ensureParents: rel => dav.ensureParents(rel),
-    put: (rel, body, contentType) => dav.write(rel, body, contentType),
-    get: rel => dav.read(rel),
-    liveHint:
-      'Scripts, styles and templates are live on the next world reload. module.json (version ' +
-      'string, esmodules/styles lists) keeps vending the OLD values until the Foundry PROCESS ' +
-      'restarts — expected, not a failure.',
-  };
+const kind = toLocal ? 'local' : hostKindFromEnv(process.env);
+const hostCfg = resolveHostConfig(env, kind);
+const plane = createHost(hostCfg, quietLogger()).files;
+if (!plane) {
+  console.error(
+    `the ${kind} host has no direct file plane — set FOUNDRY_DATA_DIR (an install on this ` +
+      'machine) or FOUNDRY_WEBDAV_URL / _USER / _PASSWORD (a WebDAV endpoint over Data/) in .env.'
+  );
+  process.exit(2);
 }
+if (kind === 'local' && hostCfg.dataDir && !existsSync(hostCfg.dataDir)) {
+  console.error(`FOUNDRY_DATA_DIR does not exist: ${hostCfg.dataDir}`);
+  process.exit(2);
+}
+const target = {
+  label: `${targetLabel(kind)} (${plane.label}${hostCfg.dataDir ? `: ${hostCfg.dataDir}` : ''})`,
+  ensureParents: rel => plane.ensureParents(rel),
+  put: (rel, body, contentType) => plane.write(rel, body, contentType),
+  get: rel => plane.read(rel),
+  liveHint:
+    kind === 'local'
+      ? 'Restart the local Foundry process to pick up module.json changes; a world reload is ' +
+        'enough for scripts, styles and templates.'
+      : 'Scripts, styles and templates are live on the next world reload. module.json (version ' +
+        'string, esmodules/styles lists) keeps vending the OLD values until the Foundry PROCESS ' +
+        'restarts — expected, not a failure.',
+};
 
 const sha = buf => createHash('sha256').update(buf).digest('hex').slice(0, 16);
 const asBuffer = raw => (Buffer.isBuffer(raw) ? raw : Buffer.from(raw));
@@ -160,7 +147,7 @@ for (const rel of files) {
   }
 }
 
-const where = toLocal ? 'the sandbox' : 'prod';
+const where = kind === 'local' ? 'the sandbox' : targetLabel(kind);
 if (fails) {
   console.log(`\n${fails} file(s) did not match.`);
 } else if (checkOnly) {
@@ -168,7 +155,7 @@ if (fails) {
 } else {
   console.log(`\nDeployed ${moduleId} v${manifest.version}; ${where} is byte-identical.`);
   console.log(target.liveHint);
-  if (toLocal) {
+  if (kind === 'local') {
     console.log(
       '⚠ A sandbox refresh (pull-prod-to-local.mjs) mirrors prod and will overwrite this — ' +
         're-run --local after every refresh.'

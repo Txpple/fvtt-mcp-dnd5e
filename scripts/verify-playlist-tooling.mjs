@@ -12,19 +12,11 @@
 // Everything created is cleaned up.
 //
 // Build first: npm run build. Run: node scripts/verify-playlist-tooling.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
 
 const TAG = 'ZZ-PLAYLIST-IT';
 let passes = 0;
@@ -46,14 +38,14 @@ try {
   console.log('[verify-playlist] connecting to sandbox…');
   await f.connect();
   console.log('[verify-playlist] connected — exercising Playlist tooling\n');
-
+  const worldId = await f.worldId(); // the live world's id — the paths need not exist
   // --- create-playlist: a soundscape (shuffle, looping) ---
   console.log('# create-playlist: layered ambience');
   const created = await f.call('createPlaylist', {
     name: `${TAG} Storm Ambience`,
     soundPaths: [
-      `worlds/${env.MOLTEN_WORLD_ID || 'sandbox'}/assets/audio/rain.ogg`,
-      `worlds/${env.MOLTEN_WORLD_ID || 'sandbox'}/assets/audio/thunder.ogg`,
+      `worlds/${worldId}/assets/audio/rain.ogg`,
+      `worlds/${worldId}/assets/audio/thunder.ogg`,
     ],
     mode: 'shuffle',
     repeat: true,

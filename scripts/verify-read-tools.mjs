@@ -4,10 +4,8 @@
 //
 // Build first: `npm run build`. Run: node scripts/verify-read-tools.mjs
 // Needs the live box + secrets in gitignored .env (first call wakes a cold box).
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { SceneTools } from '../dist/tools/scene.js';
@@ -15,19 +13,6 @@ import { ActorTools } from '../dist/tools/actor.js';
 import { CompendiumTools } from '../dist/tools/compendium.js';
 import { JournalTools } from '../dist/tools/journal.js';
 import { PlaylistTools } from '../dist/tools/playlist.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 
 // Minimal Logger stand-in (src/logger.ts shape): child() returns itself, methods are no-ops.
 const logger = {

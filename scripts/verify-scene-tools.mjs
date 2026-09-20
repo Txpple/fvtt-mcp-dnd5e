@@ -6,30 +6,18 @@
 // ZZ-MCP-ST and deleted in a finally.
 //
 // Build first: npm run build. Run: node scripts/verify-scene-tools.mjs
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { Logger } from '../dist/logger.js';
 import { SceneTools } from '../dist/tools/scene.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const TAG = 'ZZ-MCP-ST';
 const BG_VECTOR = 'icons/svg/dice-target.svg'; // always present in core Foundry
 const BG_RASTER = 'assets/mcp/mcp-claude.jpg'; // bundled portrait (for auto-dimension)
-
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    if (line.trimStart().startsWith('#')) continue;
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 
 const env = loadEnv();
 const foundry = new Foundry(bridgeConfig(env));

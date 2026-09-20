@@ -17,8 +17,8 @@
 
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { createHost, filePlaneFor } from '../dist/hosts/index.js';
 import { resolveHostConfig, hostKindFromEnv } from '../dist/hosts/index.js';
@@ -26,16 +26,6 @@ import { AssetFileTools } from '../dist/tools/assets/index.js';
 import { SceneTools } from '../dist/tools/scene.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-function loadEnv() {
-  const txt = readFileSync(join(__dirname, '..', '.env'), 'utf8');
-  const env = {};
-  for (const line of txt.split(/\r?\n/)) {
-    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-    if (m && !line.trimStart().startsWith('#')) env[m[1]] = m[2].trim();
-  }
-  return env;
-}
 const env = loadEnv();
 const planeMode = process.argv.includes('--plane')
   ? process.argv[process.argv.indexOf('--plane') + 1]

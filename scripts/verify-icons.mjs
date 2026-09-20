@@ -11,20 +11,12 @@
 // Everything created is namespaced with TAG and cleaned up in `finally`.
 //
 // Build first: npm run build. Run: node scripts/verify-icons.mjs
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { resolveAuthoredIcon, isPlaceholderIcon } from '../dist/page/dnd5e/icons.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const env = {};
-for (const line of readFileSync(join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
+const env = loadEnv();
 
 const TAG = 'ZZ-ICON-IT';
 let passes = 0;
@@ -72,7 +64,8 @@ const PATHS = new Set(
   ].map(([k, sub]) => resolveAuthoredIcon(k, sub ? { subtype: sub } : {}))
 );
 
-const f = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const f = new Foundry(cfg);
 
 let actorId; // host NPC, cleaned up in finally
 
@@ -92,7 +85,7 @@ try {
 
   // --- A. EXISTENCE: every curated path resolves on the static server (best-effort) ----------
   console.log(`# A. every curated Tier-1 icon path resolves (${PATHS.size} unique paths)`);
-  const base = (env.MOLTEN_SERVER_URL || '').replace(/\/+$/, '');
+  const base = cfg.serverUrl.replace(/\/+$/, '');
   let probed = 0;
   let missing = [];
   for (const p of PATHS) {
@@ -118,7 +111,7 @@ try {
 
   // --- Host NPC: copy the first MM creature (a realistic prefab base) -------------------------
   const creatures = await f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 });
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound};
   if (!cHit?.pack) throw new Error('could not resolve a source creature');
   const aOut = await f.call('createActorFromCompendium', {
     packId: cHit.pack,
