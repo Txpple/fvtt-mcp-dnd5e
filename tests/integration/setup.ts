@@ -12,6 +12,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+// The built host seam, like the built bridge the suites import.
+import {
+  bridgeConfigOf,
+  createHost,
+  hostKindFromEnv,
+  resolveHostConfig,
+} from '../../dist/hosts/index.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -49,33 +56,16 @@ if (OPTED_IN && !HAS_ENV) {
 }
 
 /**
- * The FoundryConfig the bridge needs, derived from .env. `FOUNDRY_PROFILE=local` targets the LOCAL
- * sandbox with the same env keys src/config.ts uses (LOCAL_* overrides, MOLTEN_* fallbacks, no wake
- * URL) — the default stays prod, exactly as before.
+ * The FoundryConfig the bridge needs, derived from .env through the ONE env selector the server
+ * and the verify scripts use (src/hosts/env.ts):  (or the pre-2.2
+ * ) targets the LOCAL sandbox with the LOCAL_* overrides and MOLTEN_*
+ * fallbacks; the default stays prod (molten), exactly as before. The Host rides along so the bridge
+ * can wake a sleeping box (and the join user's password is forwarded — omitting it once made every
+ * live suite fail on "Invalid password provided for <user>").
  */
 export function foundryConfig() {
-  if (process.env.FOUNDRY_PROFILE === 'local') {
-    return {
-      serverUrl: ENV.LOCAL_SERVER_URL || 'http://localhost:30000',
-      user: ENV.LOCAL_FOUNDRY_USER || ENV.FOUNDRY_USER || 'MCP-Claude',
-      password: ENV.LOCAL_FOUNDRY_PASSWORD ?? ENV.FOUNDRY_PASSWORD,
-      adminKey: ENV.LOCAL_ADMIN_KEY,
-      worldId: ENV.LOCAL_WORLD_ID || ENV.MOLTEN_WORLD_ID,
-    };
-  }
-  return {
-    serverUrl: ENV.MOLTEN_SERVER_URL,
-    magicUrl: ENV.MOLTEN_MAGIC_URL,
-    user: ENV.FOUNDRY_USER || 'MCP-Claude',
-    // Forward the join user's password. Omitted here originally because the bridge user was
-    // passwordless; once one was set, src/config.ts kept working (it passes FOUNDRY_PASSWORD)
-    // while this harness silently submitted a blank field and every live suite failed on
-    // "Invalid password provided for <user>". Stays undefined for a passwordless user.
-    password: ENV.FOUNDRY_PASSWORD,
-    // Enable remote world-launch so the live suite can bring up a fully-cold box on its own.
-    adminKey: ENV.MOLTEN_ADMIN_KEY,
-    worldId: ENV.MOLTEN_WORLD_ID,
-  };
+  const hostCfg = resolveHostConfig(ENV, hostKindFromEnv(process.env));
+  return { ...bridgeConfigOf(hostCfg), host: createHost(hostCfg, noopLogger) };
 }
 
 /** No-op logger matching the src/logger.ts shape (child() returns itself) — silences the bridge. */

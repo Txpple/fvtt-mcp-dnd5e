@@ -94,6 +94,19 @@ run build && npm run knip`). Live, on the sandbox (`FOUNDRY_HOST=local`):
 ### Progress
 
 - 2026-09-20 — measurements taken; owner decisions recorded (name, 3.0 scope); tracker opened.
+- 2026-09-20 — **#2 #3 #4 #5 built.** `src/hosts/**` (types, paths, webdav, local-files, molten,
+  local, generic, env, index); `foundry.ts` takes a `host` and no longer knows a Magic URL;
+  `tools/molten/**` → `tools/assets/**` over the plane; `export-chat-log` / image embedding
+  likewise; `get-world-info` carries `host`; one selector for the server, `bridge-config.mjs`
+  and the integration harness (the ten hand-rolled scripts attach `hostFor(env)`). Offline gate
+  green (1724 unit tests, +49 new for the hosts). **Live on the sandbox:**
+  `FOUNDRY_HOST=local node scripts/verify-asset-plane.mjs` 28/28 (the full asset cycle on the
+  local plane, the world-DB / traversal / overwrite refusals, bridge connect through the host,
+  `get-world-info.host = { kind: local, files: local filesystem }`, reference-checked delete);
+  `FOUNDRY_PROFILE=local node scripts/verify-reads.mjs` 25/25 (the alias);
+  `FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration` 85 passed / 1 pre-existing skip — the
+  chat suite's remote-export test now runs on the sandbox through the local plane instead of
+  skipping.
 
 ## Parked for 3.0 — CRUD consolidation (owner, 2026-09-20: out of scope for 2.2)
 

@@ -211,8 +211,8 @@ try {
   );
   // What every tool returns (dumpBehavior) must read back ABSOLUTE whatever is on disk.
   const dumped = await f.call('listSceneRegions', { sceneIdentifier: fx.sceneAId });
-  const dumpedDest = (dumped?.items ?? []).find(r => r.id === fx.regAId)
-    ?.behaviors?.[0]?.destinations?.[0];
+  const dumpedDest = (dumped?.items ?? []).find(r => r.id === fx.regAId)?.behaviors?.[0]
+    ?.destinations?.[0];
   assert(
     dumpedDest === remapped.wantA,
     `B — list-regions reads the destination back absolute (${dumpedDest})`

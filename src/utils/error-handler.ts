@@ -87,8 +87,8 @@ export class ErrorHandler {
         message: 'Connection to the Foundry world failed',
         details: errorMessage,
         suggestions: [
-          'Ensure the world is launched (Setup → Launch World); a sleeping box wakes automatically via MOLTEN_MAGIC_URL',
-          'Check MOLTEN_SERVER_URL and MOLTEN_MAGIC_URL, and that the box actually woke',
+          'Ensure the world is launched (Setup → Launch World); a host that sleeps is woken automatically when its wake is configured',
+          "Check the host's server URL / wake settings (the bridge error names the variables for this host)",
           'Verify FOUNDRY_USER is a valid, passwordless user that can join this world',
           'A cold box can be slow to wake on the first call — retry once it is up',
         ],

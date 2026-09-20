@@ -5,20 +5,42 @@ import { join } from 'node:path';
 import { ChatTools } from './chat.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
 
-function build(response: any = {}) {
-  const { foundry, calls } = makeFoundry(response);
-  const tools = new ChatTools({ foundry, logger: makeLogger() });
-  return { tools, calls, foundry };
-}
-
-/** A WebDAV client stand-in (no network). */
+/** A FilePlane stand-in (no network, no disk). `putFile` is the plane's `write`. */
 function fakeDav(overrides: Record<string, any> = {}) {
-  return {
+  const d: any = {
+    label: 'stub',
     exists: vi.fn(async () => false),
     ensureParents: vi.fn(async () => {}),
     putFile: vi.fn(async () => {}),
     ...overrides,
   };
+  d.write = (...a: any[]) => d.putFile(...a);
+  return d;
+}
+
+/** A stub Host over `files` (a fakeDav() or null for "not configured"). */
+function fakeHost(files: any, serverUrl = 'https://srv'): any {
+  return {
+    kind: 'molten',
+    label: 'stub',
+    worldId: 'w',
+    vars: {
+      serverUrl: 'MOLTEN_SERVER_URL',
+      adminKey: 'MOLTEN_ADMIN_KEY',
+      worldId: 'MOLTEN_WORLD_ID',
+    },
+    unreachableHint: '',
+    redact: (m: string) => m,
+    files,
+    filesNotConfigured: (tool: string) => `${tool} is not configured: set MOLTEN_WEBDAV_PASSWORD.`,
+    publicUrl: (p: string) => `${serverUrl}/${p}`,
+  };
+}
+
+function build(response: any = {}, files: any = null) {
+  const { foundry, calls } = makeFoundry(response);
+  const tools = new ChatTools({ foundry, logger: makeLogger(), host: fakeHost(files) });
+  return { tools, calls, foundry };
 }
 
 const tmpFiles: string[] = [];
@@ -74,16 +96,17 @@ describe('send-chat-message', () => {
     expect(forwarded).toContain('<figcaption>A map</figcaption>');
   });
 
-  it('uploads a local image over WebDAV and embeds its public URL', async () => {
-    const { tools, calls } = build({
-      id: 'c3',
-      alias: 'GM',
-      visibility: 'public',
-      whisperCount: 0,
-    });
+  it("uploads a local image through the host's file plane and embeds its public URL", async () => {
     const dav = fakeDav();
-    (tools as any).davClient = dav;
-    (tools as any).molten = { ...(tools as any).molten, serverUrl: 'https://srv' };
+    const { tools, calls } = build(
+      {
+        id: 'c3',
+        alias: 'GM',
+        visibility: 'public',
+        whisperCount: 0,
+      },
+      dav
+    );
 
     const img = tmpFile('pic.webp');
     await writeFile(img, Buffer.from([1, 2, 3]));
@@ -99,10 +122,8 @@ describe('send-chat-message', () => {
     expect(forwarded).toContain('<img src="https://srv/worlds/w/assets/chat/');
   });
 
-  it('refuses local image upload when WebDAV is unconfigured', async () => {
-    const { tools, calls } = build({ id: 'c4' });
-    (tools as any).davClient = null;
-    (tools as any).molten = { ...(tools as any).molten, webdavPassword: undefined };
+  it('refuses local image upload when the host has no file plane', async () => {
+    const { tools, calls } = build({ id: 'c4' }, null);
 
     const img = tmpFile('pic2.webp');
     await writeFile(img, Buffer.from([1]));
@@ -114,14 +135,16 @@ describe('send-chat-message', () => {
   });
 
   it('inlines a local image as a base64 data: URI with embed:"dataUri" (no upload)', async () => {
-    const { tools, calls } = build({
-      id: 'c5',
-      alias: 'GM',
-      visibility: 'public',
-      whisperCount: 0,
-    });
     const dav = fakeDav();
-    (tools as any).davClient = dav;
+    const { tools, calls } = build(
+      {
+        id: 'c5',
+        alias: 'GM',
+        visibility: 'public',
+        whisperCount: 0,
+      },
+      dav
+    );
 
     const img = tmpFile('inline.webp');
     await writeFile(img, Buffer.from([1, 2, 3]));
@@ -131,7 +154,7 @@ describe('send-chat-message', () => {
       images: [{ path: img, embed: 'dataUri' }],
     });
 
-    // dataUri reads the file directly — no WebDAV upload.
+    // dataUri reads the file directly — no upload through the plane.
     expect(dav.putFile).not.toHaveBeenCalled();
     const forwarded = calls[0][1].content as string;
     expect(forwarded).toContain('<img src="data:image/webp;base64,AQID"');
@@ -237,10 +260,8 @@ describe('export-chat-log', () => {
     expect(await readFile(p, 'utf8')).toBe('old'); // untouched
   });
 
-  it('reports not-configured for a remote-only export with no WebDAV password', async () => {
-    const { tools } = build({ format: 'markdown', messageCount: 0, content: '' });
-    (tools as any).davClient = null;
-    (tools as any).molten = { ...(tools as any).molten, webdavPassword: undefined };
+  it('reports not-configured for a remote-only export when the host has no file plane', async () => {
+    const { tools } = build({ format: 'markdown', messageCount: 0, content: '' }, null);
     const out = await tools.handleExportChatLog({ remotePath: 'worlds/w/exports/log.md' });
     expect(out).toMatch(/not configured/);
   });

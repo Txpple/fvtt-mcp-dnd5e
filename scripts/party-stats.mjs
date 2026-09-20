@@ -26,6 +26,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { hostFor } from './lib/bridge-config.mjs';
 import { foldCombatLedger, renderCombatReport } from '../dist/tools/combat-stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -65,7 +66,7 @@ async function scanLive() {
   const cfg = PROD
     ? {
         serverUrl: env.MOLTEN_SERVER_URL,
-        magicUrl: env.MOLTEN_MAGIC_URL,
+        host: hostFor(env),
         user: env.FOUNDRY_USER,
         password: env.FOUNDRY_PASSWORD,
       }

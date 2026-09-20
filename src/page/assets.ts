@@ -6,7 +6,7 @@
 // @7066-7107, relinkAsset @7107-7173, setActorArt @7321-7371, addJournalImage
 // @7371-7434, plus asset helpers @6793-6834 and collectAssetSlots @6866-7060)
 // and the contracts the Node tools (src/tools/asset-bridge.ts,
-// src/tools/molten/index.ts) and their tests expect.
+// src/tools/assets/index.ts) and their tests expect.
 //
 // Paths are Data-relative — exactly what Foundry stores in src/img fields, so
 // no conversion is needed. Writes are best-effort (no rollback). The bridge is

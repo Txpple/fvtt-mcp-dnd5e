@@ -5,8 +5,8 @@
 // `foundry.call(name, args)` seam (src/foundry.ts — the only Playwright-aware file). No TCP wrapper,
 // no spawned backend, no lock dance: the inherited WebRTC transport is gone.
 //
-// The headless Foundry client connects lazily — the first tool call wakes the Molten box and joins
-// the world; tools/list responds without touching Foundry.
+// The headless Foundry client connects lazily — the first tool call wakes the instance (if its
+// host sleeps) and joins the world; tools/list responds without touching Foundry.
 
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -18,6 +18,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { config } from './config.js';
 import { Logger } from './logger.js';
 import { Foundry } from './foundry.js';
+import { bridgeConfigOf, createHost } from './hosts/index.js';
 import { ErrorHandler, FormattedToolError } from './utils/error-handler.js';
 import { buildToolRegistry } from './registry.js';
 
@@ -42,26 +43,23 @@ async function main(): Promise<void> {
     filePath: path.join(os.tmpdir(), 'foundry-mcp-server', 'mcp-server.log'),
   });
 
+  // Where this Foundry runs (src/hosts): the wake step for the bridge, the file plane for the tools.
+  const host = createHost(config.host, logger);
+
   logger.info('Starting Foundry MCP server (headless)', {
     version: config.server.version,
-    serverUrl: config.molten.serverUrl,
-    user: config.molten.user,
+    host: host.kind,
+    serverUrl: config.host.serverUrl,
+    user: config.host.user,
   });
 
   // The live bridge. Lazy: it connects (wake -> /join -> game.ready -> inject)
   // on the first foundry.call(). Its own diagnostics go to stderr.
-  const foundry = new Foundry({
-    serverUrl: config.molten.serverUrl,
-    user: config.molten.user,
-    ...(config.molten.password ? { password: config.molten.password } : {}),
-    ...(config.molten.magicUrl ? { magicUrl: config.molten.magicUrl } : {}),
-    // Admin-key + world-id enable remote world-launch when a cold box is up but no world is active.
-    ...(config.molten.adminKey ? { adminKey: config.molten.adminKey } : {}),
-    ...(config.molten.worldId ? { worldId: config.molten.worldId } : {}),
-  });
+  // Admin-key + world-id enable remote world-launch when the instance is up but no world is active.
+  const foundry = new Foundry({ ...bridgeConfigOf(config.host), host });
 
   // The whole tool surface: definitions + dispatch, wired in one place (src/registry.ts).
-  const { tools, dispatch } = buildToolRegistry({ foundry, logger });
+  const { tools, dispatch } = buildToolRegistry({ foundry, logger, host });
 
   // Central error mapper for the dispatch wrapper: turns raw failures (esp. cold-box / bridge
   // errors) from EVERY tool into actionable messages, while passing through messages the tools

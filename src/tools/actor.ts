@@ -5,7 +5,7 @@ import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { FormattedToolError } from '../utils/error-handler.js';
 import { toInputSchema } from '../utils/schema.js';
-import { humanSize } from './molten/dav-access.js';
+import { humanSize } from '../hosts/paths.js';
 import { extractActorStats, extractActorBasicInfo } from './dnd5e/actor-stats.js';
 
 // ActorTools — read/inspect actors (the §5 actor building block, read side). Actor *creation* lives

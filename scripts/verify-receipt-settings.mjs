@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { hostFor } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -44,7 +45,7 @@ const sameSet = (a, b) => a.length === b.length && [...a].sort().join() === [...
 
 const f = new Foundry({
   serverUrl: env.MOLTEN_SERVER_URL,
-  magicUrl: env.MOLTEN_MAGIC_URL,
+  host: hostFor(env),
   user: env.FOUNDRY_USER ?? 'DM Assistant',
   password: env.FOUNDRY_PASSWORD,
   adminKey: env.MOLTEN_ADMIN_KEY,

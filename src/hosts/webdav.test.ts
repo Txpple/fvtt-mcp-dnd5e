@@ -1,8 +1,8 @@
 /**
- * Unit tests for the minimal WebDAV client (molten/webdav.ts).
+ * Unit tests for the minimal WebDAV client (hosts/webdav.ts — the Molten host's FilePlane).
  *
  * Two layers:
- *   1. Pure helpers — toDataRelative / guessContentType (no I/O).
+ *   1. Pure helpers — toDataRelative / guessContentType (hosts/paths.ts, no I/O).
  *   2. WebDavClient — global `fetch` is mocked so the request/redirect/auth
  *      logic is exercised offline. The headline case is the documented Molten
  *      gotcha: a 301 to an http:// Location must be re-issued over https WITH
@@ -11,7 +11,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WebDavClient, WebDavError, toDataRelative, guessContentType } from './webdav.js';
+import { WebDavClient } from './webdav.js';
+import { FilePlaneError } from './types.js';
+import { guessContentType, toDataRelative } from './paths.js';
 
 const makeLogger = (): any => ({
   debug: vi.fn(),
@@ -65,7 +67,7 @@ describe('toDataRelative', () => {
     expect(toDataRelative('worlds/w/./data/x.db')).toBe('worlds/w/data/x.db');
   });
   it('throws on a `..` traversal segment (security boundary)', () => {
-    expect(() => toDataRelative('assets/../worlds/w/data/actors.db')).toThrow(WebDavError);
+    expect(() => toDataRelative('assets/../worlds/w/data/actors.db')).toThrow(FilePlaneError);
     expect(() => toDataRelative('../etc/passwd')).toThrow(/traversal/i);
     expect(() => toDataRelative('worlds/w/assets/../data/x.db')).toThrow(/traversal/i);
   });
@@ -129,12 +131,12 @@ describe('WebDavClient request/auth/redirect', () => {
     fetchMock.mockResolvedValue(
       res(301, { headers: { location: 'http://eoh-test.webdav.moltenhosting.com/Data/loop/' } })
     );
-    await expect(client().propfind('loop', '1')).rejects.toBeInstanceOf(WebDavError);
+    await expect(client().propfind('loop', '1')).rejects.toBeInstanceOf(FilePlaneError);
     // initial + 3 hops = 4 calls
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it('wraps a fetch connection failure in WebDavError(status 0)', async () => {
+  it('wraps a fetch connection failure in FilePlaneError(status 0)', async () => {
     fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
     await expect(client().stat('x')).rejects.toMatchObject({ status: 0 });
   });
@@ -173,29 +175,29 @@ describe('WebDavClient verbs', () => {
     const entries = await client().propfind('assets', '1');
     expect(entries).toHaveLength(2);
     const file = entries.find(e => e.name === 'x.webp')!;
-    expect(file.isCollection).toBe(false);
+    expect(file.isDirectory).toBe(false);
     expect(file.size).toBe(2048);
     expect(file.contentType).toBe('image/webp');
-    expect(entries.find(e => e.path === 'assets')!.isCollection).toBe(true);
+    expect(entries.find(e => e.path === 'assets')!.isDirectory).toBe(true);
   });
 
-  it('putFile treats 201/204/200 as success and other codes as errors', async () => {
+  it('write (PUT) treats 201/204/200 as success and other codes as errors', async () => {
     fetchMock.mockResolvedValueOnce(res(201));
-    await expect(client().putFile('a.png', new Uint8Array([1]))).resolves.toBeUndefined();
+    await expect(client().write('a.png', new Uint8Array([1]))).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res(403));
-    await expect(client().putFile('a.png', new Uint8Array([1]))).rejects.toMatchObject({
+    await expect(client().write('a.png', new Uint8Array([1]))).rejects.toMatchObject({
       status: 403,
     });
   });
 
-  it('mkcol treats 405 (already exists) as success', async () => {
+  it('mkdir (MKCOL) treats 405 (already exists) as success', async () => {
     fetchMock.mockResolvedValueOnce(res(405));
-    await expect(client().mkcol('dir')).resolves.toBeUndefined();
+    await expect(client().mkdir('dir')).resolves.toBeUndefined();
   });
 
-  it('delete rejects on 404', async () => {
+  it('remove (DELETE) rejects on 404', async () => {
     fetchMock.mockResolvedValueOnce(res(404));
-    await expect(client().delete('gone')).rejects.toMatchObject({ status: 404 });
+    await expect(client().remove('gone')).rejects.toMatchObject({ status: 404 });
   });
 
   it('move sends Destination + Overwrite headers', async () => {

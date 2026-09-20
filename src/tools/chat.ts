@@ -3,21 +3,18 @@ import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, isAbsolute, basename } from 'node:path';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import { config } from '../config.js';
-import type { MoltenConfig } from '../config.js';
+import type { Host } from '../hosts/types.js';
+import {
+  guessContentType,
+  humanSize,
+  looksLikeWorldDbPath,
+  toDataRelative,
+  worldDbRefusal,
+} from '../hosts/paths.js';
 import { toInputSchema } from '../utils/schema.js';
 import { formatDeletionResult } from '../utils/format.js';
 import { validateExportDestinations } from '../utils/transcript.js';
-import { WebDavClient, toDataRelative, guessContentType } from './molten/webdav.js';
-import {
-  makeDavClient,
-  buildPublicUrl,
-  notConfiguredMessage,
-  worldDbRefusal,
-  looksLikeWorldDbPath,
-  davErrorMessage,
-  humanSize,
-} from './molten/dav-access.js';
+import { fileErrorMessage } from './assets/access.js';
 
 /**
  * Chat-log tools — post / list / delete / export chat messages, plus rich dnd5e cards.
@@ -34,16 +31,17 @@ const ImageSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'An absolute LOCAL file path (uploaded over WebDAV), a Data-relative asset path already in ' +
-        'Foundry, or an https:// URL.'
+      "An absolute LOCAL file path (uploaded through the host's file plane), a Data-relative asset " +
+        'path already in Foundry, or an https:// URL.'
     ),
   caption: z.string().optional().describe('Optional caption shown under the image.'),
   alt: z.string().optional().describe('Optional alt text (defaults to the caption).'),
   embed: z
-    .enum(['webdav', 'dataUri'])
-    .default('webdav')
+    .enum(['upload', 'webdav', 'dataUri'])
+    .default('upload')
     .describe(
-      'webdav (default) = upload a local file to the world over WebDAV and link its public URL ' +
+      "upload (default; 'webdav' is accepted as an alias) = upload a local file to the world through " +
+        "the host's file plane and link its public URL " +
         '(http/Data-relative paths are linked as-is). dataUri = inline the LOCAL file directly into ' +
         'the message HTML as a base64 data: URI — self-contained, no upload, but it bloats the ' +
         'message in the world DB, so keep it for small images.'
@@ -178,8 +176,9 @@ const ExportChatLogSchema = z
       .min(1)
       .optional()
       .describe(
-        'Destination relative to the Foundry Data/ root for the WebDAV copy, e.g. ' +
-          '"worlds/your-world/exports/session-3.md". Returns a public HTTPS URL. Requires MOLTEN_WEBDAV_PASSWORD.'
+        "Destination relative to the Foundry Data/ root for a copy through the host's file plane, " +
+          'e.g. "worlds/your-world/exports/session-3.md". Returns its public URL. Needs the host\'s ' +
+          'file plane configured.'
       ),
     limit: z
       .number()
@@ -252,23 +251,19 @@ const RequestRollSchema = z
 export interface ChatToolsOptions {
   foundry: FoundryBridge;
   logger: Logger;
+  /** Where Foundry runs — the file plane for image uploads / the remote export copy. */
+  host: Host;
 }
 
 export class ChatTools {
   private foundry: FoundryBridge;
   private logger: Logger;
-  private molten: MoltenConfig;
-  private davClient: WebDavClient | null = null;
+  private host: Host;
 
-  constructor({ foundry, logger }: ChatToolsOptions) {
+  constructor({ foundry, logger, host }: ChatToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'ChatTools' });
-    this.molten = config.molten;
-  }
-
-  private dav(): WebDavClient | null {
-    if (!this.davClient) this.davClient = makeDavClient(this.molten, this.logger);
-    return this.davClient;
+    this.host = host;
   }
 
   getToolDefinitions() {
@@ -294,17 +289,18 @@ export class ChatTools {
         name: 'delete-chat-messages',
         description:
           'Delete chat messages: by exact id(s) (a single id is an array of one), or all messages ' +
-          'older than a timestamp (beforeTimestamp + confirm:true — handy for the known Molten big-log ' +
-          'perf drag), or the entire log (clearAll + confirm:true). Both bulk modes need confirm:true. ' +
+          'older than a timestamp (beforeTimestamp + confirm:true — handy for the big-log perf drag ' +
+          'on a hosted box), or the entire log (clearAll + confirm:true). Both bulk modes need confirm:true. ' +
           'IRREVERSIBLE. GM-only.',
         inputSchema: toInputSchema(DeleteChatMessagesSchema),
       },
       {
         name: 'export-chat-log',
         description:
-          'Export the chat transcript to a LOCAL absolute file AND/OR a WebDAV Data/ path (returns ' +
-          'its public URL). Formats: markdown | html | json | plaintext. Refuses to overwrite an ' +
-          'existing file at either destination unless overwrite:true. WebDAV needs MOLTEN_WEBDAV_PASSWORD.',
+          'Export the chat transcript to a LOCAL absolute file AND/OR a Data/ path on the host ' +
+          '(through its file plane; returns the public URL). Formats: markdown | html | json | ' +
+          'plaintext. Refuses to overwrite an existing file at either destination unless ' +
+          "overwrite:true. The remote copy needs the host's file plane configured.",
         inputSchema: toInputSchema(ExportChatLogSchema),
       },
       {
@@ -336,7 +332,7 @@ export class ChatTools {
     if (parsed.images && parsed.images.length > 0) {
       const assembled = await this.assembleImages(
         parsed.images,
-        parsed.imageFolder ?? `worlds/${this.molten.worldId ?? 'world'}/assets/chat`,
+        parsed.imageFolder ?? `worlds/${this.host.worldId ?? 'world'}/assets/chat`,
         parsed.overwriteImages
       );
       if ('refusal' in assembled) return assembled.refusal;
@@ -366,7 +362,7 @@ export class ChatTools {
       path: string;
       caption?: string | undefined;
       alt?: string | undefined;
-      embed?: 'webdav' | 'dataUri' | undefined;
+      embed?: 'upload' | 'webdav' | 'dataUri' | undefined;
     }>,
     folder: string,
     overwrite: boolean
@@ -380,7 +376,7 @@ export class ChatTools {
       if (img.embed === 'dataUri') {
         if (/^https?:\/\//i.test(p) || p.startsWith('data:')) {
           return {
-            refusal: `Image "${p}": embed:"dataUri" needs a LOCAL file path, not a URL. Use embed:"webdav" or pass a local file.`,
+            refusal: `Image "${p}": embed:"dataUri" needs a LOCAL file path, not a URL. Use embed:"upload" or pass a local file.`,
           };
         }
         let bytes: Buffer;
@@ -400,15 +396,10 @@ export class ChatTools {
       if (/^https?:\/\//i.test(p)) {
         url = p;
       } else if (isAbsolute(p)) {
-        // Local file → upload over WebDAV, then link the public URL.
-        const dav = this.dav();
-        if (!dav)
-          return {
-            refusal: notConfiguredMessage(
-              'send-chat-message (image upload)',
-              this.molten.webdavUser
-            ),
-          };
+        // Local file → upload through the host's file plane, then link the public URL.
+        const files = this.host.files;
+        if (!files)
+          return { refusal: this.host.filesNotConfigured('send-chat-message (image upload)') };
         const remote = toDataRelative(`${folder}/${basename(p)}`);
         if (looksLikeWorldDbPath(remote)) return { refusal: worldDbRefusal(remote) };
         let bytes: Uint8Array;
@@ -418,17 +409,19 @@ export class ChatTools {
           return { refusal: `Cannot read local image "${p}": ${(err as Error).message}` };
         }
         try {
-          if (overwrite || !(await dav.exists(remote))) {
-            await dav.ensureParents(remote);
-            await dav.putFile(remote, bytes, guessContentType(p));
+          if (overwrite || !(await files.exists(remote))) {
+            await files.ensureParents(remote);
+            await files.write(remote, bytes, guessContentType(p));
           }
-          url = buildPublicUrl(this.molten.serverUrl, remote);
+          url = this.host.publicUrl(remote);
         } catch (err) {
-          return { refusal: davErrorMessage('send-chat-message (image upload)', err, this.logger) };
+          return {
+            refusal: fileErrorMessage('send-chat-message (image upload)', err, this.logger),
+          };
         }
       } else {
         // Treat as an existing Data-relative asset path.
-        url = buildPublicUrl(this.molten.serverUrl, toDataRelative(p));
+        url = this.host.publicUrl(toDataRelative(p));
       }
 
       figures.push(figureHtml(url, img.caption, img.alt));
@@ -510,27 +503,24 @@ export class ChatTools {
       }
     }
 
-    // WebDAV destination.
+    // Remote destination — the host's file plane.
     if (parsed.remotePath) {
       const clean = toDataRelative(parsed.remotePath);
       if (looksLikeWorldDbPath(clean)) return worldDbRefusal(parsed.remotePath);
-      const dav = this.dav();
-      if (!dav) {
-        if (!parsed.localPath)
-          return notConfiguredMessage('export-chat-log', this.molten.webdavUser);
-        outLines.push('  (WebDAV not configured — remote copy skipped)');
+      const files = this.host.files;
+      if (!files) {
+        if (!parsed.localPath) return this.host.filesNotConfigured('export-chat-log');
+        outLines.push('  (file plane not configured — remote copy skipped)');
       } else {
         try {
-          if (!parsed.overwrite && (await dav.exists(clean))) {
+          if (!parsed.overwrite && (await files.exists(clean))) {
             return `Refused: "Data/${clean}" already exists. Pass overwrite:true to replace it.`;
           }
-          await dav.ensureParents(clean);
-          await dav.putFile(clean, bytes, guessContentType(parsed.remotePath));
-          outLines.push(
-            `  Data/${clean}\n  public URL: ${buildPublicUrl(this.molten.serverUrl, clean)}`
-          );
+          await files.ensureParents(clean);
+          await files.write(clean, bytes, guessContentType(parsed.remotePath));
+          outLines.push(`  Data/${clean}\n  public URL: ${this.host.publicUrl(clean)}`);
         } catch (err) {
-          return davErrorMessage('export-chat-log', err, this.logger);
+          return fileErrorMessage('export-chat-log', err, this.logger);
         }
       }
     }

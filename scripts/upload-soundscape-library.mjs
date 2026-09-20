@@ -25,7 +25,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { WebDavClient } from '../dist/tools/molten/webdav.js';
+import { WebDavClient } from '../dist/hosts/webdav.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC_REPO = join(__dirname, '..', '..', 'fvtt-mod-soundscape-sfx');
@@ -221,7 +221,7 @@ async function worker() {
         skipped++;
       } else {
         const ext = job.dest.slice(job.dest.lastIndexOf('.')).toLowerCase();
-        await dav.putFile(job.dest, local, AUDIO_TYPES[ext] ?? 'application/octet-stream');
+        await dav.write(job.dest, local, AUDIO_TYPES[ext] ?? 'application/octet-stream');
         done++;
       }
     } catch (err) {
@@ -238,9 +238,9 @@ console.log(`audio: ${done} uploaded, ${skipped} already present, ${failed} fail
 
 // The library manifest itself — always overwritten, then read back and byte-verified.
 const libDest = posix.join(DEST, 'library.json');
-await dav.putFile(libDest, libraryBytes, 'application/json');
+await dav.write(libDest, libraryBytes, 'application/json');
 const sha = b => createHash('sha256').update(b).digest('hex').slice(0, 16);
-const back = Buffer.from(await dav.getFile(libDest));
+const back = Buffer.from(await dav.read(libDest));
 console.log(
   `library.json: ${sha(libraryBytes) === sha(back) ? 'byte-identical on the box' : 'MISMATCH after upload!'}`
 );
@@ -253,16 +253,16 @@ if (!failed) {
     const entries = (await dav.propfind(dirPath, '1')).filter(e => e.path !== dirPath);
     let kept = 0;
     for (const e of entries) {
-      if (e.isCollection) kept += await prune(e.path);
+      if (e.isDirectory) kept += await prune(e.path);
       else if (keep.has(e.path)) kept++;
       else {
-        await dav.delete(e.path);
+        await dav.remove(e.path);
         pruned++;
       }
     }
     if (kept === 0 && dirPath !== DEST) {
       try {
-        await dav.delete(dirPath, true);
+        await dav.remove(dirPath, true);
       } catch (err) {
         /* leave an empty dir over failing */
       }

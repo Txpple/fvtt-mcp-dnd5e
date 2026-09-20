@@ -1,9 +1,10 @@
 // foundry.ts — THE quarantine.
 //
 // This is the ONLY file in the codebase that knows Playwright/CDP exists. It owns the
-// entire live bridge: launch headless Chromium, wake the (sleeping) Molten box via the
-// Magic URL, join the world as the dedicated passwordless MCP user, wait for game.ready,
-// inject the page-side domain library (window.__fvtt), and expose a tiny seam:
+// entire live bridge: launch headless Chromium, let the host wake a sleeping instance
+// (src/hosts — the one host-specific step of connecting), join the world as the dedicated
+// passwordless MCP user, wait for game.ready, inject the page-side domain library
+// (window.__fvtt), and expose a tiny seam:
 //
 //     foundry.call(name, args)   ->  window.__fvtt[name](args)   (the tool surface)
 //     foundry.evaluate(fn, arg)  ->  page.evaluate(fn, arg)      (escape hatch)
@@ -16,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import type { PageApi } from './page/index.js';
+import type { Host } from './hosts/types.js';
 import { clearSystemCache } from './utils/system-detection.js';
 
 /**
@@ -58,21 +60,26 @@ export interface FoundryBridge {
 }
 
 export interface FoundryConfig {
-  /** Base world URL, e.g. https://eoh-test.moltenhosting.com (MOLTEN_SERVER_URL). */
+  /** Base world URL, e.g. https://eoh-test.moltenhosting.com or http://localhost:30000. */
   serverUrl: string;
-  /** Molten "Server Startup / Magic URL" (…?s=token) — GET to wake a sleeping box. */
-  magicUrl?: string;
+  /**
+   * Where this Foundry runs (src/hosts). Supplies the optional wake step before /join is probed,
+   * secret redaction for logs, and the env-var names error messages should point at. Omitted =
+   * a generic host: no wake, and messages name the generic variables.
+   */
+  host?: Host;
   /** Dedicated Foundry user to join as (FOUNDRY_USER, e.g. "MCP-Claude"). */
   user: string;
   /** Optional user password; omit for a passwordless user. */
   password?: string;
   /**
-   * Foundry admin access key (MOLTEN_ADMIN_KEY). When set (with worldId), a cold box whose
-   * VM is up but has no world launched is recovered by authenticating to /setup and launching
-   * the world. Omit to keep world-launch a manual step (the bridge then fails with guidance).
+   * Foundry admin access key. When set (with worldId), an instance that is up but has no world
+   * launched is recovered by authenticating to /setup and launching the world — Foundry's own
+   * admin flow, the same on every host. Omit to keep world-launch a manual step (the bridge then
+   * fails with guidance).
    */
   adminKey?: string;
-  /** World to launch when the box is up but no world is active (MOLTEN_WORLD_ID). */
+  /** World to launch when the instance is up but no world is active. */
   worldId?: string;
   /** Run Chromium headless (default true). */
   headless?: boolean;
@@ -150,24 +157,31 @@ export class Foundry implements FoundryBridge {
     this.log.info(`connected as "${this.cfg.user}" — game.ready`);
   }
 
-  /** GET the Magic URL to spin a sleeping Molten box back up (best-effort). */
+  /**
+   * Let the host bring a sleeping instance up (best-effort). The host gets the real page to
+   * navigate — a wake GET rides the browser exactly as it always has — but never a Playwright
+   * type. A host with no wake step (local, generic) makes this a no-op.
+   */
   private async wake(): Promise<void> {
-    if (!this.cfg.magicUrl || !this.page) return;
-    this.log.debug('waking via Magic URL');
-    await this.page
-      .goto(this.cfg.magicUrl, { waitUntil: 'domcontentloaded' })
-      .catch(e => this.log.warn(`magic-url nav note: ${this.redact((e as Error).message)}`));
+    const page = this.page;
+    if (!this.cfg.host?.wake || !page) return;
+    await this.cfg.host.wake({
+      goto: async url => {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+      },
+      log: { debug: m => this.log.debug(m), warn: m => this.log.warn(m) },
+    });
   }
 
-  /**
-   * Strip the Magic URL (and any `?s=<token>` startup secret) out of a message before it reaches
-   * the logs: a Playwright nav error echoes back the URL it failed to load, which would otherwise
-   * leak the wake token. Errors should name the failing thing, never its secret value.
-   */
-  private redact(msg: string): string {
-    let out = msg;
-    if (this.cfg.magicUrl) out = out.split(this.cfg.magicUrl).join('<MOLTEN_MAGIC_URL>');
-    return out.replace(/([?&]s=)[^\s&"']+/gi, '$1<redacted>');
+  /** Env-var names for messages: the host's own, or the generic spelling when there is no host. */
+  private get vars(): { serverUrl: string; adminKey: string; worldId: string } {
+    return (
+      this.cfg.host?.vars ?? {
+        serverUrl: 'FOUNDRY_URL',
+        adminKey: 'FOUNDRY_ADMIN_KEY',
+        worldId: 'FOUNDRY_WORLD_ID',
+      }
+    );
   }
 
   /**
@@ -204,7 +218,7 @@ export class Foundry implements FoundryBridge {
         } else {
           throw new Error(
             'Foundry world is not launched and no admin key is configured to launch it. ' +
-              'Launch the world (Setup → Launch World), or set MOLTEN_ADMIN_KEY + MOLTEN_WORLD_ID.'
+              `Launch the world (Setup → Launch World), or set ${this.vars.adminKey} + ${this.vars.worldId}.`
           );
         }
       }
@@ -217,7 +231,9 @@ export class Foundry implements FoundryBridge {
     }
     throw new Error(
       `Foundry world never became joinable within ${Math.round(budget / 1000)}s ` +
-        '(box failed to wake, or the world failed to launch). Check MOLTEN_SERVER_URL/MOLTEN_MAGIC_URL.'
+        '(the instance failed to come up, or the world failed to launch). ' +
+        (this.cfg.host?.unreachableHint ??
+          `Check ${this.vars.serverUrl} and that the world is launched.`)
     );
   }
 
@@ -279,8 +295,8 @@ export class Foundry implements FoundryBridge {
         .catch(() => 0);
       throw new Error(
         stillGated
-          ? 'Foundry admin authentication failed — check MOLTEN_ADMIN_KEY'
-          : `world "${this.cfg.worldId}" not found on /setup — check MOLTEN_WORLD_ID`
+          ? `Foundry admin authentication failed — check ${this.vars.adminKey}`
+          : `world "${this.cfg.worldId}" not found on /setup — check ${this.vars.worldId}`
       );
     }
     // Prefer Foundry's own setup POST helper: the "Launch World" button calls
@@ -333,7 +349,7 @@ export class Foundry implements FoundryBridge {
     // world (the page first shows a "<world> Version 14 Build NNN" splash). So navigate ONCE
     // and WAIT for the form — do NOT re-goto in a tight loop, which restarts the client-side
     // load and leaves the box perpetually on the splash. Reload only between long waits, to
-    // ride out a cold Molten boot where the first hit lands on the "starting" interstitial.
+    // ride out a cold managed-host boot where the first hit lands on the "starting" interstitial.
     const perTryMs = 45_000;
     const tries = 6; // up to ~4.5 min total for a cold boot
     let formReady = false;

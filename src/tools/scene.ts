@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
+import type { Host } from '../hosts/types.js';
 import { Logger } from '../logger.js';
 import { formatDeletionResult } from '../utils/format.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -10,6 +11,8 @@ import { toInputSchema } from '../utils/schema.js';
 export interface SceneToolsOptions {
   foundry: FoundryBridge;
   logger: Logger;
+  /** Where Foundry runs — reported by get-world-info so a session knows which instance and plane it is on. */
+  host?: Host;
 }
 
 // Single source of truth for each tool's input contract: the handler parses with these
@@ -401,10 +404,12 @@ const ScreenshotSceneSchema = z.object({
 export class SceneTools {
   private foundry: FoundryBridge;
   private logger: Logger;
+  private host: Host | undefined;
 
-  constructor({ foundry, logger }: SceneToolsOptions) {
+  constructor({ foundry, logger, host }: SceneToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'SceneTools' });
+    this.host = host;
   }
 
   /**
@@ -927,6 +932,16 @@ export class SceneTools {
       foundry: {
         version: worldData.foundryVersion,
       },
+      // Where this instance runs (src/hosts) and whether the asset file tools have a plane here.
+      ...(this.host
+        ? {
+            host: {
+              kind: this.host.kind,
+              label: this.host.label,
+              files: this.host.files ? this.host.files.label : 'none',
+            },
+          }
+        : {}),
       users: {
         total: worldData.users?.length || 0,
         active: worldData.users?.filter((u: any) => u.active).length || 0,

@@ -1,6 +1,6 @@
 // Chat-log tools (live). Exercises the page layer through the foundry.call seam (post / list /
 // delete / export / dnd5e card / roll request) plus the Node-side ChatTools.handleExportChatLog
-// (local file + optional WebDAV). The page lib is bundled to the browser and is NOT unit-tested, so
+// (local file + optional remote copy through the host's file plane). The page lib is bundled to the browser and is NOT unit-tested, so
 // this is its only correctness gate. Everything created is cleaned up in afterAll. Gated on LIVE.
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { readFile, rm } from 'node:fs/promises';
@@ -12,12 +12,13 @@ import { LIVE, ENV, foundryConfig, noopLogger, CONNECT_TIMEOUT_MS, TAG } from '.
 
 describe.skipIf(!LIVE)('chat-log tools (live)', () => {
   let foundry: Foundry;
+  const cfg = foundryConfig();
   const created: string[] = [];
   const localExport = join(tmpdir(), `${TAG}-chat-log.md`);
   const seed: { actorName?: string; itemName?: string } = {};
 
   beforeAll(async () => {
-    foundry = new Foundry(foundryConfig(), noopLogger);
+    foundry = new Foundry(cfg, noopLogger);
     await foundry.connect();
 
     const actors = await foundry.call<Array<{ name?: string }>>('listActors', {});
@@ -115,7 +116,7 @@ describe.skipIf(!LIVE)('chat-log tools (live)', () => {
   });
 
   it('exports the transcript to a local file (ChatTools handler)', async () => {
-    const tools = new ChatTools({ foundry: foundry as any, logger: noopLogger });
+    const tools = new ChatTools({ foundry: foundry as any, logger: noopLogger, host: cfg.host });
     const out = await tools.handleExportChatLog({ localPath: localExport, overwrite: true });
     expect(out).toContain('Exported');
     expect(out).toContain('local:');
@@ -123,17 +124,22 @@ describe.skipIf(!LIVE)('chat-log tools (live)', () => {
     expect(written).toContain('Chat Log');
   });
 
-  it('exports to WebDAV and the public URL is reachable', async ctx => {
-    // The local sandbox profile has NO WebDAV plane by design (src/config.ts) — prod only.
-    if (!ENV.MOLTEN_WEBDAV_PASSWORD || process.env.FOUNDRY_PROFILE === 'local') return ctx.skip();
-    const tools = new ChatTools({ foundry: foundry as any, logger: noopLogger });
-    const remote = `worlds/${ENV.MOLTEN_WORLD_ID}/exports/${TAG}-chat-log.md`;
-    const out = await tools.handleExportChatLog({ remotePath: remote, overwrite: true });
-    const urlMatch = out.match(/public URL: (\S+)/);
-    expect(urlMatch).toBeTruthy();
-    if (urlMatch) {
-      const res = await fetch(urlMatch[1]);
-      expect(res.status).toBe(200);
+  it("exports through the host's file plane and the public URL is reachable", async ctx => {
+    // Needs a plane: WebDAV on molten (MOLTEN_WEBDAV_PASSWORD), the Data/ dir on local
+    // (LOCAL_FOUNDRY_DATA). A host without one skips — that is the host's contract, not a failure.
+    if (!cfg.host.files) return ctx.skip();
+    const tools = new ChatTools({ foundry: foundry as any, logger: noopLogger, host: cfg.host });
+    const remote = `worlds/${cfg.host.worldId ?? ENV.MOLTEN_WORLD_ID}/exports/${TAG}-chat-log.md`;
+    try {
+      const out = await tools.handleExportChatLog({ remotePath: remote, overwrite: true });
+      const urlMatch = out.match(/public URL: (\S+)/);
+      expect(urlMatch).toBeTruthy();
+      if (urlMatch) {
+        const res = await fetch(urlMatch[1]);
+        expect(res.status).toBe(200);
+      }
+    } finally {
+      await cfg.host.files.remove(remote).catch(() => {});
     }
   });
 

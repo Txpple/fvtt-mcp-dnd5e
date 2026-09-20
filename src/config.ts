@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { resolveHostConfig, type HostConfig } from './hosts/env.js';
 
 // Load .env from the repo root regardless of the process's CWD, so the server picks up its
 // config whether it's launched from the repo root or wired into Claude Code from another directory.
@@ -41,54 +42,17 @@ const ConfigSchema = z.object({
     // Default only applies if rawConfig provides nothing; rawConfig reads package.json (see below).
     version: z.string().default('0.0.0'),
   }),
-  // Molten Hosting config. `serverUrl`/`magicUrl`/`user` drive the headless Foundry
-  // bridge (src/foundry.ts); the webdav* fields drive the Plane-B asset tools.
-  // Non-secret connection facts default to neutral `your-server` placeholders — set the
-  // real values for your instance via the MOLTEN_* env vars in a gitignored .env (see .env.example).
-  // Secrets AND worldId are `.optional()` with NO default — worldId is left unset rather than a
-  // placeholder so the bridge's remote world-launch only fires for a real, configured world
-  // (an unset MOLTEN_WORLD_ID then takes the manual-launch guidance path, not a doomed launch).
-  // Tools check presence and tell the user which var to set.
-  molten: z
-    .object({
-      serverUrl: z.string().url().default('https://your-server.moltenhosting.com'),
-      worldId: z.string().optional(), // MOLTEN_WORLD_ID — real world to remote-launch; unset = manual
-      // Headless bridge (src/foundry.ts): wake a sleeping box + which user to join as.
-      magicUrl: z.string().optional(), // MOLTEN_MAGIC_URL — GET to wake (…?s=token)
-      user: z.string().default('MCP-Claude'), // FOUNDRY_USER — GM user to /join as
-      webdavUrl: z.string().url().default('https://your-server.webdav.moltenhosting.com'),
-      fileBrowserUrl: z.string().url().default('https://your-server.files.moltenhosting.com'),
-      webdavUser: z.string().default('foundry-ftp'),
-      // --- secrets (env-only; undefined === not configured) ---
-      password: z.string().optional(), // FOUNDRY_PASSWORD — the join user's password (omit for a passwordless user)
-      webdavPassword: z.string().optional(), // MOLTEN_WEBDAV_PASSWORD — WebDAV/FileBrowser
-      adminKey: z.string().optional(), // MOLTEN_ADMIN_KEY — Foundry admin access key
-    })
-    // .prefault({}) (not .default({})) so an omitted `molten` key is fed through the
-    // schema and each field's own default fills in. zod 4's .default() takes the parsed
-    // OUTPUT type (all fields required); .prefault() keeps the zod-3 "parse the default" behavior.
-    .prefault({}),
 });
 
-export type Config = z.infer<typeof ConfigSchema>;
-export type MoltenConfig = Config['molten'];
-
-/**
- * Instance profile — which Foundry this server process targets.
- *
- * `FOUNDRY_PROFILE=local` retargets the bridge at the LOCAL sandbox instance (a mirror of prod
- * maintained by scripts/pull-prod-to-local.mjs — see docs/local-sandbox.md). The profile is set
- * per MCP-server REGISTRATION (its `env` block), never in .env: one .env then serves both
- * processes — MOLTEN_* stays the primary/prod set, LOCAL_* overrides what a local instance
- * genuinely changes, and the rest (world id, join user/password) is inherited from the prod
- * values because the sandbox is a byte copy of prod: its world id and users ARE prod's.
- *
- * The local profile deliberately has NO wake plumbing (a local box doesn't sleep) and NO WebDAV
- * plane (leaving it at placeholder/no-password makes every asset file tool report "not
- * configured" — the one wrong default here would be a local-profile server silently pointing
- * file writes at the live box).
- */
-const profile: 'molten' | 'local' = process.env.FOUNDRY_PROFILE === 'local' ? 'local' : 'molten';
+export type Config = z.infer<typeof ConfigSchema> & {
+  /**
+   * Which Foundry this server process targets and everything its host needs — resolved by the ONE
+   * env selector (src/hosts/env.ts) from FOUNDRY_HOST (`FOUNDRY_PROFILE=local` still honoured).
+   * The host is set per MCP-server REGISTRATION (its `env` block), never in .env, so one .env
+   * serves every host.
+   */
+  host: HostConfig;
+};
 
 const rawConfig = {
   logLevel: process.env.LOG_LEVEL || 'warn',
@@ -100,34 +64,9 @@ const rawConfig = {
     name: process.env.SERVER_NAME || 'foundry-mcp-server',
     version: process.env.SERVER_VERSION || readPackageVersion(),
   },
-  molten:
-    profile === 'local'
-      ? {
-          serverUrl: process.env.LOCAL_SERVER_URL || 'http://localhost:30000',
-          worldId: process.env.LOCAL_WORLD_ID || process.env.MOLTEN_WORLD_ID,
-          magicUrl: undefined, // no sleep/wake locally
-          user: process.env.LOCAL_FOUNDRY_USER || process.env.FOUNDRY_USER || 'MCP-Claude',
-          password: process.env.LOCAL_FOUNDRY_PASSWORD ?? process.env.FOUNDRY_PASSWORD,
-          webdavUrl: 'https://your-server.webdav.moltenhosting.com', // placeholder = file plane OFF
-          fileBrowserUrl: 'https://your-server.files.moltenhosting.com',
-          webdavUser: 'foundry-ftp',
-          webdavPassword: undefined, // asset tools report "not configured" in the local profile
-          adminKey: process.env.LOCAL_ADMIN_KEY, // unset -> manual world launch (click Play locally)
-        }
-      : {
-          serverUrl: process.env.MOLTEN_SERVER_URL || 'https://your-server.moltenhosting.com',
-          worldId: process.env.MOLTEN_WORLD_ID, // unset -> manual-launch path (no placeholder)
-          magicUrl: process.env.MOLTEN_MAGIC_URL,
-          user: process.env.FOUNDRY_USER || 'MCP-Claude',
-          password: process.env.FOUNDRY_PASSWORD,
-          webdavUrl:
-            process.env.MOLTEN_WEBDAV_URL || 'https://your-server.webdav.moltenhosting.com',
-          fileBrowserUrl:
-            process.env.MOLTEN_FILEBROWSER_URL || 'https://your-server.files.moltenhosting.com',
-          webdavUser: process.env.MOLTEN_WEBDAV_USER || 'foundry-ftp',
-          webdavPassword: process.env.MOLTEN_WEBDAV_PASSWORD,
-          adminKey: process.env.MOLTEN_ADMIN_KEY,
-        },
 };
 
-export const config = ConfigSchema.parse(rawConfig);
+export const config: Config = {
+  ...ConfigSchema.parse(rawConfig),
+  host: resolveHostConfig(process.env),
+};

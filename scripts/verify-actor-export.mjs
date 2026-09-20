@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { hostFor } from './lib/bridge-config.mjs';
 import { buildToolRegistry } from '../dist/registry.js';
 import { Logger } from '../dist/logger.js';
 
@@ -35,7 +36,7 @@ const f = new Foundry(
   prod
     ? {
         serverUrl: env.MOLTEN_SERVER_URL,
-        magicUrl: env.MOLTEN_MAGIC_URL,
+        host: hostFor(env),
         user: env.FOUNDRY_USER || 'DM Assistant',
         password: env.FOUNDRY_PASSWORD,
         adminKey: env.MOLTEN_ADMIN_KEY,

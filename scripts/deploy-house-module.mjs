@@ -31,7 +31,7 @@ import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSy
 import { fileURLToPath } from 'node:url';
 import { dirname, join, posix } from 'node:path';
 import { createHash } from 'node:crypto';
-import { WebDavClient } from '../dist/tools/molten/webdav.js';
+import { WebDavClient } from '../dist/hosts/webdav.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -117,8 +117,8 @@ if (toLocal) {
   target = {
     label: 'prod (Molten, over WebDAV)',
     ensureParents: rel => dav.ensureParents(rel),
-    put: (rel, body, contentType) => dav.putFile(rel, body, contentType),
-    get: rel => dav.getFile(rel),
+    put: (rel, body, contentType) => dav.write(rel, body, contentType),
+    get: rel => dav.read(rel),
     liveHint:
       'Scripts, styles and templates are live on the next world reload. module.json (version ' +
       'string, esmodules/styles lists) keeps vending the OLD values until the Foundry PROCESS ' +

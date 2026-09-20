@@ -2,47 +2,48 @@ import { z } from 'zod';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { Logger } from '../../logger.js';
-import { config } from '../../config.js';
-import type { MoltenConfig } from '../../config.js';
 import type { FoundryBridge } from '../../foundry.js';
-import { WebDavClient, guessContentType, toDataRelative, type DavEntry } from './webdav.js';
+import type { FileEntry, FilePlane, Host } from '../../hosts/types.js';
 import {
-  makeDavClient,
-  buildPublicUrl as davPublicUrl,
-  notConfiguredMessage,
-  worldDbRefusal as davWorldDbRefusal,
-  looksLikeWorldDbPath as davLooksLikeWorldDbPath,
-  davErrorMessage as davError,
+  guessContentType,
   humanSize,
-} from './dav-access.js';
+  looksLikeWorldDbPath as isWorldDbPath,
+  toDataRelative,
+  worldDbRefusal as refuseWorldDb,
+} from '../../hosts/paths.js';
+import { fileErrorMessage } from './access.js';
 import { toInputSchema } from '../../utils/schema.js';
 
 /**
- * Plane-B — Molten Hosting file tools (the asset-management library, Groups A/B).
+ * Plane-B — the asset FILE tools (the asset-management library, Groups A/B).
  *
- * These talk to Molten's file channel directly (WebDAV / public HTTPS) — NOT to the Foundry bridge —
- * so they take only config + logger. (The old host-lifecycle tools `wake-server`/`sleep-watch`/
- * `keep-awake` were removed: the operator only ever drives the bridge while the server is already up.)
+ * These talk to the host's file plane (src/hosts — WebDAV on Molten, the `Data/` directory on a
+ * local install) — NOT to the Foundry bridge — so they take the Host + logger, and the bridge only
+ * for reference checks. They never know which plane they are on: every handler is written against
+ * the FilePlane contract and the Host's `publicUrl` / `filesNotConfigured`.
  *
  * GROUPS:
  *  - A (discover, read-only): `asset-url` (pure mapping), `list-assets`, `asset-info`, `download-asset`.
- *  - B (manage files, write): `upload-asset`, `create-asset-folder`. (delete/move/copy land in a later
- *    phase, wired to bridge-side reference-checking so they can't silently break the game.)
+ *  - B (manage files, write): `upload-asset`, `upload-asset-tree`, `create-asset-folder`,
+ *    `delete-asset`, `move-asset`, `copy-asset` — the destructive ones wired to bridge-side
+ *    reference-checking so they can't silently break the game.
  *
- * WebDAV is standard Apache `mod_dav` + HTTP Basic auth (user `foundry-ftp`, password =
- * MOLTEN_WEBDAV_PASSWORD); see ./webdav.ts. Write tools no-op with a clear message when the password
- * is unset.
+ * A host with no plane configured makes every tool here answer with the host's own
+ * "not configured" message (naming the variable to set) instead of doing anything.
  *
  * HARD SAFETY RULES baked in (DESIGN §3/§5/§6):
- *  - The live world DB (LevelDB under `Data/worlds/<world>/data/`) is UNTOUCHABLE via the file channel
- *    while the server runs — WebDAV writes there corrupt it permanently. Write tools REFUSE such paths.
- *    Mass DB ops are a separate offline job (stop → Create Backup → fvtt unpack → edit → pack → start).
- *  - Anything under `Data/` is served PUBLICLY over HTTPS with no auth → privacy caveat surfaced on
+ *  - The live world DB (LevelDB under `Data/worlds/<world>/data/`) is UNTOUCHABLE via the file plane
+ *    while the server runs — a write there, over WebDAV or straight onto the disk, corrupts it
+ *    permanently. Write tools REFUSE such paths. Mass DB ops are a separate offline job (stop →
+ *    Create Backup → fvtt unpack → edit → pack → start).
+ *  - Anything under `Data/` is served PUBLICLY over HTTP(S) with no auth → privacy caveat surfaced on
  *    upload: never put anything sensitive under `Data/`.
  */
 
-interface MoltenToolsOptions {
+interface AssetFileToolsOptions {
   logger: Logger;
+  /** Where Foundry runs — supplies the file plane and the public-URL mapping. */
+  host: Host;
   /**
    * Optional bridge client. When present, the destructive file tools (delete/move-asset) consult
    * find-asset-references first so they don't silently break the game; when absent (or the bridge is
@@ -184,7 +185,7 @@ const AssetUrlSchema = z.object({
 
 /**
  * Join a Data-relative remote root with a forward-slash relative path. LITERAL chars (spaces, `#`,
- * `&`, apostrophes) are PRESERVED — the WebDAV client encodes each segment exactly once on PUT, so
+ * `&`, apostrophes) are PRESERVED — a plane encodes each segment exactly once when it needs to, so
  * passing already-encoded text here would double-encode (`%20`→`%2520`). Pure/exported for testing.
  */
 export function joinRemote(remoteRoot: string, rel: string): string {
@@ -200,15 +201,14 @@ export function matchesIncludeExt(name: string, includeExt?: string[]): boolean 
   return includeExt.some(e => e.toLowerCase().replace(/^\./, '') === ext);
 }
 
-export class MoltenTools {
+export class AssetFileTools {
   private logger: Logger;
-  private molten: MoltenConfig;
+  private host: Host;
   private foundry: FoundryBridge | undefined;
-  private davClient: WebDavClient | null = null;
 
-  constructor(options: MoltenToolsOptions) {
+  constructor(options: AssetFileToolsOptions) {
     this.logger = options.logger;
-    this.molten = config.molten;
+    this.host = options.host;
     this.foundry = options.foundry;
   }
 
@@ -218,7 +218,8 @@ export class MoltenTools {
         name: 'list-assets',
         description:
           'Plane B (file channel, read-only). List the immediate contents of a directory under the ' +
-          'Foundry `Data/` root over WebDAV (folders + files, with size / type / public URL). Use to ' +
+          "Foundry `Data/` root through the host's file plane (folders + files, with size / type / " +
+          'public URL). Use to ' +
           'browse uploaded assets, e.g. `worlds/your-world/assets/audio`. Empty/omitted path lists the ' +
           '`Data/` root.',
         inputSchema: toInputSchema(ListAssetsSchema),
@@ -235,74 +236,75 @@ export class MoltenTools {
         name: 'download-asset',
         description:
           'Plane B (file channel, read-only). Download a file from under the Foundry `Data/` root ' +
-          '(over WebDAV) to a local path on this machine. For grabbing an existing asset to inspect ' +
-          'or re-process.',
+          "(through the host's file plane) to a local path on this machine. For grabbing an existing " +
+          'asset to inspect or re-process.',
         inputSchema: toInputSchema(DownloadAssetSchema),
       },
       {
         name: 'upload-asset',
         description:
           'Plane B (file channel, write). Upload an ASSET (map/token/audio/handout image) from a ' +
-          'local file to the Foundry data area over WebDAV and return its public HTTPS URL, so large ' +
-          'media bypass the bridge entirely. Missing parent folders are created automatically. ' +
-          'ASSETS ONLY — never world-DB files (LevelDB writes while the server runs corrupt it; such ' +
-          'paths are refused). PRIVACY: anything under Data/ is served publicly with no auth — do not ' +
-          'upload anything sensitive. Requires MOLTEN_WEBDAV_PASSWORD.',
+          "local file to the Foundry data area through the host's file plane and return its public " +
+          'URL, so large media bypass the bridge entirely. Missing parent folders are created ' +
+          'automatically. ASSETS ONLY — never world-DB files (LevelDB writes while the server runs ' +
+          'corrupt it; such paths are refused). PRIVACY: anything under Data/ is served publicly with ' +
+          "no auth — do not upload anything sensitive. Needs the host's file plane configured (the " +
+          'tool names the variable when it is not).',
         inputSchema: toInputSchema(UploadAssetSchema),
       },
       {
         name: 'upload-asset-tree',
         description:
           'Plane B (file channel, write). Recursively upload a LOCAL directory tree of ASSETS to ' +
-          'the Foundry data area over WebDAV, preserving the subtree layout (each file → ' +
+          "the Foundry data area through the host's file plane, preserving the subtree layout (each file → " +
           'remoteRoot/<rel>), creating parent folders as needed. Use for BULK imports — a scene ' +
           "pack's images, a tiles folder — instead of one upload-asset per file. Skips files that " +
           'already exist unless overwrite:true; optional includeExt filter (e.g. ["webp"]). ASSETS ' +
           'ONLY — refuses live world-DB paths. Reports uploaded/skipped/error counts. PRIVACY: ' +
-          'anything under Data/ is served publicly with no auth. Requires MOLTEN_WEBDAV_PASSWORD.',
+          "anything under Data/ is served publicly with no auth. Needs the host's file plane configured.",
         inputSchema: toInputSchema(UploadAssetTreeSchema),
       },
       {
         name: 'create-asset-folder',
         description:
           'Plane B (file channel, write). Create a folder (and any missing parents) under the ' +
-          'Foundry `Data/` root over WebDAV. Idempotent — succeeds if the folder already exists. ' +
-          'Refuses paths inside a live world DB. Requires MOLTEN_WEBDAV_PASSWORD.',
+          "Foundry `Data/` root through the host's file plane. Idempotent — succeeds if the folder " +
+          "already exists. Refuses paths inside a live world DB. Needs the host's file plane configured.",
         inputSchema: toInputSchema(CreateAssetFolderSchema),
       },
       {
         name: 'delete-asset',
         description:
-          'Plane B (file channel, write). Delete a file under the Foundry `Data/` root over WebDAV. ' +
-          'REFERENCE-AWARE: consults find-asset-references first and REFUSES if any scene/actor/' +
-          'journal/playlist still points at it (pass force:true to override). Deleting a directory ' +
-          'requires recursive:true. Refuses live world-DB paths. Requires MOLTEN_WEBDAV_PASSWORD.',
+          "Plane B (file channel, write). Delete a file under the Foundry `Data/` root through the host's " +
+          'file plane. REFERENCE-AWARE: consults find-asset-references first and REFUSES if any scene/' +
+          'actor/journal/playlist still points at it (pass force:true to override). Deleting a directory ' +
+          "requires recursive:true. Refuses live world-DB paths. Needs the host's file plane configured.",
         inputSchema: toInputSchema(DeleteAssetSchema),
       },
       {
         name: 'move-asset',
         description:
-          'Plane B (file channel, write). Move/rename a file under the Foundry `Data/` root over ' +
-          'WebDAV; missing destination parent folders are created automatically. REFERENCE-AWARE: ' +
-          'by default REFUSES with a report if anything references the source (moving would break ' +
-          'those pointers). Pass relink:true to move AND rewrite all references (old→new), or ' +
-          'force:true to move without relinking. Refuses live world-DB paths. Requires ' +
-          'MOLTEN_WEBDAV_PASSWORD.',
+          'Plane B (file channel, write). Move/rename a file under the Foundry `Data/` root through ' +
+          "the host's file plane; missing destination parent folders are created automatically. " +
+          'REFERENCE-AWARE: by default REFUSES with a report if anything references the source ' +
+          '(moving would break those pointers). Pass relink:true to move AND rewrite all references ' +
+          '(old→new), or force:true to move without relinking. Refuses live world-DB paths. Needs ' +
+          "the host's file plane configured.",
         inputSchema: toInputSchema(MoveAssetSchema),
       },
       {
         name: 'copy-asset',
         description:
-          'Plane B (file channel, write). Copy a file under the Foundry `Data/` root over WebDAV; ' +
-          'missing destination parent folders are created automatically. (Copying does not affect ' +
-          'existing references, so no reference check is needed.) Refuses live world-DB ' +
-          'destination paths. Requires MOLTEN_WEBDAV_PASSWORD.',
+          "Plane B (file channel, write). Copy a file under the Foundry `Data/` root through the host's " +
+          'file plane; missing destination parent folders are created automatically. (Copying does not ' +
+          'affect existing references, so no reference check is needed.) Refuses live world-DB ' +
+          "destination paths. Needs the host's file plane configured.",
         inputSchema: toInputSchema(CopyAssetSchema),
       },
       {
         name: 'asset-url',
         description:
-          'Plane B (file channel). Return the public HTTPS URL for a file under the Foundry `Data/` ' +
+          'Plane B (file channel). Return the public URL for a file under the Foundry `Data/` ' +
           'root. Pure mapping (no network): everything under Data/ is served at the server root ' +
           '(DESIGN §6), e.g. Data/worlds/w/maps/x.jpg → <serverUrl>/worlds/w/maps/x.jpg. Useful for ' +
           'turning an uploaded/known asset path into a link Foundry or a player can load.',
@@ -317,29 +319,27 @@ export class MoltenTools {
     const { remotePath } = ListAssetsSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
 
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('list-assets');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('list-assets');
 
     try {
-      const entries = await dav.propfind(clean, '1');
-      if (entries.length === 0) {
+      const children = await plane.list(clean);
+      if (children === null) {
         return `Not found: "Data/${clean}" does not exist (or is not a directory).`;
       }
-      // Depth-1 PROPFIND includes the collection itself first — drop it; keep children.
-      const children = entries.filter(e => e.path !== clean);
       if (children.length === 0) {
         return `Data/${clean || '(root)'} is empty.`;
       }
       children.sort((a, b) => {
-        if (a.isCollection !== b.isCollection) return a.isCollection ? -1 : 1;
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
         return a.name.localeCompare(b.name);
       });
       const lines = children.map(e => this.formatEntryLine(e));
-      const dirs = children.filter(e => e.isCollection).length;
+      const dirs = children.filter(e => e.isDirectory).length;
       const files = children.length - dirs;
       return `Data/${clean || '(root)'} — ${dirs} folder(s), ${files} file(s):\n${lines.join('\n')}`;
     } catch (err) {
-      return this.davErrorMessage('list-assets', err);
+      return this.fileError('list-assets', err);
     }
   }
 
@@ -347,13 +347,13 @@ export class MoltenTools {
     const { remotePath } = AssetInfoSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
 
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('asset-info');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('asset-info');
 
     try {
-      const entry = await dav.stat(clean);
+      const entry = await plane.stat(clean);
       if (!entry) return `Does not exist: "Data/${clean}".`;
-      if (entry.isCollection) {
+      if (entry.isDirectory) {
         return `Data/${clean} — FOLDER${entry.lastModified ? ` (modified ${entry.lastModified})` : ''}.`;
       }
       const parts = [
@@ -361,11 +361,11 @@ export class MoltenTools {
         entry.size !== undefined ? `size ${humanSize(entry.size)} (${entry.size} B)` : null,
         entry.contentType ? `type ${entry.contentType}` : null,
         entry.lastModified ? `modified ${entry.lastModified}` : null,
-        `public URL: ${this.buildPublicUrl(clean)}`,
+        `public URL: ${this.host.publicUrl(clean)}`,
       ].filter(Boolean);
       return parts.join('\n  ');
     } catch (err) {
-      return this.davErrorMessage('asset-info', err);
+      return this.fileError('asset-info', err);
     }
   }
 
@@ -373,17 +373,17 @@ export class MoltenTools {
     const { remotePath, localPath } = DownloadAssetSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
 
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('download-asset');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('download-asset');
 
     try {
-      const bytes = await dav.getFile(clean);
+      const bytes = await plane.read(clean);
       await mkdir(dirname(localPath), { recursive: true });
       await writeFile(localPath, bytes);
       this.logger.info('download-asset', { remotePath: clean, localPath, bytes: bytes.length });
       return `Downloaded Data/${clean} → "${localPath}" (${humanSize(bytes.length)}, ${bytes.length} B).`;
     } catch (err) {
-      return this.davErrorMessage('download-asset', err);
+      return this.fileError('download-asset', err);
     }
   }
 
@@ -396,8 +396,8 @@ export class MoltenTools {
       return this.worldDbRefusal(remotePath);
     }
 
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('upload-asset');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('upload-asset');
 
     let bytes: Uint8Array;
     try {
@@ -407,15 +407,15 @@ export class MoltenTools {
     }
 
     try {
-      if (!overwrite && (await dav.exists(clean))) {
+      if (!overwrite && (await plane.exists(clean))) {
         return (
           `Refused: "Data/${clean}" already exists. Pass overwrite:true to replace it ` +
           '(or choose a different remotePath).'
         );
       }
-      await dav.ensureParents(clean);
-      await dav.putFile(clean, bytes, guessContentType(localPath));
-      const publicUrl = this.buildPublicUrl(clean);
+      await plane.ensureParents(clean);
+      await plane.write(clean, bytes, guessContentType(localPath));
+      const publicUrl = this.host.publicUrl(clean);
       this.logger.info('upload-asset', { localPath, remotePath: clean, bytes: bytes.length });
       return (
         `Uploaded "${localPath}" (${humanSize(bytes.length)}) → Data/${clean}.\n` +
@@ -424,7 +424,7 @@ export class MoltenTools {
         '  NOTE: this URL is publicly accessible with no auth — do not upload anything sensitive.'
       );
     } catch (err) {
-      return this.davErrorMessage('upload-asset', err);
+      return this.fileError('upload-asset', err);
     }
   }
 
@@ -437,8 +437,8 @@ export class MoltenTools {
     // The root guard covers the whole subtree (every leaf is remoteRoot/<rel>, no `..`).
     if (this.looksLikeWorldDbPath(root)) return this.worldDbRefusal(remoteRoot);
 
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('upload-asset-tree');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('upload-asset-tree');
 
     // Enumerate local files (recursive). A missing/non-directory localRoot is a clear up-front error.
     let files: string[];
@@ -461,19 +461,19 @@ export class MoltenTools {
     let skipped = 0;
     const errors: string[] = [];
     for (const localPath of files) {
-      // rel is always a forward descent under localRoot — pass LITERAL chars; the dav client encodes once.
+      // rel is always a forward descent under localRoot — pass LITERAL chars; the plane encodes once.
       const rel = relative(localRoot, localPath)
         .split(/[/\\]+/)
         .join('/');
       const remote = joinRemote(root, rel);
       try {
-        if (!overwrite && (await dav.exists(remote))) {
+        if (!overwrite && (await plane.exists(remote))) {
           skipped++;
           continue;
         }
         const bytes = await readFile(localPath);
-        await dav.ensureParents(remote);
-        await dav.putFile(remote, bytes, guessContentType(localPath));
+        await plane.ensureParents(remote);
+        await plane.write(remote, bytes, guessContentType(localPath));
         uploaded++;
       } catch (err) {
         errors.push(`${rel}: ${(err as Error).message}`);
@@ -489,7 +489,7 @@ export class MoltenTools {
     });
     const lines = [
       `Uploaded ${uploaded} file(s) → Data/${root} (${skipped} skipped, ${errors.length} error(s)).`,
-      `  Public root: ${this.buildPublicUrl(root)}`,
+      `  Public root: ${this.host.publicUrl(root)}`,
       '  NOTE: anything under Data/ is publicly accessible with no auth — do not upload anything sensitive.',
     ];
     for (const e of errors.slice(0, 20)) lines.push(`  ⚠ ${e}`);
@@ -505,21 +505,21 @@ export class MoltenTools {
       return this.worldDbRefusal(remotePath);
     }
 
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('create-asset-folder');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('create-asset-folder');
 
     try {
-      const existing = await dav.stat(clean);
+      const existing = await plane.stat(clean);
       if (existing) {
-        if (existing.isCollection) return `Already exists: folder Data/${clean}.`;
+        if (existing.isDirectory) return `Already exists: folder Data/${clean}.`;
         return `Refused: "Data/${clean}" already exists as a FILE, not a folder.`;
       }
-      await dav.ensureParents(clean); // create any missing parents above the target
-      await dav.mkcol(clean); // then the target folder itself
+      await plane.ensureParents(clean); // create any missing parents above the target
+      await plane.mkdir(clean); // then the target folder itself
       this.logger.info('create-asset-folder', { remotePath: clean });
       return `Created folder Data/${clean}.`;
     } catch (err) {
-      return this.davErrorMessage('create-asset-folder', err);
+      return this.fileError('create-asset-folder', err);
     }
   }
 
@@ -528,14 +528,14 @@ export class MoltenTools {
     const clean = toDataRelative(remotePath);
 
     if (this.looksLikeWorldDbPath(clean)) return this.worldDbRefusal(remotePath);
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('delete-asset');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('delete-asset');
 
     try {
-      const entry = await dav.stat(clean);
+      const entry = await plane.stat(clean);
       if (!entry) return `Nothing to delete: "Data/${clean}" does not exist.`;
 
-      if (entry.isCollection && !recursive) {
+      if (entry.isDirectory && !recursive) {
         return (
           `Refused: "Data/${clean}" is a directory. Pass recursive:true to delete it and everything ` +
           'inside (deliberately not the default).'
@@ -543,7 +543,7 @@ export class MoltenTools {
       }
 
       if (!force) {
-        if (entry.isCollection) {
+        if (entry.isDirectory) {
           return (
             `Refused: directory deletes can't be reference-checked per-file. Re-run with force:true ` +
             'if you are sure nothing in it is still used by a scene/actor/journal/playlist.'
@@ -563,11 +563,11 @@ export class MoltenTools {
         }
       }
 
-      await dav.delete(clean, entry.isCollection);
+      await plane.remove(clean, entry.isDirectory);
       this.logger.info('delete-asset', { remotePath: clean, recursive, force });
-      return `Deleted Data/${clean}${entry.isCollection ? ' (directory)' : ''}.`;
+      return `Deleted Data/${clean}${entry.isDirectory ? ' (directory)' : ''}.`;
     } catch (err) {
-      return this.davErrorMessage('delete-asset', err);
+      return this.fileError('delete-asset', err);
     }
   }
 
@@ -578,18 +578,18 @@ export class MoltenTools {
 
     if (this.looksLikeWorldDbPath(cleanFrom)) return this.worldDbRefusal(fromPath);
     if (this.looksLikeWorldDbPath(cleanTo)) return this.worldDbRefusal(toPath);
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('move-asset');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('move-asset');
 
     try {
-      const entry = await dav.stat(cleanFrom);
+      const entry = await plane.stat(cleanFrom);
       if (!entry) return `Nothing to move: "Data/${cleanFrom}" does not exist.`;
-      if (!overwrite && (await dav.exists(cleanTo))) {
+      if (!overwrite && (await plane.exists(cleanTo))) {
         return `Refused: "Data/${cleanTo}" already exists. Pass overwrite:true to replace it.`;
       }
 
       let refs: any[] = [];
-      if (entry.isCollection) {
+      if (entry.isDirectory) {
         if (!force) {
           return (
             `Refused: directory moves can't be reference-checked per-file. Re-run with force:true ` +
@@ -616,14 +616,14 @@ export class MoltenTools {
         }
       }
 
-      // WebDAV MOVE does not create missing collections (Apache answers 500, not 409), so build the
+      // A plane's move does not create missing directories (Apache answers 500, not 409), so build the
       // destination's parents first — same contract as upload-asset.
-      await dav.ensureParents(cleanTo);
-      await dav.move(cleanFrom, cleanTo, overwrite, entry.isCollection);
+      await plane.ensureParents(cleanTo);
+      await plane.move(cleanFrom, cleanTo, overwrite, entry.isDirectory);
       this.logger.info('move-asset', { fromPath: cleanFrom, toPath: cleanTo, relink, force });
 
       let relinkNote = '';
-      if (relink && !entry.isCollection && this.foundry) {
+      if (relink && !entry.isDirectory && this.foundry) {
         try {
           const r = await this.foundry.call('relinkAsset', {
             oldPath: cleanFrom,
@@ -636,7 +636,7 @@ export class MoltenTools {
       }
       return `Moved Data/${cleanFrom} → Data/${cleanTo}.${relinkNote}`;
     } catch (err) {
-      return this.davErrorMessage('move-asset', err);
+      return this.fileError('move-asset', err);
     }
   }
 
@@ -648,49 +648,48 @@ export class MoltenTools {
     // Guard BOTH ends: a live world's LevelDB must not be read or written over the file channel.
     if (this.looksLikeWorldDbPath(cleanFrom)) return this.worldDbRefusal(fromPath);
     if (this.looksLikeWorldDbPath(cleanTo)) return this.worldDbRefusal(toPath);
-    const dav = this.dav();
-    if (!dav) return this.notConfigured('copy-asset');
+    const plane = this.files();
+    if (!plane) return this.notConfigured('copy-asset');
 
     try {
-      const entry = await dav.stat(cleanFrom);
+      const entry = await plane.stat(cleanFrom);
       if (!entry) return `Nothing to copy: "Data/${cleanFrom}" does not exist.`;
-      if (!overwrite && (await dav.exists(cleanTo))) {
+      if (!overwrite && (await plane.exists(cleanTo))) {
         return `Refused: "Data/${cleanTo}" already exists. Pass overwrite:true to replace it.`;
       }
-      // COPY has the same missing-collection failure mode as MOVE — create parents first.
-      await dav.ensureParents(cleanTo);
-      await dav.copy(cleanFrom, cleanTo, overwrite, entry.isCollection);
+      // copy has the same missing-directory failure mode as move — create parents first.
+      await plane.ensureParents(cleanTo);
+      await plane.copy(cleanFrom, cleanTo, overwrite, entry.isDirectory);
       this.logger.info('copy-asset', { fromPath: cleanFrom, toPath: cleanTo });
       return `Copied Data/${cleanFrom} → Data/${cleanTo}.`;
     } catch (err) {
-      return this.davErrorMessage('copy-asset', err);
+      return this.fileError('copy-asset', err);
     }
   }
 
   /** Fully implemented — pure mapping, no network. */
   async handleAssetUrl(args: any): Promise<string> {
     const { remotePath } = AssetUrlSchema.parse(args ?? {});
-    return this.buildPublicUrl(toDataRelative(remotePath));
+    return this.host.publicUrl(toDataRelative(remotePath));
   }
 
   // --- helpers --------------------------------------------------------------
 
-  /** Lazily build the WebDAV client; null when no password is configured. */
-  private dav(): WebDavClient | null {
-    if (!this.davClient) this.davClient = makeDavClient(this.molten, this.logger);
-    return this.davClient;
+  /** The host's file plane; null when this host has none configured. */
+  private files(): FilePlane | null {
+    return this.host.files;
   }
 
   private notConfigured(tool: string): string {
-    return notConfiguredMessage(tool, this.molten.webdavUser);
+    return this.host.filesNotConfigured(tool);
   }
 
   private worldDbRefusal(remotePath: string): string {
-    return davWorldDbRefusal(remotePath);
+    return refuseWorldDb(remotePath);
   }
 
-  private davErrorMessage(tool: string, err: unknown): string {
-    return davError(tool, err, this.logger);
+  private fileError(tool: string, err: unknown): string {
+    return fileErrorMessage(tool, err, this.logger);
   }
 
   /** Ask the bridge what references an asset path. `checked:false` = bridge unavailable. */
@@ -713,19 +712,14 @@ export class MoltenTools {
       .join('\n');
   }
 
-  private formatEntryLine(e: DavEntry): string {
-    if (e.isCollection) return `  [DIR ] ${e.name}/`;
+  private formatEntryLine(e: FileEntry): string {
+    if (e.isDirectory) return `  [DIR ] ${e.name}/`;
     const meta = [humanSize(e.size), e.contentType].filter(Boolean).join(', ');
-    return `  [FILE] ${e.name}${meta ? `  (${meta})` : ''}  → ${this.buildPublicUrl(e.path)}`;
-  }
-
-  /** Public HTTPS URL for a path relative to `Data/` (DESIGN §6: served at the server root). */
-  private buildPublicUrl(dataRelativePath: string): string {
-    return davPublicUrl(this.molten.serverUrl, dataRelativePath);
+    return `  [FILE] ${e.name}${meta ? `  (${meta})` : ''}  → ${this.host.publicUrl(e.path)}`;
   }
 
   /** Heuristic: is this path inside a world's live LevelDB store (`worlds/<w>/data/...`)? */
   private looksLikeWorldDbPath(dataRelativePath: string): boolean {
-    return davLooksLikeWorldDbPath(dataRelativePath);
+    return isWorldDbPath(dataRelativePath);
   }
 }

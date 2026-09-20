@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { hostFor } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -37,7 +38,7 @@ const GROUP_ID = 'm2iibo7g0b1YFFjQ'; // "The Party" (re-derived below if missing
 const mkFoundry = () =>
   new Foundry({
     serverUrl: env.MOLTEN_SERVER_URL,
-    magicUrl: env.MOLTEN_MAGIC_URL,
+    host: hostFor(env),
     user: env.FOUNDRY_USER || 'Claude',
     password: env.FOUNDRY_PASSWORD,
     adminKey: env.MOLTEN_ADMIN_KEY,
@@ -314,7 +315,7 @@ try {
 
   const fp = new Foundry({
     serverUrl: env.MOLTEN_SERVER_URL,
-    magicUrl: env.MOLTEN_MAGIC_URL,
+    host: hostFor(env),
     user: TEMP_USER,
     password: '',
     adminKey: env.MOLTEN_ADMIN_KEY,

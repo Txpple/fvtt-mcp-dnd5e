@@ -1233,7 +1233,8 @@ export function keepDarknessLock(payload: Record<string, unknown>, scene: any): 
       ? (payload.environment as Record<string, unknown>)
       : undefined;
   const touchesLevel =
-    'environment.darknessLevel' in payload || (env !== undefined && env.darknessLevel !== undefined);
+    'environment.darknessLevel' in payload ||
+    (env !== undefined && env.darknessLevel !== undefined);
   if (!touchesLevel) return null;
   const explicit =
     'environment.darknessLock' in payload || (env !== undefined && env.darknessLock !== undefined);

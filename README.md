@@ -149,8 +149,10 @@ seam — `foundry.call(name, args)` — and only `src/foundry.ts` ever imports P
 - **Plane A — the live bridge.** World documents (actors, items, journals, scenes, compendia, roll
   tables, cards, ownership). Goes through the headless Foundry client while the server is awake — the
   **only** safe way to read/write live world data.
-- **Plane B — Molten files.** Talks to Molten's own file endpoints directly (no bridge):
-  upload/serve static assets over WebDAV and map `Data/`-relative paths to public URLs.
+- **Plane B — the host's file plane.** Talks to the file channel of wherever Foundry runs, directly
+  (no bridge): on Molten that is WebDAV, on a local install it is the `Data/` directory itself.
+  Uploads/serves static assets and maps `Data/`-relative paths to public URLs. Which host a
+  registration targets is `FOUNDRY_HOST` (`molten` / `local` / `generic` — [design.md §2.6](design.md)).
 
 **Safety rule baked in:** a running world's database (LevelDB stores under `Data/worlds/<world>/data/`)
 must **never** be written over the file channel — that corrupts it. Plane-B file ops are restricted
@@ -193,8 +195,9 @@ src/
   index.ts          MCP server entry (stdio) — serves the registry's tools over JSON-RPC
   registry.ts       single source of truth: tool name → handler (advertised list derived from it)
   foundry.ts        THE Playwright seam: launch headless Chromium → wake → join → inject → call()
-  config.ts         env/config loader (reads .env from the repo root)
-  tools/            MCP tool classes — Plane A world tools + molten/ (Plane B WebDAV file tools)
+  hosts/            WHERE Foundry runs — molten (Magic-URL wake, WebDAV plane) / local (Data/ dir) / generic
+  config.ts         env/config loader (reads .env from the repo root; FOUNDRY_HOST picks the host)
+  tools/            MCP tool classes — Plane A world tools + assets/ (Plane B file tools over the host's plane)
   page/             page-side domain library, bundled into dist/page.bundle.js and injected
 scripts/            dev/maintenance scripts (verify-*.mjs live acceptance, spike-headless)
 tests/              gated live integration suites (offline unit tests live beside the code in src/**)
@@ -267,7 +270,7 @@ Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your inst
 
 ## Tools
 
-**151 tools total: 141 over the headless bridge (Plane A) + 10 Molten WebDAV file tools (Plane B).**
+**151 tools total: 141 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
@@ -286,10 +289,10 @@ folders/organization, macros, combat-tracker config, the dnd5e 6.0 **automation 
 authoring), **full-fidelity actor JSON export** (`export-actor`), and **per-combat session
 analytics** (`get-combat-stats`, folded from the companion
 [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) module's stat stamps),
-**plus the asset-composition + reference-integrity tools**. Plane B (Molten WebDAV) is the
-asset file library.
+**plus the asset-composition + reference-integrity tools**. Plane B (the host's file plane —
+WebDAV on Molten, the `Data/` directory on a local install) is the asset file library.
 
-**Plane B — Molten file tools (WebDAV):**
+**Plane B — asset file tools:**
 
 | Tool                  | What it does                                                                     |
 | --------------------- | -------------------------------------------------------------------------------- |
@@ -323,7 +326,8 @@ sidebar), `add-item` (author structured weapons/armor/consumables/loot/container
 (`list-actors`, `search-compendium`, `list-journals`, …), and organization (`create-folder`,
 `move-documents`, `bulk-delete`). See the `handlers` map in [`src/registry.ts`](src/registry.ts) for the full dispatch table.
 
-> Plane B file ops run over WebDAV (need `MOLTEN_WEBDAV_PASSWORD`, work whenever the VM is awake).
+> Plane B file ops run over the host's file plane (Molten: WebDAV, needs `MOLTEN_WEBDAV_PASSWORD`,
+> works whenever the VM is awake; local: `LOCAL_FOUNDRY_DATA`).
 > Plane A tools run over the headless bridge (need the world joined). Write tools refuse live
 > world-DB paths; destructive file ops consult `find-asset-references` first.
 

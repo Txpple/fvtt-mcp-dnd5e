@@ -1,7 +1,9 @@
-import { Logger } from '../../logger.js';
+import { Logger } from '../logger.js';
+import { FilePlaneError, type FileEntry, type FilePlane } from './types.js';
+import { toDataRelative } from './paths.js';
 
 /**
- * Minimal, dependency-free WebDAV client for the Molten file channel.
+ * Minimal, dependency-free WebDAV client — the Molten host's FilePlane.
  *
  * Molten's WebDAV endpoint is standard Apache 2.4 `mod_dav` (DAV class 1,2) behind HTTP Basic auth
  * (user `foundry-ftp`, password = the File-Manager token). The endpoint is rooted at the Foundry
@@ -13,19 +15,6 @@ import { Logger } from '../../logger.js';
  * so no third-party WebDAV/XML dependency is pulled in. PROPFIND multistatus XML is parsed with a
  * small namespace-prefix-agnostic regex pass (Apache emits `D:`/`lp1:`/`lp2:` prefixes).
  */
-
-export interface DavEntry {
-  /** Data-relative path, e.g. `assets/maps/x.webp` (no leading slash, no `Data/` prefix). */
-  path: string;
-  /** Basename of the path. */
-  name: string;
-  isCollection: boolean;
-  /** Bytes (files only). */
-  size?: number;
-  contentType?: string;
-  /** RFC-1123 string from `getlastmodified`. */
-  lastModified?: string;
-}
 
 export interface WebDavClientOptions {
   /** WebDAV host root, e.g. `https://eoh-test.webdav.moltenhosting.com`. */
@@ -44,17 +33,6 @@ export interface WebDavClientOptions {
  */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Error carrying the HTTP status of a failed WebDAV request, for friendly handler messages. */
-export class WebDavError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number
-  ) {
-    super(message);
-    this.name = 'WebDavError';
-  }
-}
-
 /** Encode each path segment but preserve the `/` separators. */
 function encodePath(p: string): string {
   return p
@@ -63,33 +41,8 @@ function encodePath(p: string): string {
     .join('/');
 }
 
-/**
- * Canonicalize a path to the Data-relative form this codebase speaks: forward slashes, no leading
- * slash, no `Data/` prefix, no trailing slash, and — crucially — collapse `.`/empty segments and
- * REJECT any `..` segment. Rejecting traversal here is a security boundary, not just tidiness: every
- * request URL is built from this output and the world-DB write guard (looksLikeWorldDbPath) runs on
- * it, so an un-canonicalized `assets/../worlds/<w>/data/x` would otherwise slip past the guard and a
- * normalizing server would resolve it straight into the live LevelDB. No legitimate asset path needs
- * `..`, so we throw rather than silently resolve it.
- */
-export function toDataRelative(p: string): string {
-  const stripped = p
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/^Data\//i, '')
-    .replace(/^\/+/, '');
-  const segments: string[] = [];
-  for (const seg of stripped.split('/')) {
-    if (seg === '' || seg === '.') continue; // collapse `//` and `.` segments
-    if (seg === '..') {
-      throw new WebDavError(`Refused: path traversal ("..") is not allowed in "${p}".`, 400);
-    }
-    segments.push(seg);
-  }
-  return segments.join('/');
-}
-
-export class WebDavClient {
+export class WebDavClient implements FilePlane {
+  readonly label = 'WebDAV';
   private base: string;
   private auth: string;
   private logger: Logger;
@@ -103,10 +56,10 @@ export class WebDavClient {
   }
 
   /** Absolute WebDAV URL for a Data-relative path (collections get a trailing slash). */
-  private url(dataRelPath: string, isCollection = false): string {
+  private url(dataRelPath: string, isDirectory = false): string {
     const clean = toDataRelative(dataRelPath);
     const suffix = clean.length ? `/${encodePath(clean)}` : '';
-    return `${this.base}/Data${suffix}${isCollection ? '/' : ''}`;
+    return `${this.base}/Data${suffix}${isDirectory ? '/' : ''}`;
   }
 
   private async request(
@@ -135,13 +88,13 @@ export class WebDavClient {
     } catch (err) {
       const e = err as Error;
       if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
-        throw new WebDavError(
+        throw new FilePlaneError(
           `WebDAV ${method} timed out after ${this.timeoutMs}ms ` +
             '(the Molten box may be asleep or only half-awake; file management needs the VM live).',
           0
         );
       }
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV ${method} ${url} failed to connect: ${e.message} ` +
           '(is the Molten server awake? file management needs the VM live).',
         0
@@ -159,14 +112,14 @@ export class WebDavClient {
   }
 
   /** PROPFIND a path; returns the entries (depth 1 includes the collection itself + its children). */
-  async propfind(dataRelPath: string, depth: '0' | '1'): Promise<DavEntry[]> {
+  async propfind(dataRelPath: string, depth: '0' | '1'): Promise<FileEntry[]> {
     const isCol = depth === '1';
     const res = await this.request('PROPFIND', this.url(dataRelPath, isCol), {
       headers: { Depth: depth },
     });
     if (res.status === 404) return [];
     if (res.status !== 207) {
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV PROPFIND ${dataRelPath || '(root)'} → HTTP ${res.status} ${res.statusText}`,
         res.status
       );
@@ -174,8 +127,16 @@ export class WebDavClient {
     return parseMultistatus(await res.text());
   }
 
+  /** Children of a directory (the depth-1 PROPFIND minus the collection itself); null if absent. */
+  async list(dir: string): Promise<FileEntry[] | null> {
+    const clean = toDataRelative(dir);
+    const entries = await this.propfind(clean, '1');
+    if (entries.length === 0) return null;
+    return entries.filter(e => e.path !== clean);
+  }
+
   /** PROPFIND depth 0 of a single path; null if it does not exist. */
-  async stat(dataRelPath: string): Promise<DavEntry | null> {
+  async stat(dataRelPath: string): Promise<FileEntry | null> {
     const entries = await this.propfind(dataRelPath, '0');
     return entries[0] ?? null;
   }
@@ -186,7 +147,7 @@ export class WebDavClient {
   }
 
   /** PUT bytes to a file path. Caller is responsible for parent dirs (see ensureParents). */
-  async putFile(dataRelPath: string, body: Uint8Array, contentType?: string): Promise<void> {
+  async write(dataRelPath: string, body: Uint8Array, contentType?: string): Promise<void> {
     const headers: Record<string, string> = {};
     if (contentType) headers['Content-Type'] = contentType;
     const res = await this.request('PUT', this.url(dataRelPath), {
@@ -195,7 +156,7 @@ export class WebDavClient {
     });
     // 201 Created (new) / 204 No Content (overwrite) / 200 OK are all success.
     if (![200, 201, 204].includes(res.status)) {
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV PUT ${dataRelPath} → HTTP ${res.status} ${res.statusText}`,
         res.status
       );
@@ -203,10 +164,10 @@ export class WebDavClient {
   }
 
   /** Create a single collection (directory). Treats "already exists" (405) as success. */
-  async mkcol(dataRelPath: string): Promise<void> {
+  async mkdir(dataRelPath: string): Promise<void> {
     const res = await this.request('MKCOL', this.url(dataRelPath, true));
     if (res.status === 201 || res.status === 405) return; // 405 = already a collection
-    throw new WebDavError(
+    throw new FilePlaneError(
       `WebDAV MKCOL ${dataRelPath} → HTTP ${res.status} ${res.statusText}`,
       res.status
     );
@@ -220,16 +181,16 @@ export class WebDavClient {
     for (const part of parts) {
       prefix = prefix ? `${prefix}/${part}` : part;
       if (!(await this.exists(prefix))) {
-        await this.mkcol(prefix);
+        await this.mkdir(prefix);
       }
     }
   }
 
-  /** DELETE a file or (with isCollection) a directory. 404 → throws WebDavError(404). */
-  async delete(dataRelPath: string, isCollection = false): Promise<void> {
-    const res = await this.request('DELETE', this.url(dataRelPath, isCollection));
+  /** DELETE a file or (with isDirectory) a directory. 404 → throws FilePlaneError(404). */
+  async remove(dataRelPath: string, isDirectory = false): Promise<void> {
+    const res = await this.request('DELETE', this.url(dataRelPath, isDirectory));
     if (![200, 204, 207].includes(res.status)) {
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV DELETE ${dataRelPath} → HTTP ${res.status} ${res.statusText}`,
         res.status
       );
@@ -241,13 +202,13 @@ export class WebDavClient {
     fromRel: string,
     toRel: string,
     overwrite: boolean,
-    isCollection = false
+    isDirectory = false
   ): Promise<void> {
-    const res = await this.request('MOVE', this.url(fromRel, isCollection), {
-      headers: { Destination: this.url(toRel, isCollection), Overwrite: overwrite ? 'T' : 'F' },
+    const res = await this.request('MOVE', this.url(fromRel, isDirectory), {
+      headers: { Destination: this.url(toRel, isDirectory), Overwrite: overwrite ? 'T' : 'F' },
     });
     if (![201, 204].includes(res.status)) {
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV MOVE ${fromRel} → ${toRel}: HTTP ${res.status} ${res.statusText}`,
         res.status
       );
@@ -259,13 +220,13 @@ export class WebDavClient {
     fromRel: string,
     toRel: string,
     overwrite: boolean,
-    isCollection = false
+    isDirectory = false
   ): Promise<void> {
-    const res = await this.request('COPY', this.url(fromRel, isCollection), {
-      headers: { Destination: this.url(toRel, isCollection), Overwrite: overwrite ? 'T' : 'F' },
+    const res = await this.request('COPY', this.url(fromRel, isDirectory), {
+      headers: { Destination: this.url(toRel, isDirectory), Overwrite: overwrite ? 'T' : 'F' },
     });
     if (![201, 204].includes(res.status)) {
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV COPY ${fromRel} → ${toRel}: HTTP ${res.status} ${res.statusText}`,
         res.status
       );
@@ -273,10 +234,10 @@ export class WebDavClient {
   }
 
   /** GET a file's bytes. */
-  async getFile(dataRelPath: string): Promise<Uint8Array> {
+  async read(dataRelPath: string): Promise<Uint8Array> {
     const res = await this.request('GET', this.url(dataRelPath));
     if (res.status !== 200) {
-      throw new WebDavError(
+      throw new FilePlaneError(
         `WebDAV GET ${dataRelPath} → HTTP ${res.status} ${res.statusText}`,
         res.status
       );
@@ -285,9 +246,9 @@ export class WebDavClient {
   }
 }
 
-/** Parse a WebDAV multistatus body into DavEntry[] (prefix-agnostic). */
-function parseMultistatus(xml: string): DavEntry[] {
-  const out: DavEntry[] = [];
+/** Parse a WebDAV multistatus body into FileEntry[] (prefix-agnostic). */
+function parseMultistatus(xml: string): FileEntry[] {
+  const out: FileEntry[] = [];
   const responses = xml.match(/<(?:\w+:)?response\b[\s\S]*?<\/(?:\w+:)?response>/gi) ?? [];
   for (const block of responses) {
     const hrefMatch = block.match(/<(?:\w+:)?href>\s*([^<]*?)\s*<\/(?:\w+:)?href>/i);
@@ -298,7 +259,7 @@ function parseMultistatus(xml: string): DavEntry[] {
     } catch {
       href = hrefMatch[1];
     }
-    const isCollection = /<(?:\w+:)?resourcetype>[\s\S]*?<(?:\w+:)?collection\s*\/?>/i.test(block);
+    const isDirectory = /<(?:\w+:)?resourcetype>[\s\S]*?<(?:\w+:)?collection\s*\/?>/i.test(block);
     let path: string;
     try {
       path = toDataRelative(href);
@@ -311,42 +272,11 @@ function parseMultistatus(xml: string): DavEntry[] {
     const typeMatch = block.match(/<(?:\w+:)?getcontenttype>\s*([^<]+?)\s*</i);
     const mtimeMatch = block.match(/<(?:\w+:)?getlastmodified>\s*([^<]+?)\s*</i);
 
-    const entry: DavEntry = { path, name, isCollection };
+    const entry: FileEntry = { path, name, isDirectory };
     if (sizeMatch) entry.size = parseInt(sizeMatch[1], 10);
     if (typeMatch) entry.contentType = typeMatch[1];
     if (mtimeMatch) entry.lastModified = mtimeMatch[1];
     out.push(entry);
   }
   return out;
-}
-
-/** Best-effort Content-Type from a file extension (asset-oriented). */
-export function guessContentType(filePath: string): string {
-  const ext = filePath.toLowerCase().split('.').pop() ?? '';
-  const map: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    webp: 'image/webp',
-    gif: 'image/gif',
-    svg: 'image/svg+xml',
-    avif: 'image/avif',
-    bmp: 'image/bmp',
-    mp3: 'audio/mpeg',
-    ogg: 'audio/ogg',
-    oga: 'audio/ogg',
-    wav: 'audio/wav',
-    m4a: 'audio/mp4',
-    flac: 'audio/flac',
-    webm: 'video/webm',
-    mp4: 'video/mp4',
-    m4v: 'video/mp4',
-    json: 'application/json',
-    txt: 'text/plain; charset=utf-8',
-    md: 'text/markdown; charset=utf-8',
-    pdf: 'application/pdf',
-    glb: 'model/gltf-binary',
-    gltf: 'model/gltf+json',
-  };
-  return map[ext] ?? 'application/octet-stream';
 }

@@ -49,7 +49,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WebDavClient } from '../dist/tools/molten/webdav.js';
+import { WebDavClient } from '../dist/hosts/webdav.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -228,7 +228,7 @@ try {
 let targets = positionals.map(t => t.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''));
 if (!targets.length) {
   const worldEntries = await dav.propfind('worlds', '1');
-  const worldIds = worldEntries.filter(e => e.isCollection && e.path !== 'worlds').map(e => e.name);
+  const worldIds = worldEntries.filter(e => e.isDirectory && e.path !== 'worlds').map(e => e.name);
   let worldId = env.MOLTEN_WORLD_ID;
   if (worldId && !worldIds.includes(worldId)) {
     console.error(
@@ -269,7 +269,7 @@ for (const target of targets) {
     for (const [d, es] of results) {
       for (const e of es) {
         if (e.path === d || e.path === d.replace(/\/$/, '')) continue;
-        if (e.isCollection) {
+        if (e.isDirectory) {
           remoteDirs.add(e.path);
           dirs.push(e.path);
         } else {
@@ -392,7 +392,7 @@ const queue = toDownload.slice();
 async function fetchWithRetry(path) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await dav.getFile(path);
+      return await dav.read(path);
     } catch (err) {
       if (attempt >= 3) throw err;
       await new Promise(r => setTimeout(r, 1000 * attempt));

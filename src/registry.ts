@@ -7,6 +7,7 @@
 // unit-tests cleanly (registry.test.ts) without starting the stdio process the way index.ts does.
 
 import type { FoundryBridge } from './foundry.js';
+import type { Host } from './hosts/types.js';
 import { Logger } from './logger.js';
 
 import { ActorTools } from './tools/actor.js';
@@ -36,7 +37,7 @@ import { DnD5eContentAuditTool } from './tools/dnd5e/content-audit.js';
 import { DnD5eGroupTools } from './tools/dnd5e/group.js';
 import { buildAddFeatureTool } from './tools/dnd5e/grant-to-actor.js';
 
-import { MoltenTools } from './tools/molten/index.js';
+import { AssetFileTools } from './tools/assets/index.js';
 import { AssetBridgeTools } from './tools/asset-bridge.js';
 import { PlaylistTools } from './tools/playlist.js';
 import { SoundscapeTools } from './tools/soundscape.js';
@@ -63,6 +64,8 @@ export interface ToolRegistry {
 export interface ToolRegistryDeps {
   foundry: FoundryBridge;
   logger: Logger;
+  /** Where Foundry runs (src/hosts): the file plane for the asset + chat tools, the host block in get-world-info. */
+  host: Host;
 }
 
 /**
@@ -71,12 +74,12 @@ export interface ToolRegistryDeps {
  * definition). Returns the surface index.ts serves over stdio.
  */
 export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
-  const { foundry, logger } = deps;
+  const { foundry, logger, host } = deps;
 
   const actorTools = new ActorTools({ foundry, logger });
   const itemTools = new ItemTools({ foundry, logger });
   const compendiumTools = new CompendiumTools({ foundry, logger });
-  const sceneTools = new SceneTools({ foundry, logger });
+  const sceneTools = new SceneTools({ foundry, logger, host });
   const placeableTools = new PlaceableTools({ foundry, logger });
   const actorCreationTools = new ActorCreationTools({ foundry, logger });
 
@@ -104,16 +107,16 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const journalTools = new JournalTools({ foundry, logger });
   const ownershipTools = new OwnershipTools({ foundry, logger });
 
-  // Plane-B Molten file tools (WebDAV). `foundry` lets the destructive ones consult
-  // find-asset-references before acting.
-  const moltenTools = new MoltenTools({ logger, foundry });
+  // Plane-B asset file tools over the host's file plane. `foundry` lets the destructive ones
+  // consult find-asset-references before acting.
+  const assetFileTools = new AssetFileTools({ logger, foundry, host });
   const assetBridgeTools = new AssetBridgeTools({ foundry, logger });
   const playlistTools = new PlaylistTools({ foundry, logger });
   // House module #6 (fvtt-mod-soundscape): per-scene sound sets, authored as scene flags.
   const soundscapeTools = new SoundscapeTools({ foundry, logger });
   const tableTools = new TableTools({ foundry, logger });
   const cardsTools = new CardsTools({ foundry, logger });
-  const chatTools = new ChatTools({ foundry, logger });
+  const chatTools = new ChatTools({ foundry, logger, host });
   const userTools = new UserTools({ foundry, logger });
   const macroTools = new MacroTools({ foundry, logger });
   const combatTrackerTools = new CombatTrackerTools({ foundry, logger });
@@ -160,7 +163,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     addFeatureTool,
     ...journalTools.getToolDefinitions(),
     ...ownershipTools.getToolDefinitions(),
-    ...moltenTools.getToolDefinitions(),
+    ...assetFileTools.getToolDefinitions(),
     ...assetBridgeTools.getToolDefinitions(),
     ...playlistTools.getToolDefinitions(),
     ...soundscapeTools.getToolDefinitions(),
@@ -287,17 +290,17 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'set-actor-ownership': args => ownershipTools.handleToolCall('set-actor-ownership', args),
     'list-actor-ownership': args => ownershipTools.handleToolCall('list-actor-ownership', args),
 
-    // Plane-B Molten file tools
-    'list-assets': args => moltenTools.handleListAssets(args),
-    'asset-info': args => moltenTools.handleAssetInfo(args),
-    'download-asset': args => moltenTools.handleDownloadAsset(args),
-    'upload-asset': args => moltenTools.handleUploadAsset(args),
-    'upload-asset-tree': args => moltenTools.handleUploadAssetTree(args),
-    'create-asset-folder': args => moltenTools.handleCreateAssetFolder(args),
-    'delete-asset': args => moltenTools.handleDeleteAsset(args),
-    'move-asset': args => moltenTools.handleMoveAsset(args),
-    'copy-asset': args => moltenTools.handleCopyAsset(args),
-    'asset-url': args => moltenTools.handleAssetUrl(args),
+    // Plane-B asset file tools (the host's file plane)
+    'list-assets': args => assetFileTools.handleListAssets(args),
+    'asset-info': args => assetFileTools.handleAssetInfo(args),
+    'download-asset': args => assetFileTools.handleDownloadAsset(args),
+    'upload-asset': args => assetFileTools.handleUploadAsset(args),
+    'upload-asset-tree': args => assetFileTools.handleUploadAssetTree(args),
+    'create-asset-folder': args => assetFileTools.handleCreateAssetFolder(args),
+    'delete-asset': args => assetFileTools.handleDeleteAsset(args),
+    'move-asset': args => assetFileTools.handleMoveAsset(args),
+    'copy-asset': args => assetFileTools.handleCopyAsset(args),
+    'asset-url': args => assetFileTools.handleAssetUrl(args),
 
     // Asset composition + reference integrity (Plane A)
     'find-asset-references': args => assetBridgeTools.handleFindAssetReferences(args),

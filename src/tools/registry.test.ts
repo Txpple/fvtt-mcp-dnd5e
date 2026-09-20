@@ -13,10 +13,14 @@ import { describe, it, expect } from 'vitest';
 import { buildToolRegistry } from '../registry.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
+import { createHost, resolveHostConfig } from '../hosts/index.js';
+
+/** A generic host (no wake, no file plane) — enough for the registry to wire every tool. */
+const host = createHost(resolveHostConfig({}, 'generic'), makeLogger());
 
 function build() {
   const { foundry } = makeFoundry();
-  return buildToolRegistry({ foundry, logger: makeLogger() });
+  return buildToolRegistry({ foundry, logger: makeLogger(), host });
 }
 
 // Recursively flag the JSON-Schema constructs that are valid in draft-7 but invalid under draft
@@ -142,7 +146,11 @@ describe('tool registry', () => {
 
   it('registers disconnect-bridge and dispatches it to the seam lifecycle, not foundry.call', async () => {
     const { foundry, calls } = makeFoundry();
-    const { tools, handlers, dispatch } = buildToolRegistry({ foundry, logger: makeLogger() });
+    const { tools, handlers, dispatch } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+    });
     expect(tools.map(t => t.name)).toContain('disconnect-bridge');
     expect(typeof handlers['disconnect-bridge']).toBe('function');
 
@@ -238,7 +246,11 @@ describe('tool registry', () => {
       totalRequested: 1,
       actors: [{ id: 'c1', name: 'Gren (Sim)', sourceId: 'a1', sourceName: 'Gren' }],
     });
-    const { tools, handlers, dispatch } = buildToolRegistry({ foundry, logger: makeLogger() });
+    const { tools, handlers, dispatch } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+    });
     expect(tools.map(t => t.name)).toContain('duplicate-actor');
     expect(typeof handlers['duplicate-actor']).toBe('function');
 
@@ -337,7 +349,7 @@ describe('tool registry', () => {
 
   it('dispatch routes a known tool to the bridge and rejects an unknown one', async () => {
     const { foundry, calls } = makeFoundry({ system: 'dnd5e' });
-    const { dispatch } = buildToolRegistry({ foundry, logger: makeLogger() });
+    const { dispatch } = buildToolRegistry({ foundry, logger: makeLogger(), host });
 
     await dispatch('get-world-info', {});
     expect(calls.some(([op]) => op === 'getWorldInfo')).toBe(true);
@@ -357,7 +369,7 @@ describe('tool registry', () => {
       if (name === 'createNpcActor') return { actor: { id: 'a1', name: 'Goblin' } };
       return {};
     });
-    const { dispatch } = buildToolRegistry({ foundry, logger: makeLogger() });
+    const { dispatch } = buildToolRegistry({ foundry, logger: makeLogger(), host });
 
     const compendiumArgs = {
       packId: 'dnd-monster-manual.actors',
@@ -418,7 +430,7 @@ describe('tool registry', () => {
         };
       return {};
     });
-    const { dispatch } = buildToolRegistry({ foundry, logger: makeLogger() });
+    const { dispatch } = buildToolRegistry({ foundry, logger: makeLogger(), host });
 
     await dispatch('create-pc', { name: 'Aria', className: 'Wizard' });
     await dispatch('inspect-pc-advancement', { className: 'Wizard' });

@@ -150,7 +150,10 @@ try {
     lockState?.lock === true &&
     (u1b?.warnings ?? []).some(w => /darknessLock/.test(w));
   okLock
-    ? pass('update-scene darkness on a LOCKED scene lands, keeps the lock, warns', `level=${lockState.level}`)
+    ? pass(
+        'update-scene darkness on a LOCKED scene lands, keeps the lock, warns',
+        `level=${lockState.level}`
+      )
     : fail(
         'update-scene darkness on a LOCKED scene',
         JSON.stringify({ lockState, warnings: u1b?.warnings, settings: u1b?.settings })

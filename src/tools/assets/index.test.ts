@@ -1,22 +1,22 @@
 /**
- * Unit tests for MoltenTools (molten/index.ts) — the Plane-B file channel.
+ * Unit tests for AssetFileTools (assets/index.ts) — the Plane-B file channel.
  *
  * Focus: the SAFETY surface, which is the highest-risk code in the package.
  *   - world-DB write refusal (writing into a live LevelDB store corrupts it)
  *   - reference-aware delete/move (won't break scene/actor/journal pointers)
- *   - "not configured" behaviour when MOLTEN_WEBDAV_PASSWORD is unset
+ *   - "not configured" behaviour when the host has no file plane
  *   - pure path mapping (asset-url / public URL) and zod validation
  *
- * The WebDavClient is mocked so no network happens; `config.molten` is mutated
- * per-test to toggle the configured/not-configured state. guessContentType and
- * the other real exports of ./webdav.js are preserved via importActual.
+ * The tools are written against the host's FilePlane, so the tests hand them a stub Host whose
+ * plane is a vi.fn() surface (no network, no disk) — or `null` for the not-configured case. The
+ * same tests therefore cover the WebDAV plane and the local plane alike.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// --- mock the WebDAV client; keep the real pure helpers -------------------
+// --- a stub FilePlane ------------------------------------------------------
 const davInstance = {
-  propfind: vi.fn(),
+  list: vi.fn(),
   stat: vi.fn(),
   exists: vi.fn(),
   putFile: vi.fn(),
@@ -27,19 +27,26 @@ const davInstance = {
   copy: vi.fn(),
   getFile: vi.fn(),
 };
-vi.mock('./webdav.js', async importActual => {
-  const actual = (await importActual()) as any;
-  return {
-    ...actual,
-    WebDavClient: vi.fn(() => davInstance),
-  };
-});
+/** The FilePlane the tools see: the vi.fn() surface under the contract's method names. */
+const plane: any = {
+  label: 'stub',
+  list: (...a: any[]) => davInstance.list(...a),
+  stat: (...a: any[]) => davInstance.stat(...a),
+  exists: (...a: any[]) => davInstance.exists(...a),
+  write: (...a: any[]) => davInstance.putFile(...a),
+  mkdir: (...a: any[]) => davInstance.mkcol(...a),
+  ensureParents: (...a: any[]) => davInstance.ensureParents(...a),
+  remove: (...a: any[]) => davInstance.delete(...a),
+  move: (...a: any[]) => davInstance.move(...a),
+  copy: (...a: any[]) => davInstance.copy(...a),
+  read: (...a: any[]) => davInstance.getFile(...a),
+};
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MoltenTools, joinRemote, matchesIncludeExt } from './index.js';
-import { config } from '../../config.js';
+import { AssetFileTools, joinRemote, matchesIncludeExt } from './index.js';
+import { buildPublicUrl } from '../../hosts/paths.js';
 
 const makeLogger = (): any => {
   const l: any = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -47,20 +54,33 @@ const makeLogger = (): any => {
   return l;
 };
 
+/** A stub Host: the plane above when configured, `null` otherwise. */
+function makeHost(configured: boolean): any {
+  const serverUrl = 'https://eoh-test.moltenhosting.com';
+  return {
+    kind: 'molten',
+    label: 'Molten Hosting (stub)',
+    vars: {
+      serverUrl: 'MOLTEN_SERVER_URL',
+      adminKey: 'MOLTEN_ADMIN_KEY',
+      worldId: 'MOLTEN_WORLD_ID',
+    },
+    unreachableHint: '',
+    redact: (m: string) => m,
+    files: configured ? plane : null,
+    filesNotConfigured: (tool: string) =>
+      `${tool} is not configured: set MOLTEN_WEBDAV_PASSWORD in your .env.`,
+    publicUrl: (p: string) => buildPublicUrl(serverUrl, p),
+  };
+}
+
 function build(opts: { configured?: boolean; foundry?: any } = {}) {
   const { configured = true, foundry } = opts;
-  config.molten.webdavPassword = configured ? 'test-password' : undefined;
-  config.molten.serverUrl = 'https://eoh-test.moltenhosting.com';
-  config.molten.webdavUrl = 'https://eoh-test.webdav.moltenhosting.com';
-  const tools = new MoltenTools({ logger: makeLogger(), foundry });
-  return tools;
+  return new AssetFileTools({ logger: makeLogger(), foundry, host: makeHost(configured) });
 }
 
 beforeEach(() => {
   for (const fn of Object.values(davInstance)) (fn as any).mockReset();
-});
-afterEach(() => {
-  config.molten.webdavPassword = undefined;
 });
 
 describe('getToolDefinitions', () => {
@@ -93,7 +113,7 @@ describe('joinRemote (pure — literal chars preserved, no double-encode)', () =
     expect(joinRemote('root', '')).toBe('root');
   });
 
-  it('keeps spaces / # / & LITERAL (the WebDAV client encodes once on PUT)', () => {
+  it('keeps spaces / # / & LITERAL (a plane encodes once when it needs to)', () => {
     const out = joinRemote('worlds/w/tom-cartos', '#48 - Throne & Hall/TC_Big Tile_10x7.webp');
     expect(out).toBe('worlds/w/tom-cartos/#48 - Throne & Hall/TC_Big Tile_10x7.webp');
     expect(out).not.toContain('%23'); // not pre-encoded → no %2520 double-encode downstream
@@ -165,7 +185,7 @@ describe('world-DB write refusal (corruption guard)', () => {
     davInstance.stat.mockResolvedValue({
       path: 'assets/a.png',
       name: 'a.png',
-      isCollection: false,
+      isDirectory: false,
     });
     davInstance.exists.mockResolvedValue(false);
     const out = await build().handleMoveAsset({
@@ -184,7 +204,7 @@ describe('world-DB write refusal (corruption guard)', () => {
     davInstance.stat.mockResolvedValue({
       path: 'assets/a.png',
       name: 'a.png',
-      isCollection: false,
+      isDirectory: false,
     });
     davInstance.exists.mockResolvedValue(false);
     const out = await build().handleCopyAsset({
@@ -239,7 +259,7 @@ describe('not-configured behaviour (no WebDAV password)', () => {
     const out = await build({ configured: false }).handleListAssets({ remotePath: 'assets' });
     expect(out).toMatch(/not configured/);
     expect(out).toMatch(/MOLTEN_WEBDAV_PASSWORD/);
-    expect(davInstance.propfind).not.toHaveBeenCalled();
+    expect(davInstance.list).not.toHaveBeenCalled();
   });
   it('upload-asset (non-DB path) still reports not-configured', async () => {
     const out = await build({ configured: false }).handleUploadAsset({
@@ -255,7 +275,7 @@ describe('reference-aware delete-asset', () => {
     davInstance.stat.mockResolvedValue({
       path: 'assets/x.png',
       name: 'x.png',
-      isCollection: false,
+      isDirectory: false,
     });
     const foundry = {
       call: vi.fn(async () => ({
@@ -276,7 +296,7 @@ describe('reference-aware delete-asset', () => {
     davInstance.stat.mockResolvedValue({
       path: 'assets/x.png',
       name: 'x.png',
-      isCollection: false,
+      isDirectory: false,
     });
     // no foundry → findReferences returns checked:false
     const out = await build().handleDeleteAsset({ remotePath: 'assets/x.png' });
@@ -288,7 +308,7 @@ describe('reference-aware delete-asset', () => {
     davInstance.stat.mockResolvedValue({
       path: 'assets/x.png',
       name: 'x.png',
-      isCollection: false,
+      isDirectory: false,
     });
     const foundry = {
       call: vi.fn(async () => ({ references: { 'assets/x.png': [] } })),
@@ -302,7 +322,7 @@ describe('reference-aware delete-asset', () => {
     davInstance.stat.mockResolvedValue({
       path: 'assets/x.png',
       name: 'x.png',
-      isCollection: false,
+      isDirectory: false,
     });
     const foundry = { call: vi.fn() };
     const out = await build({ foundry }).handleDeleteAsset({
@@ -314,7 +334,7 @@ describe('reference-aware delete-asset', () => {
   });
 
   it('refuses a directory delete unless recursive:true', async () => {
-    davInstance.stat.mockResolvedValue({ path: 'assets/dir', name: 'dir', isCollection: true });
+    davInstance.stat.mockResolvedValue({ path: 'assets/dir', name: 'dir', isDirectory: true });
     const out = await build({ foundry: { call: vi.fn() } }).handleDeleteAsset({
       remotePath: 'assets/dir',
     });
@@ -426,20 +446,19 @@ describe('upload-asset-tree', () => {
 });
 
 describe('list-assets formatting', () => {
-  it('reports not-found when PROPFIND yields nothing', async () => {
-    davInstance.propfind.mockResolvedValue([]);
+  it('reports not-found when the plane says the directory is absent', async () => {
+    davInstance.list.mockResolvedValue(null);
     const out = await build().handleListAssets({ remotePath: 'ghost' });
     expect(out).toMatch(/does not exist/);
   });
 
   it('lists children (folders first) with a count summary', async () => {
-    davInstance.propfind.mockResolvedValue([
-      { path: 'assets', name: 'assets', isCollection: true }, // the collection itself — dropped
-      { path: 'assets/maps', name: 'maps', isCollection: true },
+    davInstance.list.mockResolvedValue([
+      { path: 'assets/maps', name: 'maps', isDirectory: true },
       {
         path: 'assets/a.png',
         name: 'a.png',
-        isCollection: false,
+        isDirectory: false,
         size: 1024,
         contentType: 'image/png',
       },

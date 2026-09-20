@@ -23,7 +23,7 @@ describe('ErrorHandler.toUserMessage — enriches bridge/permission/validation f
   it('maps connection/cold-box errors to actionable wake guidance', () => {
     const msg = eh.toUserMessage(new Error('net::ERR_CONNECTION_REFUSED'), 'list-actors');
     expect(msg).toContain('Connection to the Foundry world failed');
-    expect(msg).toContain('MOLTEN_MAGIC_URL');
+    expect(msg).toMatch(/wake/i);
   });
 
   it('maps permission errors', () => {

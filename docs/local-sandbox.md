@@ -128,27 +128,33 @@ app binary is a manual install.
 3. In the repo `.env`, set `LOCAL_FOUNDRY_DATA=<that Data dir>` (see `.env.example`).
 4. `node scripts/pull-prod-to-local.mjs` and launch the world.
 
-## Pointing the MCP at the sandbox — instance profiles
+## Pointing the MCP at the sandbox — hosts
 
-The server binary takes a **profile** via the `FOUNDRY_PROFILE` env var (`src/config.ts`), set in
-the MCP *registration*, never in `.env` — one `.env` serves every profile:
+The server binary takes a **host** via the `FOUNDRY_HOST` env var (`src/hosts/env.ts`, design.md
+§2.6), set in the MCP *registration*, never in `.env` — one `.env` serves every host. (The pre-2.2
+spelling `FOUNDRY_PROFILE=local` still works as an alias.)
 
-| Registration (user scope, `~/.claude.json`) | `FOUNDRY_PROFILE` | Targets |
+| Registration (user scope, `~/.claude.json`) | `FOUNDRY_HOST` | Targets |
 | --- | --- | --- |
-| `foundry-molten5e` | *(unset)* | prod (Molten), the `MOLTEN_*` set |
+| `foundry-molten5e` | *(unset)* = `molten` | prod (Molten), the `MOLTEN_*` set |
 | `foundry-local5e` | `local` | the sandbox: `LOCAL_SERVER_URL` (default `http://localhost:30000`) |
 
-The local profile **inherits** the world id and join user/password from the prod values (a
+The local host **inherits** the world id and join user/password from the prod values (a
 sandbox is a byte copy of prod — same world id, same users) and accepts `LOCAL_WORLD_ID` /
 `LOCAL_FOUNDRY_USER` / `LOCAL_FOUNDRY_PASSWORD` overrides. Both tool namespaces coexist in one
 Claude Code session; which instance a call touches is fixed by which server it goes to — there is
-no runtime "switch instance" state to get wrong.
+no runtime "switch instance" state to get wrong. `get-world-info` reports the host it is on
+(`host: { kind, label, files }`).
 
-Local-profile limits (deliberate):
+What the local host does differently (deliberate):
 
-- **No WebDAV file plane** — the asset file tools report "not configured" rather than ever
-  dialing prod from a local-profile process. Asset files reach the sandbox via the refresh pull.
-- **No wake plumbing** — a local box doesn't sleep.
+- **The file plane is the install's `Data/` directory** (`LOCAL_FOUNDRY_DATA`, the same directory
+  `local-foundry.mjs` serves) over `node:fs` — so the asset file tools (`upload-asset`,
+  `list-assets`, …) work on the sandbox with exactly the WebDAV contract, including the live
+  world-DB refusal. With `LOCAL_FOUNDRY_DATA` unset they report "not configured" — a local-host
+  process never dials prod's WebDAV.
+- **No wake plumbing** — a local box doesn't sleep; if it isn't running the bridge fails fast
+  naming `scripts/local-foundry.mjs start`.
 - **World launch needs `LOCAL_ADMIN_KEY`** — with it set, the bridge auto-launches a cold
   instance exactly like prod; without it you click Play yourself. Counter-intuitively, an
   admin-*less* Foundry v14 is *less* automatable, not more: it accepts a `launchWorld` POST but
