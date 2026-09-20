@@ -1,0 +1,1441 @@
+{
+ "descTotal": 68428,
+ "repeated": [
+  {
+   "s": "STRICT resolution — no fuzzy/substring matching.",
+   "n": 6,
+   "bytes": 288,
+   "tools": [
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards",
+    "bulk-delete"
+   ]
+  },
+  {
+   "s": "Missing ids are reported, never fatal.",
+   "n": 7,
+   "bytes": 266,
+   "tools": [
+    "delete-tiles",
+    "delete-lights",
+    "delete-sounds",
+    "delete-drawings",
+    "delete-walls",
+    "delete-tokens",
+    "delete-note"
+   ]
+  },
+  {
+   "s": "Needs the host's file plane configured.",
+   "n": 5,
+   "bytes": 195,
+   "tools": [
+    "upload-asset-tree",
+    "create-asset-folder",
+    "delete-asset",
+    "move-asset",
+    "copy-asset"
+   ]
+  },
+  {
+   "s": "Plane B (file channel, write).",
+   "n": 6,
+   "bytes": 180,
+   "tools": [
+    "upload-asset",
+    "upload-asset-tree",
+    "create-asset-folder",
+    "delete-asset",
+    "move-asset",
+    "copy-asset"
+   ]
+  },
+  {
+   "s": "Plane B (file channel, read-only).",
+   "n": 3,
+   "bytes": 102,
+   "tools": [
+    "list-assets",
+    "asset-info",
+    "download-asset"
+   ]
+  },
+  {
+   "s": "Returns created ids.",
+   "n": 5,
+   "bytes": 100,
+   "tools": [
+    "create-tiles",
+    "create-lights",
+    "create-sounds",
+    "create-drawings",
+    "create-walls"
+   ]
+  }
+ ],
+ "hot": [
+  [
+   "by exact id or exact name. strict resolution",
+   [
+    "delete-item",
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards",
+    "bulk-delete"
+   ]
+  ],
+  [
+   "exact id or exact name. strict resolution —",
+   [
+    "delete-item",
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards",
+    "bulk-delete"
+   ]
+  ],
+  [
+   "id or exact name. strict resolution — no",
+   [
+    "delete-item",
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards",
+    "bulk-delete"
+   ]
+  ],
+  [
+   "or exact name. strict resolution — no fuzzy/substring",
+   [
+    "delete-item",
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards",
+    "bulk-delete"
+   ]
+  ],
+  [
+   "exact name. strict resolution — no fuzzy/substring matching.",
+   [
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards",
+    "bulk-delete"
+   ]
+  ],
+  [
+   "name. strict resolution — no fuzzy/substring matching. gm-only.",
+   [
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable",
+    "delete-cards"
+   ]
+  ],
+  [
+   "under the foundry `data/` root through the host's",
+   [
+    "list-assets",
+    "create-asset-folder",
+    "delete-asset",
+    "move-asset",
+    "copy-asset"
+   ]
+  ],
+  [
+   "the foundry `data/` root through the host's file",
+   [
+    "list-assets",
+    "create-asset-folder",
+    "delete-asset",
+    "move-asset",
+    "copy-asset"
+   ]
+  ],
+  [
+   "documents by exact id or exact name. strict",
+   [
+    "delete-journal",
+    "delete-scene",
+    "delete-playlist",
+    "delete-rolltable"
+   ]
+  ],
+  [
+   "packs only — the srd (dnd5e.*) packs are",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "only — the srd (dnd5e.*) packs are excluded",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "— the srd (dnd5e.*) packs are excluded and",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "the srd (dnd5e.*) packs are excluded and never",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "srd (dnd5e.*) packs are excluded and never appear",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "(dnd5e.*) packs are excluded and never appear in",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "packs are excluded and never appear in results",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "are excluded and never appear in results (design.md",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "excluded and never appear in results (design.md §2.3).",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "and never appear in results (design.md §2.3). backed",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "never appear in results (design.md §2.3). backed by",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "appear in results (design.md §2.3). backed by the",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "in results (design.md §2.3). backed by the system",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "results (design.md §2.3). backed by the system compendium",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "(design.md §2.3). backed by the system compendium browser,",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "§2.3). backed by the system compendium browser, so",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "returns minimal hits ({id,name,type,uuid,pack,packlabel,img,facets}) premium-first ranked — identify",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "minimal hits ({id,name,type,uuid,pack,packlabel,img,facets}) premium-first ranked — identify candidates",
+   [
+    "search-compendium-creatures",
+    "search-compendium-spells",
+    "search-compendium-items"
+   ]
+  ],
+  [
+   "a file under the foundry `data/` root through",
+   [
+    "delete-asset",
+    "move-asset",
+    "copy-asset"
+   ]
+  ],
+  [
+   "file under the foundry `data/` root through the",
+   [
+    "delete-asset",
+    "move-asset",
+    "copy-asset"
+   ]
+  ]
+ ],
+ "perTool": [
+  {
+   "name": "get-actor",
+   "desc": 491,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "export-actor",
+   "desc": 508,
+   "field": 60,
+   "ratio": 0.11811023622047244
+  },
+  {
+   "name": "list-actors",
+   "desc": 52,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "get-actor-entity",
+   "desc": 396,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "search-actor-contents",
+   "desc": 371,
+   "field": 59,
+   "ratio": 0.15902964959568733
+  },
+  {
+   "name": "create-item",
+   "desc": 386,
+   "field": 375,
+   "ratio": 0.9715025906735751
+  },
+  {
+   "name": "list-items",
+   "desc": 88,
+   "field": 88,
+   "ratio": 1
+  },
+  {
+   "name": "get-item",
+   "desc": 359,
+   "field": 132,
+   "ratio": 0.36768802228412256
+  },
+  {
+   "name": "update-item",
+   "desc": 242,
+   "field": 147,
+   "ratio": 0.6074380165289256
+  },
+  {
+   "name": "delete-item",
+   "desc": 265,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "remove-from-actor",
+   "desc": 147,
+   "field": 106,
+   "ratio": 0.7210884353741497
+  },
+  {
+   "name": "search-compendium",
+   "desc": 659,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "get-compendium-entry",
+   "desc": 366,
+   "field": 75,
+   "ratio": 0.20491803278688525
+  },
+  {
+   "name": "search-compendium-creatures",
+   "desc": 654,
+   "field": 418,
+   "ratio": 0.6391437308868502
+  },
+  {
+   "name": "search-compendium-spells",
+   "desc": 567,
+   "field": 565,
+   "ratio": 0.9964726631393298
+  },
+  {
+   "name": "search-compendium-items",
+   "desc": 622,
+   "field": 619,
+   "ratio": 0.9951768488745981
+  },
+  {
+   "name": "list-compendium-packs",
+   "desc": 158,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "get-current-scene",
+   "desc": 77,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "get-world-info",
+   "desc": 336,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-actor-from-compendium",
+   "desc": 802,
+   "field": 555,
+   "ratio": 0.6920199501246883
+  },
+  {
+   "name": "author-npc",
+   "desc": 1193,
+   "field": 674,
+   "ratio": 0.5649622799664711
+  },
+  {
+   "name": "create-pc",
+   "desc": 1652,
+   "field": 1168,
+   "ratio": 0.7070217917675545
+  },
+  {
+   "name": "inspect-pc-advancement",
+   "desc": 374,
+   "field": 355,
+   "ratio": 0.9491978609625669
+  },
+  {
+   "name": "level-up-pc",
+   "desc": 1032,
+   "field": 461,
+   "ratio": 0.44670542635658916
+  },
+  {
+   "name": "create-pc-from-prefab",
+   "desc": 963,
+   "field": 531,
+   "ratio": 0.5514018691588785
+  },
+  {
+   "name": "duplicate-actor",
+   "desc": 885,
+   "field": 545,
+   "ratio": 0.615819209039548
+  },
+  {
+   "name": "delete-actor",
+   "desc": 472,
+   "field": 88,
+   "ratio": 0.1864406779661017
+  },
+  {
+   "name": "delete-folder",
+   "desc": 336,
+   "field": 134,
+   "ratio": 0.39880952380952384
+  },
+  {
+   "name": "update-actor",
+   "desc": 1710,
+   "field": 1574,
+   "ratio": 0.92046783625731
+  },
+  {
+   "name": "update-actor-item",
+   "desc": 471,
+   "field": 158,
+   "ratio": 0.3354564755838641
+  },
+  {
+   "name": "manage-activity",
+   "desc": 1080,
+   "field": 897,
+   "ratio": 0.8305555555555556
+  },
+  {
+   "name": "add-free-cast",
+   "desc": 720,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "manage-effect",
+   "desc": 1141,
+   "field": 998,
+   "ratio": 0.8746713409290097
+  },
+  {
+   "name": "configure-dnd5e-settings",
+   "desc": 619,
+   "field": 547,
+   "ratio": 0.8836833602584814
+  },
+  {
+   "name": "manage-calendar",
+   "desc": 734,
+   "field": 624,
+   "ratio": 0.8501362397820164
+  },
+  {
+   "name": "apply-condition",
+   "desc": 439,
+   "field": 311,
+   "ratio": 0.7084282460136674
+  },
+  {
+   "name": "add-item",
+   "desc": 1972,
+   "field": 1583,
+   "ratio": 0.802738336713996
+  },
+  {
+   "name": "import-item",
+   "desc": 1041,
+   "field": 583,
+   "ratio": 0.5600384245917387
+  },
+  {
+   "name": "content-audit",
+   "desc": 1267,
+   "field": 126,
+   "ratio": 0.09944751381215469
+  },
+  {
+   "name": "create-group",
+   "desc": 427,
+   "field": 267,
+   "ratio": 0.6252927400468384
+  },
+  {
+   "name": "manage-group-members",
+   "desc": 226,
+   "field": 59,
+   "ratio": 0.2610619469026549
+  },
+  {
+   "name": "get-group",
+   "desc": 239,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "set-primary-party",
+   "desc": 240,
+   "field": 110,
+   "ratio": 0.4583333333333333
+  },
+  {
+   "name": "add-feature",
+   "desc": 750,
+   "field": 703,
+   "ratio": 0.9373333333333334
+  },
+  {
+   "name": "create-quest-journal",
+   "desc": 498,
+   "field": 285,
+   "ratio": 0.572289156626506
+  },
+  {
+   "name": "link-quest-to-npc",
+   "desc": 262,
+   "field": 197,
+   "ratio": 0.7519083969465649
+  },
+  {
+   "name": "update-quest-journal",
+   "desc": 354,
+   "field": 334,
+   "ratio": 0.943502824858757
+  },
+  {
+   "name": "list-journals",
+   "desc": 286,
+   "field": 225,
+   "ratio": 0.7867132867132867
+  },
+  {
+   "name": "search-journals",
+   "desc": 182,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-journal",
+   "desc": 480,
+   "field": 417,
+   "ratio": 0.86875
+  },
+  {
+   "name": "update-journal",
+   "desc": 298,
+   "field": 223,
+   "ratio": 0.7483221476510067
+  },
+  {
+   "name": "set-journal-page-visibility",
+   "desc": 296,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "delete-journal-page",
+   "desc": 205,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "delete-journal",
+   "desc": 138,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "set-actor-ownership",
+   "desc": 600,
+   "field": 235,
+   "ratio": 0.39166666666666666
+  },
+  {
+   "name": "list-actor-ownership",
+   "desc": 430,
+   "field": 211,
+   "ratio": 0.4906976744186046
+  },
+  {
+   "name": "list-assets",
+   "desc": 301,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "asset-info",
+   "desc": 241,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "download-asset",
+   "desc": 208,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "upload-asset",
+   "desc": 564,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "upload-asset-tree",
+   "desc": 619,
+   "field": 290,
+   "ratio": 0.46849757673667203
+  },
+  {
+   "name": "create-asset-folder",
+   "desc": 264,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "delete-asset",
+   "desc": 373,
+   "field": 196,
+   "ratio": 0.5254691689008043
+  },
+  {
+   "name": "move-asset",
+   "desc": 467,
+   "field": 103,
+   "ratio": 0.22055674518201285
+  },
+  {
+   "name": "copy-asset",
+   "desc": 327,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "asset-url",
+   "desc": 335,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "find-asset-references",
+   "desc": 240,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "relink-asset",
+   "desc": 216,
+   "field": 76,
+   "ratio": 0.35185185185185186
+  },
+  {
+   "name": "set-actor-art",
+   "desc": 308,
+   "field": 184,
+   "ratio": 0.5974025974025974
+  },
+  {
+   "name": "add-journal-image",
+   "desc": 176,
+   "field": 162,
+   "ratio": 0.9204545454545454
+  },
+  {
+   "name": "read-pack",
+   "desc": 1738,
+   "field": 1323,
+   "ratio": 0.7612197928653625
+  },
+  {
+   "name": "create-scene",
+   "desc": 958,
+   "field": 855,
+   "ratio": 0.8924843423799582
+  },
+  {
+   "name": "list-scenes",
+   "desc": 159,
+   "field": 66,
+   "ratio": 0.41509433962264153
+  },
+  {
+   "name": "update-scene",
+   "desc": 622,
+   "field": 513,
+   "ratio": 0.8247588424437299
+  },
+  {
+   "name": "activate-scene",
+   "desc": 617,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "pull-users-to-scene",
+   "desc": 789,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "set-landing-scene",
+   "desc": 797,
+   "field": 240,
+   "ratio": 0.30112923462986196
+  },
+  {
+   "name": "delete-scene",
+   "desc": 131,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "get-scene-dimensions",
+   "desc": 421,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "screenshot-scene",
+   "desc": 470,
+   "field": 280,
+   "ratio": 0.5957446808510638
+  },
+  {
+   "name": "create-tiles",
+   "desc": 694,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-tiles",
+   "desc": 326,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-tiles",
+   "desc": 529,
+   "field": 127,
+   "ratio": 0.24007561436672967
+  },
+  {
+   "name": "delete-tiles",
+   "desc": 110,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-lights",
+   "desc": 568,
+   "field": 315,
+   "ratio": 0.5545774647887324
+  },
+  {
+   "name": "list-lights",
+   "desc": 205,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-lights",
+   "desc": 431,
+   "field": 396,
+   "ratio": 0.9187935034802784
+  },
+  {
+   "name": "delete-lights",
+   "desc": 119,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-sounds",
+   "desc": 605,
+   "field": 196,
+   "ratio": 0.3239669421487603
+  },
+  {
+   "name": "list-sounds",
+   "desc": 210,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-sounds",
+   "desc": 300,
+   "field": 252,
+   "ratio": 0.84
+  },
+  {
+   "name": "delete-sounds",
+   "desc": 119,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-drawings",
+   "desc": 607,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-drawings",
+   "desc": 249,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-drawings",
+   "desc": 331,
+   "field": 260,
+   "ratio": 0.7854984894259819
+  },
+  {
+   "name": "delete-drawings",
+   "desc": 116,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-walls",
+   "desc": 536,
+   "field": 168,
+   "ratio": 0.31343283582089554
+  },
+  {
+   "name": "list-walls",
+   "desc": 299,
+   "field": 109,
+   "ratio": 0.36454849498327757
+  },
+  {
+   "name": "update-walls",
+   "desc": 457,
+   "field": 358,
+   "ratio": 0.7833698030634574
+  },
+  {
+   "name": "delete-walls",
+   "desc": 142,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-tokens",
+   "desc": 659,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "place-tokens",
+   "desc": 529,
+   "field": 206,
+   "ratio": 0.389413988657845
+  },
+  {
+   "name": "update-token",
+   "desc": 1388,
+   "field": 1180,
+   "ratio": 0.8501440922190202
+  },
+  {
+   "name": "delete-tokens",
+   "desc": 212,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-scene-notes",
+   "desc": 565,
+   "field": 37,
+   "ratio": 0.06548672566371681
+  },
+  {
+   "name": "list-notes",
+   "desc": 235,
+   "field": 136,
+   "ratio": 0.5787234042553191
+  },
+  {
+   "name": "update-note",
+   "desc": 289,
+   "field": 244,
+   "ratio": 0.8442906574394463
+  },
+  {
+   "name": "delete-note",
+   "desc": 131,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-region",
+   "desc": 505,
+   "field": 125,
+   "ratio": 0.24752475247524752
+  },
+  {
+   "name": "list-regions",
+   "desc": 166,
+   "field": 71,
+   "ratio": 0.42771084337349397
+  },
+  {
+   "name": "update-region",
+   "desc": 298,
+   "field": 231,
+   "ratio": 0.7751677852348994
+  },
+  {
+   "name": "delete-region",
+   "desc": 192,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-teleporter",
+   "desc": 816,
+   "field": 590,
+   "ratio": 0.7230392156862745
+  },
+  {
+   "name": "add-region-behavior",
+   "desc": 526,
+   "field": 278,
+   "ratio": 0.5285171102661597
+  },
+  {
+   "name": "remap-teleporters",
+   "desc": 644,
+   "field": 179,
+   "ratio": 0.2779503105590062
+  },
+  {
+   "name": "create-playlist",
+   "desc": 172,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-playlists",
+   "desc": 96,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-playlist",
+   "desc": 134,
+   "field": 97,
+   "ratio": 0.7238805970149254
+  },
+  {
+   "name": "delete-playlist",
+   "desc": 134,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "configure-soundscape",
+   "desc": 1223,
+   "field": 691,
+   "ratio": 0.5650040883074408
+  },
+  {
+   "name": "create-rolltable",
+   "desc": 423,
+   "field": 335,
+   "ratio": 0.7919621749408984
+  },
+  {
+   "name": "import-rolltable",
+   "desc": 339,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-rolltables",
+   "desc": 79,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-rolltable",
+   "desc": 734,
+   "field": 646,
+   "ratio": 0.8801089918256131
+  },
+  {
+   "name": "roll-on-table",
+   "desc": 318,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "get-rolltable",
+   "desc": 435,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "delete-rolltable",
+   "desc": 135,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "create-cards",
+   "desc": 350,
+   "field": 263,
+   "ratio": 0.7514285714285714
+  },
+  {
+   "name": "import-cards",
+   "desc": 239,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-cards",
+   "desc": 71,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "delete-cards",
+   "desc": 128,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "send-chat-message",
+   "desc": 347,
+   "field": 179,
+   "ratio": 0.515850144092219
+  },
+  {
+   "name": "list-chat-messages",
+   "desc": 195,
+   "field": 117,
+   "ratio": 0.6
+  },
+  {
+   "name": "delete-chat-messages",
+   "desc": 296,
+   "field": 272,
+   "ratio": 0.918918918918919
+  },
+  {
+   "name": "export-chat-log",
+   "desc": 317,
+   "field": 82,
+   "ratio": 0.2586750788643533
+  },
+  {
+   "name": "post-item-card",
+   "desc": 331,
+   "field": 228,
+   "ratio": 0.6888217522658611
+  },
+  {
+   "name": "request-roll",
+   "desc": 223,
+   "field": 177,
+   "ratio": 0.7937219730941704
+  },
+  {
+   "name": "list-users",
+   "desc": 397,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "update-user",
+   "desc": 247,
+   "field": 246,
+   "ratio": 0.9959514170040485
+  },
+  {
+   "name": "set-user-avatar",
+   "desc": 315,
+   "field": 220,
+   "ratio": 0.6984126984126984
+  },
+  {
+   "name": "create-macro",
+   "desc": 436,
+   "field": 426,
+   "ratio": 0.9770642201834863
+  },
+  {
+   "name": "list-macros",
+   "desc": 174,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "delete-macro",
+   "desc": 138,
+   "field": 129,
+   "ratio": 0.9347826086956522
+  },
+  {
+   "name": "configure-combat-tracker",
+   "desc": 407,
+   "field": 396,
+   "ratio": 0.972972972972973
+  },
+  {
+   "name": "get-combat-stats",
+   "desc": 516,
+   "field": 419,
+   "ratio": 0.812015503875969
+  },
+  {
+   "name": "disconnect-bridge",
+   "desc": 450,
+   "field": 0,
+   "ratio": 0
+  },
+  {
+   "name": "list-folders",
+   "desc": 611,
+   "field": 598,
+   "ratio": 0.9787234042553191
+  },
+  {
+   "name": "create-folder",
+   "desc": 154,
+   "field": 110,
+   "ratio": 0.7142857142857143
+  },
+  {
+   "name": "update-folder",
+   "desc": 420,
+   "field": 331,
+   "ratio": 0.7880952380952381
+  },
+  {
+   "name": "move-documents",
+   "desc": 185,
+   "field": 52,
+   "ratio": 0.2810810810810811
+  },
+  {
+   "name": "bulk-delete",
+   "desc": 252,
+   "field": 79,
+   "ratio": 0.3134920634920635
+  }
+ ],
+ "leafRep": [
+  {
+   "s": "Scene id or exact name holding the placeables.",
+   "n": 24,
+   "tools": 24,
+   "bytes": 1104
+  },
+  {
+   "s": "replace (default) overwrites the whole list; add/remove merge with the current list.",
+   "n": 7,
+   "tools": 1,
+   "bytes": 588
+  },
+  {
+   "s": "Free-text custom entry stored alongside the set (replaces the existing custom string).",
+   "n": 5,
+   "tools": 1,
+   "bytes": 430
+  },
+  {
+   "s": "Display label for the `uuid` link (default: the resolved document name).",
+   "n": 3,
+   "tools": 2,
+   "bytes": 216
+  },
+  {
+   "s": "Damage types (acid, bludgeoning, cold, fire, ...).",
+   "n": 3,
+   "tools": 1,
+   "bytes": 150
+  },
+  {
+   "s": "Bright radius in grid-distance units (e.g. ft).",
+   "n": 3,
+   "tools": 3,
+   "bytes": 141
+  },
+  {
+   "s": "Dim radius in grid-distance units (e.g. ft).",
+   "n": 3,
+   "tools": 3,
+   "bytes": 132
+  },
+  {
+   "s": "Scene id or exact name.",
+   "n": 5,
+   "tools": 4,
+   "bytes": 115
+  },
+  {
+   "s": "Rotation in degrees (0–359).",
+   "n": 4,
+   "tools": 4,
+   "bytes": 112
+  },
+  {
+   "s": "Elevation in grid-distance units.",
+   "n": 3,
+   "tools": 3,
+   "bytes": 99
+  },
+  {
+   "s": "Journal entry id or exact name.",
+   "n": 3,
+   "tools": 3,
+   "bytes": 93
+  },
+  {
+   "s": "Table id or exact name.",
+   "n": 3,
+   "tools": 3,
+   "bytes": 69
+  },
+  {
+   "s": "Die size.",
+   "n": 3,
+   "tools": 2,
+   "bytes": 27
+  }
+ ],
+ "leafHot": [
+  [
+   "scene id or exact name holding",
+   30
+  ],
+  [
+   "id or exact name holding the",
+   30
+  ],
+  [
+   "or exact name holding the placeables.",
+   24
+  ],
+  [
+   "also accepts a placed token id",
+   11
+  ],
+  [
+   "accepts a placed token id (from",
+   11
+  ],
+  [
+   "a placed token id (from list-tokens)",
+   8
+  ],
+  [
+   "exact ids (preferred) or exact names",
+   8
+  ],
+  [
+   "ids (preferred) or exact names of",
+   7
+  ],
+  [
+   "replace (default) overwrites the whole list;",
+   7
+  ],
+  [
+   "(default) overwrites the whole list; add/remove",
+   7
+  ],
+  [
+   "overwrites the whole list; add/remove merge",
+   7
+  ],
+  [
+   "the whole list; add/remove merge with",
+   7
+  ],
+  [
+   "whole list; add/remove merge with the",
+   7
+  ],
+  [
+   "list; add/remove merge with the current",
+   7
+  ],
+  [
+   "add/remove merge with the current list.",
+   7
+  ],
+  [
+   "path relative to the foundry `data/`",
+   7
+  ],
+  [
+   "placed token id (from list-tokens) —",
+   6
+  ],
+  [
+   "token id (from list-tokens) — the",
+   6
+  ],
+  [
+   "that token instance's own delta, not",
+   6
+  ],
+  [
+   "token instance's own delta, not the",
+   6
+  ],
+  [
+   "instance's own delta, not the base",
+   6
+  ],
+  [
+   "then lands on that token instance's",
+   6
+  ],
+  [
+   "lands on that token instance's own",
+   6
+  ],
+  [
+   "radius in grid-distance units (e.g. ft).",
+   6
+  ],
+  [
+   "10 limited, 20 normal (default), 30",
+   6
+  ],
+  [
+   "limited, 20 normal (default), 30 proximity,",
+   6
+  ],
+  [
+   "20 normal (default), 30 proximity, 40",
+   6
+  ],
+  [
+   "normal (default), 30 proximity, 40 distance.",
+   6
+  ]
+ ]
+}

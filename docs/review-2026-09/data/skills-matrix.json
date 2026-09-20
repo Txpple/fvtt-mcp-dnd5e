@@ -1,0 +1,1245 @@
+{
+  "skills": {
+    "bestiary-builder": {
+      "tools": [
+        "create-journal",
+        "list-journals",
+        "set-journal-page-visibility",
+        "update-journal",
+        "upload-asset"
+      ],
+      "byFile": {
+        "bestiary-builder/SKILL.md": [
+          "create-journal",
+          "list-journals",
+          "set-journal-page-visibility",
+          "update-journal",
+          "upload-asset"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 837,
+        "desc": "Add a monster the party FOUGHT to the world's player-facing Bestiary journal — Monster Manual art plus the MM narrative write-up (never the stat block), filed as a page in alphabetical order. Use when the user says \"add it to the bestiary\", \"the party killed a <monster> — log it\", \"bestiary entry for <monster>\", \"add the monsters we fought\", \"what did we fight? put them in the bestiary\", or wraps a session and wants the kills recorded. Runs a bundled script that resolves the creature in the premium Monster Manual pack, follows its lore embed, harvests the book art, strips the non-narrative furniture, and upserts the page with the right ownership. The script owns the fetch/parse/sort; this skill owns the judgment: whether it's earned, which creature it really was, shared-lore variants, reskins, homebrew, and what stays hidden."
+      }
+    },
+    "cards-builder": {
+      "tools": [
+        "create-cards",
+        "delete-cards",
+        "import-cards",
+        "list-cards",
+        "upload-asset"
+      ],
+      "byFile": {
+        "cards-builder/SKILL.md": [
+          "create-cards",
+          "delete-cards",
+          "import-cards",
+          "list-cards",
+          "upload-asset"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 780,
+        "desc": "Author D&D 5e card decks in Foundry — themed decks (Deck of Many Things, a tarokka deck, encounter / event / fate decks, initiative decks) and standard playing-card decks. Use when the user wants to \"make a deck\", \"build a card deck\", \"create a Deck of Many Things\", \"a tarokka deck\", \"encounter cards\", \"import a standard deck of cards\", or stat out a set of cards. YOU decide the deck's cards — their names, face text, art; the tools only STRUCTURE it (the v14 Cards/Card shape) or import a core preset deck. Cards have no premium-book compendium, so decks are asset-driven (like scenes): the card art is uploaded, the flavor text is yours. Creation only — dealing / drawing / shuffling in play is a later phase. Composes create-cards / import-cards / list-cards / delete-cards."
+      }
+    },
+    "chat-and-narration": {
+      "tools": [
+        "delete-chat-messages",
+        "export-chat-log",
+        "list-chat-messages",
+        "post-item-card",
+        "request-roll",
+        "send-chat-message"
+      ],
+      "byFile": {
+        "chat-and-narration/SKILL.md": [
+          "delete-chat-messages",
+          "export-chat-log",
+          "list-chat-messages",
+          "post-item-card",
+          "request-roll",
+          "send-chat-message"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 716,
+        "desc": "Post to the Foundry chat log with the right visibility, voice, and formatting — narration, in-character NPC dialogue, GM whispers, blind/secret notes, player handouts with images, table-wide roll requests, and rich dnd5e item/attack cards. Also save/export the chat transcript and prune old messages. Use when the user wants to \"post to chat\", \"say (something) in character as <npc>\", \"narrate\", \"read the boxed text\", \"whisper the GM\", \"make it a blind/secret note\", \"ask everyone for a DEX save / Perception check\", \"show the goblin's attack\", \"post <npc>'s <feature>\", \"export/save the chat log\", \"clear the chat\", or \"purge old messages\". Picks the tool + mode for you; the tools themselves hold the correctness."
+      }
+    },
+    "journal-builder": {
+      "tools": [
+        "add-journal-image",
+        "create-journal",
+        "create-quest-journal",
+        "link-quest-to-npc",
+        "list-journals",
+        "search-journals",
+        "update-journal",
+        "update-quest-journal"
+      ],
+      "byFile": {
+        "journal-builder/SKILL.md": [
+          "add-journal-image",
+          "create-journal",
+          "create-quest-journal",
+          "link-quest-to-npc",
+          "list-journals",
+          "search-journals",
+          "update-journal",
+          "update-quest-journal"
+        ]
+      },
+      "shorthand": [
+        "search-compendium-*"
+      ],
+      "desc": {
+        "chars": 886,
+        "desc": "Author D&D 5e journal entries in Foundry — quest logs, player handouts, lore/gazetteer entries, read-aloud (boxed) text, GM notes, and session recaps / campaign logs. Use when the user wants to \"write a quest\", \"make a handout\", \"create a journal\", \"write up the lore / a gazetteer\", \"boxed / read-aloud text\", \"GM notes\", \"a session recap\", \"campaign log\", \"link this quest to the NPC\", or pastes adventure text to turn into a journal. YOU write the prose (the words are yours); the tools only STRUCTURE it — typed blocks → the house style, per-page player/GM visibility, and real @UUID links. Composes create-quest-journal / update-quest-journal / link-quest-to-npc / create-journal / update-journal / add-journal-image / list-journals / search-journals with GMing judgment: which page kind, what's player-facing vs GM-only, the quest layout, when to link a real NPC / compendium doc."
+      }
+    },
+    "pc-builder": {
+      "tools": [
+        "add-feature",
+        "add-free-cast",
+        "create-pc",
+        "create-pc-from-prefab",
+        "get-actor",
+        "get-actor-entity",
+        "get-compendium-entry",
+        "import-item",
+        "inspect-pc-advancement",
+        "level-up-pc",
+        "move-documents",
+        "search-compendium",
+        "search-compendium-spells",
+        "set-actor-art",
+        "set-actor-ownership",
+        "update-actor",
+        "update-actor-item"
+      ],
+      "byFile": {
+        "pc-builder/SKILL.md": [
+          "add-feature",
+          "add-free-cast",
+          "create-pc",
+          "create-pc-from-prefab",
+          "get-actor",
+          "get-actor-entity",
+          "get-compendium-entry",
+          "import-item",
+          "inspect-pc-advancement",
+          "level-up-pc",
+          "move-documents",
+          "search-compendium",
+          "search-compendium-spells",
+          "set-actor-art",
+          "set-actor-ownership",
+          "update-actor",
+          "update-actor-item"
+        ]
+      },
+      "shorthand": [
+        "search-compendium-*"
+      ],
+      "desc": {
+        "chars": 1317,
+        "desc": "Build a COMPLETE D&D 5e player character (type:character) in Foundry — a real leveled PC, not an NPC: class + species + background, ability scores, the level-1 player choices (skills, expertise, fighting style, draconic ancestry…), spells for casters, starting equipment, and a finishing pass (art, the player as owner, folder). Use when the user wants to \"make a PC\", \"build a character\", \"create a level 1 fighter\", \"roll up a wizard\", \"make my player's dragonborn paladin\", \"build a character for <player>\", or pastes a character concept/sheet. ALSO use when the user asks to \"import my D&D Beyond character\" / \"import from DDB\" or pastes a dndbeyond.com link — that import path was REMOVED (DDB exports strip embedded effect automation): refuse the import, explain why, and offer to rebuild the PC natively from the premium books, reading the DDB sheet as reference only. Composes create-pc / inspect-pc-advancement (the leveling engine: advancement runs so @scale resolves NATIVELY, unlike an NPC) with search-compendium-* / import-item / set-actor-art / set-actor-ownership / move-documents and dnd5e judgment. The tools own correctness (name→uuid, advancement.apply sequencing, choice-data shapes, persist, @scale reporting); this skill owns the parse, the ability-score math, the choices, and the house rules."
+      }
+    },
+    "physical-item-builder": {
+      "tools": [
+        "add-feature",
+        "add-item",
+        "content-audit",
+        "create-item",
+        "get-actor",
+        "get-actor-entity",
+        "get-compendium-entry",
+        "import-item",
+        "manage-activity",
+        "manage-effect",
+        "search-compendium",
+        "search-compendium-items",
+        "search-compendium-spells",
+        "update-actor",
+        "update-actor-item",
+        "update-item"
+      ],
+      "byFile": {
+        "physical-item-builder/SKILL.md": [
+          "add-feature",
+          "add-item",
+          "content-audit",
+          "create-item",
+          "get-actor",
+          "get-actor-entity",
+          "get-compendium-entry",
+          "import-item",
+          "manage-activity",
+          "manage-effect",
+          "search-compendium",
+          "search-compendium-items",
+          "search-compendium-spells",
+          "update-actor",
+          "update-actor-item",
+          "update-item"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 1036,
+        "desc": "Author D&D 5e physical items — weapons, armor, shields, wondrous items, potions/scrolls, ammunition, tools, gems/trade-goods loot, and containers — as Foundry items. Use when the user wants to \"make a magic sword\", \"create a +1 longsword\", \"add a healing potion\", \"give this NPC some loot / treasure / gear\", \"stat out this magic item\", \"build a flame tongue\", \"fill this chest with loot\", or pastes a DMG-style item entry. COMPENDIUM-FIRST: it copies the real PHB/DMG 2024 item (correct stats + art) with import-item, modifies + renames a copied base for custom items, and only authors from scratch with add-item as a last resort. Composes import-item / add-item / update-actor (coins) / update-actor-item / manage-activity / manage-effect with dnd5e judgment: itemType choice, rarity↔price sanity, the magic-item rule, attunement defaults, equipped vs carried, identified vs mystery loot, container nesting. The tools own correctness (field paths, shapes, soft validation); this skill owns the parse, the choices, and the house rules."
+      }
+    },
+    "playlist-builder": {
+      "tools": [
+        "create-playlist",
+        "create-sounds",
+        "delete-playlist",
+        "list-assets",
+        "list-playlists",
+        "update-playlist",
+        "update-scene",
+        "upload-asset"
+      ],
+      "byFile": {
+        "playlist-builder/SKILL.md": [
+          "create-playlist",
+          "create-sounds",
+          "delete-playlist",
+          "list-assets",
+          "list-playlists",
+          "update-playlist",
+          "update-scene",
+          "upload-asset"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 1011,
+        "desc": "Author D&D 5e audio playlists in Foundry — MUSIC and whole-track ambience: scene ambience beds (tavern, forest, dungeon, storm), combat/boss music, exploration music sets, and SFX soundboards. Use when the user wants to \"make a playlist\", \"add background music\", \"battle music\", \"a theme for this place\", \"exploration music\", \"a soundboard of effects\", or to attach audio to a scene. YOU decide the tracks, the playback mode, and the mix; the tools only STRUCTURE it (the Playlist/PlaylistSound shape). Audio has no premium-book compendium — playlists are asset-driven (like scenes): the sound files are uploaded. Composes create-playlist / update-playlist / list-playlists / delete-playlist (+ upload-asset for the audio); to attach a playlist to a scene, hand off to scene-builder. For randomized atmospheric ONE-SHOTS with silence between them (a crow, quiet, a distant dog) or a crossfaded ambient bed layered on a scene, hand off to soundscape-builder — that is the house Soundscape module, not a Playlist."
+      }
+    },
+    "plot-drift-check": {
+      "tools": [
+        "create-journal",
+        "get-actor",
+        "get-item",
+        "get-rolltable",
+        "list-actors",
+        "list-folders",
+        "list-items",
+        "list-journals",
+        "list-notes",
+        "list-playlists",
+        "list-rolltables",
+        "list-scenes",
+        "list-tokens",
+        "search-actor-contents",
+        "search-journals",
+        "set-journal-page-visibility",
+        "update-actor",
+        "update-actor-item",
+        "update-item",
+        "update-journal",
+        "update-rolltable",
+        "update-token"
+      ],
+      "byFile": {
+        "plot-drift-check/SKILL.md": [
+          "create-journal",
+          "get-actor",
+          "get-item",
+          "get-rolltable",
+          "list-actors",
+          "list-folders",
+          "list-items",
+          "list-journals",
+          "list-notes",
+          "list-playlists",
+          "list-rolltables",
+          "list-scenes",
+          "list-tokens",
+          "search-actor-contents",
+          "search-journals",
+          "set-journal-page-visibility",
+          "update-actor",
+          "update-actor-item",
+          "update-item",
+          "update-journal",
+          "update-rolltable",
+          "update-token"
+        ]
+      },
+      "shorthand": [
+        "list-scenes/-folders/-notes/-items",
+        "list/get-rolltable"
+      ],
+      "desc": {
+        "chars": 882,
+        "desc": "Audit the live Foundry world against the campaign's authoritative plot document and report DRIFT — stale names a rename left behind, world text that contradicts the doc, references to plot elements the doc dropped, and GM-only canon leaking into player-visible pages. Use when the user wants to \"check for plot drift\", \"audit the world against the plot doc\", \"did the rename propagate\", \"find stale references to <name>\", \"consistency-check the campaign\", \"sync the world with the plot\", or after any plot-doc revision (a renamed NPC, a changed backstory, a rewritten faction). READ-ONLY by default: it produces a drift report; it fixes findings only when the user says go. Composes the read/search tools (search-journals, list/get-rolltable, get-actor, list-scenes/-folders/-notes/-items) with surgical fixes (update-journal, update-rolltable editResults, update-actor) on request."
+      }
+    },
+    "scene-builder": {
+      "tools": [
+        "add-region-behavior",
+        "create-region",
+        "create-scene",
+        "create-teleporter",
+        "delete-region",
+        "get-scene-dimensions",
+        "list-assets",
+        "list-journals",
+        "list-lights",
+        "list-playlists",
+        "list-regions",
+        "list-scenes",
+        "list-tiles",
+        "list-walls",
+        "manage-effect",
+        "remap-teleporters",
+        "search-journals",
+        "update-region",
+        "update-scene",
+        "upload-asset"
+      ],
+      "byFile": {
+        "scene-builder/SKILL.md": [
+          "add-region-behavior",
+          "create-region",
+          "create-scene",
+          "create-teleporter",
+          "delete-region",
+          "get-scene-dimensions",
+          "list-assets",
+          "list-journals",
+          "list-lights",
+          "list-playlists",
+          "list-regions",
+          "list-scenes",
+          "list-tiles",
+          "list-walls",
+          "manage-effect",
+          "remap-teleporters",
+          "search-journals",
+          "update-region",
+          "update-scene",
+          "upload-asset"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 759,
+        "desc": "Turn a map image into a ready-to-play Foundry scene. Use when the user wants to \"build a scene\", \"make a scene from this map\", \"set up this battlemap\", \"turn this image into a scene\", \"create a scene\", \"import a map\", or asks to set scene mood/lighting/weather/fog (e.g. \"make it night\", \"add snow\", \"make this a dark cave\", \"attach this playlist/journal to the scene\"). Prompts for a map if none is given, auto-sizes the scene to the image, **looks for an accompanying sidecar JSON next to the map to import its walls + lighting**, looks at the map to suggest big-brush mood (weather / darkness / vision), and offers to attach a playlist or journal. The tools own correctness (field paths, enum mapping, name→id, image probing); this skill owns the judgment."
+      }
+    },
+    "session-audit": {
+      "tools": [
+        "configure-dnd5e-settings",
+        "create-journal",
+        "get-actor",
+        "get-actor-entity",
+        "get-compendium-entry",
+        "get-group",
+        "get-world-info",
+        "list-journals",
+        "list-scenes",
+        "list-tokens",
+        "manage-calendar",
+        "screenshot-scene",
+        "update-token"
+      ],
+      "byFile": {
+        "session-audit/SKILL.md": [
+          "configure-dnd5e-settings",
+          "create-journal",
+          "get-actor",
+          "get-actor-entity",
+          "get-compendium-entry",
+          "get-group",
+          "get-world-info",
+          "list-journals",
+          "list-scenes",
+          "list-tokens",
+          "manage-calendar",
+          "screenshot-scene",
+          "update-token"
+        ]
+      },
+      "shorthand": [
+        "list-scenes/-tokens"
+      ],
+      "desc": {
+        "chars": 1153,
+        "desc": "Audit the NEXT SESSION before it is played — read the live world's maps, placed monsters, and PC sheets, do the encounter arithmetic, and judge whether the fights are tuned right and whether the night actually fits in the hours available — then audit CAMPAIGN progress and pacing against the plot doc and the sessions played so far. Use when the user wants to \"audit my next session\", \"is this fight too hard / too easy\", \"evaluate the difficulty\", \"review the maps and monsters I placed\", \"check the encounters before Tuesday\", \"will this dungeon fit in one session\", \"how is the campaign pacing\", \"are we on track\", \"review <site> before we run it\", or hands over a built dungeon and asks what they should change. READ-ONLY: it produces a two-part report and changes nothing in the world unless the user says go. The bundled script owns the arithmetic; this skill owns what the numbers mean, which axis is actually off, and which fixes are worth the DM's time. Composes the read tools (list-scenes/-tokens, get-actor, get-actor-entity, get-group, list-journals, screenshot-scene, get-compendium-entry) with the campaign repo's plot and session record."
+      }
+    },
+    "session-scribe": {
+      "tools": [
+        "export-actor",
+        "export-chat-log",
+        "get-actor",
+        "get-combat-stats",
+        "level-up-pc",
+        "update-journal"
+      ],
+      "byFile": {
+        "session-scribe/scripts/session_scribe.py": [
+          "export-chat-log"
+        ],
+        "session-scribe/SKILL.md": [
+          "export-actor",
+          "export-chat-log",
+          "get-actor",
+          "get-combat-stats",
+          "level-up-pc",
+          "update-journal"
+        ],
+        "session-scribe/templates/combat-log.html": [
+          "get-combat-stats"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 957,
+        "desc": "Turn a Craig (Discord) session recording into a speaker-labeled transcript aligned with the Foundry chat log, then write the session artifacts — four documents as HTML + PDF (player recap, combat stats, GM notes · story, GM notes · mechanics) plus recap.md — committed to the campaign repo under sessions/YYYY-MM-DD/. Use when the user pastes a Craig download link (craig.chat/rec/... or craig.horse), or wants to \"process the session\", \"process last night's recording\", \"transcribe the session\", \"write the session recap\", \"make the session log\", or \"run session scribe\". The bundled script owns the deterministic work (Craig API download, per-track faster-whisper transcription, wall-clock alignment with the chat log); this skill owns the judgment: the recap voice, what is player-safe vs GM-only, loot/level bookkeeping, and the loose-thread list. The user's ONLY jobs are /join, /stop, and pasting the link — never ask them for more ceremony than that."
+      }
+    },
+    "soundscape-builder": {
+      "tools": [
+        "configure-soundscape",
+        "create-sounds",
+        "get-current-scene",
+        "list-assets",
+        "list-scenes",
+        "list-tokens",
+        "screenshot-scene",
+        "upload-asset"
+      ],
+      "byFile": {
+        "soundscape-builder/SKILL.md": [
+          "configure-soundscape",
+          "create-sounds",
+          "get-current-scene",
+          "list-assets",
+          "list-scenes",
+          "list-tokens",
+          "screenshot-scene",
+          "upload-asset"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 960,
+        "desc": "Give a Foundry scene ATMOSPHERIC SOUND — the house module fvtt-mod-soundscape (#6): a continuous ambient bed plus pools of one-shots that fire at randomized intervals with silence between (a crow, quiet, a distant dog). Use when the user wants to \"add ambience to this scene\", \"make this scene sound alive / creepy / busy\", \"sound for the crypt / tavern / forest\", \"random crows and wolf howls\", \"atmosphere for this map\", \"day and night sounds\", \"why is this scene silent\", or to tune / audit an existing soundscape. NOT for music — a track, a theme, a boss cue, or anything with a melody is `playlist-builder` (Soundscape never touches Playlists); a sound emitted from ONE SPOT on the map (that waterfall, this hearth) is an AmbientSound placeable via `create-sounds`. YOU decide which of the ~400 library templates belong, how many to layer, the timing, the mix, and the day/night gates; `configure-soundscape` only STRUCTURES it (the per-scene flag array)."
+      }
+    },
+    "start-session": {
+      "tools": [
+        "configure-dnd5e-settings",
+        "get-world-info",
+        "manage-calendar"
+      ],
+      "byFile": {
+        "start-session/SKILL.md": [
+          "configure-dnd5e-settings",
+          "get-world-info",
+          "manage-calendar"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 579,
+        "desc": "Boot the Foundry VTT world for a work session and report its state. Use when the user wants to start, wake, launch, or \"spin up\" the Foundry instance or world, or otherwise kick off a session — e.g. \"start the world\", \"boot Foundry\", \"open the table\", \"fire up the server\", \"wake the box\", \"get the world up\", \"let's start a session\". Drives the bridge's built-in cold-start (Magic-URL wake → world launch), then reports world / system / Foundry versions, active users, and the current scene. Read-only and safe to run any time — if the world is already up it just reports state."
+      }
+    },
+    "stat-block-builder": {
+      "tools": [
+        "add-feature",
+        "add-item",
+        "apply-condition",
+        "author-npc",
+        "content-audit",
+        "create-actor-from-compendium",
+        "get-actor",
+        "get-actor-entity",
+        "get-compendium-entry",
+        "import-item",
+        "manage-activity",
+        "manage-effect",
+        "move-documents",
+        "remove-from-actor",
+        "search-compendium",
+        "search-compendium-creatures",
+        "search-compendium-items",
+        "search-compendium-spells",
+        "set-actor-art",
+        "set-actor-ownership",
+        "update-actor",
+        "update-actor-item"
+      ],
+      "byFile": {
+        "stat-block-builder/SKILL.md": [
+          "add-feature",
+          "add-item",
+          "apply-condition",
+          "author-npc",
+          "content-audit",
+          "create-actor-from-compendium",
+          "get-actor",
+          "get-actor-entity",
+          "get-compendium-entry",
+          "import-item",
+          "manage-activity",
+          "manage-effect",
+          "move-documents",
+          "remove-from-actor",
+          "search-compendium",
+          "search-compendium-creatures",
+          "search-compendium-items",
+          "search-compendium-spells",
+          "set-actor-art",
+          "set-actor-ownership",
+          "update-actor",
+          "update-actor-item"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 992,
+        "desc": "Build a COMPLETE D&D 5e NPC in Foundry from a pasted/described stat block — not just the mechanics, the whole creature: all stats, special traits, actions/attacks, spells, effects, AND its inventory (the magic weapon it fights with, worn armor, carried gear, consumables, loot, coins), biography, and a finishing pass (art, ownership, folder). Use when the user wants to \"build this monster\", \"make an NPC from this stat block\", \"stat out <creature>\", \"create a creature from this text\", \"build the boss with its gear and loot\", or pastes a Monster-Manual-style block. Composes the actor-authoring tools (create-actor-from-compendium, author-npc, update-actor, add-feature, manage-activity, manage-effect, apply-condition, add-item, set-actor-art, set-actor-ownership, move-documents) into one coherent build with dnd5e judgment. The tools own correctness (field paths, activity/effect/item shapes, name→id, soft validation); this skill owns the parse, the orchestration, and the house rules."
+      }
+    },
+    "table-builder": {
+      "tools": [
+        "create-rolltable",
+        "delete-rolltable",
+        "get-compendium-entry",
+        "get-rolltable",
+        "import-item",
+        "import-rolltable",
+        "list-compendium-packs",
+        "list-rolltables",
+        "roll-on-table",
+        "search-compendium-creatures",
+        "search-compendium-items",
+        "update-rolltable"
+      ],
+      "byFile": {
+        "table-builder/SKILL.md": [
+          "create-rolltable",
+          "delete-rolltable",
+          "get-compendium-entry",
+          "get-rolltable",
+          "import-item",
+          "import-rolltable",
+          "list-compendium-packs",
+          "list-rolltables",
+          "roll-on-table",
+          "search-compendium-creatures",
+          "search-compendium-items",
+          "update-rolltable"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 885,
+        "desc": "Author D&D 5e roll tables in Foundry — random encounter tables, loot/treasure tables, rumor & hook tables, name generators, wild-magic / effect tables, weather, and any \"roll a d__ and consult the list\" content. Use when the user wants to \"make a roll table\", \"build a random encounter table\", \"a loot/treasure table\", \"a table of rumors / hooks\", \"a name generator\", \"a wild magic table\", \"roll for loot\", or pastes a die-and-list table to recreate. YOU decide the CONTENTS — the entries, their weights, the theme; the tools only STRUCTURE it (v14 result rendering, ranges from weights, and real @UUID item links — never the SRD). Loot/encounter entries reference REAL compendium items & monsters by uuid (mix-and-match), exactly how the published tables are built. Composes create-rolltable / update-rolltable / roll-on-table / list-rolltables / delete-rolltable with GMing judgment."
+      }
+    },
+    "token-cutout": {
+      "tools": [
+        "export-actor",
+        "get-actor",
+        "get-world-info",
+        "list-actors",
+        "list-tokens",
+        "set-actor-art",
+        "update-actor",
+        "update-token",
+        "upload-asset"
+      ],
+      "byFile": {
+        "token-cutout/SKILL.md": [
+          "export-actor",
+          "get-actor",
+          "get-world-info",
+          "list-actors",
+          "list-tokens",
+          "set-actor-art",
+          "update-actor",
+          "update-token",
+          "upload-asset"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 575,
+        "desc": "Put a token image into the world correctly after its background has been cut to alpha. Use when the user wants a cut-out token assigned to an actor, or asks to \"remove the background\" / \"make it transparent\" for a token: the PIXEL WORK is NOT here any more — it is the artificer server's `cutout-image` tool (fvtt-mcp-artificer, 2026-09-19), which also runs automatically for every `kind: \"token\"` render. This skill keeps only the Foundry-side judgment: uploading, assigning with set-actor-art, resetting inherited prototype settings, and checking facing before auto-rotate."
+      }
+    },
+    "tom-cartos-import": {
+      "tools": [
+        "add-journal-image",
+        "create-folder",
+        "create-journal",
+        "create-scene",
+        "create-scene-notes",
+        "delete-note",
+        "get-scene-dimensions",
+        "list-journals",
+        "list-scenes",
+        "move-documents",
+        "read-pack",
+        "remap-teleporters",
+        "screenshot-scene",
+        "update-note",
+        "upload-asset",
+        "upload-asset-tree"
+      ],
+      "byFile": {
+        "tom-cartos-import/SKILL.md": [
+          "add-journal-image",
+          "create-folder",
+          "create-journal",
+          "create-scene",
+          "create-scene-notes",
+          "delete-note",
+          "get-scene-dimensions",
+          "list-journals",
+          "list-scenes",
+          "move-documents",
+          "read-pack",
+          "remap-teleporters",
+          "screenshot-scene",
+          "update-note",
+          "upload-asset",
+          "upload-asset-tree"
+        ]
+      },
+      "shorthand": [],
+      "desc": {
+        "chars": 1057,
+        "desc": "Import a Tom-Cartos-style Foundry SCENE-PACK MODULE (an unzipped folder with a `module.json` and `packs/` compendiums) into the live world. Use when the user wants to \"import a Tom Cartos pack\", \"install this map module\", \"bring this scene pack into my world\", \"import the dungeon/temple/keep module\", \"import a Foundry module's scenes\", or points at a module folder / a `module.json`. Reads the pack off disk, detects its Foundry era, uploads and re-points all its assets, and recreates each scene faithfully — dimensions, grid, background, thumbnail, environment/fog mood, every wall and light, and the cross-scene teleporters (stairs between levels) — plus the pack's journal of legend keys. Also makes any standalone TILES the pack ships (huts/roofs/props) available for the GM to drag onto scenes. The tools own correctness (extraction, era detection, path rewrite, whole-placeable creation, teleporter remap, tile discovery); this skill owns the judgment: which variants to import, naming/foldering, the asset destination, the import order, and dedup."
+      }
+    }
+  },
+  "toolSkills": {
+    "get-world-info": [
+      "session-audit",
+      "start-session",
+      "token-cutout"
+    ],
+    "get-current-scene": [
+      "soundscape-builder"
+    ],
+    "disconnect-bridge": [],
+    "list-users": [],
+    "update-user": [],
+    "set-user-avatar": [],
+    "configure-dnd5e-settings": [
+      "session-audit",
+      "start-session"
+    ],
+    "manage-calendar": [
+      "session-audit",
+      "start-session"
+    ],
+    "get-actor": [
+      "pc-builder",
+      "physical-item-builder",
+      "plot-drift-check",
+      "session-audit",
+      "session-scribe",
+      "stat-block-builder",
+      "token-cutout"
+    ],
+    "export-actor": [
+      "session-scribe",
+      "token-cutout"
+    ],
+    "list-actors": [
+      "plot-drift-check",
+      "token-cutout"
+    ],
+    "get-actor-entity": [
+      "pc-builder",
+      "physical-item-builder",
+      "session-audit",
+      "stat-block-builder"
+    ],
+    "search-actor-contents": [
+      "plot-drift-check"
+    ],
+    "create-actor-from-compendium": [
+      "stat-block-builder"
+    ],
+    "author-npc": [
+      "stat-block-builder"
+    ],
+    "create-pc": [
+      "pc-builder"
+    ],
+    "inspect-pc-advancement": [
+      "pc-builder"
+    ],
+    "level-up-pc": [
+      "pc-builder",
+      "session-scribe"
+    ],
+    "create-pc-from-prefab": [
+      "pc-builder"
+    ],
+    "duplicate-actor": [],
+    "delete-actor": [],
+    "update-actor": [
+      "pc-builder",
+      "physical-item-builder",
+      "plot-drift-check",
+      "stat-block-builder",
+      "token-cutout"
+    ],
+    "update-actor-item": [
+      "pc-builder",
+      "physical-item-builder",
+      "plot-drift-check",
+      "stat-block-builder"
+    ],
+    "manage-activity": [
+      "physical-item-builder",
+      "stat-block-builder"
+    ],
+    "add-free-cast": [
+      "pc-builder"
+    ],
+    "manage-effect": [
+      "physical-item-builder",
+      "scene-builder",
+      "stat-block-builder"
+    ],
+    "apply-condition": [
+      "stat-block-builder"
+    ],
+    "add-item": [
+      "physical-item-builder",
+      "stat-block-builder"
+    ],
+    "import-item": [
+      "pc-builder",
+      "physical-item-builder",
+      "stat-block-builder",
+      "table-builder"
+    ],
+    "content-audit": [
+      "physical-item-builder",
+      "stat-block-builder"
+    ],
+    "add-feature": [
+      "pc-builder",
+      "physical-item-builder",
+      "stat-block-builder"
+    ],
+    "remove-from-actor": [
+      "stat-block-builder"
+    ],
+    "create-group": [],
+    "manage-group-members": [],
+    "get-group": [
+      "session-audit"
+    ],
+    "set-primary-party": [],
+    "set-actor-ownership": [
+      "pc-builder",
+      "stat-block-builder"
+    ],
+    "list-actor-ownership": [],
+    "set-actor-art": [
+      "pc-builder",
+      "stat-block-builder",
+      "token-cutout"
+    ],
+    "create-item": [
+      "physical-item-builder"
+    ],
+    "list-items": [
+      "plot-drift-check"
+    ],
+    "get-item": [
+      "plot-drift-check"
+    ],
+    "update-item": [
+      "physical-item-builder",
+      "plot-drift-check"
+    ],
+    "delete-item": [],
+    "search-compendium": [
+      "pc-builder",
+      "physical-item-builder",
+      "stat-block-builder"
+    ],
+    "get-compendium-entry": [
+      "pc-builder",
+      "physical-item-builder",
+      "session-audit",
+      "stat-block-builder",
+      "table-builder"
+    ],
+    "search-compendium-creatures": [
+      "stat-block-builder",
+      "table-builder"
+    ],
+    "search-compendium-spells": [
+      "pc-builder",
+      "physical-item-builder",
+      "stat-block-builder"
+    ],
+    "search-compendium-items": [
+      "physical-item-builder",
+      "stat-block-builder",
+      "table-builder"
+    ],
+    "list-compendium-packs": [
+      "table-builder"
+    ],
+    "read-pack": [
+      "tom-cartos-import"
+    ],
+    "create-scene": [
+      "scene-builder",
+      "tom-cartos-import"
+    ],
+    "list-scenes": [
+      "plot-drift-check",
+      "scene-builder",
+      "session-audit",
+      "soundscape-builder",
+      "tom-cartos-import"
+    ],
+    "update-scene": [
+      "playlist-builder",
+      "scene-builder"
+    ],
+    "activate-scene": [],
+    "pull-users-to-scene": [],
+    "set-landing-scene": [],
+    "delete-scene": [],
+    "get-scene-dimensions": [
+      "scene-builder",
+      "tom-cartos-import"
+    ],
+    "screenshot-scene": [
+      "session-audit",
+      "soundscape-builder",
+      "tom-cartos-import"
+    ],
+    "create-tiles": [],
+    "list-tiles": [
+      "scene-builder"
+    ],
+    "update-tiles": [],
+    "delete-tiles": [],
+    "create-lights": [],
+    "list-lights": [
+      "scene-builder"
+    ],
+    "update-lights": [],
+    "delete-lights": [],
+    "create-sounds": [
+      "playlist-builder",
+      "soundscape-builder"
+    ],
+    "list-sounds": [],
+    "update-sounds": [],
+    "delete-sounds": [],
+    "create-drawings": [],
+    "list-drawings": [],
+    "update-drawings": [],
+    "delete-drawings": [],
+    "create-walls": [],
+    "list-walls": [
+      "scene-builder"
+    ],
+    "update-walls": [],
+    "delete-walls": [],
+    "list-tokens": [
+      "plot-drift-check",
+      "session-audit",
+      "soundscape-builder",
+      "token-cutout"
+    ],
+    "place-tokens": [],
+    "update-token": [
+      "plot-drift-check",
+      "session-audit",
+      "token-cutout"
+    ],
+    "delete-tokens": [],
+    "create-scene-notes": [
+      "tom-cartos-import"
+    ],
+    "list-notes": [
+      "plot-drift-check"
+    ],
+    "update-note": [
+      "tom-cartos-import"
+    ],
+    "delete-note": [
+      "tom-cartos-import"
+    ],
+    "create-region": [
+      "scene-builder"
+    ],
+    "list-regions": [
+      "scene-builder"
+    ],
+    "update-region": [
+      "scene-builder"
+    ],
+    "delete-region": [
+      "scene-builder"
+    ],
+    "create-teleporter": [
+      "scene-builder"
+    ],
+    "add-region-behavior": [
+      "scene-builder"
+    ],
+    "remap-teleporters": [
+      "scene-builder",
+      "tom-cartos-import"
+    ],
+    "create-quest-journal": [
+      "journal-builder"
+    ],
+    "link-quest-to-npc": [
+      "journal-builder"
+    ],
+    "update-quest-journal": [
+      "journal-builder"
+    ],
+    "list-journals": [
+      "bestiary-builder",
+      "journal-builder",
+      "plot-drift-check",
+      "scene-builder",
+      "session-audit",
+      "tom-cartos-import"
+    ],
+    "search-journals": [
+      "journal-builder",
+      "plot-drift-check",
+      "scene-builder"
+    ],
+    "create-journal": [
+      "bestiary-builder",
+      "journal-builder",
+      "plot-drift-check",
+      "session-audit",
+      "tom-cartos-import"
+    ],
+    "update-journal": [
+      "bestiary-builder",
+      "journal-builder",
+      "plot-drift-check",
+      "session-scribe"
+    ],
+    "set-journal-page-visibility": [
+      "bestiary-builder",
+      "plot-drift-check"
+    ],
+    "delete-journal-page": [],
+    "delete-journal": [],
+    "add-journal-image": [
+      "journal-builder",
+      "tom-cartos-import"
+    ],
+    "create-rolltable": [
+      "table-builder"
+    ],
+    "import-rolltable": [
+      "table-builder"
+    ],
+    "list-rolltables": [
+      "plot-drift-check",
+      "table-builder"
+    ],
+    "update-rolltable": [
+      "plot-drift-check",
+      "table-builder"
+    ],
+    "roll-on-table": [
+      "table-builder"
+    ],
+    "get-rolltable": [
+      "plot-drift-check",
+      "table-builder"
+    ],
+    "delete-rolltable": [
+      "table-builder"
+    ],
+    "create-cards": [
+      "cards-builder"
+    ],
+    "import-cards": [
+      "cards-builder"
+    ],
+    "list-cards": [
+      "cards-builder"
+    ],
+    "delete-cards": [
+      "cards-builder"
+    ],
+    "create-playlist": [
+      "playlist-builder"
+    ],
+    "list-playlists": [
+      "playlist-builder",
+      "plot-drift-check",
+      "scene-builder"
+    ],
+    "update-playlist": [
+      "playlist-builder"
+    ],
+    "delete-playlist": [
+      "playlist-builder"
+    ],
+    "configure-soundscape": [
+      "soundscape-builder"
+    ],
+    "send-chat-message": [
+      "chat-and-narration"
+    ],
+    "list-chat-messages": [
+      "chat-and-narration"
+    ],
+    "delete-chat-messages": [
+      "chat-and-narration"
+    ],
+    "export-chat-log": [
+      "chat-and-narration",
+      "session-scribe"
+    ],
+    "post-item-card": [
+      "chat-and-narration"
+    ],
+    "request-roll": [
+      "chat-and-narration"
+    ],
+    "configure-combat-tracker": [],
+    "get-combat-stats": [
+      "session-scribe"
+    ],
+    "list-assets": [
+      "playlist-builder",
+      "scene-builder",
+      "soundscape-builder"
+    ],
+    "asset-info": [],
+    "download-asset": [],
+    "upload-asset": [
+      "bestiary-builder",
+      "cards-builder",
+      "playlist-builder",
+      "scene-builder",
+      "soundscape-builder",
+      "token-cutout",
+      "tom-cartos-import"
+    ],
+    "upload-asset-tree": [
+      "tom-cartos-import"
+    ],
+    "create-asset-folder": [],
+    "delete-asset": [],
+    "move-asset": [],
+    "copy-asset": [],
+    "asset-url": [],
+    "find-asset-references": [],
+    "relink-asset": [],
+    "list-folders": [
+      "plot-drift-check"
+    ],
+    "create-folder": [
+      "tom-cartos-import"
+    ],
+    "update-folder": [],
+    "delete-folder": [],
+    "move-documents": [
+      "pc-builder",
+      "stat-block-builder",
+      "tom-cartos-import"
+    ],
+    "bulk-delete": [],
+    "create-macro": [],
+    "list-macros": [],
+    "delete-macro": []
+  },
+  "unusedTools": [
+    "disconnect-bridge",
+    "list-users",
+    "update-user",
+    "set-user-avatar",
+    "duplicate-actor",
+    "delete-actor",
+    "create-group",
+    "manage-group-members",
+    "set-primary-party",
+    "list-actor-ownership",
+    "delete-item",
+    "activate-scene",
+    "pull-users-to-scene",
+    "set-landing-scene",
+    "delete-scene",
+    "create-tiles",
+    "update-tiles",
+    "delete-tiles",
+    "create-lights",
+    "update-lights",
+    "delete-lights",
+    "list-sounds",
+    "update-sounds",
+    "delete-sounds",
+    "create-drawings",
+    "list-drawings",
+    "update-drawings",
+    "delete-drawings",
+    "create-walls",
+    "update-walls",
+    "delete-walls",
+    "place-tokens",
+    "delete-tokens",
+    "delete-journal-page",
+    "delete-journal",
+    "configure-combat-tracker",
+    "asset-info",
+    "download-asset",
+    "create-asset-folder",
+    "delete-asset",
+    "move-asset",
+    "copy-asset",
+    "asset-url",
+    "find-asset-references",
+    "relink-asset",
+    "update-folder",
+    "delete-folder",
+    "bulk-delete",
+    "create-macro",
+    "list-macros",
+    "delete-macro"
+  ],
+  "families": {
+    "tiles": [
+      "create-tiles",
+      "list-tiles",
+      "update-tiles",
+      "delete-tiles"
+    ],
+    "lights": [
+      "create-lights",
+      "list-lights",
+      "update-lights",
+      "delete-lights"
+    ],
+    "sounds": [
+      "create-sounds",
+      "list-sounds",
+      "update-sounds",
+      "delete-sounds"
+    ],
+    "drawings": [
+      "create-drawings",
+      "list-drawings",
+      "update-drawings",
+      "delete-drawings"
+    ],
+    "walls": [
+      "create-walls",
+      "list-walls",
+      "update-walls",
+      "delete-walls"
+    ],
+    "tokens": [
+      "list-tokens",
+      "place-tokens",
+      "update-token",
+      "delete-tokens"
+    ],
+    "notes": [
+      "create-scene-notes",
+      "list-notes",
+      "update-note",
+      "delete-note"
+    ],
+    "regions": [
+      "create-region",
+      "list-regions",
+      "update-region",
+      "delete-region",
+      "create-teleporter",
+      "add-region-behavior",
+      "remap-teleporters"
+    ],
+    "items": [
+      "create-item",
+      "list-items",
+      "get-item",
+      "update-item",
+      "delete-item",
+      "import-item"
+    ],
+    "tables": [
+      "create-rolltable",
+      "import-rolltable",
+      "list-rolltables",
+      "update-rolltable",
+      "get-rolltable",
+      "delete-rolltable"
+    ],
+    "journals": [
+      "create-journal",
+      "update-journal",
+      "list-journals",
+      "delete-journal",
+      "delete-journal-page"
+    ],
+    "actors": [
+      "list-actors",
+      "get-actor",
+      "update-actor",
+      "delete-actor"
+    ],
+    "folders": [
+      "list-folders",
+      "create-folder",
+      "update-folder",
+      "delete-folder"
+    ],
+    "scenes": [
+      "create-scene",
+      "list-scenes",
+      "update-scene",
+      "delete-scene"
+    ],
+    "playlists": [
+      "create-playlist",
+      "list-playlists",
+      "update-playlist",
+      "delete-playlist"
+    ],
+    "cards": [
+      "create-cards",
+      "import-cards",
+      "list-cards",
+      "delete-cards"
+    ],
+    "macros": [
+      "create-macro",
+      "list-macros",
+      "delete-macro"
+    ]
+  }
+}

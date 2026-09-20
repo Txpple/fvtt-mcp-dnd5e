@@ -1,0 +1,8 @@
+target: LOCAL sandbox (http://localhost:30000)
+sandbox dnd5e 6.0.3
+  ✓ #7482 no-duration effect created in combat keeps expiry null (was turnStart on 6.0.1/6.0.2)
+  ✓ manage-effect create with no duration persists expiry null
+  ✓ read-back reports it as permanent (no expiry)
+  ✓ #7450 sourceItem.* condition key accepted and persisted verbatim
+
+4 passed, 0 failed

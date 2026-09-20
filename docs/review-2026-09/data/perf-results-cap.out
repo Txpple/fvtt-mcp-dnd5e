@@ -1,0 +1,6 @@
+list-actor-ownership (today's record shape, 168 actors): raw 228748 chars -> record-cap keeps 14/168 actors in 19209 chars; character cut kept 14 complete + 1 partial record and lost the count
+list-actor-ownership (compact shape): raw 12637 chars -> fits, 0 omitted
+search-compendium-creatures (today's shape, 493 hits): raw 188428 chars -> record-cap keeps 51/493 hits in 19826 chars, totalFound + note preserved
+search-compendium-creatures (compact A): raw 66614 chars -> record-cap keeps 147/493 hits
+search-compendium-creatures (TSV lines): raw 47675 chars -> line-cap keeps 207/493 hits
+markdown list (list-macros x3 = 25873 chars): line-cap omitted 72 line(s); tail = "t · by Anthony\n…[72 more line(s) omitted — response exceeded toolResponseMaxChars (20000)]"

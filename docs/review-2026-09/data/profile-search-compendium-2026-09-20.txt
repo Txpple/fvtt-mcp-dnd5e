@@ -1,0 +1,22 @@
+target: LOCAL sandbox (http://localhost:30000)
+connect                                            8137 ms
+packs: 53 total; 23 dnd5e.* (SRD, excluded); 2 Scene; indexed at connect: 21
+getIndex over 28 searched packs: 12103 ms total, 4053 entries
+   dnd-dungeon-masters-guide.equipment               10965 ms     548 entries
+   dnd-dungeon-masters-guide.tables                    675 ms     125 entries
+   dnd-players-handbook.tables                         169 ms      27 entries
+   dnd-heroes-faerun.tables                            155 ms      14 entries
+   dnd-monster-manual.tables                           139 ms     116 entries
+   dnd-dungeon-masters-guide.content                     0 ms      46 entries  (already indexed)
+   dnd-dungeon-masters-guide.features                    0 ms      23 entries  (already indexed)
+   dnd-dungeon-masters-guide.bastions                    0 ms      35 entries  (already indexed)
+   dnd-dungeon-masters-guide.actors                      0 ms      72 entries  (already indexed)
+   dnd-heroes-faerun.book                                0 ms      30 entries  (already indexed)
+   dnd-heroes-faerun.actors                              0 ms       6 entries  (already indexed)
+   dnd-heroes-faerun.items                               0 ms      21 entries  (already indexed)
+searchCompendium sword (indexes warm now)           168 ms
+   42 results
+searchCompendium sword (2nd)                        171 ms
+   (faceted args differ: foundry.call('searchCompendiumFaceted') failed: page.evaluate: Error: Unknown do)
+searchCompendiumFaceted goblin (creatures)          356 ms
+non-book packs searched: 10 (155 ms of index)

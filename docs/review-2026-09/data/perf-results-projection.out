@@ -1,0 +1,88 @@
+tool                                                before   after    saved   note
+list-actors                                         13210    10490    21%     168 records; drop hasImage + the "filtered" prose
+list-actors.2                                       11946    9459     21%     153 records; drop hasImage + the "filtered" prose
+list-items                                          16392    7986     51%     84 records; drop img (avg 57 chars) + folderId
+list-journals                                       9660     7072     27%     22 journals / 80 pages; drop constant type:"JournalEntry", pageCount, page type when "text", playerVisible when false, the success/mode envelope
+list-scenes                                         9698     2873     70%     50 scenes; drop the background path line (avg 130 chars/scene)
+list-folders                                        5763     3789     34%     79 folders; drop color + sort, abbreviate counts
+list-macros                                         8633     7639     12%     105 macros; hotbar detail -> a pin count
+list-macros (no hotbar)                             8633     6496     25%     same, hotbar dropped entirely (opt-in via a flag)
+list-chat-messages                                  6135     6135     0%      50 messages, 80-char preview each — already compact; keep
+list-compendium-packs                               2861     2313     19%     30 packs; drop constant system:"dnd5e", availableTypes
+get-world-info                                      1805     354      80%     drop description (758 chars of HTML), background, automation (23 keys; that is configure-dnd5e-settings' read)
+get-current-scene                                   1700     1182     30%     7 tokens; flatten position, drop hasImage, hidden:false, 1x1 size
+list-users                                          835      835      0%      tiny; keep
+list-playlists                                      690      690      0%      tiny; keep
+list-rolltables                                     181      181      0%      tiny; keep
+list-cards                                          21       21       0%      tiny; keep
+list-tokens                                         185      185      0%      zod error (sceneIdentifier required) — 185 chars; unchanged by projection
+list-walls                                          185      185      0%      zod error (sceneIdentifier required) — 185 chars; unchanged by projection
+list-lights                                         185      185      0%      zod error (sceneIdentifier required) — 185 chars; unchanged by projection
+list-regions                                        185      185      0%      zod error (sceneIdentifier required) — 185 chars; unchanged by projection
+list-notes                                          185      185      0%      zod error (sceneIdentifier required) — 185 chars; unchanged by projection
+search-compendium                                   8954     4825     46%     42 hits; description is "" on 42/42 (index has none), summary derivable, drop hasImage + pack.label + gameSystem
+search-compendium-spells (A)                        14979    6568     56%     50 hits; drop uuid (= pack+id), packLabel, img, type (constant), the criteria echo + note
+search-compendium-spells (B)                        14979    5868     61%     uuid-only variant with short facet keys (skills pass uuid)
+search-compendium-creatures (A) [uncapped est.]     186611   65067    65%     52 complete records visible before the cap (379 chars each) -> ~493 records in the 186,611-char raw result; A = 132 chars/record
+search-compendium-creatures (A) [as received, capped]20073    20073    0%      both sides still exceed the 20,000 cap -> the client receives 20,073 either way; only a record cap / real name filter changes this
+search-compendium-creatures (B) [uncapped est.]     186611   69997    62%     B = 142 chars/record (uuid-only)
+list-actor-ownership (A) [uncapped est.]            227662   12240    95%     14 complete actors visible (1359 chars each = 7 user rows x ~190 chars); 1/14 have ANY explicit entry; A = one row per actor, explicit entries only, 73 chars
+list-actor-ownership (A) [as received, capped]      20073    12240    39%     168 actors x 73 chars fits under the cap
+list-actor-ownership (B) [uncapped est.]            227662   1500     99%     B = report only actors with an explicit entry or a non-NONE default (1/14 of the visible sample) + a one-line count of the rest
+
+24-call total (as a client receives it, variant A): before 154534 chars ≈ 42926 tokens -> after 105650 chars ≈ 29347 tokens (32% smaller)
+list/search bodies that actually change (12 calls): before 142242 -> after 95327 (33% smaller)
+
+Fields today vs compact:
+  list-actors                                          today: id,name,type,hasImage
+                                                       compact: id,name,type
+  list-actors.2                                        today: id,name,type,hasImage
+                                                       compact: id,name,type
+  list-items                                           today: id,name,type,img,folderId,folderName
+                                                       compact: id,name,type,folder
+  list-journals                                        today: id,name,type,pageCount,pages[id,name,type,playerVisible]
+                                                       compact: id,name,pages[id,name,type?,playerVisible?]
+  list-scenes                                          today: name,id,[active],WxH,grid,background
+                                                       compact: name,id,[active],WxH,grid
+  list-folders                                         today: name,id,color,sort,docCount,subfolderCount,nesting
+                                                       compact: name,id,docCount,subfolderCount,nesting
+  list-macros                                          today: name,id,type,author,hotbar[user slot…]
+                                                       compact: name,id,type,author,pinCount
+  list-macros (no hotbar)                              today: name,id,type,author,hotbar[user slot…]
+                                                       compact: name,id,type,author
+  list-chat-messages                                   today: id,time,alias,whisper,preview80
+                                                       compact: same
+  list-compendium-packs                                today: id,label,type,system
+                                                       compact: id,label,type
+  get-world-info                                       today: id,title,description,background,system,foundry,host,users,activeUsers,automation
+                                                       compact: id,title,system,foundry,host,users,activeUsers
+  get-current-scene                                    today: tokens[id,name,position{x,y},size{w,h},actorId,disposition,hidden,hasImage]
+                                                       compact: tokens[id,name,x,y,actorId,disposition,hidden?,size?]
+  list-users                                           today: (markdown line per record)
+                                                       compact: same
+  list-playlists                                       today: (markdown line per record)
+                                                       compact: same
+  list-rolltables                                      today: (markdown line per record)
+                                                       compact: same
+  list-cards                                           today: (markdown line per record)
+                                                       compact: same
+  list-tokens                                          today: error
+                                                       compact: error
+  list-walls                                           today: error
+                                                       compact: error
+  list-lights                                          today: error
+                                                       compact: error
+  list-regions                                         today: error
+                                                       compact: error
+  list-notes                                           today: error
+                                                       compact: error
+  search-compendium                                    today: id,name,type,pack{id,label},description,hasImage,summary
+                                                       compact: id,name,type,pack
+  search-compendium-spells (A)                         today: id,name,type,uuid,pack,packLabel,img,facets{spellLevel,spellSchool}
+                                                       compact: id,name,pack,facets
+  search-compendium-spells (B)                         today: same
+                                                       compact: uuid,name,lvl,school
+  search-compendium-creatures (A) [uncapped est.]      today: id,name,type,uuid,pack,packLabel,img,facets{challengeRating,creatureType,size,hasSpells,hasLegendaryActions}
+                                                       compact: id,name,pack,cr,type,size,spells?,legendary?
+  list-actor-ownership (A) [uncapped est.]             today: id,name,type,defaultPermission,numericDefaultPermission,ownership[userId,userName,permission,numericPermission,source,explicitPermission,numericExplicitPermission] x7 users
+                                                       compact: id,name,default,explicit{user:level}?

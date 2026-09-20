@@ -1,0 +1,1030 @@
+{
+ "fvtt-mod-battleflow": [
+  {
+   "file": "ARCHITECTURE.md",
+   "oldName": 1,
+   "relOldPath": 1
+  },
+  {
+   "file": "DESIGN.md",
+   "oldName": 2
+  },
+  {
+   "file": "NOTES.md",
+   "scripts": [
+    "deploy-house-module.mjs",
+    "pull-prod-to-local.mjs",
+    "world-snapshot.mjs"
+   ],
+   "toolNames": [
+    "get-world-info"
+   ]
+  },
+  {
+   "file": "PLAN.md",
+   "oldName": 2,
+   "scripts": [
+    "deploy-house-module.mjs",
+    "local-foundry.mjs",
+    "pull-prod-to-local.mjs",
+    "reload-clients.mjs",
+    "world-snapshot.mjs"
+   ],
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/README.md",
+   "oldName": 1,
+   "relOldPath": 1,
+   "readsDotEnv": 1,
+   "scripts": [
+    "pull-prod-to-local.mjs",
+    "reload-clients.mjs",
+    "world-snapshot.mjs"
+   ]
+  },
+  {
+   "file": "tools/battery.mjs",
+   "scripts": [
+    "world-snapshot.mjs"
+   ]
+  },
+  {
+   "file": "tools/check-mastery-rules.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/check-popup-routing.mjs",
+   "oldName": 1,
+   "absOldPath": 1,
+   "importFoundryClass": 1
+  },
+  {
+   "file": "tools/content/apply-macro-clear-rest.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/content/audit-reaction-list.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/content/fix-innate-sorcery.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/content/fix-shield-master.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/fixture-d20-folds.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/fixture-morgash-maneuvers.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/fixture-suite.mjs",
+   "envKeys": [
+    "MOLTEN_TEST_USER"
+   ],
+   "scripts": [
+    "pull-prod-to-local.mjs"
+   ],
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/harness.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 3,
+   "fMembers": [
+    "f.connect",
+    "f.disconnect",
+    "f.dispose",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/maintain-party.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-auto-crit.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-clock-riders.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-conditions.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-d20-folds.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-effect-view.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-emanations.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-expiry.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-heroic-check.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-hit-sequence.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-hitmenu-table.mjs",
+   "oldName": 1,
+   "absOldPath": 1,
+   "importFoundryClass": 1,
+   "fMembers": [
+    "f.connect",
+    "f.disconnect",
+    "f.dispose",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-metamagic.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-offer-timing.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-pack-shapes.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-platform-emanations.mjs",
+   "oldName": 1,
+   "absOldPath": 1,
+   "importFoundryClass": 1,
+   "fMembers": [
+    "f.connect",
+    "f.dispose",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-revert-dead.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-rogue-fixture.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-sg-range.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-shield-leftover.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-steady-aim-live.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-steady-aim.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-surfaces.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-twinnable.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/probe-web.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/reload-clients.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/reset-fixture-state.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/scan-corpus.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/scan-reactions.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/scan-riders.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/scan-volley-spells.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/scrub-fixture-residue.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-battleflow.mjs",
+   "envKeys": [
+    "MOLTEN_TEST_USER"
+   ],
+   "scripts": [
+    "reload-clients.mjs"
+   ],
+   "fMembers": [
+    "f.disconnect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-cast.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-clock.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-concentration.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-d20-folds.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-effects.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-emanations.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-expiry.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-heatmetal.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-hitmenu.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-hold.mjs",
+   "fMembers": [
+    "f.disconnect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-maneuvers.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-metamagic.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-nogm.mjs",
+   "oldName": 1,
+   "absOldPath": 1,
+   "importFoundryClass": 1
+  },
+  {
+   "file": "tools/smoke-reminders.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-resources.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-riders.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-saves.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-shields.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-sneak.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-superiority.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-surfaces.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-twoclient.mjs",
+   "oldName": 1,
+   "absOldPath": 1,
+   "importFoundryClass": 1
+  },
+  {
+   "file": "tools/smoke-volleys.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/target.mjs",
+   "oldName": 1,
+   "envKeys": [
+    "BF_SUITE_PASSWORD",
+    "BF_SUITE_USER",
+    "FOUNDRY_PASSWORD",
+    "FOUNDRY_USER",
+    "LOCAL_ADMIN_KEY",
+    "LOCAL_FOUNDRY_USER",
+    "LOCAL_SERVER_URL",
+    "LOCAL_WORLD_ID",
+    "MOLTEN_ADMIN_KEY",
+    "MOLTEN_MAGIC_URL",
+    "MOLTEN_SERVER_URL",
+    "MOLTEN_TEST_PASSWORD",
+    "MOLTEN_TEST_USER",
+    "MOLTEN_WORLD_ID"
+   ],
+   "scripts": [
+    "pull-prod-to-local.mjs"
+   ],
+   "toolNames": [
+    "disconnect-bridge"
+   ],
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/verify-settings.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "fMembers": [
+    "f.connect",
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/world-snapshot.mjs",
+   "oldName": 1,
+   "absOldPath": 1,
+   "readsDotEnv": 1,
+   "envKeys": [
+    "LOCAL_WORLD_ID",
+    "MOLTEN_WORLD_ID"
+   ],
+   "scripts": [
+    "local-foundry.mjs",
+    "world-snapshot.mjs"
+   ]
+  }
+ ],
+ "fvtt-mod-fxstudio": [
+  {
+   "file": "CLAUDE.md",
+   "oldName": 3,
+   "relOldPath": 3,
+   "scripts": [
+    "deploy-house-module.mjs",
+    "local-foundry.mjs",
+    "pull-prod-to-local.mjs"
+   ],
+   "regNames": [
+    "foundry-local5e",
+    "foundry-molten5e"
+   ],
+   "toolNames": [
+    "disconnect-bridge",
+    "get-world-info"
+   ]
+  },
+  {
+   "file": "DESIGN.md",
+   "scripts": [
+    "deploy-house-module.mjs"
+   ],
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "NEXT-SESSION.md",
+   "oldName": 3,
+   "relOldPath": 3,
+   "scripts": [
+    "configure-modules.mjs",
+    "deploy-house-module.mjs",
+    "local-foundry.mjs"
+   ]
+  },
+  {
+   "file": "prototypes/bench.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/build-data2.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/compare-autorec2.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/convert.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/coverage.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/derive.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/derive2.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/derive3.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/read-db.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "prototypes/resolve2.mjs",
+   "oldName": 1,
+   "absOldPath": 1
+  },
+  {
+   "file": "tools/README.md",
+   "oldName": 1,
+   "relOldPath": 1,
+   "envKeys": [
+    "FOUNDRY_DATA",
+    "FXS_MCP_REPO"
+   ],
+   "scripts": [
+    "deploy-house-module.mjs"
+   ]
+  },
+  {
+   "file": "tools/lib/env.mjs",
+   "oldName": 1,
+   "envKeys": [
+    "FOUNDRY_DATA",
+    "FXS_MCP_REPO"
+   ]
+  },
+  {
+   "file": "tools/lib/foundry.mjs",
+   "dynImportFoundry": 1,
+   "readsDotEnv": 1,
+   "envKeys": [
+    "BF_SUITE_PASSWORD",
+    "BF_SUITE_USER",
+    "LOCAL_ADMIN_KEY",
+    "LOCAL_SERVER_URL",
+    "LOCAL_WORLD_ID",
+    "MOLTEN_WORLD_ID"
+   ],
+   "regNames": [
+    "foundry-local5e"
+   ],
+   "toolNames": [
+    "disconnect-bridge"
+   ],
+   "fMembers": [
+    "f.connect",
+    "f.dispose",
+    "f.evaluate",
+    "f.page"
+   ]
+  },
+  {
+   "file": "tools/lib/suite.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/preview.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/sandbox-module.mjs",
+   "oldName": 2,
+   "relOldPath": 2,
+   "scripts": [
+    "local-foundry.mjs"
+   ]
+  },
+  {
+   "file": "tools/smoke-author.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-boot.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-fx.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-replay.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "tools/smoke-screens.mjs",
+   "fMembers": [
+    "f.evaluate"
+   ]
+  }
+ ],
+ "fvtt-mod-lootshelf": [
+  {
+   "file": "HANDOFF.md",
+   "toolNames": [
+    "list-actors",
+    "list-users"
+   ]
+  }
+ ],
+ "fvtt-mod-miscpatches": [
+  {
+   "file": "CLAUDE.md",
+   "oldName": 3,
+   "relOldPath": 3,
+   "readsDotEnv": 1,
+   "scripts": [
+    "deploy-house-module.mjs",
+    "local-foundry.mjs"
+   ],
+   "toolNames": [
+    "disconnect-bridge"
+   ]
+  },
+  {
+   "file": "tools/smoke-teleports.mjs",
+   "oldName": 2,
+   "absOldPath": 2,
+   "importFoundryClass": 1,
+   "readsDotEnv": 1,
+   "envKeys": [
+    "BF_SUITE_PASSWORD",
+    "BF_SUITE_USER",
+    "LOCAL_ADMIN_KEY",
+    "LOCAL_SERVER_URL",
+    "LOCAL_WORLD_ID",
+    "MOLTEN_WORLD_ID"
+   ],
+   "fMembers": [
+    "f.connect",
+    "f.dispose",
+    "f.evaluate"
+   ]
+  }
+ ],
+ "fvtt-mod-soundscape": [
+  {
+   "file": "design.md",
+   "toolNames": [
+    "configure-soundscape"
+   ]
+  }
+ ],
+ "fvtt-mod-soundscape-sfx": [
+  {
+   "file": "README.md",
+   "oldName": 2,
+   "scripts": [
+    "remap-soundscape-scene-paths.mjs",
+    "upload-soundscape-library.mjs"
+   ]
+  }
+ ],
+ "fvtt-mcp-artificer": [
+  {
+   "file": ".claude/skills/illustration-builder/SKILL.md",
+   "toolNames": [
+    "add-journal-image",
+    "export-actor",
+    "get-actor",
+    "list-assets",
+    "list-scenes",
+    "screenshot-scene",
+    "set-actor-art",
+    "upload-asset"
+   ]
+  },
+  {
+   "file": "BACKLOG.md",
+   "toolNames": [
+    "upload-asset"
+   ]
+  },
+  {
+   "file": "CLAUDE.md",
+   "oldName": 2,
+   "readsDotEnv": 2,
+   "toolNames": [
+    "add-journal-image",
+    "set-actor-art",
+    "upload-asset"
+   ]
+  },
+  {
+   "file": "README.md",
+   "oldName": 2,
+   "readsDotEnv": 1,
+   "toolNames": [
+    "add-journal-image",
+    "set-actor-art",
+    "upload-asset"
+   ]
+  },
+  {
+   "file": "ROADMAP.md",
+   "oldName": 1,
+   "toolNames": [
+    "add-journal-image",
+    "set-actor-art",
+    "upload-asset"
+   ]
+  },
+  {
+   "file": "notes/archive/m3-loop-proof.md",
+   "toolNames": [
+    "add-journal-image",
+    "create-journal",
+    "upload-asset"
+   ]
+  },
+  {
+   "file": "notes/archive/session-handoff-2026-08-26.md",
+   "toolNames": [
+    "set-actor-art"
+   ]
+  },
+  {
+   "file": "notes/archive/session-handoff-2026-08-27.md",
+   "toolNames": [
+    "set-actor-art"
+   ]
+  },
+  {
+   "file": "scripts/token_cutout.py",
+   "oldName": 1
+  },
+  {
+   "file": "src/config.ts",
+   "readsDotEnv": 1
+  },
+  {
+   "file": "src/registry.ts",
+   "oldName": 1
+  },
+  {
+   "file": "src/utils/schema.ts",
+   "oldName": 1
+  }
+ ],
+ "fvtt-campaign-greenrest": [
+  {
+   "file": "BOOTSTRAP.md",
+   "oldName": 1
+  },
+  {
+   "file": "README.md",
+   "oldName": 2
+  },
+  {
+   "file": "notes/README.md",
+   "oldName": 2
+  },
+  {
+   "file": "notes/greenrest-camp-kestrel-ideation.md",
+   "toolNames": [
+    "import-item"
+   ]
+  },
+  {
+   "file": "notes/greenrest-hollow-build-handoff.md",
+   "toolNames": [
+    "configure-soundscape",
+    "get-actor",
+    "list-scenes"
+   ]
+  },
+  {
+   "file": "notes/greenrest-lootshelf-migration.md",
+   "oldName": 1,
+   "scripts": [
+    "configure-modules.mjs",
+    "register-module.mjs",
+    "uninstall-modules.mjs"
+   ],
+   "fMembers": [
+    "f.evaluate"
+   ]
+  },
+  {
+   "file": "notes/greenrest-pc-compliance-open-items.md",
+   "toolNames": [
+    "get-actor"
+   ]
+  },
+  {
+   "file": "notes/greenrest-session1-flags.md",
+   "toolNames": [
+    "get-actor"
+   ]
+  },
+  {
+   "file": "notes/map-pack-imports-maps-only.md",
+   "toolNames": [
+    "create-scene"
+   ]
+  },
+  {
+   "file": "notes/party-snapshot-at-session-wrap.md",
+   "toolNames": [
+    "get-actor"
+   ]
+  },
+  {
+   "file": "notes/session-recording-pipeline.md",
+   "oldName": 1,
+   "toolNames": [
+    "export-chat-log"
+   ]
+  },
+  {
+   "file": "party-snapshots/2026-08-25.md",
+   "toolNames": [
+    "export-actor"
+   ]
+  },
+  {
+   "file": "read-backstories-before-pc-content.md",
+   "toolNames": [
+    "get-actor"
+   ]
+  },
+  {
+   "file": "sync-repos.txt",
+   "oldName": 1
+  },
+  {
+   "file": "sync.ps1",
+   "oldName": 2
+  },
+  {
+   "file": "world-state.md",
+   "envKeys": [
+    "MOLTEN_WEBDAV_PASSWORD"
+   ],
+   "toolNames": [
+    "get-world-info",
+    "list-scenes",
+    "update-journal"
+   ]
+  }
+ ]
+}

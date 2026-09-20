@@ -1,0 +1,38 @@
+
+=== SUMMARY (number of FILES per repo touching each probe)
+fvtt-mod-battleflow        {"oldName":26,"relOldPath":2,"scripts":8,"toolNames":2,"fMembers":65,"readsDotEnv":17,"absOldPath":21,"importFoundryClass":20,"envKeys":4}
+fvtt-mod-fxstudio          {"oldName":15,"relOldPath":4,"scripts":5,"regNames":2,"toolNames":2,"fMembers":9,"absOldPath":10,"envKeys":3,"dynImportFoundry":1,"readsDotEnv":1}
+fvtt-mod-lootshelf         {"toolNames":1}
+fvtt-mod-miscpatches       {"oldName":2,"relOldPath":1,"readsDotEnv":2,"scripts":1,"toolNames":1,"absOldPath":1,"importFoundryClass":1,"envKeys":1,"fMembers":1}
+fvtt-mod-soundscape        {"toolNames":1}
+fvtt-mod-soundscape-sfx    {"oldName":1,"scripts":1}
+fvtt-mcp-artificer         {"toolNames":8,"oldName":6,"readsDotEnv":3}
+fvtt-campaign-greenrest    {"oldName":7,"toolNames":10,"scripts":1,"fMembers":1,"envKeys":1}
+
+=== ENV KEYS read by hand (distinct, per repo)
+fvtt-mod-battleflow        BF_SUITE_PASSWORD BF_SUITE_USER FOUNDRY_PASSWORD FOUNDRY_USER LOCAL_ADMIN_KEY LOCAL_FOUNDRY_USER LOCAL_SERVER_URL LOCAL_WORLD_ID MOLTEN_ADMIN_KEY MOLTEN_MAGIC_URL MOLTEN_SERVER_URL MOLTEN_TEST_PASSWORD MOLTEN_TEST_USER MOLTEN_WORLD_ID
+fvtt-mod-fxstudio          BF_SUITE_PASSWORD BF_SUITE_USER FOUNDRY_DATA FXS_MCP_REPO LOCAL_ADMIN_KEY LOCAL_SERVER_URL LOCAL_WORLD_ID MOLTEN_WORLD_ID
+fvtt-mod-miscpatches       BF_SUITE_PASSWORD BF_SUITE_USER LOCAL_ADMIN_KEY LOCAL_SERVER_URL LOCAL_WORLD_ID MOLTEN_WORLD_ID
+fvtt-campaign-greenrest    MOLTEN_WEBDAV_PASSWORD
+
+=== SCRIPTS named (distinct, per repo)
+fvtt-mod-battleflow        deploy-house-module.mjs local-foundry.mjs pull-prod-to-local.mjs reload-clients.mjs world-snapshot.mjs
+fvtt-mod-fxstudio          configure-modules.mjs deploy-house-module.mjs local-foundry.mjs pull-prod-to-local.mjs
+fvtt-mod-miscpatches       deploy-house-module.mjs local-foundry.mjs
+fvtt-mod-soundscape-sfx    remap-soundscape-scene-paths.mjs upload-soundscape-library.mjs
+fvtt-campaign-greenrest    configure-modules.mjs register-module.mjs uninstall-modules.mjs
+
+=== TOOL NAMES named (distinct, per repo)
+fvtt-mod-battleflow        disconnect-bridge get-world-info
+fvtt-mod-fxstudio          disconnect-bridge get-world-info
+fvtt-mod-lootshelf         list-actors list-users
+fvtt-mod-miscpatches       disconnect-bridge
+fvtt-mod-soundscape        configure-soundscape
+fvtt-mcp-artificer         add-journal-image create-journal export-actor get-actor list-assets list-scenes screenshot-scene set-actor-art upload-asset
+fvtt-campaign-greenrest    configure-soundscape create-scene export-actor export-chat-log get-actor get-world-info import-item list-scenes update-journal
+
+=== Foundry members used (distinct, per repo)
+fvtt-mod-battleflow        f.connect f.disconnect f.dispose f.evaluate
+fvtt-mod-fxstudio          f.connect f.dispose f.evaluate f.page
+fvtt-mod-miscpatches       f.connect f.dispose f.evaluate
+fvtt-campaign-greenrest    f.evaluate

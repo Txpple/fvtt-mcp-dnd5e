@@ -1,0 +1,30 @@
+tools: 151 matched zod: 151 unmatched: -
+total inputSchema chars  inline: 206472  reused=ref: 264773  saved: -58301 (-28.2%)
+tools where reused=ref produced any $defs: 121
+
+top 20 by chars saved:
+  create-pc                    inline   1555  ref   1531  saved     24  $defs 1  $ref 6
+  get-actor                    inline    299  ref    299  saved      0  $defs 0  $ref 0
+  get-actor-entity             inline    320  ref    320  saved      0  $defs 0  $ref 0
+  get-item                     inline    165  ref    165  saved      0  $defs 0  $ref 0
+  get-world-info               inline     47  ref     47  saved      0  $defs 0  $ref 0
+  level-up-pc                  inline    609  ref    609  saved      0  $defs 0  $ref 0
+  get-group                    inline    197  ref    197  saved      0  $defs 0  $ref 0
+  set-journal-page-visibility  inline    379  ref    379  saved      0  $defs 0  $ref 0
+  delete-journal-page          inline    255  ref    255  saved      0  $defs 0  $ref 0
+  asset-info                   inline    214  ref    214  saved      0  $defs 0  $ref 0
+  download-asset               inline    317  ref    317  saved      0  $defs 0  $ref 0
+  create-asset-folder          inline    217  ref    217  saved      0  $defs 0  $ref 0
+  asset-url                    inline    271  ref    271  saved      0  $defs 0  $ref 0
+  activate-scene               inline    206  ref    206  saved      0  $defs 0  $ref 0
+  get-scene-dimensions         inline    153  ref    153  saved      0  $defs 0  $ref 0
+  list-tiles                   inline    176  ref    176  saved      0  $defs 0  $ref 0
+  list-lights                  inline    176  ref    176  saved      0  $defs 0  $ref 0
+  list-sounds                  inline    176  ref    176  saved      0  $defs 0  $ref 0
+  list-drawings                inline    176  ref    176  saved      0  $defs 0  $ref 0
+  list-tokens                  inline    176  ref    176  saved      0  $defs 0  $ref 0
+
+full tools/list JSON chars (inline, as advertised): 283948
+
+create-pc $defs keys: [ '__schema0' ]
+  __schema0: {"type":"integer","minimum":1,"maximum":30}…

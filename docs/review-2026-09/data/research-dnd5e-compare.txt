@@ -1,0 +1,56 @@
+=== release-6.0.1...release-6.0.2 ===
+commits: 15 files: 19
+  * 394ee2b [#7442] Fix instance of legacy '==' operator.
+  * b6b4175 [#7450] Use rolled item data in Rule filters and expose the source item (#7451)
+  * 990c557 [#7452] Fix Druid Magician cantrips-known AE.
+  * 6ee2d89 [#7443] Accept passed-in message data flavor for group roll requests.
+  * 7b0b142 Make concentration getter lazy to avoid infinite recursion.
+  * 51f6e8f Do not delete dependent effects. Defer cleanup to dependency cleanup time when source is deleted.
+  * 33c0cac [#7463] Make roll request creation robust to cross-realm events.
+  * 70e9882 [#7466] Fix incorrect immmunity localization key in stat blocks
+  * b642ce0 Add workaround for foundryvtt/foundryvtt#14373 for ActorDelta adventure quick-start re-imports.
+  * 3a922ac Augment request roll results with the ID of the message they came from.
+  * 8c10c1a Guard against initialising malformed status effects.
+  * 9349480 [#7455] Fix compendium spells dropped onto the inventory tab not being created with a Cast activity. Fix non-compendium spell scrolls losing concentration.
+  * cac30cc [#7470] Fix some cases of infinite falling loops.
+  * 1749a84 [#7462] Fix negative terms not appearing in breakdown. Render separate constants. (#7468)
+  * c9f6f2d Increment version for 6.0.2 release.
+-- files --
+  modified dnd5e.mjs +11/-0
+  modified less/v2/chat.less +21/-9
+  modified less/v3/chat.less +1/-0
+  modified module/applications/actor/api/base-actor-sheet.mjs +11/-4
+  modified module/data/actor/group.mjs +12/-5
+  modified module/data/actor/npc.mjs +2/-2
+  modified module/data/chat-message/request-message-data.mjs +2/-1
+  modified module/dice/basic-roll.mjs +30/-4
+  modified module/documents/active-effect.mjs +40/-10
+  modified module/documents/actor/actor.mjs +2/-1
+  modified module/documents/applied-rules.mjs +1/-1
+  modified module/documents/item.mjs +4/-3
+  modified module/documents/token.mjs +13/-10
+  modified module/enrichers.mjs +1/-1
+  modified module/utils.mjs +1/-0
+  modified packs/_source/classes24/druid/class-features/primal-order-magician.yml +1/-1
+  modified system.json +2/-2
+  modified templates/chat/request-card.hbs +1/-1
+  modified templates/chat/roll-breakdown.hbs +6/-6
+=== release-6.0.2...release-6.0.3 ===
+commits: 7 files: 9
+  * 160e7ff Add Arcana Unleashed & Deadfall to Welcome Dialog
+  * 0fd354f Allow ActorDeltas to inherit migrated child documents from the base actor rather than persisting them themselves.
+  * a5fef9c [#7474] Fix undefined variable.
+  * f8eb5b2 [#7480] Fix filtering out effects from container sheet.
+  * 052a1a3 [#7475] Fix advantage mode counts when parent roll data is missing (#7476)
+  * 20aa22c [#7482] [#7484] Do not add expiry for duration-less effects.
+  * 63e3769 Increment system version for 6.0.3 release.
+-- files --
+  modified json/official-content.json +8/-0
+  modified module/applications/item/container-sheet.mjs +1/-1
+  modified module/data/shared/d20-roll-modification-field.mjs +9/-0
+  modified module/documents/active-effect.mjs +4/-2
+  modified module/migration.mjs +10/-1
+  modified module/utils.mjs +1/-1
+  modified system.json +2/-2
+  added    ui/official/products/dnd-arcana-unleashed.webp +0/-0
+  added    ui/official/products/dnd-deadfall.webp +0/-0

@@ -1,0 +1,15 @@
+module/applications/actor/api/base-actor-sheet.mjs
+module/applications/item/container-sheet.mjs
+module/data/actor/group.mjs
+module/data/actor/npc.mjs
+module/data/chat-message/request-message-data.mjs
+module/data/shared/d20-roll-modification-field.mjs
+module/dice/basic-roll.mjs
+module/documents/active-effect.mjs
+module/documents/actor/actor.mjs
+module/documents/applied-rules.mjs
+module/documents/item.mjs
+module/documents/token.mjs
+module/enrichers.mjs
+module/migration.mjs
+module/utils.mjs

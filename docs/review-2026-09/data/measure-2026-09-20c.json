@@ -1,0 +1,259 @@
+{
+  "measuredAt": "2026-09-20T16:19:57.631Z",
+  "toolsList": {
+    "count": 151,
+    "chars": 283948
+  },
+  "rows": [
+    {
+      "name": "search-compendium-creatures",
+      "args": {
+        "query": "goblin"
+      },
+      "chars": 20073,
+      "tokens": 5576,
+      "truncated": true,
+      "isError": false,
+      "ms": 627,
+      "schemaBytes": 1238
+    },
+    {
+      "name": "list-actor-ownership",
+      "args": {},
+      "chars": 20073,
+      "tokens": 5576,
+      "truncated": true,
+      "isError": false,
+      "ms": 190,
+      "schemaBytes": 274
+    },
+    {
+      "name": "list-items",
+      "args": {},
+      "chars": 16392,
+      "tokens": 4553,
+      "truncated": false,
+      "isError": false,
+      "ms": 145,
+      "schemaBytes": 349
+    },
+    {
+      "name": "search-compendium-spells",
+      "args": {
+        "query": "fire"
+      },
+      "chars": 14979,
+      "tokens": 4161,
+      "truncated": false,
+      "isError": false,
+      "ms": 534,
+      "schemaBytes": 1377
+    },
+    {
+      "name": "list-actors",
+      "args": {},
+      "chars": 13210,
+      "tokens": 3669,
+      "truncated": false,
+      "isError": false,
+      "ms": 140,
+      "schemaBytes": 152
+    },
+    {
+      "name": "list-actors",
+      "args": {
+        "type": "npc"
+      },
+      "chars": 11946,
+      "tokens": 3318,
+      "truncated": false,
+      "isError": false,
+      "ms": 709,
+      "schemaBytes": 152
+    },
+    {
+      "name": "list-scenes",
+      "args": {},
+      "chars": 9698,
+      "tokens": 2694,
+      "truncated": false,
+      "isError": false,
+      "ms": 153,
+      "schemaBytes": 248
+    },
+    {
+      "name": "list-journals",
+      "args": {},
+      "chars": 9660,
+      "tokens": 2683,
+      "truncated": false,
+      "isError": false,
+      "ms": 140,
+      "schemaBytes": 676
+    },
+    {
+      "name": "search-compendium",
+      "args": {
+        "query": "sword"
+      },
+      "chars": 8954,
+      "tokens": 2487,
+      "truncated": false,
+      "isError": false,
+      "ms": 7826,
+      "schemaBytes": 556
+    },
+    {
+      "name": "list-macros",
+      "args": {},
+      "chars": 8633,
+      "tokens": 2398,
+      "truncated": false,
+      "isError": false,
+      "ms": 134,
+      "schemaBytes": 47
+    },
+    {
+      "name": "list-chat-messages",
+      "args": {
+        "limit": 50
+      },
+      "chars": 6135,
+      "tokens": 1704,
+      "truncated": false,
+      "isError": false,
+      "ms": 152,
+      "schemaBytes": 494
+    },
+    {
+      "name": "list-folders",
+      "args": {},
+      "chars": 5763,
+      "tokens": 1601,
+      "truncated": false,
+      "isError": false,
+      "ms": 135,
+      "schemaBytes": 248
+    },
+    {
+      "name": "list-compendium-packs",
+      "args": {},
+      "chars": 2861,
+      "tokens": 795,
+      "truncated": false,
+      "isError": false,
+      "ms": 152,
+      "schemaBytes": 116
+    },
+    {
+      "name": "get-world-info",
+      "args": {},
+      "chars": 1805,
+      "tokens": 501,
+      "truncated": false,
+      "isError": false,
+      "ms": 8840,
+      "schemaBytes": 47
+    },
+    {
+      "name": "get-current-scene",
+      "args": {},
+      "chars": 1700,
+      "tokens": 472,
+      "truncated": false,
+      "isError": false,
+      "ms": 167,
+      "schemaBytes": 304
+    },
+    {
+      "name": "list-users",
+      "args": {},
+      "chars": 835,
+      "tokens": 232,
+      "truncated": false,
+      "isError": false,
+      "ms": 124,
+      "schemaBytes": 47
+    },
+    {
+      "name": "list-playlists",
+      "args": {},
+      "chars": 690,
+      "tokens": 192,
+      "truncated": false,
+      "isError": false,
+      "ms": 157,
+      "schemaBytes": 47
+    },
+    {
+      "name": "list-tokens",
+      "args": {},
+      "chars": 185,
+      "tokens": 51,
+      "truncated": false,
+      "isError": true,
+      "ms": 1,
+      "schemaBytes": 176
+    },
+    {
+      "name": "list-walls",
+      "args": {},
+      "chars": 185,
+      "tokens": 51,
+      "truncated": false,
+      "isError": true,
+      "ms": 1,
+      "schemaBytes": 371
+    },
+    {
+      "name": "list-lights",
+      "args": {},
+      "chars": 185,
+      "tokens": 51,
+      "truncated": false,
+      "isError": true,
+      "ms": 1,
+      "schemaBytes": 176
+    },
+    {
+      "name": "list-regions",
+      "args": {},
+      "chars": 185,
+      "tokens": 51,
+      "truncated": false,
+      "isError": true,
+      "ms": 3,
+      "schemaBytes": 153
+    },
+    {
+      "name": "list-notes",
+      "args": {},
+      "chars": 185,
+      "tokens": 51,
+      "truncated": false,
+      "isError": true,
+      "ms": 2,
+      "schemaBytes": 176
+    },
+    {
+      "name": "list-rolltables",
+      "args": {},
+      "chars": 181,
+      "tokens": 50,
+      "truncated": false,
+      "isError": false,
+      "ms": 140,
+      "schemaBytes": 47
+    },
+    {
+      "name": "list-cards",
+      "args": {},
+      "chars": 21,
+      "tokens": 6,
+      "truncated": false,
+      "isError": false,
+      "ms": 119,
+      "schemaBytes": 47
+    }
+  ]
+}

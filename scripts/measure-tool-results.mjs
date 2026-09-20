@@ -3,14 +3,17 @@
 // This is the number that costs context in Claude Code (where tool schemas are deferred and the
 // results are the bulk of what an MCP puts into the conversation).
 //
-//   FOUNDRY_HOST=local node scripts/measure-tool-results.mjs [--json out.json]
+//   FOUNDRY_HOST=local node scripts/measure-tool-results.mjs [--json out.json] [--bodies dir]
+//
+// --bodies writes each call's full result text to <dir>/<tool>[.<n>].txt so the SHAPE of what a
+// client receives can be read, not just its size (which fields a list returns, where a cap cuts).
 //
 // Read-only: nothing is created or changed in the world. The bridge connects once (first call).
 // Prints a table (tool · args · chars · ~tokens · truncated?) sorted by size, plus the tools/list
 // size for the same registration, so a review can put both numbers side by side.
 
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -19,6 +22,11 @@ const SERVER = join(__dirname, '..', 'dist', 'index.js');
 const jsonOut = process.argv.includes('--json')
   ? process.argv[process.argv.indexOf('--json') + 1]
   : null;
+const bodiesDir = process.argv.includes('--bodies')
+  ? process.argv[process.argv.indexOf('--bodies') + 1]
+  : null;
+if (bodiesDir) mkdirSync(bodiesDir, { recursive: true });
+const bodyNames = new Map();
 
 // The read set. Args are the minimal, typical call a skill would make.
 const CALLS = [
@@ -118,6 +126,11 @@ try {
     const isError = res.result?.isError === true || !!res.error;
     const truncated = /chars omitted — response exceeded toolResponseMaxChars/.test(text);
     const schemaBytes = JSON.stringify(byName.get(name)?.inputSchema ?? {}).length;
+    if (bodiesDir) {
+      const n = (bodyNames.get(name) ?? 0) + 1;
+      bodyNames.set(name, n);
+      writeFileSync(join(bodiesDir, `${name}${n > 1 ? `.${n}` : ''}.txt`), text);
+    }
     rows.push({
       name,
       args,
