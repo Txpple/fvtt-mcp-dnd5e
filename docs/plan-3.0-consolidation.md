@@ -75,28 +75,28 @@ renaming milestone) → M9 → M10.
 
 ## Decisions
 
-Recorded from the review (§15) with the owner's answers of 2026-09-20 where given; the rest are
-defaults the owner can overturn before the milestone that depends on them starts.
+Recorded from the review (§15) with the owner's answers of 2026-09-20 (#1–#9, #16, #17); the rest
+are defaults the owner can overturn before the milestone that depends on them starts.
 
 | # | Decision | Recorded |
 | --- | --- | --- |
 | 1 | Consolidation shape | **b2 lossless `op` union per family, after the prose diet** — measured (review §4). Not the `describe` op; not `reused:'ref'`. |
-| 2 | Default host | **`generic`** (owner to confirm before M4): the owner's `foundry-molten5e` registration sets `FOUNDRY_HOST=molten` explicitly; today it sets nothing. |
+| 2 | Default host | **`generic`** (owner, 2026-09-20): the owner's `foundry-molten5e` registration sets `FOUNDRY_HOST=molten` explicitly when M4 lands; today it sets nothing. |
 | 3 | Skill descriptions | apply the six measured rewrites; budget ≤ 8,000 for all 17 (default). |
 | 4 | Response/schema diet timing | **inside 3.0** (owner, 2026-09-20 — no 2.3). |
 | 5 | README | **rewritten at the end of 3.0** (owner, 2026-09-20): a git-friendly page in plain English describing the project; release narratives → `CHANGELOG.md`. |
 | 6 | Registration names | keep `foundry-molten5e` / `foundry-local5e` privately (fxstudio + start-session reference them); `.mcp.json.example` shows neutral names; `foundry-local5e` demoted to a project-scope `.mcp.json` with `FOUNDRY_TOOLSETS=world` in fxstudio / battleflow / miscpatches (this repo keeps the full sandbox surface). Default. |
 | 7 | Prod version | stays dnd5e 5.3.3 / Foundry 14.364 until the owner upgrades (owner, 2026-09-20). |
-| 8 | Ops scripts (deploy / register / configure / uninstall house modules) | default: keep the four as the documented "sandbox toolkit" importing `./client` + `./hosts`; the module-specific harnesses (partystash, lootshelf, soundscape, receipt) move to their module repos; the soundscape upload scripts → `fvtt-mod-soundscape-sfx`. Owner may instead want a `fvtt-tools` sibling. |
-| 9 | Bridge file plane on `generic` | default: **build it** in M4 (2–3 days incl. live verify) — without it 9 tools and 7 skills are dead on generic, which contradicts "user-facing". |
+| 8 | Ops scripts (deploy / register / configure / uninstall house modules) | **keep here** as the documented "sandbox toolkit" importing `./client` + `./hosts` (owner, 2026-09-20); the module-specific harnesses (partystash, lootshelf, soundscape, receipt) move to their module repos; the soundscape upload scripts → `fvtt-mod-soundscape-sfx`. |
+| 9 | Bridge file plane on `generic` | **build it** in M4 (owner, 2026-09-20; 2–3 days incl. live verify) — without it 9 tools and 7 skills are dead on generic, which contradicts "user-facing". |
 | 10 | List output format | default: **one line per record** in a documented field order with a header `<N> <noun>(s) [of M]`; `get-*` = JSON with a `fields` selector; mutations = one-line confirmation; a miss is `isError`. |
 | 11 | Active-scene default for placeable tools | default: **yes** — `game.scenes.active` is one world-wide document, echoed in the result; the 6 scene-document tools stay explicit. |
 | 12 | Release scripts → `tests/integration` | default: (a) the gate fix now (M5); (b) promotion optional, not a 3.0 requirement. |
 | 13 | CLAUDE.md | default: tracked as `CONTRIBUTING.md` in M9 with a 3-line pointer; LOCAL.md stays gitignored. |
 | 14 | Premium set | default: `PREMIUM_BOOK_PREFIXES` stays the five; `dnd-arcana-unleashed` / `dnd-deadfall` added when the owner installs them; design.md §2.3 names MM/PHB/DMG as required for authoring and the rest as optional extensions. |
 | 15 | Error contract | default: both — the 3-line raw-message fix in M2's first commit, the coded contract in M6. |
-| 16 | session-scribe | default: **genericize** — per-campaign `STYLE.md` + `campaign.json`, a Windows-only note; moving it to the campaign repo is the alternative. |
-| 17 | soundscape-builder + `configure-soundscape` | default: **keep here** under a README "tools that need a companion module" section (same for `get-combat-stats`, `set-landing-scene`); moving into `fvtt-mod-soundscape` is the alternative. |
+| 16 | session-scribe | **genericize in place** (owner, 2026-09-20) — per-campaign `STYLE.md` + `campaign.json`, a Windows-only note. |
+| 17 | soundscape-builder + `configure-soundscape` | **keep here** (owner, 2026-09-20) under a README "tools that need a companion module" section (same for `get-combat-stats`, `set-landing-scene`). |
 | 18 | bestiary-builder | default: land the page-targeted compendium-journal read + page sort (tool side) and delete `bestiary-entry.mjs`; the 2-line `bridgeConfig` fix first (M2). |
 | 19 | tom-cartos-import defaults | default: pack-faithful import as the default; maps-only and the autoexplore stamp as asked-for options. |
 | 20 | Tools no skill names (51) | decided per tool in M8's family commit: plain feature (documented) or dropped. |
