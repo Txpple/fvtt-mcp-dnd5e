@@ -130,4 +130,8 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   consumers; no 2.3; README last; prod stays 5.3.3); the review
   (`docs/architecture-review-2026-09.md`, `c327ac6`) measured the baselines; **M1 done**
   (`c53c2de`) with the launcher / verify-wake fix (`96ed726`); this tracker opened; design.md
-  scrubbed of Phase 2 and its §4 updated; HANDOFF.md retired.
+  scrubbed of Phase 2 and its §4 updated; HANDOFF.md retired; owner decisions #2, #8, #9, #16, #17
+  answered (`d42dd93`). **Next: M0.** Open for the owner: `verify-wake.mjs` ran against prod for
+  ~2 min before `96ed726` (its first step is a world shutdown; the wake was in progress when
+  killed) — check the Molten panel; a bridge connect relaunches the world if it went down.
+  Nothing pushed yet.
