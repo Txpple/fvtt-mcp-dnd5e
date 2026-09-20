@@ -40,6 +40,19 @@ export class FormattedToolError extends Error {
   }
 }
 
+/**
+ * The page's own words, without the plumbing: the bridge's `foundry.call(…) failed:` wrapper,
+ * Playwright's `page.evaluate: Error: ` prefix, and the in-page stack that page.evaluate folds
+ * into the message after the first line.
+ */
+export function rawPageMessage(raw: string): string {
+  return raw
+    .replace(/^foundry\.call\('[^']+'\) failed: /, '')
+    .replace(/^page\.evaluate: (?:Error: )?/, '')
+    .split(/\r?\n\s+at /)[0]
+    .trim();
+}
+
 export class ErrorHandler {
   private logger: Logger;
 
@@ -242,9 +255,10 @@ export class ErrorHandler {
    * Map + log an arbitrary tool error into a user-facing message — the form used by the central
    * dispatch wrapper for every error a tool doesn't curate itself. Crucially it does
    * NOT flatten messages that are already specific: zod validation errors keep their field-level
-   * detail, and the generic catch-all falls back to the raw message rather than the vague
-   * "An unexpected error occurred". So central handling only ADDS value (cold-box / permission /
-   * not-found guidance) and never degrades an already-informative message.
+   * detail, the generic catch-all falls back to the raw message rather than the vague
+   * "An unexpected error occurred", and every classified message ends with the page's own words
+   * ("Foundry said: …") — the classifier is a substring heuristic, so its guidance is a hint and
+   * the original text is the fact. Central handling only ADDS value and never hides the message.
    */
   toUserMessage(error: any, toolName: string): string {
     const raw = error instanceof Error ? error.message : String(error);
@@ -258,7 +272,7 @@ export class ErrorHandler {
     if (mcpError.type === 'system' && mcpError.message === 'An unexpected error occurred') {
       return raw;
     }
-    return this.formatErrorMessage(mcpError, toolName);
+    return `${this.formatErrorMessage(mcpError, toolName)} Foundry said: ${rawPageMessage(raw)}`;
   }
 }
 
