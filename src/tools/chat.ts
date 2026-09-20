@@ -39,14 +39,13 @@ const ImageSchema = z.object({
   caption: z.string().optional().describe('Optional caption shown under the image.'),
   alt: z.string().optional().describe('Optional alt text (defaults to the caption).'),
   embed: z
-    .enum(['upload', 'webdav', 'dataUri'])
+    .enum(['upload', 'dataUri'])
     .default('upload')
     .describe(
-      "upload (default; 'webdav' is accepted as an alias) = upload a local file to the world through " +
-        "the host's file plane and link its public URL " +
-        '(http/Data-relative paths are linked as-is). dataUri = inline the LOCAL file directly into ' +
-        'the message HTML as a base64 data: URI — self-contained, no upload, but it bloats the ' +
-        'message in the world DB, so keep it for small images.'
+      'upload (default) = upload a local file to the world through the file plane and link its ' +
+        'public URL (http/Data-relative paths are linked as-is). dataUri = inline the LOCAL file ' +
+        'directly into the message HTML as a base64 data: URI — self-contained, no upload, but it ' +
+        'bloats the message in the world DB, so keep it for small images.'
     ),
 });
 
@@ -368,7 +367,7 @@ export class ChatTools {
       path: string;
       caption?: string | undefined;
       alt?: string | undefined;
-      embed?: 'upload' | 'webdav' | 'dataUri' | undefined;
+      embed?: 'upload' | 'dataUri' | undefined;
     }>,
     folder: string,
     overwrite: boolean

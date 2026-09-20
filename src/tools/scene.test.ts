@@ -543,6 +543,25 @@ describe('handleGetWorldInfo', () => {
     );
   });
 
+  it('passes the bridge user and the premium-book presence through', async () => {
+    const { tools } = build({
+      ...worldData,
+      bridgeUser: { name: 'MCP-Claude', role: 'ASSISTANT' },
+      library: {
+        'dnd-monster-manual': 'present',
+        'dnd-players-handbook': 'present',
+        'dnd-dungeon-masters-guide': 'missing',
+      },
+    });
+    const out = await tools.handleGetWorldInfo({});
+    expect(out.bridgeUser).toEqual({ name: 'MCP-Claude', role: 'ASSISTANT' });
+    expect(out.library).toEqual({
+      'dnd-monster-manual': 'present',
+      'dnd-players-handbook': 'present',
+      'dnd-dungeon-masters-guide': 'missing',
+    });
+  });
+
   it('leaves the world description HTML and join background out (no skill reads them)', async () => {
     const { tools } = build({
       ...worldData,

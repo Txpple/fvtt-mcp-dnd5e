@@ -11,8 +11,32 @@
 // /auth and /setup redirect to /join) or a role-4 GAMEMASTER session — the bridge user is a
 // role-3 ASSISTANT and stays that way by decision. Don't rebuild this without revisiting that.
 
+import { PREMIUM_BOOK_PREFIXES } from '../utils/compendium-sources.js';
 import { readCalendar } from './dnd5e/calendar.js';
 import { readDnd5eSettings } from './dnd5e/settings.js';
+
+/** Role number → the name Foundry uses (CONST.USER_ROLES), for the bridge-user report. */
+function roleName(role: number): string {
+  const table: Record<string, number> = (globalThis as any).CONST?.USER_ROLES ?? {};
+  return Object.keys(table).find(k => table[k] === role) ?? String(role);
+}
+
+/**
+ * Which premium books (design.md §2.3 — the ONE definition in utils/compendium-sources.ts) have
+ * packs registered in this world: `present` when any pack carries the book's prefix (an
+ * installed but inactive module registers none), else `missing`.
+ */
+function libraryPresence(): Record<string, 'present' | 'missing'> {
+  const packIds: string[] = game.packs.map((p: any) =>
+    String(p.collection ?? p.metadata?.id ?? '')
+  );
+  const out: Record<string, 'present' | 'missing'> = {};
+  for (const prefix of PREMIUM_BOOK_PREFIXES) {
+    const id = prefix.replace(/\.$/, '');
+    out[id] = packIds.some(p => p.startsWith(prefix)) ? 'present' : 'missing';
+  }
+  return out;
+}
 
 /** The calendar's headline facts for the world summary (date + time strings, enabled). */
 function calendarSummary(): Record<string, unknown> {
@@ -40,6 +64,10 @@ interface WorldInfo {
   systemVersion: string;
   foundryVersion: string;
   users: WorldUser[];
+  /** The user the bridge joined as, and its role — writes need ASSISTANT or GAMEMASTER. */
+  bridgeUser: { name: string; role: string };
+  /** The premium books (§2.3): which have packs in this world (dnd5e only). */
+  library?: Record<string, 'present' | 'missing'>;
   /** dnd5e 6.0 automation switches + the calendar (present on a dnd5e world only). */
   automation?: Record<string, unknown>;
 }
@@ -65,6 +93,11 @@ export function getWorldInfo(): WorldInfo {
   }
   return {
     ...(automation ? { automation } : {}),
+    ...(game.system.id === 'dnd5e' ? { library: libraryPresence() } : {}),
+    bridgeUser: {
+      name: String(game.user?.name ?? ''),
+      role: roleName(Number(game.user?.role ?? 0)),
+    },
     id: game.world.id,
     title: game.world.title,
     description: String((game.world as any).description ?? ''),

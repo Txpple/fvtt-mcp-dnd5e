@@ -174,11 +174,22 @@ export class Foundry implements FoundryBridge {
     await this.ensureWorldReady(this.page);
     await this.joinWorld(this.page);
     await this.injectBundle(this.page);
-    this.liveWorldId = await this.page.evaluate(
-      () => (globalThis as { game?: { world?: { id?: string } } }).game?.world?.id ?? ''
-    );
+    const who = await this.page.evaluate(() => {
+      const g = (globalThis as { game?: { world?: { id?: string }; user?: { role?: number } } })
+        .game;
+      return { worldId: g?.world?.id ?? '', role: Number(g?.user?.role ?? 0) };
+    });
+    this.liveWorldId = who.worldId;
     this.ready = true;
     this.log.info(`connected as "${this.cfg.user}" — game.ready (world "${this.liveWorldId}")`);
+    // Nearly every tool writes as a GM; a lower role fails call by call with Foundry's own
+    // permission errors, so say it once here (CONST.USER_ROLES: ASSISTANT = 3, GAMEMASTER = 4).
+    if (who.role < 3) {
+      this.log.warn(
+        `bridge user "${this.cfg.user}" has role ${who.role} (below Assistant GM) — every write ` +
+          'tool will be refused by Foundry. Give the user the Gamemaster or Assistant GM role.'
+      );
+    }
     this.warmIndexes();
   }
 

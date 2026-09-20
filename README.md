@@ -236,8 +236,16 @@ tests/              gated live integration suites (offline unit tests live besid
 - A **Chromium for Playwright** — `npx playwright install chromium` (Playwright is a devDependency;
   the headless bridge drives this browser).
 - **Foundry VTT 14.368+** with the **D&D 5e system 6.0.3+** (2.x is the dnd5e **6.x** line and
-  refuses to author against an older system; v1.5.2 is the last release that runs on dnd5e 5.3.x), hosted on **Molten**, plus a dedicated **passwordless Foundry user**
-  for the MCP to join as.
+  refuses to author against an older system; v1.5.2 is the last release that runs on dnd5e 5.3.x),
+  anywhere it runs (Molten Hosting, this machine, a URL — `FOUNDRY_HOST`), plus a dedicated
+  **Foundry user** for the MCP to join as (Users → Create User, role Gamemaster or Assistant GM;
+  `FOUNDRY_USER`, default `MCP-Claude`; a lower role is warned about at connect and every write
+  fails).
+- **The premium 2024 books as Foundry modules** — the *Monster Manual*, *Player's Handbook* and
+  *Dungeon Master's Guide* (`dnd-monster-manual`, `dnd-players-handbook`,
+  `dnd-dungeon-masters-guide`) are **required for authoring** (the skills copy from them, never
+  from the SRD); *Heroes of Faerûn* and *Ravenloft: The Horrors Within* are optional extensions.
+  `get-world-info` reports each as `present` / `missing`; the non-authoring tools work with none.
 
 ## Build
 

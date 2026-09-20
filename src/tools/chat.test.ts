@@ -180,6 +180,16 @@ describe('send-chat-message', () => {
     expect(forwarded).toContain('<img src="data:image/webp;base64,AQID"');
   });
 
+  it('the embed modes are upload and dataUri — the 2.x plane name is refused by name', async () => {
+    const { tools } = build();
+    await expect(
+      tools.handleSendChatMessage({
+        content: '<p>x</p>',
+        images: [{ path: 'C:/x.png', embed: 'webdav' }],
+      })
+    ).rejects.toThrow(/embed/);
+  });
+
   it('refuses embed:"dataUri" for an http URL', async () => {
     const { tools } = build();
     const out = await tools.handleSendChatMessage({

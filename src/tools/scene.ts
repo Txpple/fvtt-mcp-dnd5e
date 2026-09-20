@@ -959,6 +959,11 @@ export class SceneTools {
             name: u.name,
             isGM: u.isGM,
           })) || [],
+      // The user the bridge joined as and its role (writes need ASSISTANT / GAMEMASTER).
+      ...(worldData.bridgeUser ? { bridgeUser: worldData.bridgeUser } : {}),
+      // The premium books (design.md §2.3): present = packs registered, missing = not installed
+      // or inactive. The authoring skills need MM / PHB / DMG; the rest are optional extensions.
+      ...(worldData.library ? { library: worldData.library } : {}),
       // dnd5e 6.0 automation switches + the calendar (configure-dnd5e-settings / manage-calendar)
       ...(worldData.automation ? { automation: worldData.automation } : {}),
     };

@@ -48,12 +48,13 @@ Content is HTML. Keep these shapes consistent:
     1. **Embed in the HTML** (`embed: "dataUri"`) — the image bytes are read and inlined into the message
        itself as a base64 `data:` URI. Self-contained, nothing left at a path on the server, but it
        bloats the message in the world DB — keep it for small images.
-    2. **Upload to WebDAV at a location** (`embed: "webdav"`, the default) — confirm/choose a
-       Data-relative folder (default `worlds/<world>/assets/chat`), upload the file there, and link its
-       public URL. Permanent and reusable. ⚠️ Served PUBLICLY with no auth — nothing sensitive.
+    2. **Upload to the world at a location** (`embed: "upload"`, the default) — confirm/choose a
+       Data-relative folder (default `worlds/<world>/assets/chat`), upload the file there through the
+       file plane, and link its public URL. Permanent and reusable. ⚠️ Served PUBLICLY with no auth —
+       nothing sensitive.
   If the user already signalled which (e.g. "just embed it" / "put it at worlds/.../maps"), skip the ask
   and do that. Example:
-  `send-chat-message { content: "<p>You find a map.</p>", visibility: "public", images: [{ path: "C:/maps/treasure.webp", caption: "The treasure map", embed: "webdav" }] }`
+  `send-chat-message { content: "<p>You find a map.</p>", visibility: "public", images: [{ path: "C:/maps/treasure.webp", caption: "The treasure map", embed: "upload" }] }`
 
 ## Rich dnd5e cards and roll requests
 
@@ -78,10 +79,12 @@ export-chat-log {
 }
 ```
 
-Then report the local path AND the returned public URL. If `MOLTEN_WEBDAV_PASSWORD` isn't set, the
-WebDAV copy is skipped — fall back to local-only and say so. Formats: `markdown`/`plaintext` (readable,
-HTML stripped, roll totals kept), `html` (raw markup, unstyled — not the rendered card), `json`
-(lossless structured records).
+Then report the local path AND the returned public URL. The remote copy goes through the file plane
+(every host has one; an `html` export needs a direct plane — `FOUNDRY_DATA_DIR` or
+`FOUNDRY_WEBDAV_*` — because Foundry's own uploader takes md / txt / json but not html). If the tool
+refuses the remote copy, fall back to local-only and say so. Formats: `markdown`/`plaintext`
+(readable, HTML stripped, roll totals kept), `html` (raw markup, unstyled — not the rendered card),
+`json` (lossless structured records).
 
 ## Chat hygiene
 
