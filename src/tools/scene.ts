@@ -270,14 +270,14 @@ const CreateSceneSchema = z.object({
     .array(SidecarWallSchema)
     .optional()
     .describe(
-      'Walls to import from a map sidecar JSON (the `walls` array of a Foundry scene-export ' +
-        'sidecar that ships next to a map). Created after the scene exists; coordinates are ' +
-        'absolute canvas pixels, so pass the sidecar width/height/gridSize/padding too.'
+      'Inline walls (the sidecar `walls` array). For a file on disk use `placeablesPath` instead — ' +
+        'the arrays are then read whole, server-side. Coordinates are absolute canvas pixels, so ' +
+        'pass the sidecar width/height/gridSize/padding too.'
     ),
   lights: z
     .array(SidecarLightSchema)
     .optional()
-    .describe('Ambient lights to import from a map sidecar JSON (the `lights` array).'),
+    .describe('Inline ambient lights (the sidecar `lights` array); see `placeablesPath`.'),
   regions: z
     .array(RegionSidecarSchema)
     .optional()
@@ -290,10 +290,10 @@ const CreateSceneSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Server-local path to a JSON file of {walls,lights,regions} to place (as written by read-pack ' +
-        'for a scene-pack import). Read SERVER-SIDE and merged with any inline placeables — this routes ' +
-        "a pack's hundreds of walls/lights/regions tool→tool without passing them through the agent (the " +
-        'MCP response cap makes inline placeables infeasible at scene scale).'
+      'Server-local path to a JSON with {walls,lights,regions} arrays — a map sidecar (a Foundry ' +
+        'scene export) or the file read-pack writes. Read SERVER-SIDE, whole, and merged with any ' +
+        'inline placeables: hundreds of walls never pass through the agent and no field is lost in a ' +
+        'hand remap.'
     ),
   width: z
     .number()
@@ -438,10 +438,9 @@ export class SceneTools {
           'distance/units/color/alpha, token vision, fog mode, lighting (darkness, global light, or a ' +
           'whole environment{}/fog{} mood object + saved camera for pack imports), weather, a linked ' +
           'playlist/journal, a nav thumbnail, padding, provenance flags, and ' +
-          'activate it. Can also IMPORT walls + ' +
-          'ambient lights from a map sidecar JSON (the `walls`/`lights` arrays many battlemaps ship ' +
-          'alongside the image): pass them and they are placed on the new scene (legacy or v14 shapes ' +
-          'both accepted, normalized to v14). GM-only.',
+          'activate it. Can also IMPORT the walls + ambient lights (+ regions) of a map sidecar JSON: ' +
+          '`placeablesPath` reads the file server-side, whole; legacy or v14 shapes, normalized to ' +
+          'v14. GM-only.',
         inputSchema: toInputSchema(CreateSceneSchema),
       },
       {

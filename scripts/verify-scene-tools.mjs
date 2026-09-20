@@ -6,10 +6,13 @@
 // ZZ-MCP-ST and deleted in a finally.
 //
 // Build first: npm run build. Run: node scripts/verify-scene-tools.mjs
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { SceneTools } from '../dist/tools/scene.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -232,6 +235,65 @@ try {
     () => foundry.call('updateScene', { sceneIdentifier: c1.sceneId, journal: 'NoSuchJournalXYZ' }),
     'No journal found'
   );
+
+  // ---- 9. a map sidecar through placeablesPath (F29: scene-builder's path) ----
+  // A legacy Dungeon-Alchemist-style export next to a v14-shaped wall and light, handed to the
+  // Node handler as a FILE: the arrays are read server-side, whole, and normalized — the legacy
+  // `sense` drives sight AND light, a v14 light keeps its whole `config` (luminosity, animation).
+  const dir = mkdtempSync(join(tmpdir(), 'mcp-sidecar-'));
+  const sidecar = join(dir, 'map.json');
+  writeFileSync(
+    sidecar,
+    JSON.stringify({
+      width: 1200, height: 800, grid: 100, gridDistance: 5, gridUnits: 'ft', padding: 0,
+      walls: [
+        { c: [100, 100, 500, 100], move: 1, sense: 2, sound: 1, door: 0 }, // legacy LIMITED
+        { c: [500, 100, 500, 500], move: 20, sight: 0, light: 0, sound: 20, door: 0 }, // v14 see-through
+      ],
+      lights: [
+        { x: 300, y: 300, dim: 30, bright: 15, tintColor: '#ff9329', tintAlpha: 0.5 }, // legacy
+        { x: 700, y: 300, rotation: 0, config: { dim: 40, bright: 20, color: '#ffb066', alpha: 0.4,
+          luminosity: 0.25, attenuation: 0.75, animation: { type: 'torch', speed: 5, intensity: 5 } } },
+      ],
+    })
+  );
+  try {
+    const tools = new SceneTools({ foundry, logger: new Logger({ level: 'error', format: 'simple' }) });
+    const text = await tools.handleCreateScene({
+      name: `${TAG}-sidecar`, backgroundPath: BG_VECTOR,
+      width: 1200, height: 800, gridSize: 100, gridDistance: 5, gridUnits: 'ft', padding: 0,
+      placeablesPath: sidecar,
+    });
+    const back = await foundry.evaluate(name => {
+      const s = globalThis.game.scenes.find(x => x.name === name);
+      if (!s) return null;
+      const w = s.walls.contents.map(x => ({ c: x.c, sight: x.sight, light: x.light, move: x.move }));
+      const l = s.lights.contents.map(x => ({ x: x.x, luminosity: x.config?.luminosity, anim: x.config?.animation?.type, dim: x.config?.dim }));
+      return { id: s.id, walls: w, lights: l };
+    }, `${TAG}-sidecar`);
+    if (back?.id) createdSceneIds.push(back.id);
+    /imported: 2 wall\(s\), 2 light\(s\)/.test(text)
+      ? pass('placeablesPath: 2 walls + 2 lights placed from the file', text.match(/imported:[^\n]*/)?.[0])
+      : fail('placeablesPath: 2 walls + 2 lights placed from the file', text);
+    const legacy = back?.walls?.find(w => w.c?.[0] === 100);
+    legacy?.sight === 10 && legacy?.light === 10 && legacy?.move === 20
+      ? pass('legacy sense:2 → v14 sight 10 + light 10, move 1 → 20')
+      : fail('legacy sense:2 → v14 sight 10 + light 10, move 1 → 20', JSON.stringify(legacy));
+    const v14 = back?.walls?.find(w => w.c?.[0] === 500);
+    v14?.sight === 0 && v14?.light === 0
+      ? pass('v14 sight:0 kept (see-through wall stays see-through)')
+      : fail('v14 sight:0 kept (see-through wall stays see-through)', JSON.stringify(v14));
+    const torch = back?.lights?.find(l => l.x === 700);
+    torch?.luminosity === 0.25 && torch?.anim === 'torch' && torch?.dim === 40
+      ? pass('v14 light config carried whole (luminosity 0.25, torch animation)')
+      : fail('v14 light config carried whole (luminosity 0.25, torch animation)', JSON.stringify(torch));
+    const legacyLight = back?.lights?.find(l => l.x === 300);
+    legacyLight?.dim === 30
+      ? pass('legacy light dim/bright normalized into config')
+      : fail('legacy light dim/bright normalized into config', JSON.stringify(legacyLight));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 } catch (e) {
   fail('SUITE', e?.message || String(e));
 } finally {
