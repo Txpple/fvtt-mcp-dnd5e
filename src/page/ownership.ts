@@ -35,83 +35,103 @@ function findActorByIdentifier(identifier: string): any {
   return undefined;
 }
 
+/** A non-GM user's effective level: the explicit entry when there is one, else the actor default. */
+function effectiveLevel(actor: any, user: any): number {
+  return actor.testUserPermission(user, 'OWNER')
+    ? 3
+    : actor.testUserPermission(user, 'OBSERVER')
+      ? 2
+      : actor.testUserPermission(user, 'LIMITED')
+        ? 1
+        : 0;
+}
+
 /**
- * List ownership permissions per actor/player. Optionally narrow to a single
- * actor (or "all"), and/or a single player. GM users are always excluded.
+ * List ownership per actor. Optionally narrow to a single actor (or "all") and/or a single
+ * player. GM users are always excluded (they test as OWNER on everything).
  *
- * Reports the EFFECTIVE level and where it came from. `testUserPermission` alone
- * collapses the two states setActorOwnership is careful to keep apart: an explicit
- * level-0 entry and an absent key both read as NONE, and an inherited OWNER reads
- * the same as a granted one. So each row also carries `source` ('explicit' when the
- * actor's ownership map holds a key for that user, 'inherited' when the actor
- * `default` is supplying the level) plus the raw explicit level, and each actor
- * carries its `default`. Without that, a GM cannot tell whether to call
- * set-actor-ownership with NONE or INHERIT.
+ * Two shapes, both keeping the distinction setActorOwnership is careful about — an explicit
+ * level-0 entry (a stored deny that overrides a permissive default) is NOT an absent key:
+ *
+ *   - compact (default): per actor `{id, name, default, explicit?: {<user name>: <level>}}` —
+ *     the explicit entries only; a player absent from `explicit` inherits `default`. Actors
+ *     whose ownership is trivial (default NONE and no explicit entry) are counted, not listed,
+ *     unless one actor was asked for by name.
+ *   - verbose: every actor asked for, with a row per non-GM user reporting the EFFECTIVE level
+ *     plus its `source` ('explicit' / 'inherited') and the raw explicit level.
  */
 export function getActorOwnership(args?: {
   actorIdentifier?: string;
   playerIdentifier?: string;
+  verbose?: boolean;
 }): unknown {
   const actorIdentifier = args?.actorIdentifier;
   const playerIdentifier = args?.playerIdentifier;
+  const single = !!actorIdentifier && actorIdentifier !== 'all';
 
-  const actors: any[] = actorIdentifier
-    ? actorIdentifier === 'all'
-      ? (game.actors?.contents ?? [])
-      : [findActorByIdentifier(actorIdentifier)].filter(Boolean)
+  const actors: any[] = single
+    ? [findActorByIdentifier(actorIdentifier)].filter(Boolean)
     : (game.actors?.contents ?? []);
 
-  const users: any[] = playerIdentifier
-    ? [game.users?.getName(playerIdentifier) || game.users?.get(playerIdentifier)].filter(Boolean)
-    : (game.users?.contents ?? []);
+  const users: any[] = (
+    playerIdentifier
+      ? [game.users?.getName(playerIdentifier) || game.users?.get(playerIdentifier)].filter(Boolean)
+      : (game.users?.contents ?? [])
+  ).filter((u: any) => u && !u.isGM);
 
-  const ownershipInfo: any[] = [];
+  const levelName = (level: number) => PERMISSION_NAMES[level] ?? String(level);
+  const rows: any[] = [];
+  let trivial = 0;
 
   for (const actor of actors) {
     const map: Record<string, number> = actor.ownership ?? {};
     const defaultLevel = typeof map.default === 'number' ? map.default : 0;
 
-    const actorInfo: any = {
-      id: actor.id,
-      name: actor.name,
-      type: actor.type,
-      defaultPermission: PERMISSION_NAMES[defaultLevel] ?? String(defaultLevel),
-      numericDefaultPermission: defaultLevel,
-      ownership: [],
-    };
-
-    for (const user of users.filter((u: any) => u && !u.isGM)) {
-      const permission = actor.testUserPermission(user, 'OWNER')
-        ? 3
-        : actor.testUserPermission(user, 'OBSERVER')
-          ? 2
-          : actor.testUserPermission(user, 'LIMITED')
-            ? 1
-            : 0;
-
-      // An explicit entry can hold ANY level, 0 included — presence of the key is the
-      // question, not its value, so hasOwn rather than a truthiness/`?? null` test.
-      const hasExplicit = Object.hasOwn(map, user.id);
-      const explicitLevel = hasExplicit ? map[user.id] : null;
-
-      actorInfo.ownership.push({
-        userId: user.id,
-        userName: user.name,
-        permission: PERMISSION_NAMES[permission],
-        numericPermission: permission,
-        source: hasExplicit ? 'explicit' : 'inherited',
-        explicitPermission:
-          explicitLevel === null
-            ? null
-            : (PERMISSION_NAMES[explicitLevel] ?? String(explicitLevel)),
-        numericExplicitPermission: explicitLevel,
+    if (args?.verbose) {
+      rows.push({
+        id: actor.id,
+        name: actor.name,
+        type: actor.type,
+        defaultPermission: levelName(defaultLevel),
+        numericDefaultPermission: defaultLevel,
+        ownership: users.map((user: any) => {
+          // An explicit entry can hold ANY level, 0 included — presence of the key is the
+          // question, not its value, so hasOwn rather than a truthiness/`?? null` test.
+          const hasExplicit = Object.hasOwn(map, user.id);
+          const explicitLevel = hasExplicit ? map[user.id] : null;
+          const permission = effectiveLevel(actor, user);
+          return {
+            userId: user.id,
+            userName: user.name,
+            permission: levelName(permission),
+            numericPermission: permission,
+            source: hasExplicit ? 'explicit' : 'inherited',
+            explicitPermission: explicitLevel === null ? null : levelName(explicitLevel),
+            numericExplicitPermission: explicitLevel,
+          };
+        }),
       });
+      continue;
     }
 
-    ownershipInfo.push(actorInfo);
+    const explicit: Record<string, string> = {};
+    for (const user of users) {
+      if (Object.hasOwn(map, user.id)) explicit[user.name] = levelName(map[user.id]!);
+    }
+    const hasExplicit = Object.keys(explicit).length > 0;
+    if (!single && !hasExplicit && defaultLevel === 0) {
+      trivial++;
+      continue;
+    }
+    rows.push({
+      id: actor.id,
+      name: actor.name,
+      default: levelName(defaultLevel),
+      ...(hasExplicit ? { explicit } : {}),
+    });
   }
 
-  return ownershipInfo;
+  return { ownership: rows, total: actors.length, listed: rows.length, trivialOmitted: trivial };
 }
 
 /**

@@ -54,6 +54,10 @@ const ListActorOwnershipSchema = z.object({
     .string()
     .optional()
     .describe('Optional: specific player name to check ownership for'),
+  verbose: z
+    .boolean()
+    .optional()
+    .describe('Per-player matrix (effective level + source) for every actor asked; narrow first.'),
 });
 
 export class OwnershipTools {
@@ -79,7 +83,7 @@ export class OwnershipTools {
       {
         name: 'list-actor-ownership',
         description:
-          "List current ownership permissions for actors, showing which players have what access levels. Each row reports the EFFECTIVE level plus its `source`: 'explicit' (the actor's ownership map holds an entry for that player) or 'inherited' (the actor's `default`, also reported per actor as defaultPermission). Use it to tell an explicit NONE — a stored deny that overrides a permissive default — from a player who simply has no entry.",
+          'List actor ownership: a row per actor with explicit entries or a non-NONE default — {id, name, default, explicit: {<player>: <level>}}. A player absent from explicit inherits default; an explicit NONE is a stored deny. Trivial actors (default NONE, no entries) are counted, not listed; name one to see it. verbose: the per-player matrix.',
         inputSchema: toInputSchema(ListActorOwnershipSchema),
       },
     ];
@@ -173,20 +177,28 @@ export class OwnershipTools {
    * List actor ownership permissions
    */
   private async listActorOwnership(args: any) {
-    const { actorIdentifier, playerIdentifier } = ListActorOwnershipSchema.parse(args ?? {});
+    const { actorIdentifier, playerIdentifier, verbose } = ListActorOwnershipSchema.parse(
+      args ?? {}
+    );
 
     this.logger.info(
       `Listing actor ownership for actor: "${actorIdentifier || 'all'}", player: "${playerIdentifier || 'all'}"`
     );
 
-    const ownershipData = await this.foundry.call('getActorOwnership', {
+    const data = await this.foundry.call('getActorOwnership', {
       actorIdentifier,
       playerIdentifier,
+      verbose,
     });
 
+    const summary = verbose
+      ? `${data.listed} actor(s), a row per player`
+      : `${data.listed} of ${data.total} actor(s) with explicit entries or a non-NONE default; ` +
+        `${data.trivialOmitted} inherit default NONE with no entries (not listed)`;
     return {
       success: true,
-      ownership: ownershipData,
+      summary,
+      ownership: data.ownership,
     };
   }
 

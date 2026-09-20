@@ -213,16 +213,32 @@ describe('set-actor-ownership (assignActorOwnership)', () => {
 });
 
 describe('list-actor-ownership (listActorOwnership)', () => {
-  it('forwards identifiers to getActorOwnership and wraps the result', async () => {
-    const ownership = [{ actor: 'Aragorn', players: [{ name: 'John', level: 'OWNER' }] }];
-    const { tools, calls } = build(ownership);
+  it('forwards identifiers to getActorOwnership and summarises the compact result', async () => {
+    const ownership = [{ id: 'a1', name: 'Aragorn', default: 'NONE', explicit: { John: 'OWNER' } }];
+    const { tools, calls } = build({ ownership, total: 168, listed: 1, trivialOmitted: 167 });
     const out = await tools.handleToolCall('list-actor-ownership', {
       actorIdentifier: 'Aragorn',
       playerIdentifier: 'John',
     });
     expect(calls[0][0]).toBe('getActorOwnership');
-    expect(calls[0][1]).toEqual({ actorIdentifier: 'Aragorn', playerIdentifier: 'John' });
-    expect(out).toEqual({ success: true, ownership });
+    expect(calls[0][1]).toEqual({
+      actorIdentifier: 'Aragorn',
+      playerIdentifier: 'John',
+      verbose: undefined,
+    });
+    expect(out).toEqual({
+      success: true,
+      summary:
+        '1 of 168 actor(s) with explicit entries or a non-NONE default; 167 inherit default NONE with no entries (not listed)',
+      ownership,
+    });
+  });
+
+  it('verbose: true asks the page for the per-player matrix', async () => {
+    const { tools, calls } = build({ ownership: [], total: 2, listed: 2, trivialOmitted: 0 });
+    const out = await tools.handleToolCall('list-actor-ownership', { verbose: true });
+    expect(calls[0][1]).toMatchObject({ verbose: true });
+    expect(out).toMatchObject({ summary: '2 actor(s), a row per player' });
   });
 
   it('lets a failed ownership query bubble to the central mapper (throws, not error-as-data)', async () => {

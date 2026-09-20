@@ -136,18 +136,60 @@ function stubReadWorld(ownership: Record<string, number> | undefined) {
     { id: 'gm', name: 'Gamemaster', isGM: true },
   ];
   (globalThis as any).game = {
-    actors: { contents: [actor] },
+    actors: {
+      contents: [actor],
+      get: (id: string) => (id === actor.id ? actor : undefined),
+      getName: (name: string) => (name === actor.name ? actor : undefined),
+    },
     users: { contents: users, get: (id: string) => users.find(u => u.id === id) },
   };
   return { actor };
 }
 
-/** The single row getActorOwnership produces for the lone player. */
+/** The single verbose row getActorOwnership produces for the lone player. */
 function readRow(): any {
-  return (getActorOwnership({ actorIdentifier: 'all' }) as any[])[0];
+  return (getActorOwnership({ actorIdentifier: 'all', verbose: true }) as any).ownership[0];
 }
 
-describe('getActorOwnership — explicit vs inherited', () => {
+describe('getActorOwnership — compact shape (default)', () => {
+  it('lists the explicit entries by player name and the actor default', () => {
+    stubReadWorld({ default: 3, u1: 0 });
+    const out = getActorOwnership({}) as any;
+    expect(out).toEqual({
+      ownership: [
+        { id: 'actor1', name: 'The Party', default: 'OWNER', explicit: { John: 'NONE' } },
+      ],
+      total: 1,
+      listed: 1,
+      trivialOmitted: 0,
+    });
+  });
+
+  it('counts, but does not list, an actor with default NONE and no explicit entry', () => {
+    stubReadWorld({ default: 0 });
+    expect(getActorOwnership({})).toEqual({
+      ownership: [],
+      total: 1,
+      listed: 0,
+      trivialOmitted: 1,
+    });
+  });
+
+  it('lists a non-NONE default without an explicit key', () => {
+    stubReadWorld({ default: 2 });
+    const out = getActorOwnership({}) as any;
+    expect(out.ownership).toEqual([{ id: 'actor1', name: 'The Party', default: 'OBSERVER' }]);
+  });
+
+  it('lists a trivial actor when it was asked for by name', () => {
+    stubReadWorld({ default: 0 });
+    const out = getActorOwnership({ actorIdentifier: 'The Party' }) as any;
+    expect(out.ownership).toEqual([{ id: 'actor1', name: 'The Party', default: 'NONE' }]);
+    expect(out.trivialOmitted).toBe(0);
+  });
+});
+
+describe('getActorOwnership — verbose: explicit vs inherited', () => {
   it('marks an explicit level-0 entry as an explicit DENY, not an absent one', async () => {
     // The party-stash shape: default OWNER, one player pinned to an explicit 0. Both this
     // and "no entry at all on a default-NONE actor" read as NONE — only `source` separates
