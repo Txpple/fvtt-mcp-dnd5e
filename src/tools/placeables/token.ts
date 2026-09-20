@@ -93,7 +93,10 @@ const UpdateTokenSchema = z
     elevation: z
       .number()
       .optional()
-      .describe('Token elevation in grid-distance units (e.g. feet).'),
+      .describe(
+        'Token elevation in grid-distance units. With dnd5e falling automation on, an elevation ' +
+          'above the supporting surface marks the actor Falling (6.0.2+: on unviewed scenes too).'
+      ),
     hidden: z
       .boolean()
       .optional()
@@ -207,8 +210,7 @@ export const tokenToolModule: PlaceableModuleFactory = foundry => ({
         'hobgoblin band on the bridge). Each entry names an actor (id or EXACT name) + an absolute ' +
         "canvas-pixel x/y; the token is built from the actor's PROTOTYPE (so the house token " +
         'defaults — auto-rotate, ring, disposition — carry over), with optional per-copy hidden/' +
-        'elevation/rotation/name/disposition overrides. Repeat an actor for several copies. The GM ' +
-        'can always drag tokens in the app instead — this is for scripted/batch placement. GM-only.',
+        'elevation/rotation/name/disposition overrides. Repeat an actor for several copies. GM-only.',
       inputSchema: toInputSchema(PlaceTokensSchema),
     },
     {
@@ -219,9 +221,9 @@ export const tokenToolModule: PlaceableModuleFactory = foundry => ({
         '(default: the ACTIVE scene), then target tokens by `tokenIds` and/or `actorIds` (an actor id ' +
         'OR exact name — updates EVERY placed copy of that actor, e.g. all "Dead Guard" corpses). Patch ' +
         'any of: `rotation` (or `randomizeRotation` for an independent per-token angle), `scale` (token ' +
-        'art size — sets texture.scaleX/scaleY together), `imagePath` (RESKIN the placed instance — new ' +
-        'token art, still image or animated video, existence-checked so a 404 never breaks working art; ' +
-        'no more delete+re-place), `elevation`, `hidden`, `lockRotation`, `x`/`y`, ' +
+        'art size — sets texture.scaleX/scaleY together), `imagePath` (RESKIN the placed instance — ' +
+        'still image or animated video, existence-checked so a 404 never breaks working art), ' +
+        '`elevation`, `hidden`, `lockRotation`, `x`/`y`, ' +
         '`name`, `displayName` (nameplate visibility), `displayBars` (resource-bar visibility), `bar1`/`bar2` ' +
         '(which resource each bar tracks — the health bar is bar1 = attributes.hp), `ring` (dynamic token ' +
         "ring on/off), and `hp` (this token's CURRENT hit points, per-token on its own delta — so two copies " +

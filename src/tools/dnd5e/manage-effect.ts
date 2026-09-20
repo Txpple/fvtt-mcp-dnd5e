@@ -35,7 +35,7 @@ const filter = z
       'comparisons: in has hasany hasall contains icontains startswith endswith empty gt gte lt lte ' +
       'subsetof), an operator {o: "AND"|"OR"|"NAND"|"NOR"|"XOR", v: [filters]} / {o: "NOT", v: filter}, ' +
       'or a bare array (AND). Examples: {k:"statuses.bloodied", v:1} · {k:"item.properties", o:"has", ' +
-      'v:"thr"} · {k:"roll.ability", v:"str"} (roll.* keys only on a CHANGE). Also accepts the JSON string.'
+      'v:"thr"} · {k:"roll.ability", v:"str"} (roll.* keys only on a CHANGE).'
   );
 
 const change = z.object({
@@ -86,8 +86,9 @@ const change = z.object({
         'RULES-type change (dnd5e.advantage / bonus / minimum / maximum), the only changes evaluated ' +
         'at roll time: roll.ability, roll.skill, roll.type, roll.attack.type / .mode / ' +
         '.classification, roll.damage.type, roll.proficient, roll.tool …, e.g. ' +
-        '{k:"roll.attack.type", v:"ranged"}. A core-type change is evaluated at data preparation, ' +
-        'where there is no roll data.'
+        '{k:"roll.attack.type", v:"ranged"}; there item.* is the item being ROLLED and ' +
+        'sourceItem.* the item carrying the effect (dnd5e 6.0.2). A core-type change is evaluated ' +
+        'at data preparation, where there is no roll data.'
     ),
   replacement: z
     .enum(EFFECT_REPLACEMENTS)
@@ -239,9 +240,8 @@ export class DnD5eManageEffectTool {
           '6.0 `conditions` (a Filter) gate the whole effect ("while Bloodied") or one change; ' +
           '`duration.expiry` takes the combat / rest / source-target turn events. Target the actor ' +
           '(actorIdentifier), an embedded item (actorIdentifier + itemIdentifier), or a world item ' +
-          '(itemIdentifier alone). Use action="list" to find effectIds (it reads conditions + rules back). ' +
-          'Item effects transfer to the owning actor by default. Authoring only — it sets effect data, ' +
-          'it does not run combat.',
+          '(itemIdentifier alone). action="list" finds effectIds (and reads conditions + rules back). ' +
+          'Item effects transfer to the owning actor by default. Authoring only.',
         inputSchema: toInputSchema(ManageEffectSchema),
       },
     ];

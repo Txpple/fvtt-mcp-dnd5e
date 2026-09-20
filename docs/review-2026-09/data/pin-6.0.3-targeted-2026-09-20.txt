@@ -6,3 +6,12 @@ sandbox dnd5e 6.0.3
   ✓ #7450 sourceItem.* condition key accepted and persisted verbatim
 
 4 passed, 0 failed
+
+--- #7470 (M1 leftover, run 2026-09-20 during 3.0 M2; scratch/probe-7470-falling.mjs) ---
+dnd5e 6.0.3; falling was enabled; scene "01 Stairs Down" (viewed: "Party Camp")
+after elevation 30: {"updated":1,"elevation":30,"falling":true,"statuses":["falling"],"newChat":[]}
+after elevation 0: {"updated":1,"elevation":0,"falling":false,"hp":0,"newChat":[]}
+→ an update-token elevation write on a scene the bridge does not view marks the linked actor
+  Falling when nothing supports it (and clears it on the way down); no damage is posted until a
+  later movement plummets it. The system's rule, applied to every client since 6.0.2; noted on
+  the elevation leaf.
