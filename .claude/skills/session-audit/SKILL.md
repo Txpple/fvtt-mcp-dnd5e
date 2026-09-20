@@ -67,12 +67,12 @@ Four things about this list are load-bearing:
   is usually the best finding in the report — a named villain in the wrong room, a reveal that now
   fires out of order.
 
-**One gap in the reads you must name rather than paper over.** `get-actor` returns `0`/`null` for a
-PC's maximum HP — take it from the newest `party-snapshots/*.md` and say in the report which number
-you used. It is a tool correctness gap, not a judgment gap (design.md §2.1); if it bites twice, say
-so and propose extending `get-actor` rather than working around it again. (Damage and condition
-immunities / resistances / vulnerabilities ARE on `get-actor` — `defenses`, with each entry's
-`bypasses`; read them there, not from the compendium source.)
+**Read the numbers from `get-actor`, not from the campaign repo.** A PC's max HP (`hitPoints.max`,
+with `tempmax` when an Aid is up), AC, and the damage / condition immunities, resistances and
+vulnerabilities (`defenses`, each with its `bypasses`) all come from the live sheet. If a read
+ever comes back `0`/`null` for something the sheet shows, name it in the report as a tool gap
+(design.md §2.1) and propose extending `get-actor` — never substitute a snapshot or a compendium
+source silently.
 
 ## Step 2 — the arithmetic (the script owns this)
 

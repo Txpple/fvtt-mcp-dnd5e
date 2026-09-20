@@ -325,9 +325,10 @@ function extractSaves(
  * sanitized from `toObject().system`, which is the SOURCE data and so omits every prepared/derived
  * field: ability `.mod`, skill `.total`/`.passive`/`.mod`, `attributes.ac.value`,
  * `attributes.init.total`, the available-legendary-actions `legact.value` (= max − spent), and the
- * CR-derived `details.xp.value`. Reading them here (the same way extractSaves reads save totals)
- * lets the Node extractor surface real modifiers instead of zeros. Returns undefined when there is
- * nothing derived to report.
+ * CR-derived `details.xp.value`, and a PC's `attributes.hp.max` (class hit dice + CON; the source
+ * holds null — an NPC's is authored). Reading them here (the same way extractSaves reads save
+ * totals) lets the Node extractor surface real modifiers instead of zeros. Returns undefined when
+ * there is nothing derived to report.
  */
 function extractDerived(actor: any): Record<string, any> | undefined {
   const system = actor?.system;
@@ -375,6 +376,18 @@ function extractDerived(actor: any): Record<string, any> | undefined {
 
   const initTotal = system.attributes?.init?.total;
   if (typeof initTotal === 'number') out.init = { total: initTotal };
+
+  // `effectiveMax` = max + tempmax (dnd5e's own field); reported so a consumer never re-adds it.
+  const hp = system.attributes?.hp;
+  if (hp && typeof hp.max === 'number') {
+    out.hp = {
+      value: hp.value ?? 0,
+      max: hp.max,
+      effectiveMax: typeof hp.effectiveMax === 'number' ? hp.effectiveMax : hp.max + (hp.tempmax ?? 0),
+      temp: hp.temp ?? 0,
+      tempmax: hp.tempmax ?? 0,
+    };
+  }
 
   const legact = system.resources?.legact;
   if (legact && typeof legact.value === 'number') {

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
+import { extractActorBasicInfo, extractActorStats } from '../dist/tools/dnd5e/actor-stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = {};
@@ -213,6 +214,21 @@ try {
       readback.breath.resolved !== '0' &&
       !/@scale/.test(readback.breath.resolved),
     `B8: racial @scale resolves (${readback?.breath?.token} -> ${readback?.breath?.resolved})`
+  );
+
+  // B9 (F31): get-actor reports the PC's DERIVED max HP. The toObject() source carries
+  // hp.max:null for a character (dnd5e computes it from hit dice + CON), so the extractors used to
+  // say 0 and session-audit read it from a campaign snapshot instead.
+  const info = await withNodeTimeout(
+    f.call('getCharacterInfo', { characterId: built.actor.id }),
+    60_000,
+    'getCharacterInfo'
+  );
+  const basicMax = extractActorBasicInfo(info)?.hitPoints?.max;
+  const statsMax = extractActorStats(info)?.hitPoints?.max;
+  assert(
+    basicMax === 12 && statsMax === 12,
+    `B9: get-actor max HP from the derived block = 12 (basicInfo ${basicMax}, stats ${statsMax}; source ${info?.system?.attributes?.hp?.max})`
   );
 
   // ---- Test C: inspect-pc-advancement reports the same class choices ----

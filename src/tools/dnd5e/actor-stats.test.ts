@@ -148,6 +148,27 @@ describe('extractActorStats', () => {
     expect(stats.xp).toBe(1800);
   });
 
+  it("reports a PC's max HP from the derived block (the source holds null)", () => {
+    // A character's hp.max is computed by dnd5e from class hit dice + CON: toObject() carries
+    // max:null, so get-actor used to say 0 and session-audit read it from a campaign snapshot.
+    const pc = {
+      name: 'Thessaly',
+      type: 'character',
+      system: { attributes: { hp: { value: 31, max: null, temp: 0, tempmax: 0 } } },
+      derived: { hp: { value: 31, max: 38, effectiveMax: 38, temp: 0, tempmax: 0 } },
+    };
+    expect(extractActorStats(pc).hitPoints).toEqual({ current: 31, max: 38, temp: 0 });
+    expect(extractActorBasicInfo(pc).hitPoints).toEqual({ current: 31, max: 38, temp: 0 });
+    // tempmax (an Aid spell) is reported only when it is non-zero.
+    const aided = { ...pc, derived: { hp: { value: 31, max: 38, effectiveMax: 43, temp: 0, tempmax: 5 } } };
+    expect(extractActorStats(aided).hitPoints).toEqual({ current: 31, max: 38, temp: 0, tempmax: 5 });
+    // Without a derived block (an NPC source read) the authored max still wins over 0.
+    expect(
+      extractActorStats({ name: 'X', type: 'npc', system: { attributes: { hp: { value: 5, max: 9 } } } })
+        .hitPoints
+    ).toEqual({ current: 5, max: 9, temp: 0 });
+  });
+
   it('is safe on an actor with no system data', () => {
     const stats = extractActorStats({ name: 'Blank', type: 'npc' });
     expect(stats).toEqual({ name: 'Blank', type: 'npc' });

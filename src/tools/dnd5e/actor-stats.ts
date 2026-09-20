@@ -22,10 +22,11 @@ export function extractActorBasicInfo(actorData: any): any {
   const basicInfo: any = {};
   const system = actorData.system || {};
 
+  // A PC's hp.max is DERIVED (null in the toObject() source) — prefer the derived block.
   if (system.attributes?.hp) {
     basicInfo.hitPoints = {
       current: system.attributes.hp.value,
-      max: system.attributes.hp.max,
+      max: actorData.derived?.hp?.max ?? system.attributes.hp.max,
       temp: system.attributes.hp.temp || 0,
     };
   }
@@ -132,13 +133,15 @@ export function extractActorStats(actorData: any): any {
     stats.level = Number(level);
   }
 
-  // Hit Points
+  // Hit Points — a PC's max is DERIVED (null in the toObject() source); prefer the derived block.
   const hp = system.attributes?.hp;
   if (hp) {
+    const tempmax = actorData.derived?.hp?.tempmax ?? hp.tempmax ?? 0;
     stats.hitPoints = {
       current: hp.value ?? 0,
-      max: hp.max ?? 0,
+      max: actorData.derived?.hp?.max ?? hp.max ?? 0,
       temp: hp.temp ?? 0,
+      ...(tempmax ? { tempmax } : {}),
     };
   }
 
