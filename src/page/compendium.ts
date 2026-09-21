@@ -12,8 +12,8 @@ import { invalid, notFound } from './errors.js';
 
 interface CompendiumSearchArgs {
   query: string;
-  packType?: string;
-  limit?: number;
+  packType?: string | undefined;
+  limit?: number | undefined;
 }
 
 interface CompendiumSearchResult {
@@ -22,7 +22,7 @@ interface CompendiumSearchResult {
   type: string;
   uuid: string;
   pack: string;
-  img?: string;
+  img?: string | undefined;
 }
 
 interface GetCompendiumDocumentArgs {
@@ -34,28 +34,28 @@ interface CompendiumItem {
   id: string;
   name: string;
   type: string;
-  img?: string;
+  img?: string | undefined;
   system: Record<string, unknown>;
 }
 
 interface CompendiumEffect {
   id: string;
   name: string;
-  icon?: string;
+  icon?: string | undefined;
   disabled: boolean;
-  duration?: Record<string, unknown>;
+  duration?: Record<string, unknown> | undefined;
 }
 
 interface CompendiumEntryFull {
   id: string;
   name: string;
   type: string;
-  img?: string;
+  img?: string | undefined;
   pack: string;
   packLabel: string;
   system: Record<string, unknown>;
-  items?: CompendiumItem[];
-  effects?: CompendiumEffect[];
+  items?: CompendiumItem[] | undefined;
+  effects?: CompendiumEffect[] | undefined;
   fullData: Record<string, unknown>;
 }
 
@@ -192,7 +192,7 @@ export async function searchCompendium(
  * (design.md §2.3) so they never surface to the caller. The Node tool filters by type and derives
  * availableTypes from this list.
  */
-export function getAvailablePacks(): unknown {
+export function getAvailablePacks() {
   return excludeSrdPacks(
     Array.from(game.packs.values()) as any[],
     (pack: any) => pack.metadata.id

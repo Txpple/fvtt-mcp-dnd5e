@@ -10,6 +10,8 @@
 // Nothing here imports Playwright, node:fs or fetch: the interfaces are plain so the tools can be
 // unit-tested against a stub plane and the bridge against a stub host.
 
+import type { PageApi, PageArgs, PageResult } from '../page/index.js';
+
 export type HostKind = 'molten' | 'local' | 'generic';
 
 /** One entry under `Data/`, in the Data-relative vocabulary the whole codebase speaks. */
@@ -20,10 +22,10 @@ export interface FileEntry {
   name: string;
   isDirectory: boolean;
   /** Bytes (files only). */
-  size?: number;
-  contentType?: string;
+  size?: number | undefined;
+  contentType?: string | undefined;
   /** RFC-1123 string (what WebDAV reports; the local plane formats mtime the same way). */
-  lastModified?: string;
+  lastModified?: string | undefined;
 }
 
 /**
@@ -69,11 +71,11 @@ export interface FilePlane {
 }
 
 /**
- * The bridge as the bridge file plane sees it: the tool seam, minus Playwright and minus the
- * page-name typing (a structural subset of `FoundryBridge`).
+ * The bridge as the bridge file plane sees it: the typed tool seam, minus Playwright (a structural
+ * subset of `FoundryBridge`; the types come from the page's own signatures).
  */
 export interface PageCaller {
-  call<T = any>(name: string, args?: unknown): Promise<T>;
+  call<N extends keyof PageApi>(name: N, ...args: PageArgs<N>): Promise<PageResult<N>>;
 }
 
 /** What the bridge lends a host to wake an instance: the real browser page, minus Playwright. */

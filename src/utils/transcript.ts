@@ -4,8 +4,8 @@
 import { isAbsolute } from 'node:path';
 
 export interface ExportDestinations {
-  localPath?: string;
-  remotePath?: string;
+  localPath?: string | undefined;
+  remotePath?: string | undefined;
 }
 
 export type DestinationCheck = { ok: true } | { ok: false; error: string };

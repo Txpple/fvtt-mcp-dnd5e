@@ -20,10 +20,7 @@ export class BridgeFilePlane implements FilePlane {
 
   async list(dir: string): Promise<FileEntry[] | null> {
     const clean = toDataRelative(dir);
-    const r = await this.page.call<{
-      dirs: Array<{ path: string; name: string }>;
-      files: Array<FileEntry>;
-    } | null>('browseFiles', { dir: clean });
+    const r = await this.page.call('browseFiles', { dir: clean });
     if (!r) return null;
     return [
       ...r.dirs.map(d => ({ path: d.path, name: d.name, isDirectory: true })),
@@ -33,12 +30,7 @@ export class BridgeFilePlane implements FilePlane {
 
   async stat(path: string): Promise<FileEntry | null> {
     const clean = toDataRelative(path);
-    const r = await this.page.call<{
-      isDirectory: boolean;
-      size?: number;
-      contentType?: string;
-      lastModified?: string;
-    } | null>('statFile', { path: clean });
+    const r = await this.page.call('statFile', { path: clean });
     if (!r) return null;
     return { path: clean, name: clean.split('/').pop() ?? clean, ...r };
   }
@@ -49,16 +41,14 @@ export class BridgeFilePlane implements FilePlane {
 
   async read(path: string): Promise<Uint8Array> {
     const clean = toDataRelative(path);
-    const r = await this.page.call<{ base64: string } | null>('readFileBase64', { path: clean });
+    const r = await this.page.call('readFileBase64', { path: clean });
     if (!r) throw new FilePlaneError(`Not found: "Data/${clean}" is not served by Foundry.`, 404);
     return new Uint8Array(Buffer.from(r.base64, 'base64'));
   }
 
   async write(path: string, body: Uint8Array, contentType?: string): Promise<void> {
     const clean = toDataRelative(path);
-    const r = await this.page.call<
-      { ok: true; path: string } | { ok: false; reason: string; detail: string }
-    >('uploadFile', {
+    const r = await this.page.call('uploadFile', {
       path: clean,
       base64: Buffer.from(body).toString('base64'),
       ...(contentType ? { contentType } : {}),
@@ -79,9 +69,7 @@ export class BridgeFilePlane implements FilePlane {
 
   async mkdir(path: string): Promise<void> {
     const clean = toDataRelative(path);
-    const r = await this.page.call<
-      { ok: true; existed: boolean } | { ok: false; reason: string; detail: string }
-    >('createDirectory', { path: clean });
+    const r = await this.page.call('createDirectory', { path: clean });
     if (r.ok) return;
     throw new FilePlaneError(
       `Cannot create "Data/${clean}": ${r.detail}.`,

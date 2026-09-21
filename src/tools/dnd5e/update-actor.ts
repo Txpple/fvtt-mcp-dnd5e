@@ -41,6 +41,9 @@ const setField = (what: string, supportsCustom = true) =>
     })
     .optional();
 
+/** The page handler's arg shape — `updateActor` receives exactly this (a type-only import there). */
+export type UpdateActorArgs = z.output<typeof UpdateActorSchema>;
+
 const UpdateActorSchema = z.object({
   actorIdentifier: z
     .string()

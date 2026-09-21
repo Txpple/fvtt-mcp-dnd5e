@@ -569,7 +569,7 @@ export class SceneTools {
     const placeableLine = placeables.length ? `\n  imported: ${placeables.join(', ')}` : '';
     // Regions can hold cross-scene teleporters whose destinations need a post-import remap pass.
     const teleportHint =
-      result?.regionsCreated > 0
+      (result.regionsCreated ?? 0) > 0
         ? '\n  ↪ regions imported — run remap-teleporters once after all scenes to link teleporters'
         : '';
     const placeableErrs = Array.isArray(result?.placeableErrors)
@@ -757,8 +757,8 @@ export class SceneTools {
         `\n  They now log in to the ACTIVE scene like everyone else.`;
     } else {
       head =
-        `🧭 ${assigned.length} user(s) will now LOG IN to "${result?.scene?.name}" ` +
-        `(${result.scene.id}): ` +
+        `🧭 ${assigned.length} user(s) will now LOG IN to "${result.scene?.name}" ` +
+        `(${result.scene?.id}): ` +
         `${assigned.map(u => `${u.name}${u.previous ? ` (was "${u.previous}")` : ''}`).join(', ')}` +
         `\n  Sticky until cleared, and it takes effect on their next login/refresh — ` +
         `use pull-users-to-scene to move someone who is already connected.`;

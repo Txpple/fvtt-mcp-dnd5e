@@ -127,7 +127,11 @@ export async function settleCachedSpellCopies(
   featureItem: any,
   activityId: string,
   desiredName?: string,
-  opts: { waitMs?: number; pollMs?: number; stableMs?: number } = {}
+  opts: {
+    waitMs?: number | undefined;
+    pollMs?: number | undefined;
+    stableMs?: number | undefined;
+  } = {}
 ): Promise<SettledCachedSpell> {
   const waitMs = opts.waitMs ?? 5000;
   const pollMs = opts.pollMs ?? 150;

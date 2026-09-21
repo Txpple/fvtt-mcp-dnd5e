@@ -175,14 +175,22 @@ const LEVEL_NAMES: Record<number, string> = {
 
 export interface CreateGroupArgs {
   name: string;
-  members?: string[];
-  description?: string;
-  summary?: string;
-  img?: string;
-  folderName?: string;
-  defaultOwnership?: 'none' | 'limited' | 'observer' | 'owner';
-  currency?: { pp?: number; gp?: number; ep?: number; sp?: number; cp?: number };
-  makePrimaryParty?: boolean;
+  members?: string[] | undefined;
+  description?: string | undefined;
+  summary?: string | undefined;
+  img?: string | undefined;
+  folderName?: string | undefined;
+  defaultOwnership?: 'none' | 'limited' | 'observer' | 'owner' | undefined;
+  currency?:
+    | {
+        pp?: number | undefined;
+        gp?: number | undefined;
+        ep?: number | undefined;
+        sp?: number | undefined;
+        cp?: number | undefined;
+      }
+    | undefined;
+  makePrimaryParty?: boolean | undefined;
 }
 
 /**
@@ -191,7 +199,7 @@ export interface CreateGroupArgs {
  * system.addMember. defaultOwnership writes ownership.default, the one knob that grants every
  * player at once — the party-stash case; per-user grants stay with set-actor-ownership.
  */
-export async function createGroupActor(args: CreateGroupArgs): Promise<unknown> {
+export async function createGroupActor(args: CreateGroupArgs) {
   const warnings: string[] = [];
 
   const resolutions = resolveMembers(args.members ?? []);
@@ -263,8 +271,8 @@ export async function createGroupActor(args: CreateGroupArgs): Promise<unknown> 
 
 export interface ManageGroupMembersArgs {
   groupIdentifier: string;
-  add?: string[];
-  remove?: string[];
+  add?: string[] | undefined;
+  remove?: string[] | undefined;
 }
 
 /**
@@ -272,7 +280,7 @@ export interface ManageGroupMembersArgs {
  * Every requested identifier gets a per-actor outcome (added / removed / skipped+reason) —
  * the batch never dies mid-loop on a guard the system API would have thrown.
  */
-export async function manageGroupMembers(args: ManageGroupMembersArgs): Promise<unknown> {
+export async function manageGroupMembers(args: ManageGroupMembersArgs) {
   const group = resolveGroupStrict(args.groupIdentifier);
 
   const removals = planMemberRemovals(currentMemberIds(group), resolveMembers(args.remove ?? []));
@@ -304,7 +312,7 @@ export async function manageGroupMembers(args: ManageGroupMembersArgs): Promise<
  * shared inventory (the embedded items ARE the stash), ownership, and the primary-party flag.
  * get-actor's character-shaped read returns an empty husk for groups — this is the contract.
  */
-export function getGroupInfo(args: { groupIdentifier: string }): unknown {
+export function getGroupInfo(args: { groupIdentifier: string }) {
   const group = resolveGroupStrict(args.groupIdentifier);
   const source = group.system.toObject();
 
@@ -348,8 +356,8 @@ export function getGroupInfo(args: { groupIdentifier: string }): unknown {
 }
 
 export interface ConfigurePrimaryPartyArgs {
-  groupIdentifier?: string;
-  clear?: boolean;
+  groupIdentifier?: string | undefined;
+  clear?: boolean | undefined;
 }
 
 /**
@@ -357,9 +365,7 @@ export interface ConfigurePrimaryPartyArgs {
  * point it at that group. clear → unset. Setting the current value is a clean no-op
  * (changed: false), mirroring configure-combat-tracker.
  */
-export async function configurePrimaryParty(
-  args: ConfigurePrimaryPartyArgs = {}
-): Promise<unknown> {
+export async function configurePrimaryParty(args: ConfigurePrimaryPartyArgs = {}) {
   if (args.groupIdentifier && args.clear) {
     throw invalid('set-primary-party: pass groupIdentifier OR clear, not both');
   }
@@ -368,20 +374,20 @@ export async function configurePrimaryParty(
 
   if (args.clear) {
     if (!previous) {
-      return { success: true, changed: false, current: null };
+      return { success: true, changed: false as const, current: null };
     }
     await game.settings.set(SETTING_NS, SETTING_KEY, { actor: null });
-    return { success: true, changed: true, previous, current: currentPrimaryParty() };
+    return { success: true, changed: true as const, previous, current: currentPrimaryParty() };
   }
 
   if (args.groupIdentifier) {
     const group = resolveGroupStrict(args.groupIdentifier);
     if (previous?.id === group.id) {
-      return { success: true, changed: false, current: previous };
+      return { success: true, changed: false as const, current: previous };
     }
     await game.settings.set(SETTING_NS, SETTING_KEY, { actor: group.id });
-    return { success: true, changed: true, previous, current: currentPrimaryParty() };
+    return { success: true, changed: true as const, previous, current: currentPrimaryParty() };
   }
 
-  return { success: true, changed: false, current: previous };
+  return { success: true, changed: false as const, current: previous };
 }

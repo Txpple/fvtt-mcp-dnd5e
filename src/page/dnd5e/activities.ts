@@ -48,11 +48,11 @@ export function damagePartToActivity(p: RawDamagePart): Record<string, unknown> 
 /** An authored activity duration (dnd5e 6.0 DurationField: value formula, units, expiry). */
 export interface ActivityDurationOpts {
   /** Amount for a scalar unit — a number or a deterministic formula ("@prof"). */
-  value?: number | string;
-  units?: string;
+  value?: number | string | undefined;
+  units?: string | undefined;
   /** Effect expiry the activity's applied effects inherit (6.0): core combat / rest / source-target. */
-  expiry?: string | null;
-  concentration?: boolean;
+  expiry?: string | null | undefined;
+  concentration?: boolean | undefined;
 }
 
 /** An authored area template (dnd5e TargetField.template). */
@@ -60,18 +60,18 @@ export interface ActivityTemplateOpts {
   type: string;
   /** Primary size in `units` (radius / length / width per shape) — a number or deterministic formula. */
   size: number | string;
-  width?: number | string;
-  height?: number | string;
-  units?: string;
+  width?: number | string | undefined;
+  height?: number | string | undefined;
+  units?: string | undefined;
   /** Number of templates placed (e.g. Fire Bolt-style multi-placement). */
-  count?: number | string;
+  count?: number | string | undefined;
 }
 
 /** Who the activity affects (dnd5e TargetField.affects). */
 export interface ActivityAffectsOpts {
-  type?: string;
-  count?: number | string;
-  choice?: boolean;
+  type?: string | undefined;
+  count?: number | string | undefined;
+  choice?: boolean | undefined;
 }
 
 /**
@@ -81,26 +81,26 @@ export interface ActivityAffectsOpts {
  */
 export interface ActivityBehaviorOpts {
   type: string;
-  name?: string;
-  level?: { min?: number; max?: number };
-  effectUuids?: string[];
-  sizes?: string[];
-  creatureTypes?: string[];
-  terrainTypes?: string[];
+  name?: string | undefined;
+  level?: { min?: number | undefined; max?: number | undefined } | undefined;
+  effectUuids?: string[] | undefined;
+  sizes?: string[] | undefined;
+  creatureTypes?: string[] | undefined;
+  terrainTypes?: string[] | undefined;
 }
 
 /** Custom transformation settings (TransformationSetting): what carries over from the original self. */
 export interface TransformSettingsOpts {
-  keep?: string[];
-  merge?: string[];
-  effects?: string[];
+  keep?: string[] | undefined;
+  merge?: string[] | undefined;
+  effects?: string[] | undefined;
   /** Deterministic formula for a floor on the new form's AC (Moon druid: "(13 + @abilities.wis.mod)"). */
-  minimumAC?: string;
+  minimumAC?: string | undefined;
   /** Deterministic formula for temp HP granted on transforming ("@classes.druid.levels"). */
-  tempFormula?: string;
-  transformTokens?: boolean;
+  tempFormula?: string | undefined;
+  transformTokens?: boolean | undefined;
   /** Spell lists the form keeps access to (dnd5e registry keys, e.g. "subclass:moon"). */
-  spellLists?: string[];
+  spellLists?: string[] | undefined;
 }
 
 /**
@@ -110,54 +110,54 @@ export interface TransformSettingsOpts {
  * other (see effect-refs.ts). `onSave` only exists on a SAVE activity's field (save-data.mjs).
  */
 export interface AppliedEffectOpts {
-  _id?: string;
-  uuid?: string;
-  onSave?: boolean;
-  level?: { min?: number; max?: number };
+  _id?: string | undefined;
+  uuid?: string | undefined;
+  onSave?: boolean | undefined;
+  level?: { min?: number | undefined; max?: number | undefined } | undefined;
 }
 
 /** A transform profile (direct link: `actorUuid`; by CR: `cr` + the filters). */
 export interface TransformProfileOpts {
-  name?: string;
-  cr?: number | string;
-  sizes?: string[];
-  creatureTypes?: string[];
+  name?: string | undefined;
+  cr?: number | string | undefined;
+  sizes?: string[] | undefined;
+  creatureTypes?: string[] | undefined;
   /** Movement types the chosen creature must NOT have (e.g. ['fly'] for low-level Wild Shape). */
-  restrictMovement?: string[];
-  level?: { min?: number; max?: number };
-  actorUuid?: string;
+  restrictMovement?: string[] | undefined;
+  level?: { min?: number | undefined; max?: number | undefined } | undefined;
+  actorUuid?: string | undefined;
 }
 
 export interface BuildActivityOpts {
   /** Activity id (caller generates via foundry.utils.randomID(16)). */
   id: string;
-  name?: string;
-  activationType?: string;
-  sort?: number;
+  name?: string | undefined;
+  activationType?: string | undefined;
+  sort?: number | undefined;
   /**
    * Duration OVERRIDE for the activity (6.0: effects it applies inherit it, incl. `expiry`). When
    * given, `override: true` is set so the activity's own duration wins over the item's.
    */
-  duration?: ActivityDurationOpts;
+  duration?: ActivityDurationOpts | undefined;
   /** Area template + who it affects — sets `target.override: true` so the activity's own target wins. */
-  template?: ActivityTemplateOpts;
-  affects?: ActivityAffectsOpts;
+  template?: ActivityTemplateOpts | undefined;
+  affects?: ActivityAffectsOpts | undefined;
   /** Area behaviors the template carries (needs a template to ever fire). */
-  behaviors?: ActivityBehaviorOpts[];
+  behaviors?: ActivityBehaviorOpts[] | undefined;
   // teleport (dnd5e 6.0): how far the target may be moved; omit for any distance
-  teleportDistance?: number | string;
-  teleportUnits?: string;
+  teleportDistance?: number | string | undefined;
+  teleportUnits?: string | undefined;
   // transform (dnd5e 6.0)
-  transformMode?: string;
-  transformPreset?: string;
+  transformMode?: string | undefined;
+  transformPreset?: string | undefined;
   /** form mode: may the actor revert to "no form" from the prompt. */
-  formless?: boolean;
+  formless?: boolean | undefined;
   /** direct / cr profiles — `actorUuid` ALREADY resolved by the page orchestrator. */
-  profiles?: TransformProfileOpts[];
+  profiles?: TransformProfileOpts[] | undefined;
   /** form mode: the ITEM's own effect ids, one per form — resolved by name by the orchestrator. */
-  formEffectIds?: string[];
+  formEffectIds?: string[] | undefined;
   /** cr / direct: custom transformation settings (sets transform.customize) instead of the bare preset. */
-  transformSettings?: TransformSettingsOpts;
+  transformSettings?: TransformSettingsOpts | undefined;
   /**
    * The PRESET's own settings, read from `CONFIG.DND5E.transformation.presets[preset].settings` by the
    * page (Sets → arrays) — the base `transformSettings` merges over. dnd5e's own transform sheet seeds
@@ -166,40 +166,40 @@ export interface BuildActivityOpts {
    * customised transform silently loses the preset's minimumAC / tempFormula / spellLists / keep /
    * merge / effects. Omit (or {}) when there is no preset.
    */
-  transformPresetSettings?: Record<string, unknown>;
+  transformPresetSettings?: Record<string, unknown> | undefined;
   /**
    * Applied effects (`activity.effects[]`): the ActiveEffects the activity puts on its targets. Refs
    * are ALREADY resolved by the page to an on-item `_id` or a compendium / world-item `uuid`.
    */
-  appliedEffects?: AppliedEffectOpts[];
+  appliedEffects?: AppliedEffectOpts[] | undefined;
   // attack
-  attackType?: 'melee' | 'ranged';
-  attackBonus?: number;
+  attackType?: 'melee' | 'ranged' | undefined;
+  attackBonus?: number | undefined;
   /** Attack ability override (the dnd5e 2024 attack.ability field). Omit to leave it ''. */
-  ability?: string;
+  ability?: string | undefined;
   /** Attack classification ('' for 2024, 'weapon' for 2014). */
-  classification?: string;
-  includeBase?: boolean;
+  classification?: string | undefined;
+  includeBase?: boolean | undefined;
   /** RAW activity damage parts (caller handles the weapon base part separately). */
-  damageParts?: RawDamagePart[];
+  damageParts?: RawDamagePart[] | undefined;
   // save
-  saveAbility?: string;
-  saveDC?: number;
-  onSave?: 'half' | 'none';
+  saveAbility?: string | undefined;
+  saveDC?: number | undefined;
+  onSave?: 'half' | 'none' | undefined;
   // heal
-  healing?: { number: number; denomination: number; type?: string };
+  healing?: { number: number; denomination: number; type?: string | undefined } | undefined;
   // check
-  checkAbility?: string;
-  checkDC?: number;
-  skills?: string[];
+  checkAbility?: string | undefined;
+  checkDC?: number | undefined;
+  skills?: string[] | undefined;
   // cast (link a real compendium spell — the activity casts it, pulling its measured template / save /
   // attack / effects). The page orchestrator resolves the spell from spellUuid and fills level/
   // spellProperties before calling this pure builder; saveDC/attackBonus drive the challenge override.
-  spellUuid?: string;
+  spellUuid?: string | undefined;
   /** Cast level (e.g. 3 for Fireball). Resolved from the spell's base level when omitted. */
-  level?: number;
+  level?: number | undefined;
   /** The spell's V/S/M components (['vocal','somatic','material']) — resolved from the linked spell. */
-  spellProperties?: string[];
+  spellProperties?: string[] | undefined;
   /**
    * Cast consumption. usesOn 'item' (default — the wand pattern): `charges` are consumed FROM the
    * parent item's own pool per cast. usesOn 'activity' (the feature-granted free-cast pattern —
@@ -207,10 +207,10 @@ export interface BuildActivityOpts {
    * "@scale.ranger.favored-enemy") lives ON the activity, recovering per `recoveryPeriod`, and one
    * use is consumed per cast. Omit charges for an at-will cast (no consumption either way).
    */
-  charges?: number | string;
-  usesOn?: 'item' | 'activity';
+  charges?: number | string | undefined;
+  usesOn?: 'item' | 'activity' | undefined;
   /** Activity-pool recovery (usesOn 'activity' only): lr / sr / day / dawn / dusk. Default 'lr'. */
-  recoveryPeriod?: string;
+  recoveryPeriod?: string | undefined;
 }
 
 /**

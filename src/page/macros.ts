@@ -72,12 +72,12 @@ function firstFreeSlot(user: any): number {
 export async function createMacro(args: {
   name: string;
   command: string;
-  type?: 'script' | 'chat';
-  img?: string;
-  owner?: string;
-  hotbarUser?: string;
-  hotbarSlot?: number;
-}): Promise<unknown> {
+  type?: 'script' | 'chat' | undefined;
+  img?: string | undefined;
+  owner?: string | undefined;
+  hotbarUser?: string | undefined;
+  hotbarSlot?: number | undefined;
+}) {
   if (!args?.name) throw invalid('name is required');
   if (!args?.command) throw invalid('command is required');
   if (args.hotbarSlot !== undefined && !args.hotbarUser) {
@@ -154,7 +154,7 @@ export async function createMacro(args: {
  * Every macro (or a name-substring / pinned-by-user subset), each with its hotbar pins. `user`
  * keeps the macros pinned on that user's hotbar (id or exact name).
  */
-export function listMacros(args?: { nameFilter?: string; user?: string }): unknown {
+export function listMacros(args?: { nameFilter?: string | undefined; user?: string | undefined }) {
   const assignments = hotbarAssignments();
   const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
   const userId = args?.user ? resolveUserOrThrow(args.user).id : null;
@@ -172,7 +172,7 @@ export function listMacros(args?: { nameFilter?: string; user?: string }): unkno
   return { success: true, count: macros.length, macros };
 }
 
-export async function deleteMacros(args: { macros: string[] }): Promise<unknown> {
+export async function deleteMacros(args: { macros: string[] }) {
   if (!Array.isArray(args?.macros) || args.macros.length === 0) {
     throw invalid('macros is required — an array of macro ids or exact names');
   }

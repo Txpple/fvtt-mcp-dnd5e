@@ -35,6 +35,8 @@ const damageShape = z
   })
   .describe("Base damage (weapon base die, or an ammo round's added damage).");
 
+export type AddItemArgs = z.output<typeof AddItemSchema>;
+
 const AddItemSchema = z.object({
   // ── Discriminator ─────────────────────────────────────────────────
   itemType: z

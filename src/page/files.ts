@@ -59,9 +59,9 @@ function basename(p: string): string {
 
 /** One HEAD of a Data-relative file: size / type / last-modified, or null when it is not served. */
 async function headFile(path: string): Promise<{
-  size?: number;
-  contentType?: string;
-  lastModified?: string;
+  size?: number | undefined;
+  contentType?: string | undefined;
+  lastModified?: string | undefined;
 } | null> {
   const res = await fetch(`/${encodePath(path)}`, { method: 'HEAD', cache: 'no-store' });
   if (!res.ok) return null;
@@ -98,9 +98,9 @@ export interface BrowseFilesResult {
   files: Array<{
     path: string;
     name: string;
-    size?: number;
-    contentType?: string;
-    lastModified?: string;
+    size?: number | undefined;
+    contentType?: string | undefined;
+    lastModified?: string | undefined;
   }>;
 }
 
@@ -131,9 +131,9 @@ export async function browseFiles(args: { dir: string }): Promise<BrowseFilesRes
 
 export interface StatFileResult {
   isDirectory: boolean;
-  size?: number;
-  contentType?: string;
-  lastModified?: string;
+  size?: number | undefined;
+  contentType?: string | undefined;
+  lastModified?: string | undefined;
 }
 
 /** One entry — by browsing its parent (a directory is only knowable that way) — or `null`. */
@@ -184,7 +184,7 @@ export type UploadFileResult =
 export async function uploadFile(args: {
   path: string;
   base64: string;
-  contentType?: string;
+  contentType?: string | undefined;
 }): Promise<UploadFileResult> {
   const path = String(args?.path ?? '');
   const name = basename(path);

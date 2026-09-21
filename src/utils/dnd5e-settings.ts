@@ -15,8 +15,8 @@ export interface Dnd5eSettingSpec {
   label: string;
   kind: Dnd5eSettingKind;
   /** Fixed choices (kind 'choice'); `liveChoices` names a CONFIG list resolved on the page instead. */
-  choices?: readonly string[];
-  liveChoices?: 'calendars';
+  choices?: readonly string[] | undefined;
+  liveChoices?: 'calendars' | undefined;
   /**
    * The choice that means "unset / automatic". It is NOT a storable value: the underlying
    * StringField declares `choices`, which makes core default `blank` to FALSE (foundry.mjs
@@ -24,14 +24,14 @@ export interface Dnd5eSettingSpec {
    * ClientSettings#set's DataModel validation. The page reads an absent/blank source AS this value
    * and, on a write, OMITS the key from the DataModel object instead of writing "".
    */
-  omitWhenChoice?: string;
+  omitWhenChoice?: string | undefined;
   /** Where it lives: the registered dnd5e setting, plus a field path for a DataModel setting. */
   setting: string;
-  path?: string;
+  path?: string | undefined;
   /** dnd5e registers it with requiresReload — the change takes effect after clients reload. */
-  requiresReload?: boolean;
+  requiresReload?: boolean | undefined;
   /** Client-scoped (per user) — reported, never written (a write would only touch the bridge user). */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   hint: string;
 }
 

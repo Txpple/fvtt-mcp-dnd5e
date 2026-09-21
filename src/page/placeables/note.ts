@@ -31,14 +31,14 @@ const NOTE_ANCHOR_NAME: Record<number, string> = {
 };
 
 export interface NoteInput {
-  journal?: string;
-  page?: string;
-  x?: number;
-  y?: number;
-  label?: string;
-  icon?: string;
-  iconSize?: number;
-  global?: boolean;
+  journal?: string | undefined;
+  page?: string | undefined;
+  x?: number | undefined;
+  y?: number | undefined;
+  label?: string | undefined;
+  icon?: string | undefined;
+  iconSize?: number | undefined;
+  global?: boolean | undefined;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface NoteInput {
 export function resolveNoteTarget(
   journal: string,
   page?: string
-): { entryId: string; pageId?: string } {
+): { entryId: string; pageId?: string | undefined } {
   const coll: any = game.journal;
   const entry =
     coll?.get?.(journal) ??
@@ -152,12 +152,15 @@ export const noteDescriptor: PlaceableDescriptor = {
 };
 
 // --- bridge page functions (registered in src/page/index.ts) -----------------
-export const createSceneNotes = (args: { sceneIdentifier: string; items: NoteInput[] }) =>
-  crudCreate(noteDescriptor, args);
-export const listSceneNotes = (args: { sceneIdentifier: string }) => crudList(noteDescriptor, args);
+export const createSceneNotes = (args: {
+  sceneIdentifier?: string | undefined;
+  items: NoteInput[];
+}) => crudCreate(noteDescriptor, args);
+export const listSceneNotes = (args: { sceneIdentifier?: string | undefined }) =>
+  crudList(noteDescriptor, args);
 export const updateSceneNotes = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & NoteInput>;
 }) => crudUpdate(noteDescriptor, args);
-export const deleteSceneNotes = (args: { sceneIdentifier: string; ids: string[] }) =>
+export const deleteSceneNotes = (args: { sceneIdentifier?: string | undefined; ids: string[] }) =>
   crudDelete(noteDescriptor, args);

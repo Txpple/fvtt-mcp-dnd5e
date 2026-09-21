@@ -92,7 +92,7 @@ async function rawFields(m: any): Promise<RawMessageFields> {
   // Build roll records without explicit-undefined keys (exactOptionalPropertyTypes).
   const rolls = Array.isArray(m.rolls)
     ? m.rolls.map((r: any) => {
-        const o: { total?: number; formula?: string } = {};
+        const o: { total?: number | undefined; formula?: string | undefined } = {};
         if (typeof r?.total === 'number') o.total = r.total;
         const f = r?.formula ?? r?._formula;
         if (typeof f === 'string') o.formula = f;
@@ -121,12 +121,12 @@ async function rawFields(m: any): Promise<RawMessageFields> {
 
 export async function postChatMessage(args: {
   content: string;
-  visibility?: Visibility;
-  speakerActor?: string;
-  flavor?: string;
-  style?: StyleName;
-  enrich?: boolean;
-}): Promise<unknown> {
+  visibility?: Visibility | undefined;
+  speakerActor?: string | undefined;
+  flavor?: string | undefined;
+  style?: StyleName | undefined;
+  enrich?: boolean | undefined;
+}) {
   if (!args?.content || typeof args.content !== 'string') {
     throw invalid('content is required and must be a non-empty string');
   }
@@ -174,10 +174,10 @@ export async function postChatMessage(args: {
 // --- list -------------------------------------------------------------------
 
 export async function listChatMessages(args: {
-  limit?: number;
-  sinceTimestamp?: number;
-  contentMode?: 'html' | 'text' | 'none';
-}): Promise<unknown> {
+  limit?: number | undefined;
+  sinceTimestamp?: number | undefined;
+  contentMode?: 'html' | 'text' | 'none' | undefined;
+}) {
   const limit = args?.limit ?? 50;
   const contentMode = args?.contentMode ?? 'text';
   let msgs = (game.messages?.contents ?? [])
@@ -197,11 +197,11 @@ export async function listChatMessages(args: {
 // --- delete -----------------------------------------------------------------
 
 export async function deleteChatMessages(args: {
-  ids?: string[];
-  beforeTimestamp?: number;
-  clearAll?: boolean;
-  confirm?: boolean;
-}): Promise<unknown> {
+  ids?: string[] | undefined;
+  beforeTimestamp?: number | undefined;
+  clearAll?: boolean | undefined;
+  confirm?: boolean | undefined;
+}) {
   const Cls = chatMessageClass();
 
   // Precedence: clearAll > beforeTimestamp > ids.
@@ -260,10 +260,10 @@ export async function deleteChatMessages(args: {
 // --- export -----------------------------------------------------------------
 
 export async function exportChatLog(args: {
-  format?: 'markdown' | 'html' | 'json' | 'plaintext';
-  limit?: number;
-  sinceTimestamp?: number;
-}): Promise<unknown> {
+  format?: 'markdown' | 'html' | 'json' | 'plaintext' | undefined;
+  limit?: number | undefined;
+  sinceTimestamp?: number | undefined;
+}) {
   const format = args?.format ?? 'markdown';
   let msgs = (game.messages?.contents ?? [])
     .slice()
@@ -298,11 +298,11 @@ export async function exportChatLog(args: {
 export async function postItemCard(args: {
   actor: string;
   item: string;
-  activity?: string;
-  action?: 'use' | 'attack' | 'damage';
-  consume?: boolean;
-  critical?: boolean;
-}): Promise<unknown> {
+  activity?: string | undefined;
+  action?: 'use' | 'attack' | 'damage' | undefined;
+  consume?: boolean | undefined;
+  critical?: boolean | undefined;
+}) {
   const actor = resolveActorFuzzy(args.actor);
   if (!actor) throw notFound(`actor "${args.actor}" not found`);
   const item =
@@ -326,7 +326,7 @@ export async function postItemCard(args: {
   if (!activity) {
     return {
       success: true,
-      posted: false,
+      posted: false as const,
       actorName: actor.name,
       itemName: item.name,
       reason:
@@ -386,12 +386,12 @@ export async function postItemCard(args: {
 
 export async function requestRoll(args: {
   kind: 'save' | 'check' | 'skill';
-  ability?: string;
-  skill?: string;
-  dc?: number;
-  flavor?: string;
-  visibility?: 'public' | 'gm';
-}): Promise<unknown> {
+  ability?: string | undefined;
+  skill?: string | undefined;
+  dc?: number | undefined;
+  flavor?: string | undefined;
+  visibility?: 'public' | 'gm' | undefined;
+}) {
   const Cls = chatMessageClass();
   const expr = buildRollRequestExpression(args.kind, args.ability, args.skill, args.dc);
   const inner = `${args.flavor ? `<strong>${args.flavor}:</strong> ` : ''}${expr}`;

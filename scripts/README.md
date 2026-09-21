@@ -59,7 +59,9 @@ tool proofs:
 `npm run measure` prints the context budgets `src/measure.test.ts` ratchets: `schema-decompose`
 (tools/list bytes by leaf / description / structure), `schema-toolsets` (per toolset),
 `names-cost` (the tool-name list every Claude Code prompt carries), `skills-matrix` (skill ↔
-tool references, the M8 checklist). `FOUNDRY_HOST=local node scripts/measure/tool-results.mjs`
+tool references, the M8 checklist), `seam-typing` (the checker's count of `any` / `unknown`
+args and returns across the page handlers — 0 / 0 since M6; the `SeamGuard` type in
+`src/page/index.ts` is the ratchet). `FOUNDRY_HOST=local node scripts/measure/tool-results.mjs`
 is the live 24-call baseline of result sizes.
 
 ## What is not here any more (3.0)

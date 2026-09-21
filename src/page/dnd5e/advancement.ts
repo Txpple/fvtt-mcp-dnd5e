@@ -81,19 +81,25 @@ export type PcChoiceMap = Record<string, Record<string, Record<string, unknown>>
 export interface PcBuildPlan {
   name: string;
   className: string;
-  species?: string;
-  background?: string;
+  species?: string | undefined;
+  background?: string | undefined;
   /** FINAL ability scores (skill owns the math). Omitted → left at the dnd5e defaults. */
-  abilities?: PcAbilities;
-  choices?: PcChoiceMap;
+  abilities?: PcAbilities | undefined;
+  choices?: PcChoiceMap | undefined;
   /**
    * Caster spell picks by NAME. `alwaysPrepared` imports every one of them as ALWAYS PREPARED
    * (`system.prepared: 2`) — the table's rule for known-style casters (sorcerer, bard, ranger,
    * warlock); which classes get it is the skill's call (design.md §2.1).
    */
-  spells?: { cantrips?: string[]; prepared?: string[]; alwaysPrepared?: boolean };
+  spells?:
+    | {
+        cantrips?: string[] | undefined;
+        prepared?: string[] | undefined;
+        alwaysPrepared?: boolean | undefined;
+      }
+    | undefined;
   /** Character level 1..20 (v2). The engine loops levels {0..level}; HP/subclass/slots scale with it. */
-  level?: number;
+  level?: number | undefined;
   /**
    * Additional classes for a multiclass PC built in ONE call (v4). Each is a SECONDARY class — the
    * `className`/`level` above is the PRIMARY (the originalClass). A secondary class gets the 2024
@@ -101,25 +107,25 @@ export interface PcBuildPlan {
    * max. Total character level (primary `level` + every multiclass `levels`) must be ≤ 20, and a class
    * may appear only once (use levelUpPc to add further levels to an existing class).
    */
-  multiclass?: Array<{ className: string; levels: number }>;
+  multiclass?: Array<{ className: string; levels: number }> | undefined;
   /** HP per level past the first: 'avg' (2024 fixed average, default) or 'max'. L1 (original class) is always max. */
-  hpMode?: 'avg' | 'max';
-  sourceRules?: string;
-  folder?: string;
+  hpMode?: 'avg' | 'max' | undefined;
+  sourceRules?: string | undefined;
+  folder?: string | undefined;
   /**
    * When a REQUIRED player choice (a Trait pick / ItemChoice / Subclass) has no supplied data, the
    * tool by default does NOT persist — it returns needsChoices so the skill can fill them and
    * re-call (no litter actor). Set true to proceed anyway, applying only forced defaults for the
    * unsupplied picks (the skill decides proceed-with-defaults vs ask — design.md §2.1).
    */
-  acceptDefaults?: boolean;
+  acceptDefaults?: boolean | undefined;
   /**
    * Default art (true unless the player brings an image): the portrait AND token texture of the
    * PRIMARY class's PHB pregen — a fixed class → art mapping the book ships, so the same class always
    * gets the same art. Skipped with a warning when no premium type:character pregen has the class's
    * name. `set-actor-art` afterwards overrides it.
    */
-  defaultArt?: boolean;
+  defaultArt?: boolean | undefined;
 }
 
 /**
@@ -159,7 +165,7 @@ export interface AdvancementChoice {
   /** how many to pick. */
   count: number;
   /** legal options — trait keys (may be wildcard categories like "languages:standard:*") or items. */
-  options: Array<{ value: string; label?: string }>;
+  options: Array<{ value: string; label?: string | undefined }>;
 }
 
 /** A normalized advancement descriptor lifted off a live dnd5e item (one per advancement object). */
@@ -188,7 +194,7 @@ export function allowedForRole(
 /** What `applyItemAdvancements` decides to do for ONE advancement at ONE level — pure, no side effects. */
 export type AdvancementStep =
   | { kind: 'skip'; reason: string }
-  | { kind: 'apply'; data: Record<string, unknown>; initial: boolean; result?: string };
+  | { kind: 'apply'; data: Record<string, unknown>; initial: boolean; result?: string | undefined };
 
 export interface AdvancementPlanInput {
   type: string;
@@ -260,34 +266,40 @@ export function planAdvancementApply(input: AdvancementPlanInput): AdvancementSt
 
 export interface PcBuildResult {
   success: boolean;
-  actor?: {
-    id: string;
-    name: string;
-    className: string;
-    species: string | null;
-    background: string | null;
-    level: number;
-    hp: number | null;
-    folder: string | null;
-    /** create only: the default art applied (the primary class's PHB pregen), or null when opted out / absent. */
-    art?: { portrait: string; token: string; from: string } | null;
-    /** level-up only: the new level IN the leveled class + the full class breakdown (multiclass). */
-    classLevel?: number;
-    classes?: Array<{ name: string; levels: number }>;
-  };
-  applied?: Array<{ source: string; level: number; type: string; title: string; result: string }>;
-  needsChoices?: AdvancementChoice[];
-  unresolvedScale?: Array<{ itemId: string; itemName: string; path: string; formula: string }>;
+  actor?:
+    | {
+        id: string;
+        name: string;
+        className: string;
+        species: string | null;
+        background: string | null;
+        level: number;
+        hp: number | null;
+        folder: string | null;
+        /** create only: the default art applied (the primary class's PHB pregen), or null when opted out / absent. */
+        art?: { portrait: string; token: string; from: string } | null | undefined;
+        /** level-up only: the new level IN the leveled class + the full class breakdown (multiclass). */
+        classLevel?: number | undefined;
+        classes?: Array<{ name: string; levels: number }> | undefined;
+      }
+    | undefined;
+  applied?:
+    | Array<{ source: string; level: number; type: string; title: string; result: string }>
+    | undefined;
+  needsChoices?: AdvancementChoice[] | undefined;
+  unresolvedScale?:
+    | Array<{ itemId: string; itemName: string; path: string; formula: string }>
+    | undefined;
   /** prefab path only: the source pregen's name, and the update-actor keys layered onto the copy. */
-  from?: string;
-  modificationsApplied?: string[];
+  from?: string | undefined;
+  modificationsApplied?: string[] | undefined;
   warnings: string[];
   /**
    * CORRUPTING advancement failures (a forced grant, supplied pick, subclass embed, or HP apply that
    * threw). Distinct from `warnings` (best-effort): a non-empty `errors` means the PC would be silently
    * incomplete, so the build does NOT persist (create) / rolls back (level-up) and returns success:false.
    */
-  errors?: string[];
+  errors?: string[] | undefined;
 }
 
 // =============================================================================
@@ -332,7 +344,7 @@ export function summarizeChoice(
   if (raw.type === 'Trait') {
     const groups = Array.isArray(cfg.choices) ? cfg.choices : [];
     let count = 0;
-    const options: Array<{ value: string; label?: string }> = [];
+    const options: Array<{ value: string; label?: string | undefined }> = [];
     const seen = new Set<string>();
     for (const g of groups) {
       count += Number(g?.count ?? 0);
@@ -472,9 +484,9 @@ function labelsForPool(configuration: any): Map<string, string> {
 /** Premium subclass items whose classIdentifier matches — populates the L3 Subclass choice's options. */
 async function findSubclassesFor(
   classIdentifier: string | undefined
-): Promise<Array<{ value: string; label?: string }>> {
+): Promise<Array<{ value: string; label?: string | undefined }>> {
   if (!classIdentifier) return [];
-  const out: Array<{ value: string; label?: string }> = [];
+  const out: Array<{ value: string; label?: string | undefined }> = [];
   for (const pack of game.packs) {
     if (pack.documentName !== 'Item' || !isPremiumBookPack(pack.metadata.id)) continue;
     const idx = await pack.getIndex({ fields: ['type', 'system.classIdentifier'] });
@@ -666,10 +678,10 @@ async function embedClassAndApply(
 // =============================================================================
 
 export async function inspectAdvancementChoices(args: {
-  className?: string;
-  classUuid?: string;
-  level?: number;
-}): Promise<unknown> {
+  className?: string | undefined;
+  classUuid?: string | undefined;
+  level?: number | undefined;
+}) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported(
       `inspectAdvancementChoices requires D&D 5e. Current system: "${game.system.id}".`
@@ -1106,9 +1118,9 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
 export interface LevelUpPlan {
   actorIdentifier: string;
   className: string;
-  choices?: PcChoiceMap;
-  hpMode?: 'avg' | 'max';
-  acceptDefaults?: boolean;
+  choices?: PcChoiceMap | undefined;
+  hpMode?: 'avg' | 'max' | undefined;
+  acceptDefaults?: boolean | undefined;
 }
 
 export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
@@ -1299,15 +1311,15 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
 export interface PcPrefabPlan {
   name: string;
   /** Friendly pregen name (e.g. "Fighter") — resolved across premium Actor packs. */
-  prefab?: string;
+  prefab?: string | undefined;
   /** Explicit source (alternative to `prefab`): the premium pack + actor id. */
-  packId?: string;
-  actorId?: string;
+  packId?: string | undefined;
+  actorId?: string | undefined;
   /** FINAL ability scores overriding the pregen's array (skill owns the math). */
-  abilities?: PcAbilities;
+  abilities?: PcAbilities | undefined;
   /** update-actor-shaped stat edits layered onto the COPY only (mirrors create-actor-from-compendium). */
-  modifications?: Record<string, any>;
-  folder?: string;
+  modifications?: Record<string, any> | undefined;
+  folder?: string | undefined;
 }
 
 /**

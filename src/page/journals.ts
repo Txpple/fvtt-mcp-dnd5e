@@ -33,10 +33,10 @@ interface JournalSummary {
 
 interface JournalContent {
   content: string;
-  currentPage?: { id: string; name: string };
+  currentPage?: { id: string; name: string } | undefined;
   allPages: JournalPageSummary[];
   pageCount: number;
-  note?: string;
+  note?: string | undefined;
 }
 
 interface JournalPageContent {
@@ -63,7 +63,7 @@ function mapPages(journal: any): JournalPageSummary[] {
 }
 
 /** List every journal entry (optionally by name substring) with a per-entry page manifest. */
-export function listJournals(args?: { nameFilter?: string }): JournalSummary[] {
+export function listJournals(args?: { nameFilter?: string | undefined }): JournalSummary[] {
   const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
   return game.journal
     .filter((journal: any) => !nameLower || (journal.name ?? '').toLowerCase().includes(nameLower))
@@ -76,13 +76,11 @@ export function listJournals(args?: { nameFilter?: string }): JournalSummary[] {
 
 /**
  * Get a journal entry's content: the first text page plus the full page manifest.
- * Returns null when the journal id does not resolve.
+ * A journal id that does not resolve is a not-found error (a miss is an error, design.md §3).
  */
-export function getJournalContent(args: { journalId: string }): JournalContent | null {
+export function getJournalContent(args: { journalId: string }): JournalContent {
   const journal = game.journal.get(args.journalId);
-  if (!journal) {
-    return null;
-  }
+  if (!journal) throw notFound(`Journal entry "${args.journalId}" not found`);
 
   const allPages = mapPages(journal);
   const pageCount = allPages.length;
@@ -110,22 +108,18 @@ export function getJournalContent(args: { journalId: string }): JournalContent |
 
 /**
  * Get a specific journal page's content by id. For text pages the HTML body is
- * returned; for other page types (image, etc.) the source path is returned.
- * Returns null when either the journal or the page id does not resolve.
+ * returned; for other page types (image, etc.) the source path is returned. A journal or page
+ * id that does not resolve is a not-found error.
  */
 export function getJournalPageContent(args: {
   journalId: string;
   pageId: string;
-}): JournalPageContent | null {
+}): JournalPageContent {
   const journal = game.journal.get(args.journalId);
-  if (!journal) {
-    return null;
-  }
+  if (!journal) throw notFound(`Journal entry "${args.journalId}" not found`);
 
   const page = journal.pages.get(args.pageId);
-  if (!page) {
-    return null;
-  }
+  if (!page) throw notFound(`Page "${args.pageId}" not found in journal "${journal.name}"`);
 
   return {
     id: page.id || '',
@@ -341,20 +335,20 @@ export async function createJournal(params: {
   name: string;
   pages: Array<{
     name: string;
-    kind?: 'image';
-    content?: string;
-    src?: string;
-    caption?: string;
-    sort?: number;
-    ownership?: { default: number };
+    kind?: 'image' | undefined;
+    content?: string | undefined;
+    src?: string | undefined;
+    caption?: string | undefined;
+    sort?: number | undefined;
+    ownership?: { default: number } | undefined;
   }>;
-  folderName?: string;
+  folderName?: string | undefined;
 }): Promise<{
   id: string;
   name: string;
   pageCount: number;
   pages: Array<{ id: string; name: string }>;
-  warnings?: string[];
+  warnings?: string[] | undefined;
 }> {
   if (!params?.name || params.name.trim().length === 0) {
     throw invalid('name is required and must be a non-empty string');
@@ -441,16 +435,16 @@ export async function createJournal(params: {
  */
 export async function updateJournal(params: {
   journalId: string;
-  name?: string;
-  content?: string;
-  pageId?: string;
-  newPageName?: string;
-  ownership?: { default: number };
+  name?: string | undefined;
+  content?: string | undefined;
+  pageId?: string | undefined;
+  newPageName?: string | undefined;
+  ownership?: { default: number } | undefined;
 }): Promise<{
   success: boolean;
   pageId?: string | undefined;
   pageName?: string | undefined;
-  renamed?: boolean;
+  renamed?: boolean | undefined;
 }> {
   const journal = resolveJournalStrict(params.journalId);
   if (!journal) {
@@ -519,8 +513,8 @@ export async function setJournalPageVisibility(args: {
 export async function deleteJournalPage(args: { journalId: string; pageId: string }): Promise<{
   success: boolean;
   deleted: boolean;
-  notFound?: string;
-  page?: { id: string; name: string };
+  notFound?: string | undefined;
+  page?: { id: string; name: string } | undefined;
 }> {
   const journal = resolveJournalStrict(args.journalId);
   if (!journal) {
@@ -528,11 +522,11 @@ export async function deleteJournalPage(args: { journalId: string; pageId: strin
   }
   const page = journal.pages.get(args.pageId);
   if (!page) {
-    return { success: true, deleted: false, notFound: args.pageId };
+    return { success: true, deleted: false as const, notFound: args.pageId };
   }
   const info = { id: page.id ?? args.pageId, name: page.name ?? '' };
   await journal.deleteEmbeddedDocuments('JournalEntryPage', [args.pageId]);
-  return { success: true, deleted: true, page: info };
+  return { success: true, deleted: true as const, page: info };
 }
 
 /**
@@ -544,7 +538,7 @@ export async function deleteJournals(data: { identifiers: string[] }): Promise<{
   success: boolean;
   deletedCount: number;
   deleted: Array<{ id: string; name: string }>;
-  notFound?: string[];
+  notFound?: string[] | undefined;
 }> {
   if (!Array.isArray(data?.identifiers) || data.identifiers.length === 0) {
     throw invalid('identifiers array is required and must contain at least one entry');

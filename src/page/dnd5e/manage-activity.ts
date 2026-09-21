@@ -196,11 +196,11 @@ async function resolveBehaviors(
 export async function manageActivity(params: {
   action: 'add' | 'edit' | 'remove' | 'list';
   itemIdentifier: string;
-  actorIdentifier?: string;
-  activityId?: string;
-  activity?: Record<string, any>;
-  patch?: Record<string, any>;
-}): Promise<unknown> {
+  actorIdentifier?: string | undefined;
+  activityId?: string | undefined;
+  activity?: Record<string, any> | undefined;
+  patch?: Record<string, any> | undefined;
+}) {
   const { action, itemIdentifier } = params ?? ({} as any);
   if (!itemIdentifier) throw invalid('itemIdentifier is required');
 

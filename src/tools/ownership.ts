@@ -211,12 +211,12 @@ export class OwnershipTools {
     try {
       if (identifier.toLowerCase().includes('all friendly npcs')) {
         // Get all tokens in current scene with friendly disposition
-        const actors = await this.foundry.call('getFriendlyNPCs', {});
+        const actors = await this.foundry.call('getFriendlyNPCs');
         this.logger.debug(`Found ${actors.length} friendly NPCs`);
         return actors;
       } else if (identifier.toLowerCase().includes('party characters')) {
         // Get all player-owned characters
-        const actors = await this.foundry.call('getPartyCharacters', {});
+        const actors = await this.foundry.call('getPartyCharacters');
         this.logger.debug(`Found ${actors.length} party characters`);
         return actors;
       } else {
@@ -243,7 +243,7 @@ export class OwnershipTools {
     try {
       if (identifier.toLowerCase() === 'party') {
         // Get all connected players (excluding GM)
-        const players = await this.foundry.call('getConnectedPlayers', {});
+        const players = await this.foundry.call('getConnectedPlayers');
         this.logger.debug(`Found ${players.length} connected players`);
         return players;
       } else {

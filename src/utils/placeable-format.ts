@@ -13,37 +13,37 @@ function sceneMiss(notFound: string, tail: string): never {
 }
 
 interface CreateResult {
-  notFound?: string;
-  sceneId?: string;
-  sceneName?: string;
-  created?: number;
-  items?: Array<Record<string, any>>;
-  errors?: string[];
-  warnings?: string[];
+  notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  created?: number | undefined;
+  items?: Array<Record<string, any>> | undefined;
+  errors?: string[] | undefined;
+  warnings?: string[] | undefined;
 }
 
 interface ListResult {
-  found?: boolean;
-  notFound?: string;
+  found?: boolean | undefined;
+  notFound?: string | undefined;
 }
 
 interface UpdateResult {
-  notFound?: string;
-  sceneId?: string;
-  sceneName?: string;
-  matched?: number;
-  updated?: number;
-  notFoundIds?: string[];
-  warnings?: string[];
+  notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  matched?: number | undefined;
+  updated?: number | undefined;
+  notFoundIds?: string[] | undefined;
+  warnings?: string[] | undefined;
 }
 
 interface DeleteResult {
-  notFound?: string;
-  sceneId?: string;
-  sceneName?: string;
-  deleted?: number;
-  notFoundIds?: string[];
-  warnings?: string[];
+  notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  deleted?: number | undefined;
+  notFoundIds?: string[] | undefined;
+  warnings?: string[] | undefined;
 }
 
 function warningBlock(warnings?: string[]): string {

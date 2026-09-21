@@ -31,23 +31,23 @@ const DOOR_VALUES = new Set([0, 1, 2]); // WALL_DOOR_TYPES
 const DS_VALUES = new Set([0, 1, 2]); // WALL_DOOR_STATES
 
 export interface WallInput {
-  x0?: number;
-  y0?: number;
-  x1?: number;
-  y1?: number;
-  c?: number[];
-  move?: number;
-  light?: number;
-  sight?: number;
-  sound?: number;
-  dir?: number;
-  door?: number;
-  ds?: number;
-  doorSound?: string;
-  thresholdLight?: number | null;
-  thresholdSight?: number | null;
-  thresholdSound?: number | null;
-  thresholdAttenuation?: boolean;
+  x0?: number | undefined;
+  y0?: number | undefined;
+  x1?: number | undefined;
+  y1?: number | undefined;
+  c?: number[] | undefined;
+  move?: number | undefined;
+  light?: number | undefined;
+  sight?: number | undefined;
+  sound?: number | undefined;
+  dir?: number | undefined;
+  door?: number | undefined;
+  ds?: number | undefined;
+  doorSound?: string | undefined;
+  thresholdLight?: number | null | undefined;
+  thresholdSight?: number | null | undefined;
+  thresholdSound?: number | null | undefined;
+  thresholdAttenuation?: boolean | undefined;
 }
 
 /**
@@ -172,22 +172,27 @@ export const wallDescriptor: PlaceableDescriptor = {
 };
 
 // --- bridge page functions (registered in src/page/index.ts) -----------------
-export const createSceneWalls = (args: { sceneIdentifier: string; items: WallInput[] }) =>
-  crudCreate(wallDescriptor, args);
+export const createSceneWalls = (args: {
+  sceneIdentifier?: string | undefined;
+  items: WallInput[];
+}) => crudCreate(wallDescriptor, args);
 /**
  * List walls with an optional door filter. A populated scene carries hundreds of walls (the live
  * Cave has 645) and the real edit loop is DOORS (open/lock/secret) — `doorsOnly` keeps the response
  * inspectable instead of a wall-of-JSON.
  */
-export const listSceneWalls = (args: { sceneIdentifier: string; doorsOnly?: boolean }) => {
+export const listSceneWalls = (args: {
+  sceneIdentifier?: string | undefined;
+  doorsOnly?: boolean | undefined;
+}) => {
   const r = crudList(wallDescriptor, { sceneIdentifier: args.sceneIdentifier });
   if (!args?.doorsOnly || !r.items) return r;
   const doors = r.items.filter(w => typeof w.door === 'number' && w.door > 0);
   return { ...r, count: doors.length, totalWalls: r.count, items: doors };
 };
 export const updateSceneWalls = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & WallInput>;
 }) => crudUpdate(wallDescriptor, args);
-export const deleteSceneWalls = (args: { sceneIdentifier: string; ids: string[] }) =>
+export const deleteSceneWalls = (args: { sceneIdentifier?: string | undefined; ids: string[] }) =>
   crudDelete(wallDescriptor, args);

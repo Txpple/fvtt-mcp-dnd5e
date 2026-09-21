@@ -169,50 +169,46 @@ export class AssetBridgeTools {
   async handleSetActorArt(args: any): Promise<string> {
     const parsed = SetActorArtSchema.parse(args ?? {});
     const result = await this.foundry.call('setActorArt', parsed);
-    if (result?.updated === false && result?.notFound) {
-      return `Actor not found: "${result?.notFound ?? parsed.actorIdentifier}". Nothing changed.`;
-    }
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
+    const warns = result.warnings ?? [];
     const warnSection = warns.length
       ? `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`
       : '';
     // Nothing valid was written (e.g. a video portrait with applyToToken:false) — report + warn.
-    if (result?.updated === false) {
-      return `No art applied to actor "${result?.actorName ?? parsed.actorIdentifier}".${warnSection}`;
+    if (!result.updated) {
+      return `No art applied to actor "${result.actorName ?? parsed.actorIdentifier}".${warnSection}`;
     }
-    const img = result?.img;
-    const tokenSrc = result?.tokenSrc;
+    const img = result.img;
+    const tokenSrc = result.tokenSrc;
     // Distinct portrait vs token art (a still portrait + an animated token) → show both; otherwise
     // keep the original single-path phrasing.
     const artDesc =
-      result?.appliedToToken && tokenSrc && tokenSrc !== img
+      result.appliedToToken && tokenSrc && tokenSrc !== img
         ? `portrait ${img ?? '(unchanged)'} · token ${tokenSrc}`
-        : `${img ?? tokenSrc}${result?.appliedToToken ? ' (portrait + prototype token)' : ' (portrait only)'}`;
+        : `${img ?? tokenSrc}${result.appliedToToken ? ' (portrait + prototype token)' : ' (portrait only)'}`;
     const normalized =
-      Array.isArray(result?.normalized) && result.normalized.length
+      Array.isArray(result.normalized) && result.normalized.length
         ? ` Prototype normalized: ${result.normalized.join(', ')}.`
         : '';
+    // `placedTokens` is cut at 20; `placedTokensStale` is the full count (both present together).
+    const stale = result.placedTokensStale ?? 0;
     const placed =
-      Array.isArray(result?.placedTokens) && result.placedTokens.length
-        ? `\n\n⚠️ ${result.placedTokensStale} placed token(s) still carry the old art/settings — ` +
+      Array.isArray(result.placedTokens) && result.placedTokens.length
+        ? `\n\n⚠️ ${stale} placed token(s) still carry the old art/settings — ` +
           'update-token each or delete + re-drop:\n' +
           result.placedTokens
-            .map((t: any) => `- ${t.scene} · ${t.name} (${t.tokenId}): ${t.stale.join(', ')}`)
+            .map(t => `- ${t.scene} · ${t.name} (${t.tokenId}): ${t.stale.join(', ')}`)
             .join('\n') +
-          (result.placedTokensStale > result.placedTokens.length
-            ? `\n- … ${result.placedTokensStale - result.placedTokens.length} more`
+          (stale > result.placedTokens.length
+            ? `\n- … ${stale - result.placedTokens.length} more`
             : '')
         : '';
-    return `Set art for actor "${result?.actorName}" (${result?.actorId}) → ${artDesc}.${normalized}${placed}${warnSection}`;
+    return `Set art for actor "${result.actorName}" (${result.actorId}) → ${artDesc}.${normalized}${placed}${warnSection}`;
   }
 
   async handleAddJournalImage(args: any): Promise<string> {
     const parsed = AddJournalImageSchema.parse(args ?? {});
     const result = await this.foundry.call('addJournalImage', parsed);
-    if (result?.updated === false) {
-      return `Journal not found: "${result?.notFound ?? parsed.journalIdentifier}". Nothing changed.`;
-    }
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
+    const warns = result.warnings ?? [];
     const warnSection = warns.length
       ? `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`
       : '';

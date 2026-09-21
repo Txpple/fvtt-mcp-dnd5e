@@ -12,6 +12,9 @@
 import { slugify, resolveActorFuzzy as findActorByIdentifier } from '../_shared.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { invalid, notFound, unsupported } from '../errors.js';
+import type { PassiveFeatureArgs } from '../../tools/dnd5e/add-feature.js';
+// The arg shapes are the tool's zod OUTPUT (type-only imports; nothing of the tool side reaches
+// the page bundle) — the page receives exactly what the tool parsed.
 
 // ---------------------------------------------------------------------------
 // save feature — feat Item with a single "save" activity
@@ -27,11 +30,11 @@ export async function addSaveFeatureToActor(args: {
   damageParts: Array<{ number: number; denomination: number; type: string }>;
   halfOnSave: boolean;
   areaType: string;
-  areaSize?: number;
+  areaSize?: number | undefined;
   areaUnits: string;
   affectsType: string;
-  img?: string;
-}): Promise<unknown> {
+  img?: string | undefined;
+}) {
   // 1. Lookup actor
   const actor = findActorByIdentifier(args.actorIdentifier);
   if (!actor) {
@@ -157,7 +160,7 @@ export async function addSaveFeatureToActor(args: {
 // passive feature — feat Item, description only, empty activities map
 // ---------------------------------------------------------------------------
 
-export async function addPassiveFeatureToActor(args: any): Promise<unknown> {
+export async function addPassiveFeatureToActor(args: PassiveFeatureArgs) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addPassiveFeatureToActor requires the dnd5e game system');
   }

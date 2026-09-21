@@ -47,7 +47,7 @@ async function deleteByResolver(
   success: boolean;
   deletedCount: number;
   deleted: Array<{ id: string; name: string }>;
-  notFound?: string[];
+  notFound?: string[] | undefined;
 }> {
   if (!Array.isArray(identifiers) || identifiers.length === 0) {
     throw invalid('identifiers array is required and must contain at least one entry');
@@ -77,7 +77,13 @@ async function deleteByResolver(
 
 // --- collection lists ---
 
-export function listPlaylists(): unknown {
+export function listPlaylists(): Array<{
+  id: string;
+  name: string;
+  mode: number;
+  soundCount: number;
+  playing: boolean;
+}> {
   return (game.playlists?.contents ?? []).map((p: any) => ({
     id: p.id ?? '',
     name: p.name ?? '',
@@ -87,7 +93,13 @@ export function listPlaylists(): unknown {
   }));
 }
 
-export function listRollTables(): unknown {
+export function listRollTables(): Array<{
+  id: string;
+  name: string;
+  formula: string;
+  resultCount: number;
+  description: string;
+}> {
   return (game.tables?.contents ?? []).map((t: any) => ({
     id: t.id ?? '',
     name: t.name ?? '',
@@ -97,7 +109,7 @@ export function listRollTables(): unknown {
   }));
 }
 
-export function listCards(): unknown {
+export function listCards(): Array<{ id: string; name: string; type: string; cardCount: number }> {
   return (game.cards?.contents ?? []).map((c: any) => ({
     id: c.id ?? '',
     name: c.name ?? '',
@@ -109,18 +121,18 @@ export function listCards(): unknown {
 // --- table rolls ---
 
 // Roll on a RollTable, evaluating without marking results drawn or posting to chat.
-export async function rollOnTable(args: { identifier: string }): Promise<unknown> {
+export async function rollOnTable(args: { identifier: string }) {
   const identifier = args?.identifier;
   const table = resolveStrict(game.tables, identifier);
   if (!table) {
-    return { success: true, rolled: false, notFound: identifier };
+    return { success: true, rolled: false as const, notFound: identifier };
   }
 
   // roll() evaluates without marking results drawn or posting to chat.
   const { roll, results } = await table.roll();
   return {
     success: true,
-    rolled: true,
+    rolled: true as const,
     tableId: table.id,
     tableName: table.name,
     total: roll?.total,
@@ -145,10 +157,10 @@ export async function rollOnTable(args: { identifier: string }): Promise<unknown
 // gives only a summary; roll-on-table draws one random entry). Results are sorted by their low range so a
 // d<N> table reads 1..N in order. Pure read: no roll, no mutation. Returns found:false / notFound when the
 // identifier doesn't resolve.
-export function getRollTable(args: { identifier: string }): unknown {
+export function getRollTable(args: { identifier: string }) {
   const table = resolveStrict(game.tables, args?.identifier);
   if (!table) {
-    return { success: true, found: false, notFound: args?.identifier };
+    return { success: true, found: false as const, notFound: args?.identifier };
   }
   const results = (table.results?.contents ?? [])
     .map((r: any) => {
@@ -172,7 +184,7 @@ export function getRollTable(args: { identifier: string }): unknown {
 
   return {
     success: true,
-    found: true,
+    found: true as const,
     id: table.id ?? '',
     name: table.name ?? '',
     formula: table.formula ?? '',
@@ -212,11 +224,11 @@ function playlistModeMap(): Record<string, number> {
 export async function createPlaylist(args: {
   name: string;
   soundPaths: string[];
-  mode?: string;
-  fade?: number;
-  defaultVolume?: number;
-  repeat?: boolean;
-}): Promise<unknown> {
+  mode?: string | undefined;
+  fade?: number | undefined;
+  defaultVolume?: number | undefined;
+  repeat?: boolean | undefined;
+}) {
   if (!args?.name || typeof args.name !== 'string') {
     throw invalid('name is required');
   }
@@ -267,13 +279,13 @@ export async function createPlaylist(args: {
 // tracks. Returns updated:false / notFound when the identifier doesn't resolve.
 export async function updatePlaylist(args: {
   identifier: string;
-  name?: string;
-  mode?: string;
-  fade?: number;
-}): Promise<unknown> {
+  name?: string | undefined;
+  mode?: string | undefined;
+  fade?: number | undefined;
+}) {
   const playlist = resolveStrict(game.playlists, args.identifier);
   if (!playlist) {
-    return { success: true, updated: false, notFound: args.identifier };
+    return { success: true, updated: false as const, notFound: args.identifier };
   }
 
   const modeMap = playlistModeMap();
@@ -291,11 +303,16 @@ export async function updatePlaylist(args: {
   }
 
   await playlist.update(update);
-  return { success: true, updated: true, playlistId: playlist.id, playlistName: playlist.name };
+  return {
+    success: true,
+    updated: true as const,
+    playlistId: playlist.id,
+    playlistName: playlist.name,
+  };
 }
 
 // Delete one or more Playlist documents by exact id/name. Best-effort.
-export async function deletePlaylists(args: { identifiers: string[] }): Promise<unknown> {
+export async function deletePlaylists(args: { identifiers: string[] }) {
   return deleteByResolver(args.identifiers, id => resolveStrict(game.playlists, id));
 }
 
@@ -303,11 +320,11 @@ export async function deletePlaylists(args: { identifiers: string[] }): Promise<
 
 // Input shape for one table entry (Node-validated by tables.ts; mirrored here).
 interface RollTableResultInput {
-  text?: string;
-  uuid?: string;
-  name?: string;
-  weight?: number;
-  range?: [number, number];
+  text?: string | undefined;
+  uuid?: string | undefined;
+  name?: string | undefined;
+  weight?: number | undefined;
+  range?: [number, number] | undefined;
 }
 
 // Parse the pack id from a Compendium UUID: "Compendium.<scope>.<pack>.<Type>.<id>" -> "<scope>.<pack>".
@@ -434,12 +451,12 @@ async function buildTableResults(results: RollTableResultInput[]): Promise<
 // CALLER's editResults array, so error labels stay accurate even when an earlier edit was
 // dropped during content resolution.
 export interface ResolvedResultEdit {
-  index?: number;
-  roll?: number;
-  resultId?: string;
-  description?: string;
-  weight?: number;
-  range?: [number, number];
+  index?: number | undefined;
+  roll?: number | undefined;
+  resultId?: string | undefined;
+  description?: string | undefined;
+  weight?: number | undefined;
+  range?: [number, number] | undefined;
 }
 
 /**
@@ -461,7 +478,7 @@ export interface ResolvedResultEdit {
  * layout is interval-checked and overlaps / coverage gaps are reported.
  */
 export function buildResultEditPatches(
-  existing: Array<{ id: string; range?: number[] }>,
+  existing: Array<{ id: string; range?: number[] | undefined }>,
   edits: ResolvedResultEdit[]
 ): { patches: Array<Record<string, unknown>>; errors: string[]; warnings: string[] } {
   const patches: Array<Record<string, unknown>> = [];
@@ -475,7 +492,7 @@ export function buildResultEditPatches(
     const label = `editResults[${e.index ?? i}]`;
 
     // -- resolve the target to ONE existing result --
-    let target: { id: string; range?: number[] } | undefined;
+    let target: { id: string; range?: number[] | undefined } | undefined;
     if (typeof e.resultId === 'string' && e.resultId.trim() !== '') {
       target = existing.find(r => r.id === e.resultId);
       if (!target) {
@@ -572,13 +589,13 @@ export function buildResultEditPatches(
 // formula defaults to 1d<maxRange> unless an explicit formula is supplied.
 export async function createRollTable(args: {
   name: string;
-  description?: string;
-  formula?: string;
-  replacement?: boolean;
-  displayRoll?: boolean;
-  folderName?: string;
+  description?: string | undefined;
+  formula?: string | undefined;
+  replacement?: boolean | undefined;
+  displayRoll?: boolean | undefined;
+  folderName?: string | undefined;
   results: RollTableResultInput[];
-}): Promise<unknown> {
+}) {
   if (!args?.name || args.name.trim().length === 0) {
     throw invalid('name is required and must be a non-empty string');
   }
@@ -617,8 +634,8 @@ export async function createRollTable(args: {
 
 // One TARGETED result edit as it arrives over the bridge (text/uuid not yet resolved).
 interface RollTableResultEditInput extends RollTableResultInput {
-  roll?: number;
-  resultId?: string;
+  roll?: number | undefined;
+  resultId?: string | undefined;
 }
 
 // Update a RollTable's fields, and its results in one of two modes:
@@ -632,17 +649,17 @@ interface RollTableResultEditInput extends RollTableResultInput {
 // Returns updated:false / notFound when unresolved.
 export async function updateRollTable(args: {
   identifier: string;
-  name?: string;
-  description?: string;
-  formula?: string;
-  replacement?: boolean;
-  displayRoll?: boolean;
-  results?: RollTableResultInput[];
-  editResults?: RollTableResultEditInput[];
-}): Promise<unknown> {
+  name?: string | undefined;
+  description?: string | undefined;
+  formula?: string | undefined;
+  replacement?: boolean | undefined;
+  displayRoll?: boolean | undefined;
+  results?: RollTableResultInput[] | undefined;
+  editResults?: RollTableResultEditInput[] | undefined;
+}) {
   const table = resolveStrict(game.tables, args.identifier);
   if (!table) {
-    return { success: true, updated: false, notFound: args.identifier };
+    return { success: true, updated: false as const, notFound: args.identifier };
   }
 
   const update: any = {};
@@ -727,7 +744,7 @@ export async function updateRollTable(args: {
 
   return {
     success: true,
-    updated: true,
+    updated: true as const,
     tableId: table.id,
     tableName: table.name,
     resultCount: table.results?.size ?? 0,
@@ -738,7 +755,7 @@ export async function updateRollTable(args: {
 }
 
 // Delete one or more RollTable documents by exact id/name. Best-effort.
-export async function deleteRollTables(args: { identifiers: string[] }): Promise<unknown> {
+export async function deleteRollTables(args: { identifiers: string[] }) {
   return deleteByResolver(args.identifiers, id => resolveStrict(game.tables, id));
 }
 
@@ -752,8 +769,8 @@ export async function deleteRollTables(args: { identifiers: string[] }): Promise
 export async function importRollTable(args: {
   packId: string;
   itemId: string;
-  folderName?: string;
-}): Promise<unknown> {
+  folderName?: string | undefined;
+}) {
   if (!args?.packId || !args?.itemId) {
     throw invalid('Both packId and itemId are required');
   }
@@ -785,11 +802,18 @@ export async function importRollTable(args: {
 // the card).
 export async function createCards(args: {
   name: string;
-  type?: string;
-  description?: string;
-  folderName?: string;
-  cards?: Array<{ name: string; description?: string; text?: string; img?: string }>;
-}): Promise<unknown> {
+  type?: string | undefined;
+  description?: string | undefined;
+  folderName?: string | undefined;
+  cards?:
+    | Array<{
+        name: string;
+        description?: string | undefined;
+        text?: string | undefined;
+        img?: string | undefined;
+      }>
+    | undefined;
+}) {
   if (!args?.name || args.name.trim().length === 0) {
     throw invalid('name is required and must be a non-empty string');
   }
@@ -853,9 +877,9 @@ export async function createCards(args: {
 // ready-made deck" path. Mirrors Foundry's own preset loader: fetch the preset JSON, then create.
 export async function importCardsPreset(args: {
   preset: string;
-  name?: string;
-  folderName?: string;
-}): Promise<unknown> {
+  name?: string | undefined;
+  folderName?: string | undefined;
+}) {
   const presets = (globalThis as any).CONFIG?.Cards?.presets ?? {};
   const preset = presets[args?.preset ?? ''];
   if (!preset) {
@@ -888,6 +912,6 @@ export async function importCardsPreset(args: {
 }
 
 // Delete one or more Cards stacks by exact id/name. Best-effort.
-export async function deleteCards(args: { identifiers: string[] }): Promise<unknown> {
+export async function deleteCards(args: { identifiers: string[] }) {
   return deleteByResolver(args.identifiers, id => resolveStrict(game.cards, id));
 }

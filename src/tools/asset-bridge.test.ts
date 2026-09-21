@@ -176,10 +176,13 @@ describe('handleSetActorArt', () => {
     expect(out).toBe('Set art for actor "G" (a1) → i.webp (portrait only).');
   });
 
-  it('reports not-found branch when updated === false', async () => {
-    const { tools } = build({ updated: false, notFound: 'Ghost' });
-    const out = await tools.handleSetActorArt({ actorIdentifier: 'Ghost', imagePath: 'i.webp' });
-    expect(out).toBe('Actor not found: "Ghost". Nothing changed.');
+  it("a missing actor is the page's not-found throw, propagated untouched (a miss is an error)", async () => {
+    const { tools } = build(() => {
+      throw new Error('Actor not found: "Ghost" (exact id or name)');
+    });
+    await expect(
+      tools.handleSetActorArt({ actorIdentifier: 'Ghost', imagePath: 'i.webp' })
+    ).rejects.toThrow(/^Actor not found: "Ghost"/);
   });
 
   it('surfaces a bad-asset warning from the page result', async () => {
@@ -315,13 +318,13 @@ describe('handleAddJournalImage', () => {
     expect(calls[0][1]).toMatchObject({ playerVisible: true });
   });
 
-  it('reports not-found branch when updated === false', async () => {
-    const { tools } = build({ updated: false, notFound: 'Ghost' });
-    const out = await tools.handleAddJournalImage({
-      journalIdentifier: 'Ghost',
-      imagePath: 'i.webp',
+  it("a missing journal is the page's not-found throw, propagated untouched", async () => {
+    const { tools } = build(() => {
+      throw new Error('Journal not found: "Ghost" (exact id or name)');
     });
-    expect(out).toBe('Journal not found: "Ghost". Nothing changed.');
+    await expect(
+      tools.handleAddJournalImage({ journalIdentifier: 'Ghost', imagePath: 'i.webp' })
+    ).rejects.toThrow(/^Journal not found: "Ghost"/);
   });
 
   it('surfaces a bad-asset warning from the page result (kept broken)', async () => {

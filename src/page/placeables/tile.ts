@@ -30,28 +30,28 @@ import {
 } from '../_placeables.js';
 
 export interface TileInput {
-  src?: string;
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  rotation?: number;
-  alpha?: number;
-  elevation?: number;
-  sort?: number;
-  scaleX?: number;
-  scaleY?: number;
-  tint?: string;
-  fit?: string;
-  occlusionMode?: number;
-  occlusionAlpha?: number;
-  restrictLight?: boolean;
-  restrictWeather?: boolean;
-  videoLoop?: boolean;
-  videoAutoplay?: boolean;
-  videoVolume?: number;
-  hidden?: boolean;
-  locked?: boolean;
+  src?: string | undefined;
+  x?: number | undefined;
+  y?: number | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
+  rotation?: number | undefined;
+  alpha?: number | undefined;
+  elevation?: number | undefined;
+  sort?: number | undefined;
+  scaleX?: number | undefined;
+  scaleY?: number | undefined;
+  tint?: string | undefined;
+  fit?: string | undefined;
+  occlusionMode?: number | undefined;
+  occlusionAlpha?: number | undefined;
+  restrictLight?: boolean | undefined;
+  restrictWeather?: boolean | undefined;
+  videoLoop?: boolean | undefined;
+  videoAutoplay?: boolean | undefined;
+  videoVolume?: number | undefined;
+  hidden?: boolean | undefined;
+  locked?: boolean | undefined;
 }
 
 /** The doc's texture anchor (v14 default 0.5/0.5 = center) — the point its x/y positions. */
@@ -83,9 +83,7 @@ async function toCreateDoc(input: TileInput): Promise<CreateDocResult> {
   // KEEP+WARN: a tile image has no sensible substitute — keep the path but warn on a 404.
   if (src && !(await imgResolves(src))) warnings.push(badAssetWarning('src', src, false));
 
-  const { x, y, width, height } = input as Required<
-    Pick<TileInput, 'x' | 'y' | 'width' | 'height'>
-  >;
+  const { x, y, width, height } = input as { x: number; y: number; width: number; height: number };
   const doc: Record<string, unknown> = {
     texture: textureCreate(input, src),
     // TL→anchor: the tools speak top-left; the doc x/y is the anchor point (default 0.5 = center).
@@ -201,12 +199,15 @@ export const tileDescriptor: PlaceableDescriptor = {
 };
 
 // --- bridge page functions (registered in src/page/index.ts) -----------------
-export const createSceneTiles = (args: { sceneIdentifier: string; items: TileInput[] }) =>
-  crudCreate(tileDescriptor, args);
-export const listSceneTiles = (args: { sceneIdentifier: string }) => crudList(tileDescriptor, args);
+export const createSceneTiles = (args: {
+  sceneIdentifier?: string | undefined;
+  items: TileInput[];
+}) => crudCreate(tileDescriptor, args);
+export const listSceneTiles = (args: { sceneIdentifier?: string | undefined }) =>
+  crudList(tileDescriptor, args);
 export const updateSceneTiles = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & TileInput>;
 }) => crudUpdate(tileDescriptor, args);
-export const deleteSceneTiles = (args: { sceneIdentifier: string; ids: string[] }) =>
+export const deleteSceneTiles = (args: { sceneIdentifier?: string | undefined; ids: string[] }) =>
   crudDelete(tileDescriptor, args);

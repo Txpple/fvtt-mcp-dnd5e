@@ -24,8 +24,8 @@ import { ambiguous, invalid, notFound } from '../errors.js';
 
 export type EffectRef =
   | { kind: 'effect-uuid'; uuid: string }
-  | { kind: 'item-uuid'; uuid: string; effectName?: string }
-  | { kind: 'name'; name: string; effectName?: string };
+  | { kind: 'item-uuid'; uuid: string; effectName?: string | undefined }
+  | { kind: 'name'; name: string; effectName?: string | undefined };
 
 const EFFECT_UUID_RE = /\.ActiveEffect\.[A-Za-z0-9]{16}$/;
 const ITEM_UUID_RE = /^(Compendium\..+\.Item|Item)\.[A-Za-z0-9]{16}$/;

@@ -15,11 +15,11 @@ export interface AdvBehaviorSpec {
   type: string; // 'HitPoints' | 'ItemGrant' | 'Trait' | 'Subclass' | 'AbilityScoreImprovement' | …
   title: string;
   levels: number[];
-  classRestriction?: string;
+  classRestriction?: string | undefined;
   /** Mutate the owning actor when applied (e.g. bump HP, add an item, set spell slots). */
   effect?: (actor: MockActor, level: number, data: any, opts: any) => void;
   /** When true, apply() throws — to exercise the corrupting-failure path. */
-  throws?: boolean;
+  throws?: boolean | undefined;
 }
 
 /** A fake premium-book class/species/background document. */
@@ -28,9 +28,9 @@ export interface FakeDocSpec {
   type: 'class' | 'race' | 'background' | 'subclass';
   identifier: string;
   packId: string;
-  advancements?: AdvBehaviorSpec[];
+  advancements?: AdvBehaviorSpec[] | undefined;
   /** Base system data merged onto an embedded copy (e.g. seed spell slots to test rest top-off). */
-  system?: Record<string, any>;
+  system?: Record<string, any> | undefined;
 }
 
 let nextId = 1000;
@@ -75,7 +75,7 @@ export class MockItem {
   isOriginalClass = false;
   /** the registry key for this item's advancement behaviors — preserved through persist so a level-up
    *  on a re-read actor can still apply them (real Foundry reconstructs advancements from stored data). */
-  advKey?: string;
+  advKey?: string | undefined;
   /** the advancement behaviors this item carries (a class/species/background) — bound when embedded. */
   private behaviors: AdvBehaviorSpec[];
   private actor: MockActor;
@@ -231,7 +231,7 @@ export interface FakePregenSpec {
   packId: string;
   name: string;
   img: string;
-  tokenSrc?: string;
+  tokenSrc?: string | undefined;
 }
 
 interface MockStore {
@@ -256,7 +256,7 @@ export interface MockHandle {
  */
 export function installFoundryMock(
   docs: FakeDocSpec[],
-  opts: { pregens?: FakePregenSpec[] } = {}
+  opts: { pregens?: FakePregenSpec[] | undefined } = {}
 ): MockHandle {
   const store: MockStore = {
     actors: new Map(),

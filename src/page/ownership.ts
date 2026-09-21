@@ -61,10 +61,10 @@ function effectiveLevel(actor: any, user: any): number {
  *     plus its `source` ('explicit' / 'inherited') and the raw explicit level.
  */
 export function getActorOwnership(args?: {
-  actorIdentifier?: string;
-  playerIdentifier?: string;
-  verbose?: boolean;
-}): unknown {
+  actorIdentifier?: string | undefined;
+  playerIdentifier?: string | undefined;
+  verbose?: boolean | undefined;
+}) {
   const actorIdentifier = args?.actorIdentifier;
   const playerIdentifier = args?.playerIdentifier;
   const single = !!actorIdentifier && actorIdentifier !== 'all';
@@ -155,7 +155,7 @@ export async function setActorOwnership(args: {
   actorId: string;
   userId: string;
   permission: number | null;
-}): Promise<{ success: boolean; message: string; error?: string }> {
+}): Promise<{ success: boolean; message: string; error?: string | undefined }> {
   try {
     const actor = game.actors?.get(args.actorId);
     if (!actor) {
@@ -217,7 +217,7 @@ export async function setActorOwnership(args: {
  * Friendly-disposition tokens on the active scene, as { id, name }. Prefers the
  * token's underlying actor id; falls back to the token id.
  */
-export function getFriendlyNPCs(): unknown {
+export function getFriendlyNPCs(): Array<{ id: string; name: string }> {
   const scene = game.scenes?.find((s: any) => s.active);
   if (!scene) return [];
 
@@ -233,7 +233,7 @@ export function getFriendlyNPCs(): unknown {
 /**
  * Player-owned character actors (the party), as { id, name }.
  */
-export function getPartyCharacters(): unknown {
+export function getPartyCharacters(): Array<{ id: string; name: string }> {
   return (game.actors?.contents ?? [])
     .filter((actor: any) => actor.hasPlayerOwner && actor.type === 'character')
     .map((actor: any) => ({
@@ -246,7 +246,7 @@ export function getPartyCharacters(): unknown {
 /**
  * Connected (active) non-GM users, as { id, name }.
  */
-export function getConnectedPlayers(): unknown {
+export function getConnectedPlayers(): Array<{ id: string; name: string }> {
   return (game.users?.contents ?? [])
     .filter((user: any) => user.active && !user.isGM)
     .map((user: any) => ({
@@ -264,9 +264,9 @@ export function getConnectedPlayers(): unknown {
  */
 export function findPlayers(args: {
   identifier: string;
-  allowPartialMatch?: boolean;
-  includeCharacterOwners?: boolean;
-}): unknown {
+  allowPartialMatch?: boolean | undefined;
+  includeCharacterOwners?: boolean | undefined;
+}) {
   const { identifier, allowPartialMatch = true, includeCharacterOwners = true } = args;
   const searchTerm = identifier.toLowerCase();
   const players: Array<{ id: string; name: string }> = [];

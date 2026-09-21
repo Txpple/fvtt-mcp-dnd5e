@@ -24,23 +24,23 @@ import {
 } from '../_placeables.js';
 
 export interface SoundInput {
-  x?: number;
-  y?: number;
-  path?: string;
-  radius?: number;
-  name?: string;
-  repeat?: boolean;
-  volume?: number;
-  walls?: boolean;
-  easing?: boolean;
-  hidden?: boolean;
-  elevation?: number;
-  darknessMin?: number;
-  darknessMax?: number;
-  baseEffect?: string;
-  baseEffectIntensity?: number;
-  muffledEffect?: string;
-  muffledEffectIntensity?: number;
+  x?: number | undefined;
+  y?: number | undefined;
+  path?: string | undefined;
+  radius?: number | undefined;
+  name?: string | undefined;
+  repeat?: boolean | undefined;
+  volume?: number | undefined;
+  walls?: boolean | undefined;
+  easing?: boolean | undefined;
+  hidden?: boolean | undefined;
+  elevation?: number | undefined;
+  darknessMin?: number | undefined;
+  darknessMax?: number | undefined;
+  baseEffect?: string | undefined;
+  baseEffectIntensity?: number | undefined;
+  muffledEffect?: string | undefined;
+  muffledEffectIntensity?: number | undefined;
 }
 
 async function toCreateDoc(input: SoundInput): Promise<CreateDocResult> {
@@ -148,13 +148,15 @@ export const soundDescriptor: PlaceableDescriptor = {
 };
 
 // --- bridge page functions (registered in src/page/index.ts) -----------------
-export const createSceneSounds = (args: { sceneIdentifier: string; items: SoundInput[] }) =>
-  crudCreate(soundDescriptor, args);
-export const listSceneSounds = (args: { sceneIdentifier: string }) =>
+export const createSceneSounds = (args: {
+  sceneIdentifier?: string | undefined;
+  items: SoundInput[];
+}) => crudCreate(soundDescriptor, args);
+export const listSceneSounds = (args: { sceneIdentifier?: string | undefined }) =>
   crudList(soundDescriptor, args);
 export const updateSceneSounds = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & SoundInput>;
 }) => crudUpdate(soundDescriptor, args);
-export const deleteSceneSounds = (args: { sceneIdentifier: string; ids: string[] }) =>
+export const deleteSceneSounds = (args: { sceneIdentifier?: string | undefined; ids: string[] }) =>
   crudDelete(soundDescriptor, args);

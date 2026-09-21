@@ -531,8 +531,8 @@ export class ChatTools {
   async handlePostItemCard(args: any): Promise<string> {
     const parsed = PostItemCardSchema.parse(args ?? {});
     const r = await this.foundry.call('postItemCard', parsed);
-    if (r?.posted === false) return `Could not post a rich card: ${r.reason}`;
-    return `Posted ${r?.action} card for "${r?.itemName}" (${r?.activityType}) as ${r?.actorName}.`;
+    if (!r.posted) return `Could not post a rich card: ${r.reason}`;
+    return `Posted ${r.action} card for "${r.itemName}" (${r.activityType}) as ${r.actorName}.`;
   }
 
   async handleRequestRoll(args: any): Promise<string> {

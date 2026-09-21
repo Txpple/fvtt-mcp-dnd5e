@@ -88,14 +88,14 @@ export interface AuditFinding {
   docType: 'actor' | 'item';
   id: string;
   name: string;
-  owner?: string; // owning actor name, for an embedded item
+  owner?: string | undefined; // owning actor name, for an embedded item
   detail: string;
 }
 
 interface AuditArgs {
-  actorIdentifiers?: string[];
-  itemFolders?: string[];
-  worldItemIds?: string[];
+  actorIdentifiers?: string[] | undefined;
+  itemFolders?: string[] | undefined;
+  worldItemIds?: string[] | undefined;
 }
 
 /**
@@ -104,7 +104,7 @@ interface AuditArgs {
  * every NPC actor and every world Item. Read-only — it never mutates a document; it returns findings
  * for the skill to fix.
  */
-export async function auditContent(args?: AuditArgs): Promise<unknown> {
+export async function auditContent(args?: AuditArgs) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported(`auditContent requires D&D 5e. Current system: "${game.system.id}".`);
   }

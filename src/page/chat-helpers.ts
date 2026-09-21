@@ -61,35 +61,35 @@ export function buildMessageVisibility(input: VisibilityInput): VisibilityParts 
 export interface RawMessageFields {
   id: string;
   author: string;
-  authorName?: string;
-  alias?: string;
+  authorName?: string | undefined;
+  alias?: string | undefined;
   timestamp: number;
   style: number;
   content: string;
   /** Core v14 message title (dnd5e 6.0 cards set "Item - Activity"). */
-  title?: string;
-  flavor?: string;
+  title?: string | undefined;
+  flavor?: string | undefined;
   whisper: string[];
   blind: boolean;
   isRoll: boolean;
-  rolls?: Array<{ total?: number; formula?: string }>;
+  rolls?: Array<{ total?: number | undefined; formula?: string | undefined }> | undefined;
 }
 
 export interface MessageRecord {
   id: string;
   author: string;
-  authorName?: string;
-  alias?: string;
+  authorName?: string | undefined;
+  alias?: string | undefined;
   timestamp: number;
   time: string;
   style: number;
   isRoll: boolean;
   whisperCount: number;
   blind: boolean;
-  content?: string;
-  title?: string;
-  flavor?: string;
-  rolls?: Array<{ total?: number; formula?: string }>;
+  content?: string | undefined;
+  title?: string | undefined;
+  flavor?: string | undefined;
+  rolls?: Array<{ total?: number | undefined; formula?: string | undefined }> | undefined;
 }
 
 export interface RecordOptions {

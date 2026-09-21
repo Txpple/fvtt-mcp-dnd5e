@@ -18,6 +18,14 @@ import { WEAPON_PROPERTIES } from '../../utils/dnd5e-canonical.js';
 import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { invalid, notFound, unsupported } from '../errors.js';
+import type {
+  AttackFeatureArgs,
+  AttackWithSaveFeatureArgs,
+  AuraFeatureArgs,
+} from '../../tools/dnd5e/add-feature.js';
+// The arg shapes are the tool's zod OUTPUT (type-only imports; nothing of the tool side reaches
+// the page bundle) — the page receives exactly what the tool parsed.
+// The attack kinds also carry `effectiveAbility`, resolved by the tool from abilityModifier / attackType.
 
 // =============================================================================
 // Method-specific constants (ported verbatim from the oracle).
@@ -63,9 +71,9 @@ export function buildActivityDamageParts(
  */
 export function buildAttackRange(data: {
   attackType: string;
-  reachFt?: number;
-  rangeFt?: number;
-  longRangeFt?: number;
+  reachFt?: number | undefined;
+  rangeFt?: number | undefined;
+  longRangeFt?: number | undefined;
 }): { value: number | undefined; long: number | null; units: string } {
   return data.attackType === 'melee'
     ? { value: data.reachFt ?? 5, long: null, units: 'ft' }
@@ -77,7 +85,7 @@ export function buildAttackRange(data: {
 // (add-feature, featureType: attack). Oracle ~5534-5769.
 // =============================================================================
 
-export async function addAttackToActor(data: any): Promise<unknown> {
+export async function addAttackToActor(data: AttackFeatureArgs & { effectiveAbility: string }) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addAttackToActor requires the dnd5e game system');
   }
@@ -233,7 +241,7 @@ export async function addAttackToActor(data: any): Promise<unknown> {
 // (add-feature, featureType: aura). Oracle ~5769-5947.
 // =============================================================================
 
-export async function addAuraToActor(data: any): Promise<unknown> {
+export async function addAuraToActor(data: AuraFeatureArgs) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addAuraToActor requires the dnd5e game system');
   }
@@ -392,7 +400,9 @@ export async function addAuraToActor(data: any): Promise<unknown> {
 // (add-feature, featureType: attack-with-save). Oracle ~6041-6317.
 // =============================================================================
 
-export async function addAttackWithSaveToActor(data: any): Promise<unknown> {
+export async function addAttackWithSaveToActor(
+  data: AttackWithSaveFeatureArgs & { effectiveAbility: string }
+) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addAttackWithSaveToActor requires the dnd5e game system');
   }

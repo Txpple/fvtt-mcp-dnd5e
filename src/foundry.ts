@@ -16,7 +16,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import type { PageApi } from './page/index.js';
+import type { PageApi, PageArgs, PageResult } from './page/index.js';
+
+// The seam's types, re-exported so a tool (or a sibling) names a handler's argument or result
+// without reaching into src/page: `PageArgs<'manageEffect'>[0]`, `PageResult<'listUsers'>`.
+export type { PageApi, PageArgs, PageResult };
 import { asCallError, asConnectError } from './bridge-error.js';
 import type { Host } from './hosts/types.js';
 import { hostConfigProblem } from './hosts/env.js';
@@ -37,12 +41,12 @@ const JOIN_USER_FIELD = 'select[name="userid"], input[name="username"]';
  */
 export interface FoundryBridge {
   /**
-   * Invoke a page-side handler by name. `name` is constrained to `keyof PageApi` (the
-   * registered window.__fvtt method names), so a typo'd or removed method is a compile
-   * error here, not an "Unknown page function" at runtime. `T` stays first so existing
-   * `call<ReturnShape>('method', args)` sites are unchanged.
+   * Invoke a page-side handler by name. Typed end to end from the handler's own signature
+   * (src/page/index.ts `PageApi`): a mistyped or removed name, a wrong argument shape and a
+   * result field the handler never returns are all compile errors here, not surprises in a live
+   * session. The argument is optional exactly when the handler's is.
    */
-  call<T = any>(name: keyof PageApi, args?: unknown): Promise<T>;
+  call<N extends keyof PageApi>(name: N, ...args: PageArgs<N>): Promise<PageResult<N>>;
   /**
    * Capture a PNG screenshot of the live page (the rendered Foundry canvas + UI) to `outPath`.
    * Playwright-level — the page-side bundle can't reach `page.screenshot`, so this is the one
@@ -551,10 +555,10 @@ export class Foundry implements FoundryBridge {
    * BridgeError: the page's own words as `detail`, its PageError code (or `connection` when the
    * session was lost under the call) as `code` — see src/bridge-error.ts.
    */
-  async call<T = unknown>(name: string, args?: unknown): Promise<T> {
+  async call<N extends keyof PageApi>(name: N, ...args: PageArgs<N>): Promise<PageResult<N>> {
     await this.ensureReady();
     try {
-      return await this.invoke<T>(name, args);
+      return await this.invoke<PageResult<N>>(name, args[0]);
     } catch (err) {
       // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page stays
       // open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge has
@@ -564,7 +568,7 @@ export class Foundry implements FoundryBridge {
         this.log.warn(`page bridge missing on '${name}' — recovering and retrying`);
         await this.recover();
         try {
-          return await this.invoke<T>(name, args);
+          return await this.invoke<PageResult<N>>(name, args[0]);
         } catch (err2) {
           throw asCallError(name, err2);
         }

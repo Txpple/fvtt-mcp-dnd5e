@@ -136,7 +136,7 @@ export class CardsTools {
   }
 
   async handleListCards(_args: any): Promise<string> {
-    const stacks = (await this.foundry.call('listCards', {})) ?? [];
+    const stacks = (await this.foundry.call('listCards')) ?? [];
     if (!Array.isArray(stacks) || stacks.length === 0) return 'No card stacks found.';
     const lines = stacks.map(
       (c: any) => `  - "${c.name}" (${c.id}) — ${c.type}, ${c.cardCount} card(s)`

@@ -48,14 +48,14 @@ const DISPLAY_MODE_NAME: Record<number, string> = Object.fromEntries(
 );
 
 export interface TokenPlaceInput {
-  actor?: string;
-  x?: number;
-  y?: number;
-  hidden?: boolean;
-  elevation?: number;
-  rotation?: number;
-  name?: string;
-  disposition?: string;
+  actor?: string | undefined;
+  x?: number | undefined;
+  y?: number | undefined;
+  hidden?: boolean | undefined;
+  elevation?: number | undefined;
+  rotation?: number | undefined;
+  name?: string | undefined;
+  disposition?: string | undefined;
 }
 
 /**
@@ -65,8 +65,8 @@ export interface TokenPlaceInput {
  * writing a NaN. Exported for unit testing.
  */
 export function tokenPlacementOverrides(input: TokenPlaceInput): {
-  overrides?: Record<string, unknown>;
-  error?: string;
+  overrides?: Record<string, unknown> | undefined;
+  error?: string | undefined;
 } {
   for (const k of ['x', 'y'] as const) {
     if (typeof input[k] !== 'number') return { error: `${k} is required (a number)` };
@@ -151,36 +151,36 @@ export const tokenDescriptor: PlaceableDescriptor = {
 /** The current-state token fields buildTokenUpdate reads (a minimal, testable slice of TokenDocument). */
 export interface TokenLike {
   id: string;
-  name?: string;
-  lockRotation?: boolean;
+  name?: string | undefined;
+  lockRotation?: boolean | undefined;
 }
 
 /** The mutations update-token can apply to a placed token. */
 export interface TokenPatchArgs {
-  rotation?: number;
-  randomizeRotation?: boolean;
-  scale?: number;
-  imagePath?: string; // reskin: token art (texture.src) — IMAGE or VIDEO; existence-checked in updateSceneTokens
-  elevation?: number;
-  hidden?: boolean;
-  lockRotation?: boolean;
-  x?: number;
-  y?: number;
-  name?: string;
-  displayName?: string; // nameplate visibility mode key (DISPLAY_MODES)
-  displayBars?: string; // resource-bar visibility mode key (DISPLAY_MODES)
-  bar1?: string; // bar1 resource attribute (e.g. "attributes.hp"); "" clears it
-  bar2?: string; // bar2 resource attribute; "" clears it
-  ring?: boolean; // dynamic token ring on/off (ring.enabled)
-  hp?: TokenHpArgs; // per-token hit points, written to the token's OWN actor (delta) — see buildHpPatch
+  rotation?: number | undefined;
+  randomizeRotation?: boolean | undefined;
+  scale?: number | undefined;
+  imagePath?: string | undefined; // reskin: token art (texture.src) — IMAGE or VIDEO; existence-checked in updateSceneTokens
+  elevation?: number | undefined;
+  hidden?: boolean | undefined;
+  lockRotation?: boolean | undefined;
+  x?: number | undefined;
+  y?: number | undefined;
+  name?: string | undefined;
+  displayName?: string | undefined; // nameplate visibility mode key (DISPLAY_MODES)
+  displayBars?: string | undefined; // resource-bar visibility mode key (DISPLAY_MODES)
+  bar1?: string | undefined; // bar1 resource attribute (e.g. "attributes.hp"); "" clears it
+  bar2?: string | undefined; // bar2 resource attribute; "" clears it
+  ring?: boolean | undefined; // dynamic token ring on/off (ring.enabled)
+  hp?: TokenHpArgs | undefined; // per-token hit points, written to the token's OWN actor (delta) — see buildHpPatch
 }
 
 /** The hit-point sub-fields update-token can set on a placed token's own actor. */
 export interface TokenHpArgs {
-  value?: number; // current HP
-  max?: number; // max HP
-  temp?: number; // temporary HP
-  tempmax?: number; // max-HP modifier (system.attributes.hp.tempmax)
+  value?: number | undefined; // current HP
+  max?: number | undefined; // max HP
+  temp?: number | undefined; // temporary HP
+  tempmax?: number | undefined; // max-HP modifier (system.attributes.hp.tempmax)
 }
 
 /**
@@ -296,20 +296,20 @@ export function buildHpPatch(hp?: TokenHpArgs): Record<string, number> | null {
  */
 export async function updateSceneTokens(
   args: {
-    sceneIdentifier?: string;
-    tokenIds?: string[];
-    actorIds?: string[];
+    sceneIdentifier?: string | undefined;
+    tokenIds?: string[] | undefined;
+    actorIds?: string[] | undefined;
   } & TokenPatchArgs
 ): Promise<{
   success: boolean;
   matched: number;
   updated: number;
-  notFound?: string;
-  sceneId?: string;
-  sceneName?: string;
-  tokens?: Array<Record<string, unknown>>;
-  warnings?: string[];
-  unmatched?: { tokenIds?: string[]; actorIds?: string[] };
+  notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  tokens?: Array<Record<string, unknown>> | undefined;
+  warnings?: string[] | undefined;
+  unmatched?: { tokenIds?: string[] | undefined; actorIds?: string[] | undefined } | undefined;
 }> {
   const scene = resolveTargetScene(args?.sceneIdentifier);
   if (!scene) return { success: true, matched: 0, updated: 0, notFound: args!.sceneIdentifier! };
@@ -419,7 +419,7 @@ export async function updateSceneTokens(
       : undefined,
   });
 
-  const unmatched: { tokenIds?: string[]; actorIds?: string[] } = {};
+  const unmatched: { tokenIds?: string[] | undefined; actorIds?: string[] | undefined } = {};
   if (unmatchedTokenIds.length > 0) unmatched.tokenIds = unmatchedTokenIds;
   if (unmatchedActorIds.length > 0) unmatched.actorIds = unmatchedActorIds;
 
@@ -436,9 +436,11 @@ export async function updateSceneTokens(
 }
 
 // --- bridge page functions (registered in src/page/index.ts) ------------------
-export const listSceneTokens = (args: { sceneIdentifier: string }) =>
+export const listSceneTokens = (args: { sceneIdentifier?: string | undefined }) =>
   crudList(tokenDescriptor, args);
-export const placeSceneTokens = (args: { sceneIdentifier: string; items: TokenPlaceInput[] }) =>
-  crudCreate(tokenDescriptor, args);
-export const deleteSceneTokens = (args: { sceneIdentifier: string; ids: string[] }) =>
+export const placeSceneTokens = (args: {
+  sceneIdentifier?: string | undefined;
+  items: TokenPlaceInput[];
+}) => crudCreate(tokenDescriptor, args);
+export const deleteSceneTokens = (args: { sceneIdentifier?: string | undefined; ids: string[] }) =>
   crudDelete(tokenDescriptor, args);

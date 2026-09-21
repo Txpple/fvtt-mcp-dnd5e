@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FoundryBridge } from '../../foundry.js';
+import type { FoundryBridge, PageArgs } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import {
   ACTIVITY_BEHAVIOR_TYPES,
@@ -624,7 +624,7 @@ export class DnD5eManageActivityTool {
 
     await assertDnd5e(this.foundry, this.logger, 'manage-activity');
 
-    const fwd: Record<string, any> = {
+    const fwd: PageArgs<'manageActivity'>[0] = {
       action: parsed.action,
       itemIdentifier: parsed.itemIdentifier,
     };

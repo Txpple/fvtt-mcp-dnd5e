@@ -22,25 +22,25 @@ import {
 } from '../_placeables.js';
 
 export interface LightInput {
-  x?: number;
-  y?: number;
-  rotation?: number;
-  walls?: boolean;
-  vision?: boolean;
-  hidden?: boolean;
-  elevation?: number;
-  dim?: number;
-  bright?: number;
-  color?: string;
-  alpha?: number;
-  angle?: number;
-  luminosity?: number;
-  attenuation?: number;
-  animationType?: string;
-  animationSpeed?: number;
-  animationIntensity?: number;
-  darknessMin?: number;
-  darknessMax?: number;
+  x?: number | undefined;
+  y?: number | undefined;
+  rotation?: number | undefined;
+  walls?: boolean | undefined;
+  vision?: boolean | undefined;
+  hidden?: boolean | undefined;
+  elevation?: number | undefined;
+  dim?: number | undefined;
+  bright?: number | undefined;
+  color?: string | undefined;
+  alpha?: number | undefined;
+  angle?: number | undefined;
+  luminosity?: number | undefined;
+  attenuation?: number | undefined;
+  animationType?: string | undefined;
+  animationSpeed?: number | undefined;
+  animationIntensity?: number | undefined;
+  darknessMin?: number | undefined;
+  darknessMax?: number | undefined;
 }
 
 /** Build the nested `config` emission object from the flat inputs (only-supplied fields). */
@@ -135,13 +135,15 @@ export const lightDescriptor: PlaceableDescriptor = {
 };
 
 // --- bridge page functions (registered in src/page/index.ts) -----------------
-export const createSceneLights = (args: { sceneIdentifier: string; items: LightInput[] }) =>
-  crudCreate(lightDescriptor, args);
-export const listSceneLights = (args: { sceneIdentifier: string }) =>
+export const createSceneLights = (args: {
+  sceneIdentifier?: string | undefined;
+  items: LightInput[];
+}) => crudCreate(lightDescriptor, args);
+export const listSceneLights = (args: { sceneIdentifier?: string | undefined }) =>
   crudList(lightDescriptor, args);
 export const updateSceneLights = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & LightInput>;
 }) => crudUpdate(lightDescriptor, args);
-export const deleteSceneLights = (args: { sceneIdentifier: string; ids: string[] }) =>
+export const deleteSceneLights = (args: { sceneIdentifier?: string | undefined; ids: string[] }) =>
   crudDelete(lightDescriptor, args);

@@ -58,7 +58,7 @@ export interface FreeCastActivityPlan {
  * preserving spent uses. Throws on a spell-type "feature" or an unknown recovery period.
  */
 export function buildFreeCastActivityPlan(
-  feature: { name?: string; type?: string; system?: any },
+  feature: { name?: string | undefined; type?: string | undefined; system?: any },
   spell: Pick<CastSpellFacts, 'uuid' | 'name' | 'level' | 'properties' | 'activationType'>,
   opts: FreeCastPlanOpts,
   newId: string
@@ -142,8 +142,8 @@ export interface RepertoireCleanup {
  * update: null when the spell is already clean.
  */
 export function buildRepertoireCleanup(spell: {
-  name?: string;
-  type?: string;
+  name?: string | undefined;
+  type?: string | undefined;
   system?: any;
 }): RepertoireCleanup {
   if (spell?.type !== 'spell') {
@@ -194,9 +194,9 @@ export async function addFreeCast(params: {
   actorIdentifier: string;
   spellIdentifier: string;
   grantedBy: string;
-  uses?: string | number;
-  recoveryPeriod?: string;
-}): Promise<unknown> {
+  uses?: string | number | undefined;
+  recoveryPeriod?: string | undefined;
+}) {
   const { actorIdentifier, spellIdentifier, grantedBy } = params ?? ({} as any);
   if (!actorIdentifier) throw invalid('actorIdentifier is required');
   if (!spellIdentifier) throw invalid('spellIdentifier is required');

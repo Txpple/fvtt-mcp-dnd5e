@@ -245,7 +245,7 @@ export function unmaskedName(item: any): string | undefined {
 export async function importFromCompendium(
   packId: string,
   docId: string,
-  opts: { requirePackType?: string } = {}
+  opts: { requirePackType?: string | undefined } = {}
 ): Promise<{ pack: any; source: any; data: any }> {
   if (!packId || !docId) {
     throw invalid('Both packId and itemId are required');

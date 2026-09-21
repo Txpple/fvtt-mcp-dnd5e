@@ -19,15 +19,15 @@ import { invalid, unsupported } from './errors.js';
 
 /** One create-doc result: the built document, OR a per-item error (isolated), plus any warnings. */
 export interface CreateDocResult {
-  doc?: Record<string, unknown>;
-  error?: string;
-  warnings?: string[];
+  doc?: Record<string, unknown> | undefined;
+  error?: string | undefined;
+  warnings?: string[] | undefined;
 }
 
 /** One update-patch result: the dot-path patch to apply, whether anything changed, plus any warnings. */
 export interface PatchResult {
-  patch?: Record<string, unknown>;
-  warnings?: string[];
+  patch?: Record<string, unknown> | undefined;
+  warnings?: string[] | undefined;
   changed: boolean;
 }
 
@@ -39,7 +39,7 @@ export interface PatchResult {
  */
 export interface PlaceableCtx {
   scene: any;
-  index?: number;
+  index?: number | undefined;
 }
 
 /**
@@ -67,13 +67,13 @@ function toArray(coll: any): any[] {
 
 export interface CrudCreateResult {
   success: true;
-  sceneId?: string;
-  sceneName?: string;
-  notFound?: string;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  notFound?: string | undefined;
   created: number;
-  items?: Array<Record<string, unknown>>;
-  errors?: string[];
-  warnings?: string[];
+  items?: Array<Record<string, unknown>> | undefined;
+  errors?: string[] | undefined;
+  warnings?: string[] | undefined;
 }
 
 /**
@@ -83,7 +83,7 @@ export interface CrudCreateResult {
  */
 export async function crudCreate(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier?: string; items: any[] }
+  args: { sceneIdentifier?: string | undefined; items: any[] }
 ): Promise<CrudCreateResult> {
   if (!desc.toCreateDoc) throw unsupported(`${desc.docName}: create is not supported`);
   if (!Array.isArray(args?.items) || args.items.length === 0) {
@@ -139,25 +139,25 @@ export async function crudCreate(
 
 export interface CrudListResult {
   found: boolean;
-  notFound?: string;
-  sceneId?: string;
-  sceneName?: string;
+  notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
   /** Whether the listed scene is the world's active one (the default when no identifier is given). */
-  sceneActive?: boolean;
-  count?: number;
-  items?: Array<Record<string, unknown>>;
+  sceneActive?: boolean | undefined;
+  count?: number | undefined;
+  items?: Array<Record<string, unknown>> | undefined;
 }
 
 /** List every placeable of one type on a scene (id + salient fields via `dump`). Read-only. */
 export function crudList(
   desc: PlaceableDescriptor,
-  args?: { sceneIdentifier?: string }
+  args?: { sceneIdentifier?: string | undefined }
 ): CrudListResult {
   const scene = resolveTargetScene(args?.sceneIdentifier);
-  if (!scene) return { found: false, notFound: args!.sceneIdentifier! };
+  if (!scene) return { found: false as const, notFound: args!.sceneIdentifier! };
   const items = toArray(desc.collection(scene)).map(d => desc.dump(d));
   return {
-    found: true,
+    found: true as const,
     sceneId: scene.id,
     sceneName: scene.name,
     sceneActive: scene.active === true,
@@ -168,14 +168,14 @@ export function crudList(
 
 export interface CrudUpdateResult {
   success: true;
-  sceneId?: string;
-  sceneName?: string;
-  notFound?: string;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  notFound?: string | undefined;
   matched: number;
   updated: number;
-  items?: Array<Record<string, unknown>>;
-  notFoundIds?: string[];
-  warnings?: string[];
+  items?: Array<Record<string, unknown>> | undefined;
+  notFoundIds?: string[] | undefined;
+  warnings?: string[] | undefined;
 }
 
 /**
@@ -185,7 +185,7 @@ export interface CrudUpdateResult {
  */
 export async function crudUpdate<P extends { id: string }>(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier?: string; patches: P[] }
+  args: { sceneIdentifier?: string | undefined; patches: P[] }
 ): Promise<CrudUpdateResult> {
   if (!desc.buildPatch) throw unsupported(`${desc.docName}: update is not supported`);
   if (!Array.isArray(args?.patches) || args.patches.length === 0) {
@@ -234,19 +234,19 @@ export async function crudUpdate<P extends { id: string }>(
 
 export interface CrudDeleteResult {
   success: true;
-  sceneId?: string;
-  sceneName?: string;
-  notFound?: string;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  notFound?: string | undefined;
   deleted: number;
-  notFoundIds?: string[];
+  notFoundIds?: string[] | undefined;
   /** Post-delete integrity notes (e.g. a surviving teleporter now pointing at a deleted region). */
-  warnings?: string[];
+  warnings?: string[] | undefined;
 }
 
 /** Delete N placeables of one type by id. Partitions present vs notFoundIds, one batched call. */
 export async function crudDelete(
   desc: PlaceableDescriptor,
-  args: { sceneIdentifier?: string; ids: string[] }
+  args: { sceneIdentifier?: string | undefined; ids: string[] }
 ): Promise<CrudDeleteResult> {
   if (!Array.isArray(args?.ids) || args.ids.length === 0) {
     throw invalid('ids array is required and must contain at least one entry');

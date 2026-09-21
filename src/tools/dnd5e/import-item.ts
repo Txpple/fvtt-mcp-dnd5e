@@ -14,6 +14,8 @@ import { formatUnresolvedScale } from '../../utils/format.js';
  * get-compendium-entry first, then copy here; afterward refine the copy with update-actor-item,
  * manage-activity, or manage-effect (e.g. bump a base shield to +1 and rename it for a custom item).
  */
+export type ImportItemArgs = z.output<typeof ImportItemSchema>;
+
 const ImportItemSchema = z.object({
   packId: z
     .string()

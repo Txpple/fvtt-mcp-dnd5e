@@ -55,12 +55,12 @@ function effectExtras(e: any): Record<string, unknown> {
 
 export async function manageEffect(params: {
   action: 'create' | 'edit' | 'delete' | 'list';
-  actorIdentifier?: string;
-  itemIdentifier?: string;
-  effectId?: string;
-  effect?: Record<string, any>;
-  patch?: Record<string, any>;
-}): Promise<unknown> {
+  actorIdentifier?: string | undefined;
+  itemIdentifier?: string | undefined;
+  effectId?: string | undefined;
+  effect?: Record<string, any> | undefined;
+  patch?: Record<string, any> | undefined;
+}) {
   const { action } = params ?? ({} as any);
 
   // Resolve the parent document (actor, embedded item, or world item) that owns the effects.

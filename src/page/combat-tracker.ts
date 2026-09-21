@@ -22,14 +22,16 @@ const NAMESPACE = 'core';
 const SETTING = 'combatTrackerConfig';
 
 export interface CombatTrackerArgs {
-  resource?: string;
-  skipDefeated?: boolean;
-  turnMarker?: {
-    enabled?: boolean;
-    animation?: string;
-    src?: string;
-    disposition?: boolean;
-  };
+  resource?: string | undefined;
+  skipDefeated?: boolean | undefined;
+  turnMarker?:
+    | {
+        enabled?: boolean | undefined;
+        animation?: string | undefined;
+        src?: string | undefined;
+        disposition?: boolean | undefined;
+      }
+    | undefined;
 }
 
 export interface AppliedChange {
@@ -95,7 +97,7 @@ function liveAnimations(): Array<{ value: string; label: string }> {
  * server or the call is REJECTED (fail closed — writing a 404 marker path is a silent no-op in
  * play; upload-asset first). "" is the documented reset-to-stock value and skips the check.
  */
-export async function configureCombatTracker(args: CombatTrackerArgs = {}): Promise<unknown> {
+export async function configureCombatTracker(args: CombatTrackerArgs = {}) {
   const current = foundry.utils.deepClone(game.settings.get(NAMESPACE, SETTING) ?? {});
   const animations = liveAnimations();
   const fallbackMarker = CONFIG.Combat?.fallbackTurnMarker ?? null;

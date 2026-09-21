@@ -26,6 +26,43 @@ import { searchCompendiumFaceted } from '../compendium-facets.js';
 import { resolveAuthoredIcon, isPlaceholderIcon } from './icons.js';
 import { imgResolves, badAssetWarning } from '../img-resolve.js';
 import { ambiguous, invalid, notFound, unsupported } from '../errors.js';
+import type { AddItemArgs } from '../../tools/dnd5e/add-item.js';
+import type { ImportItemArgs } from '../../tools/dnd5e/import-item.js';
+
+// The seam's shapes (3.0 M6). The arg types are the tools' zod output — the page receives exactly
+// what the tool parsed (type-only imports; nothing of the tool side reaches the page bundle).
+
+/** A created Item as the page reports it. */
+export interface CreatedItemRef {
+  id: string;
+  name: string;
+  type: string;
+  trueName?: string | undefined;
+}
+/** Where the item landed. */
+export type ItemTarget =
+  | { type: 'actor'; id: string; name: string }
+  | { type: 'world'; folderId: string | null; folderName: string | null };
+/** The loose world-Item twin minted for a magic item on an NPC (rule 9). */
+export interface LootCopy extends CreatedItemRef {
+  folderId: string | null;
+  folderName: string | null;
+}
+export interface AddItemResult {
+  success: true;
+  target: ItemTarget;
+  item: CreatedItemRef;
+  warnings?: string[] | undefined;
+  lootCopy?: LootCopy | undefined;
+}
+export interface ImportItemResult {
+  success: true;
+  source: { packId: string; itemId: string; name: string };
+  target: ItemTarget;
+  item: CreatedItemRef;
+  unresolvedScale?: Array<{ path: string; formula: string }> | undefined;
+  lootCopy?: LootCopy | undefined;
+}
 
 /** The finer kind used to pick a default icon: equipmentType for wondrous, consumableType for a
  * consumable, lootType for loot. Other item types have no sub-kind icon (resolver uses the bare key). */
@@ -60,57 +97,71 @@ const EQUIPPABLE_DOC = new Set(['weapon', 'equipment', 'consumable', 'tool']);
 export interface PhysicalItemOpts {
   itemType: string;
   name: string;
-  img?: string;
-  description?: string;
+  img?: string | undefined;
+  description?: string | undefined;
   // PhysicalItemTemplate (cross-cutting)
-  quantity?: number;
-  price?: { value?: number; denomination?: string };
-  weight?: { value?: number; units?: string };
+  quantity?: number | undefined;
+  price?: { value?: number | undefined; denomination?: string | undefined } | undefined;
+  weight?: { value?: number | undefined; units?: string | undefined } | undefined;
   /** Rarity key, or several ("Rarity Varies" — dnd5e 6.0 `system.rarities`); '' / [] = mundane. */
-  rarity?: string | string[];
-  identified?: boolean;
-  containerId?: string | null;
+  rarity?: string | string[] | undefined;
+  identified?: boolean | undefined;
+  containerId?: string | null | undefined;
   // Equippable + magical
-  equipped?: boolean;
-  attunement?: string;
-  attuned?: boolean;
-  magical?: boolean;
-  magicalBonus?: number | null;
-  properties?: string[];
+  equipped?: boolean | undefined;
+  attunement?: string | undefined;
+  attuned?: boolean | undefined;
+  magical?: boolean | undefined;
+  magicalBonus?: number | null | undefined;
+  properties?: string[] | undefined;
   // weapon
-  weaponClass?: string;
-  baseItem?: string;
-  damage?: { number: number; denomination: number; types: string[] };
-  versatile?: { number: number; denomination: number; types: string[] };
+  weaponClass?: string | undefined;
+  baseItem?: string | undefined;
+  damage?: { number: number; denomination: number; types: string[] } | undefined;
+  versatile?: { number: number; denomination: number; types: string[] } | undefined;
   rangeObj?:
-    | { value: number | null; long: number | null; reach?: number | null; units: string }
+    | {
+        value: number | null;
+        long: number | null;
+        reach?: number | null | undefined;
+        units: string;
+      }
     | undefined;
-  proficient?: number;
+  proficient?: number | undefined;
   activities?: Record<string, any> | undefined;
   // equipment (armor / shield / wondrous)
-  armorType?: string;
-  armorValue?: number;
-  dex?: number | null;
-  strength?: number;
-  equipmentType?: string;
+  armorType?: string | undefined;
+  armorValue?: number | undefined;
+  dex?: number | null | undefined;
+  strength?: number | undefined;
+  equipmentType?: string | undefined;
   // consumable
-  consumableType?: string;
-  subtype?: string;
-  uses?: { spent?: number; max?: number | string; recovery?: any[]; autoDestroy?: boolean };
-  ammoReplace?: boolean;
+  consumableType?: string | undefined;
+  subtype?: string | undefined;
+  uses?:
+    | {
+        spent?: number | undefined;
+        max?: number | string | undefined;
+        recovery?: any[] | undefined;
+        autoDestroy?: boolean | undefined;
+      }
+    | undefined;
+  ammoReplace?: boolean | undefined;
   // tool
-  toolType?: string;
-  ability?: string;
-  toolBonus?: string;
+  toolType?: string | undefined;
+  ability?: string | undefined;
+  toolBonus?: string | undefined;
   // loot
-  lootType?: string;
+  lootType?: string | undefined;
   // container
-  capacity?: {
-    count?: number | null;
-    weight?: { value: number | null; units: string };
-    volume?: { value: number | null; units: string };
-  };
-  currency?: Record<string, number>;
+  capacity?:
+    | {
+        count?: number | null | undefined;
+        weight?: { value: number | null; units: string } | undefined;
+        volume?: { value: number | null; units: string } | undefined;
+      }
+    | undefined;
+  currency?: Record<string, number | undefined> | undefined;
 }
 
 /** Build the dnd5e weapon/ammo base-damage object from a simple {number,denomination,types}. */
@@ -133,7 +184,7 @@ function damageBase(d: { number: number; denomination: number; types: string[] }
 export function buildPhysicalItemData(opts: PhysicalItemOpts): {
   name: string;
   type: string;
-  img?: string;
+  img?: string | undefined;
   system: Record<string, any>;
 } {
   const docType = DOC_TYPE[opts.itemType];
@@ -251,11 +302,12 @@ export function buildPhysicalItemData(opts: PhysicalItemOpts): {
     }
   }
 
-  const doc: { name: string; type: string; img?: string; system: Record<string, any> } = {
-    name: opts.name,
-    type: docType,
-    system,
-  };
+  const doc: { name: string; type: string; img?: string | undefined; system: Record<string, any> } =
+    {
+      name: opts.name,
+      type: docType,
+      system,
+    };
   // Rule 8 — never ship a blank icon. Use the caller's img if given; otherwise fill a real, verified
   // core icon for this item kind (the DataModel would otherwise default to a monochrome placeholder).
   doc.img = opts.img ?? resolveAuthoredIcon(opts.itemType, { subtype: iconSubtype(opts) });
@@ -390,9 +442,9 @@ export function wantsLootCopy(lootCopy: unknown, isMagic: boolean): boolean {
 async function mintLootCopy(
   lootDoc: { name: string; type: string; [k: string]: any },
   folder: string
-): Promise<any> {
-  const res: any = await createWorldItems({ items: [lootDoc], folder });
-  const created = res?.created?.[0];
+): Promise<LootCopy | null> {
+  const res = await createWorldItems({ items: [lootDoc], folder });
+  const created = res.created[0];
   return created
     ? {
         id: created.id,
@@ -408,7 +460,7 @@ async function mintLootCopy(
  * Create a structured physical item on an actor (embedded inventory) or in the world Items sidebar.
  * data is the normalized object the add-item tool sends. Returns { success, target, item, lootCopy? }.
  */
-export async function addItem(data: any): Promise<unknown> {
+export async function addItem(data: AddItemArgs): Promise<AddItemResult> {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addItem requires the dnd5e game system');
   }
@@ -534,7 +586,7 @@ export async function addItem(data: any): Promise<unknown> {
       });
     }
 
-    const result: any = {
+    const result: AddItemResult = {
       success: true,
       target: { type: 'actor', id: actor.id, name: actor.name },
       item: { id: created.id, name: created.name, type: created.type },
@@ -570,8 +622,8 @@ export async function addItem(data: any): Promise<unknown> {
   }
 
   const doc = buildPhysicalItemData({ ...baseOpts, containerId });
-  const res: any = await createWorldItems({ items: [doc], folder: data.folder });
-  const created = res?.created?.[0];
+  const res = await createWorldItems({ items: [doc], folder: data.folder });
+  const created = res.created[0];
   if (!created) throw new Error(`Failed to create world item "${data.name}"`);
 
   return {
@@ -590,7 +642,7 @@ export async function addItem(data: any): Promise<unknown> {
  * of immediate overrides (rename, quantity, equipped, identified, container) are applied on the copy so
  * the common "drop in a copy, ready to use" case is one call. Returns { success, target, item }.
  */
-export async function importItemFromCompendium(data: any): Promise<unknown> {
+export async function importItemFromCompendium(data: ImportItemArgs): Promise<ImportItemResult> {
   if (game.system.id !== 'dnd5e') {
     throw unsupported(`importItemFromCompendium requires D&D 5e (current: "${game.system.id}").`);
   }
@@ -629,7 +681,7 @@ export async function importItemFromCompendium(data: any): Promise<unknown> {
       throw new Error(`Failed to copy item "${doc.name}" onto actor "${actor.name}"`);
     }
     const unresolvedScale = findUnresolvedScaleTokens(toSource(created));
-    const result: any = {
+    const result: ImportItemResult = {
       success: true,
       source: { packId: data.packId, itemId: data.itemId, name: sourceName },
       target: { type: 'actor', id: actor.id, name: actor.name },
@@ -665,8 +717,8 @@ export async function importItemFromCompendium(data: any): Promise<unknown> {
     doc.system.container = c.id;
   }
 
-  const res: any = await createWorldItems({ items: [doc], folder: data.folder });
-  const created = res?.created?.[0];
+  const res = await createWorldItems({ items: [doc], folder: data.folder });
+  const created = res.created[0];
   if (!created) throw new Error(`Failed to copy world item "${doc.name}"`);
 
   // The world Item carries the same data as `doc`, which is already plain source — scan it directly.

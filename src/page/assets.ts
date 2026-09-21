@@ -21,7 +21,7 @@ import {
   OWNERSHIP_OBSERVER,
 } from './journals.js';
 import { resolveCreatureIcon } from './dnd5e/icons.js';
-import { invalid } from './errors.js';
+import { invalid, notFound } from './errors.js';
 
 /**
  * Group C — find every document that references the given asset path(s).
@@ -35,7 +35,7 @@ import { invalid } from './errors.js';
  * any hit — the user overrides with `force` — over-reporting is safe-by-design; only a false
  * NEGATIVE would be dangerous, and the exact-equality branch avoids that for non-text fields.
  */
-export async function findAssetReferences(data: { paths: string[] }): Promise<unknown> {
+export async function findAssetReferences(data: { paths: string[] }) {
   const paths = Array.isArray(data.paths) ? data.paths.filter(p => typeof p === 'string') : [];
   if (paths.length === 0) {
     throw invalid('paths array is required and must contain at least one asset path');
@@ -79,8 +79,8 @@ export async function findAssetReferences(data: { paths: string[] }): Promise<un
 export async function relinkAsset(data: {
   oldPath: string;
   newPath: string;
-  dryRun?: boolean;
-}): Promise<unknown> {
+  dryRun?: boolean | undefined;
+}) {
   if (!data.oldPath || !data.newPath) {
     throw invalid('oldPath and newPath are both required');
   }
@@ -141,19 +141,17 @@ export async function relinkAsset(data: {
 export async function setActorArt(data: {
   actorIdentifier: string;
   imagePath: string;
-  tokenImagePath?: string;
-  applyToToken?: boolean;
-  normalizePrototype?: boolean;
-  autoRotate?: boolean;
-}): Promise<unknown> {
+  tokenImagePath?: string | undefined;
+  applyToToken?: boolean | undefined;
+  normalizePrototype?: boolean | undefined;
+  autoRotate?: boolean | undefined;
+}) {
   if (!data.actorIdentifier || !data.imagePath) {
     throw invalid('actorIdentifier and imagePath are both required');
   }
 
   const actor = resolveActorStrict(data.actorIdentifier);
-  if (!actor) {
-    return { success: true, updated: false, notFound: data.actorIdentifier };
-  }
+  if (!actor) throw notFound(`Actor not found: "${data.actorIdentifier}" (exact id or name)`);
 
   const applyToToken = data.applyToToken !== false;
   const warnings: string[] = [];
@@ -218,7 +216,8 @@ export async function setActorArt(data: {
     // Nothing valid to write (e.g. a video imagePath with applyToToken:false).
     return {
       success: true,
-      updated: false,
+      // a literal so the tool narrows the union on it
+      updated: false as const,
       actorId: actor.id,
       actorName: actor.name,
       ...(warnings.length ? { warnings } : {}),
@@ -252,7 +251,7 @@ export async function setActorArt(data: {
 
   return {
     success: true,
-    updated: true,
+    updated: true as const,
     actorId: actor.id,
     actorName: actor.name,
     img,
@@ -272,17 +271,17 @@ export async function setActorArt(data: {
 export async function addJournalImage(data: {
   journalIdentifier: string;
   imagePath: string;
-  pageName?: string;
-  caption?: string;
-  playerVisible?: boolean;
-}): Promise<unknown> {
+  pageName?: string | undefined;
+  caption?: string | undefined;
+  playerVisible?: boolean | undefined;
+}) {
   if (!data.journalIdentifier || !data.imagePath) {
     throw invalid('journalIdentifier and imagePath are both required');
   }
 
   const journal = resolveJournalStrict(data.journalIdentifier);
   if (!journal) {
-    return { success: true, updated: false, notFound: data.journalIdentifier };
+    throw notFound(`Journal not found: "${data.journalIdentifier}" (exact id or name)`);
   }
 
   const src = normalizeAssetPath(data.imagePath);
@@ -311,7 +310,7 @@ export async function addJournalImage(data: {
   if (data.playerVisible) await openEntryForHandouts(journal);
   return {
     success: true,
-    updated: true,
+    updated: true as const,
     journalId: journal.id,
     journalName: journal.name,
     pageId: page?.id,

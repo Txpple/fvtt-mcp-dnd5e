@@ -116,7 +116,7 @@ export class PlaylistTools {
   }
 
   async handleListPlaylists(_args: any): Promise<string> {
-    const playlists = (await this.foundry.call('listPlaylists', {})) ?? [];
+    const playlists = (await this.foundry.call('listPlaylists')) ?? [];
     if (!Array.isArray(playlists) || playlists.length === 0) return 'No playlists found.';
     const lines = playlists.map(
       (p: any) =>

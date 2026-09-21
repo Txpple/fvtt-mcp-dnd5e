@@ -58,7 +58,7 @@ export function formatImportReport(result: any, totalRequested: number, noun: st
     packId: string;
     packLabel: string;
     itemId: string;
-    unresolvedScale?: Array<{ path: string; formula: string }>;
+    unresolvedScale?: Array<{ path: string; formula: string }> | undefined;
   }>;
   const skipped = result.skipped as Array<{ name: string; reason: string }>;
   const notFound = result.notFound as string[];

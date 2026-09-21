@@ -179,23 +179,23 @@ export const AC_DEFAULT_CALCS = ['unarmored', 'armored'];
 /** One custom AC formula (the `attributes.ac.formulas[]` element). */
 export interface AcFormulaInput {
   formula: string;
-  label?: string;
-  armored?: boolean | null;
-  shielded?: boolean | null;
+  label?: string | undefined;
+  armored?: boolean | null | undefined;
+  shielded?: boolean | null | undefined;
 }
 
 /** The update-actor `ac` block: the dnd5e 6.0 contract plus the 5.x aliases still accepted. */
 export interface AcInput {
-  override?: number | null;
-  natural?: number;
-  calcs?: string[];
-  formulas?: AcFormulaInput[];
+  override?: number | null | undefined;
+  natural?: number | undefined;
+  calcs?: string[] | undefined;
+  formulas?: AcFormulaInput[] | undefined;
   /** @deprecated 5.x alias — flat | natural | default | custom | <armorClasses key> */
-  calc?: string;
+  calc?: string | undefined;
   /** @deprecated 5.x alias — the flat value for calc "flat" / "natural" */
-  flat?: number;
+  flat?: number | undefined;
   /** @deprecated 5.x alias — the formula for calc "custom" */
-  formula?: string;
+  formula?: string | undefined;
 }
 
 const AC = 'system.attributes.ac';

@@ -33,8 +33,25 @@ export function resolveUser(identifier?: string): any {
   );
 }
 
+/** One user as the tools see it — listUsers and updateUser's echo. */
+export interface UserSummary {
+  /** Where this user comes up at login (set-landing-scene); null = follows the active scene. */
+  landingScene: { id: string; name: string | null } | null;
+  id: string;
+  name: string;
+  role: number;
+  roleLabel: string;
+  active: boolean;
+  isGM: boolean;
+  color: string | null;
+  pronouns: string | null;
+  avatar: string | null;
+  character: { id: string; name: string } | null;
+  isBridgeUser: boolean;
+}
+
 /** One user's listing shape — shared by listUsers and updateUser's echo. */
-function describeUser(user: any): Record<string, unknown> {
+function describeUser(user: any): UserSummary {
   const character = user.character ? { id: user.character.id, name: user.character.name } : null;
   // Landing scene (set-landing-scene / fvtt-mod-openserver): where this user comes up at LOGIN.
   // null = no assignment, so they follow the ACTIVE scene like core does. Resolved to a name here
@@ -59,7 +76,7 @@ function describeUser(user: any): Record<string, unknown> {
   };
 }
 
-export function listUsers(): unknown {
+export function listUsers() {
   const users = (game.users?.contents ?? [])
     .map(describeUser)
     .sort((a: any, b: any) => b.role - a.role || a.name.localeCompare(b.name));
@@ -68,12 +85,12 @@ export function listUsers(): unknown {
 
 export async function updateUser(args: {
   user: string;
-  role?: 'none' | 'player' | 'trusted' | 'assistant' | 'gamemaster';
-  name?: string;
-  color?: string;
-  pronouns?: string;
-  character?: string;
-}): Promise<unknown> {
+  role?: 'none' | 'player' | 'trusted' | 'assistant' | 'gamemaster' | undefined;
+  name?: string | undefined;
+  color?: string | undefined;
+  pronouns?: string | undefined;
+  character?: string | undefined;
+}) {
   if (!args?.user) throw invalid('user is required (a user id or exact name)');
   const user = resolveUser(args.user);
   if (!user) {
@@ -167,7 +184,7 @@ export async function updateUser(args: {
   };
 }
 
-export async function setUserAvatar(args: { user?: string; avatar: string }): Promise<unknown> {
+export async function setUserAvatar(args: { user?: string | undefined; avatar: string }) {
   if (!args?.avatar || typeof args.avatar !== 'string') {
     throw invalid(
       'avatar is required and must be a non-empty string (a path or URL Foundry can load)'

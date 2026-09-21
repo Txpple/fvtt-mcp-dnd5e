@@ -379,6 +379,36 @@ const api = {
  */
 export type PageApi = typeof api;
 
+/** The argument tuple handler `N` takes: `[]`, `[args]` or `[args?]` — what `foundry.call` accepts. */
+export type PageArgs<N extends keyof PageApi> = Parameters<PageApi[N]>;
+/** What handler `N` answers with, awaited — what `foundry.call` resolves to. */
+export type PageResult<N extends keyof PageApi> = Awaited<ReturnType<PageApi[N]>>;
+
+// The seam's guarantee (3.0 M6, F24): no handler answers `any` or `unknown`, none takes an `any` /
+// `unknown` argument, and none takes more than the ONE argument the bridge passes (`fn(a)`). A
+// regression is a compile error on the line below, naming the handler — `tsc` is the ratchet.
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type Untyped<T> = IsAny<T> extends true ? true : unknown extends T ? true : false;
+type UntypedResult = {
+  [K in keyof PageApi]: Untyped<PageResult<K>> extends true ? K : never;
+}[keyof PageApi];
+type UntypedArg = {
+  [K in keyof PageApi]: PageArgs<K> extends []
+    ? never
+    : Untyped<PageArgs<K>[0]> extends true
+      ? K
+      : never;
+}[keyof PageApi];
+type ExtraArg = {
+  [K in keyof PageApi]: PageArgs<K>['length'] extends 0 | 1 ? never : K;
+}[keyof PageApi];
+type MustBeNever<T extends never> = T;
+export type SeamGuard = [
+  MustBeNever<UntypedResult>,
+  MustBeNever<UntypedArg>,
+  MustBeNever<ExtraArg>,
+];
+
 // Bind the GUARDED handlers: every return value is asserted plain-JSON-serializable in-page,
 // before it crosses the Playwright bridge, so a forgotten toObject()/dump() (a Map silently
 // flattened to {}, a live Document that throws opaquely) fails loudly naming the handler + path

@@ -370,10 +370,6 @@ export class JournalTools {
       ...(request.folderName ? { folderName: request.folderName } : {}),
     });
 
-    if (!result || result.error) {
-      throw new Error(result?.error || 'Failed to create journal');
-    }
-
     return {
       success: true,
       journalId: result.id,
@@ -417,14 +413,11 @@ export class JournalTools {
     ];
 
     const current = await this.readPageContent(request.journalId, request.pageId);
-    const result = await this.foundry.call('updateJournalContent', {
+    await this.foundry.call('updateJournalContent', {
       journalId: request.journalId,
       content: current + renderStyledHtml(linkBlocks),
       ...(request.pageId ? { pageId: request.pageId } : {}),
     });
-    if (!result || result.error || !result.success) {
-      throw new Error(result?.error || 'Failed to add the NPC link');
-    }
 
     return {
       success: true,
@@ -451,9 +444,6 @@ export class JournalTools {
         newPageName: request.newPageName,
         ...(ownership ? { ownership } : {}),
       });
-      if (!result || result.error || !result.success) {
-        throw new Error(result?.error || 'Failed to create the new page');
-      }
       return {
         success: true,
         message: `New page "${request.newPageName}" added.`,
@@ -470,9 +460,6 @@ export class JournalTools {
       ...(request.pageId ? { pageId: request.pageId } : {}),
       ...(ownership ? { ownership } : {}),
     });
-    if (!result || result.error || !result.success) {
-      throw new Error(result?.error || 'Failed to append the section');
-    }
     return {
       success: true,
       message: 'Appended a new section to the journal page.',
@@ -485,11 +472,9 @@ export class JournalTools {
   private async readPageContent(journalId: string, pageId?: string): Promise<string> {
     if (pageId) {
       const pageResult = await this.foundry.call('getJournalPageContent', { journalId, pageId });
-      if (!pageResult || pageResult.error) throw new Error(`Page not found: ${pageId}`);
       return pageResult.content || '';
     }
     const journal = await this.foundry.call('getJournalContent', { journalId });
-    if (!journal || journal.error) throw new Error(`Journal not found: ${journalId}`);
     return journal.content || '';
   }
 
@@ -506,10 +491,6 @@ export class JournalTools {
         pageId: request.pageId,
       });
 
-      if (!pageResult || pageResult.error) {
-        throw new Error(pageResult?.error || 'Page not found');
-      }
-
       return {
         success: true,
         mode: 'page',
@@ -523,10 +504,6 @@ export class JournalTools {
       const journalContent = await this.foundry.call('getJournalContent', {
         journalId: request.journalId,
       });
-
-      if (!journalContent || journalContent.error) {
-        throw new Error(journalContent?.error || 'Journal not found');
-      }
 
       return {
         success: true,
@@ -545,11 +522,7 @@ export class JournalTools {
       ...(request.nameFilter !== undefined ? { nameFilter: request.nameFilter } : {}),
     });
 
-    if (!journals || journals.error) {
-      throw new Error('Failed to retrieve journals');
-    }
-
-    let filteredJournals = journals;
+    let filteredJournals: Array<(typeof journals)[number] & { contentPreview?: string }> = journals;
 
     // Filter for quest-related journals if requested
     if (request.filterQuests) {
@@ -587,10 +560,6 @@ export class JournalTools {
     // Get all journals (now includes page metadata)
     const journals = await this.foundry.call('listJournals', {});
 
-    if (!journals || journals.error) {
-      throw new Error('Failed to retrieve journals');
-    }
-
     const searchResults = [];
     const query = request.searchQuery.toLowerCase();
 
@@ -599,7 +568,7 @@ export class JournalTools {
       const matchInfo: any = {
         id: journal.id,
         name: journal.name,
-        pageCount: journal.pages?.length ?? journal.pageCount ?? 0,
+        pageCount: journal.pages.length,
         matchType: [],
         matchedPages: [],
       };
@@ -678,10 +647,6 @@ export class JournalTools {
       ...(request.folderName ? { folderName: request.folderName } : {}),
     });
 
-    if (!result || result.error) {
-      throw new Error(result?.error || 'Failed to create journal');
-    }
-
     // Surface any page-side asset warnings (e.g. an image page src that 404s — KEEP+WARN).
     const warns = Array.isArray(result?.warnings) ? result.warnings : [];
     let message = `Journal "${result.name}" created with ${result.pageCount} page(s)`;
@@ -715,10 +680,6 @@ export class JournalTools {
       ...(ownership ? { ownership } : {}),
     });
 
-    if (!result || result.error || result.success === false) {
-      throw new Error(result?.error || 'Failed to update journal');
-    }
-
     return {
       success: true,
       journalId: request.journalId,
@@ -741,10 +702,6 @@ export class JournalTools {
       playerVisible: request.playerVisible,
     });
 
-    if (!result || result.error || result.success === false) {
-      throw new Error(result?.error || 'Failed to set page visibility');
-    }
-
     return {
       success: true,
       journalId: request.journalId,
@@ -765,10 +722,6 @@ export class JournalTools {
       journalId: request.journalId,
       pageId: request.pageId,
     });
-
-    if (!result || result.error) {
-      throw new Error(result?.error || 'Failed to delete page');
-    }
     if (result.deleted === false) {
       return {
         success: true,
@@ -795,10 +748,6 @@ export class JournalTools {
     const result = await this.foundry.call('deleteJournals', {
       identifiers: request.identifiers,
     });
-
-    if (!result || result.error) {
-      throw new Error(result?.error || 'Failed to delete journals');
-    }
 
     return {
       success: true,

@@ -18,32 +18,32 @@ import { invalid } from './errors.js';
 // ---------------------------------------------------------------------------
 
 export interface FacetFilter {
-  k?: string; // dnd5e source key-path (absent on the logical operators, e.g. OR)
+  k?: string | undefined; // dnd5e source key-path (absent on the logical operators, e.g. OR)
   o: string; // dnd5e.Filter operator (exact, in, gte, lte, hasany, OR, …)
   v: unknown;
 }
 
-type NumOrRange = number | { min?: number; max?: number };
+type NumOrRange = number | { min?: number | undefined; max?: number | undefined };
 
 export interface FacetedSearchArgs {
   documentType: string; // friendly content type — a CONTENT_TYPES key
-  name?: string; // case-insensitive substring narrowing
+  name?: string | undefined; // case-insensitive substring narrowing
   // creature facets
-  challengeRating?: NumOrRange;
-  creatureType?: string;
-  size?: string; // friendly enum (tiny/small/medium/large/huge/gargantuan)
-  hasSpells?: boolean;
-  hasLegendaryActions?: boolean;
+  challengeRating?: NumOrRange | undefined;
+  creatureType?: string | undefined;
+  size?: string | undefined; // friendly enum (tiny/small/medium/large/huge/gargantuan)
+  hasSpells?: boolean | undefined;
+  hasLegendaryActions?: boolean | undefined;
   // spell facets
-  spellLevel?: NumOrRange;
-  spellSchool?: string | string[];
-  damageType?: string; // two-stage (activity damage parts) — not an index facet
+  spellLevel?: NumOrRange | undefined;
+  spellSchool?: string | string[] | undefined;
+  damageType?: string | undefined; // two-stage (activity damage parts) — not an index facet
   // gear facets
-  rarity?: string | string[];
-  itemType?: string | string[]; // the item SUBTYPE (system.type.value): wand/wondrous/ammo/…
-  magical?: boolean; // detected via the `mgc` property
-  properties?: string[];
-  limit?: number;
+  rarity?: string | string[] | undefined;
+  itemType?: string | string[] | undefined; // the item SUBTYPE (system.type.value): wand/wondrous/ammo/…
+  magical?: boolean | undefined; // detected via the `mgc` property
+  properties?: string[] | undefined;
+  limit?: number | undefined;
 }
 
 export interface CompendiumHit {

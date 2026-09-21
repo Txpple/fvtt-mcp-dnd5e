@@ -543,6 +543,73 @@ export interface DnD5eAddFeatureToolOptions {
 // Tool class
 // ---------------------------------------------------------------------------
 
+// The per-kind schemas (hoisted so the page handlers can type their args as the zod OUTPUT —
+// `import type { … FeatureArgs }` on the page side; the tool passes `parsed` straight through).
+const PassiveSchema = z.object({
+  featureType: z.literal('passive'),
+  ...featureHeaderFields,
+  featType: z.string().optional(),
+  requirements: z.string().optional(),
+  ...sourceMetaFields,
+});
+export type PassiveFeatureArgs = z.output<typeof PassiveSchema>;
+
+const AttackSchema = z
+  .object({
+    featureType: z.literal('attack'),
+    ...featureHeaderFields,
+    activationType: activationField,
+    ...attackCoreFields,
+    ...sourceMetaFields,
+  })
+  .superRefine(refineRangedAttack);
+export type AttackFeatureArgs = z.output<typeof AttackSchema>;
+
+const AttackWithSaveSchema = z
+  .object({
+    featureType: z.literal('attack-with-save'),
+    ...featureHeaderFields,
+    activationType: activationField,
+    ...attackCoreFields,
+    saveAbility: z.enum(ABILITY_ENUM),
+    saveDC: z.number().int().min(1).max(30),
+    saveDamageParts: z.array(damagePart).min(1, 'at least one save damage part is required'),
+    saveOnSave: z.enum(SAVE_ON_SAVE_ENUM).default('none'),
+    ...sourceMetaFields,
+  })
+  .superRefine(refineRangedAttack);
+export type AttackWithSaveFeatureArgs = z.output<typeof AttackWithSaveSchema>;
+
+const AuraSchema = z.object({
+  featureType: z.literal('aura'),
+  ...featureHeaderFields,
+  activationType: activationField,
+  damageParts: damagePartsRequired,
+  areaType: z.enum(AREA_SHAPE_ENUM),
+  areaSize: z.number().positive('areaSize must be greater than 0'),
+  areaUnits: z.enum(AREA_UNITS_ENUM).default('ft'),
+  affectsType: z.enum(AFFECTS_ENUM).default('creature'),
+  ...sourceMetaFields,
+});
+export type AuraFeatureArgs = z.output<typeof AuraSchema>;
+
+const SpellcastingSchema = z.object({
+  featureType: z.literal('spellcasting'),
+  actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
+  spellcastingClass: z.enum(SPELLCASTING_CLASS_ENUM),
+  spellcastingLevel: z.number().int().min(1).max(20),
+  spellcastingAbility: z.enum(ABILITY_ENUM).optional(),
+  sourceRules: z.enum(SOURCE_RULES_ENUM).default('2024'),
+});
+export type SpellcastingFeatureArgs = z.output<typeof SpellcastingSchema>;
+
+const SpellsSchema = z.object({
+  featureType: z.literal('spells'),
+  actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
+  spellNames: z.array(z.string().min(1)).min(1).max(50),
+  compendiumPacks: z.array(z.string().min(1)).default([...DEFAULT_SPELL_PACKS]),
+});
+
 export class DnD5eAddFeatureTool {
   private foundry: FoundryBridge;
   private logger: Logger;
@@ -597,13 +664,7 @@ export class DnD5eAddFeatureTool {
   // ---------------------------------------------------------------------------
 
   private async handlePassive(args: any): Promise<any> {
-    const schema = z.object({
-      featureType: z.literal('passive'),
-      ...featureHeaderFields,
-      featType: z.string().optional(),
-      requirements: z.string().optional(),
-      ...sourceMetaFields,
-    });
+    const schema = PassiveSchema;
 
     const parsed = schema.parse(args);
 
@@ -721,15 +782,7 @@ export class DnD5eAddFeatureTool {
   // ---------------------------------------------------------------------------
 
   private async handleAttack(args: any): Promise<any> {
-    const schema = z
-      .object({
-        featureType: z.literal('attack'),
-        ...featureHeaderFields,
-        activationType: activationField,
-        ...attackCoreFields,
-        ...sourceMetaFields,
-      })
-      .superRefine(refineRangedAttack);
+    const schema = AttackSchema;
 
     const parsed = schema.parse(args);
     const effectiveAbility: string =
@@ -801,19 +854,7 @@ export class DnD5eAddFeatureTool {
   // ---------------------------------------------------------------------------
 
   private async handleAttackWithSave(args: any): Promise<any> {
-    const schema = z
-      .object({
-        featureType: z.literal('attack-with-save'),
-        ...featureHeaderFields,
-        activationType: activationField,
-        ...attackCoreFields,
-        saveAbility: z.enum(ABILITY_ENUM),
-        saveDC: z.number().int().min(1).max(30),
-        saveDamageParts: z.array(damagePart).min(1, 'at least one save damage part is required'),
-        saveOnSave: z.enum(SAVE_ON_SAVE_ENUM).default('none'),
-        ...sourceMetaFields,
-      })
-      .superRefine(refineRangedAttack);
+    const schema = AttackWithSaveSchema;
 
     const parsed = schema.parse(args);
     const effectiveAbility: string =
@@ -880,17 +921,7 @@ export class DnD5eAddFeatureTool {
   // ---------------------------------------------------------------------------
 
   private async handleAura(args: any): Promise<any> {
-    const schema = z.object({
-      featureType: z.literal('aura'),
-      ...featureHeaderFields,
-      activationType: activationField,
-      damageParts: damagePartsRequired,
-      areaType: z.enum(AREA_SHAPE_ENUM),
-      areaSize: z.number().positive('areaSize must be greater than 0'),
-      areaUnits: z.enum(AREA_UNITS_ENUM).default('ft'),
-      affectsType: z.enum(AFFECTS_ENUM).default('creature'),
-      ...sourceMetaFields,
-    });
+    const schema = AuraSchema;
 
     const parsed = schema.parse(args);
 
@@ -945,14 +976,7 @@ export class DnD5eAddFeatureTool {
   // ---------------------------------------------------------------------------
 
   private async handleSpellcasting(args: any): Promise<any> {
-    const schema = z.object({
-      featureType: z.literal('spellcasting'),
-      actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
-      spellcastingClass: z.enum(SPELLCASTING_CLASS_ENUM),
-      spellcastingLevel: z.number().int().min(1).max(20),
-      spellcastingAbility: z.enum(ABILITY_ENUM).optional(),
-      sourceRules: z.enum(SOURCE_RULES_ENUM).default('2024'),
-    });
+    const schema = SpellcastingSchema;
 
     const parsed = schema.parse(args);
     const effectiveAbility =
@@ -1011,12 +1035,7 @@ export class DnD5eAddFeatureTool {
   // ---------------------------------------------------------------------------
 
   private async handleSpells(args: any): Promise<any> {
-    const schema = z.object({
-      featureType: z.literal('spells'),
-      actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
-      spellNames: z.array(z.string().min(1)).min(1).max(50),
-      compendiumPacks: z.array(z.string().min(1)).default([...DEFAULT_SPELL_PACKS]),
-    });
+    const schema = SpellsSchema;
 
     const parsed = schema.parse(args);
     assertNoSrdPacks(parsed.compendiumPacks, 'add-feature spells');

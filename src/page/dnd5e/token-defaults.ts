@@ -48,9 +48,9 @@ export function resolveDisposition(
  */
 export function tokenDefaults(opts: {
   disposition: number;
-  darkvision?: number;
+  darkvision?: number | undefined;
   /** Existing ring config (e.g. a compendium copy's) to preserve while forcing `enabled: false`. */
-  ring?: Record<string, unknown> | null;
+  ring?: Record<string, unknown> | null | undefined;
 }): Record<string, unknown> {
   const dark = opts.darkvision && opts.darkvision > 0 ? opts.darkvision : 0;
   return {

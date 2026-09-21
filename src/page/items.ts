@@ -19,15 +19,15 @@ const ItemClass: any = (globalThis as any).Item;
 const FolderClass: any = (globalThis as any).Folder;
 
 interface ListWorldItemsArgs {
-  type?: string;
-  folder?: string;
-  nameFilter?: string;
+  type?: string | undefined;
+  folder?: string | undefined;
+  nameFilter?: string | undefined;
 }
 
 interface WorldItemSummary {
   id: string;
   name: string;
-  trueName?: string; // unmasked source name when dnd5e identity-masks an unidentified item
+  trueName?: string | undefined; // unmasked source name when dnd5e identity-masks an unidentified item
   type: string;
   folderName: string | null;
 }
@@ -37,7 +37,7 @@ interface WorldItemSummary {
  * dnd5e's identity mask is active (see unmaskedName), absent otherwise so the common
  * (identified) shapes stay byte-identical.
  */
-function trueNameField(item: any): { trueName?: string } {
+function trueNameField(item: any): { trueName?: string | undefined } {
   const trueName = unmaskedName(item);
   return trueName !== undefined ? { trueName } : {};
 }
@@ -47,7 +47,7 @@ function trueNameField(item: any): { trueName?: string } {
  * and a case-insensitive substring name filter. A folder filter that resolves
  * to no matching Item folder yields an empty list.
  */
-export function listWorldItems(args?: ListWorldItemsArgs): unknown {
+export function listWorldItems(args?: ListWorldItemsArgs) {
   const { type, folder, nameFilter } = args ?? {};
   const nameLower = nameFilter ? nameFilter.toLowerCase() : null;
 
@@ -96,7 +96,7 @@ interface GetWorldItemArgs {
  * or no item matches. Returns the full detail shape (system/effects/flags
  * sanitized of cyclic/sensitive/bloat fields).
  */
-export function getWorldItem(args?: GetWorldItemArgs): unknown {
+export function getWorldItem(args?: GetWorldItemArgs) {
   const identifier = (args?.identifier ?? '').trim();
   if (identifier.length === 0) {
     throw invalid('identifier is required and must be a non-empty string');
@@ -140,10 +140,10 @@ export function getWorldItem(args?: GetWorldItemArgs): unknown {
 interface UpdateWorldItemsArgs {
   updates: Array<{
     id: string;
-    name?: string;
-    img?: string;
-    system?: Record<string, any>;
-    folder?: string;
+    name?: string | undefined;
+    img?: string | undefined;
+    system?: Record<string, any> | undefined;
+    folder?: string | undefined;
   }>;
 }
 
@@ -153,7 +153,7 @@ interface UpdateWorldItemsArgs {
  * absent, scoped to Item folders). Throws when the updates array is empty, an
  * entry lacks a non-empty id, or an id does not resolve to a world Item.
  */
-export async function updateWorldItems(args: UpdateWorldItemsArgs): Promise<unknown> {
+export async function updateWorldItems(args: UpdateWorldItemsArgs) {
   const { updates } = args ?? ({} as UpdateWorldItemsArgs);
 
   if (!Array.isArray(updates) || updates.length === 0) {
@@ -230,12 +230,12 @@ interface CreateWorldItemsArgs {
   items: Array<{
     name: string;
     type: string;
-    img?: string;
-    system?: Record<string, any>;
-    effects?: any[];
-    flags?: Record<string, any>;
+    img?: string | undefined;
+    system?: Record<string, any> | undefined;
+    effects?: any[] | undefined;
+    flags?: Record<string, any> | undefined;
   }>;
-  folder?: string;
+  folder?: string | undefined;
 }
 
 /**
@@ -244,7 +244,7 @@ interface CreateWorldItemsArgs {
  * types, optionally places them in a named/id-resolved Item folder (created when
  * absent), and returns { folderId, folderName, created }.
  */
-export async function createWorldItems(args: CreateWorldItemsArgs): Promise<unknown> {
+export async function createWorldItems(args: CreateWorldItemsArgs) {
   const { items, folder } = args ?? ({} as CreateWorldItemsArgs);
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -336,14 +336,15 @@ interface DeleteWorldItemsArgs {
  * call can never hit the wrong item. Returns { success, deletedCount, deleted,
  * notFound? }.
  */
-export async function deleteWorldItems(args: DeleteWorldItemsArgs): Promise<unknown> {
+export async function deleteWorldItems(args: DeleteWorldItemsArgs) {
   const identifiers = args?.identifiers;
 
   if (!Array.isArray(identifiers) || identifiers.length === 0) {
     throw invalid('identifiers array is required and must contain at least one entry');
   }
 
-  const deleted: Array<{ id: string; name: string; trueName?: string; type: string }> = [];
+  const deleted: Array<{ id: string; name: string; trueName?: string | undefined; type: string }> =
+    [];
   const notFound: string[] = [];
 
   for (const identifier of identifiers) {

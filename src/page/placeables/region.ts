@@ -60,34 +60,34 @@ export const ROTATE_AREA_BEHAVIOR = 'dnd5e.rotateArea';
  */
 export interface RotateAreaOpts {
   /** Stop angles in degrees, e.g. [0, 90, 180, 270]. Default [0]. */
-  positions?: number[];
-  tiles?: string[];
-  walls?: string[];
-  lights?: string[];
-  regions?: string[];
-  sounds?: string[];
+  positions?: number[] | undefined;
+  tiles?: string[] | undefined;
+  walls?: string[] | undefined;
+  lights?: string[] | undefined;
+  regions?: string[] | undefined;
+  sounds?: string[] | undefined;
   /** Rotate the listed walls as linked segments (default true). */
-  linkWalls?: boolean;
+  linkWalls?: boolean | undefined;
   /** Animation time in ms — the whole turn (fixed) or per 90° (variable). Default 1000. */
-  timeMs?: number;
-  timeMode?: string;
+  timeMs?: number | undefined;
+  timeMode?: string | undefined;
   /** short (default) / long / cw / ccw. */
-  direction?: string;
+  direction?: string | undefined;
 }
 
 export interface Dnd5eBehaviorOpts {
   /** Names / uuids / "Item uuid#Effect" refs — resolved to ActiveEffect uuids (applyActiveEffect). */
-  effects?: string[];
+  effects?: string[] | undefined;
   /** Token dispositions the behavior applies to (applyActiveEffect) / ignores (difficultTerrain). */
-  dispositions?: string[];
-  sizes?: string[];
-  creatureTypes?: string[];
+  dispositions?: string[] | undefined;
+  sizes?: string[] | undefined;
+  creatureTypes?: string[] | undefined;
   /** difficultTerrain: what kind of terrain (a creature may ignore some kinds). */
-  terrainTypes?: string[];
+  terrainTypes?: string[] | undefined;
   /** difficultTerrain: magical terrain (Spike Growth) vs mundane (rubble). */
-  magical?: boolean;
+  magical?: boolean | undefined;
   /** rotateArea: the turning-platform configuration. */
-  rotate?: RotateAreaOpts;
+  rotate?: RotateAreaOpts | undefined;
 }
 
 /** Shape a rotateArea configuration into the behavior's `system` (ids already validated). Pure. */
@@ -302,7 +302,7 @@ export function remapTeleportDestination(
   dest: unknown,
   sceneIdMap: Record<string, string>,
   regionIdMap: Record<string, string>
-): { status: RemapStatus; dest?: string; reason?: string } {
+): { status: RemapStatus; dest?: string | undefined; reason?: string | undefined } {
   if (typeof dest !== 'string' || dest.trim() === '') return { status: 'no-match' };
   const m = dest.match(TELEPORT_DEST_RE);
   if (!m) return { status: 'no-match' };
@@ -327,19 +327,27 @@ export function remapTeleportDestination(
 // --- the descriptor ------------------------------------------------------------
 
 export interface RegionInput {
-  name?: string;
-  color?: string;
-  visibility?: number;
-  shapes?: Record<string, unknown>[];
-  behaviors?: Record<string, unknown>[];
+  name?: string | undefined;
+  color?: string | undefined;
+  visibility?: number | undefined;
+  shapes?: Record<string, unknown>[] | undefined;
+  behaviors?: Record<string, unknown>[] | undefined;
 }
 
 export interface RegionPatch {
-  name?: string;
-  color?: string;
-  visibility?: number;
-  shapes?: Record<string, unknown>[];
-  rect?: { x: number; y: number; widthCells?: number; heightCells?: number; snapToGrid?: boolean };
+  name?: string | undefined;
+  color?: string | undefined;
+  visibility?: number | undefined;
+  shapes?: Record<string, unknown>[] | undefined;
+  rect?:
+    | {
+        x: number;
+        y: number;
+        widthCells?: number | undefined;
+        heightCells?: number | undefined;
+        snapToGrid?: boolean | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -403,7 +411,7 @@ export function rectContainsSnappedCenter(
  * rectContainsSnappedCenter documents. Pure/exported for unit testing.
  */
 export function teleportPlacementWarning(
-  destRegion: { name?: string; shapes?: any[] },
+  destRegion: { name?: string | undefined; shapes?: any[] | undefined },
   grid: { size: number; sceneX: number; sceneY: number }
 ): string | null {
   const shapes = destRegion.shapes ?? [];
@@ -482,12 +490,14 @@ export const regionDescriptor: PlaceableDescriptor = {
 
 // --- bridge page functions (registered in src/page/index.ts) -------------------
 
-export const createSceneRegions = (args: { sceneIdentifier: string; items: RegionInput[] }) =>
-  crudCreate(regionDescriptor, args);
-export const listSceneRegions = (args: { sceneIdentifier: string }) =>
+export const createSceneRegions = (args: {
+  sceneIdentifier?: string | undefined;
+  items: RegionInput[];
+}) => crudCreate(regionDescriptor, args);
+export const listSceneRegions = (args: { sceneIdentifier?: string | undefined }) =>
   crudList(regionDescriptor, args);
 export const updateSceneRegions = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & RegionPatch>;
 }) => crudUpdate(regionDescriptor, args);
 
@@ -496,7 +506,10 @@ export const updateSceneRegions = (args: {
  * a just-deleted region id — the orphaned-other-end trap. Orphans are warned, never auto-deleted
  * (the GM may be mid-rebuild).
  */
-export async function deleteSceneRegions(args: { sceneIdentifier: string; ids: string[] }) {
+export async function deleteSceneRegions(args: {
+  sceneIdentifier?: string | undefined;
+  ids: string[];
+}) {
   const result = await crudDelete(regionDescriptor, args);
   if (!result.deleted || !result.sceneId) return result;
   const deletedIds = new Set(args.ids.filter(id => !(result.notFoundIds ?? []).includes(id)));
@@ -535,20 +548,20 @@ export async function deleteSceneRegions(args: { sceneIdentifier: string; ids: s
 export async function createSceneTeleporter(args: {
   from: { sceneIdentifier: string; x: number; y: number };
   to: { sceneIdentifier: string; x: number; y: number };
-  widthCells?: number;
-  heightCells?: number;
-  twoWay?: boolean;
-  snapToGrid?: boolean;
-  confirm?: boolean;
-  fromName?: string;
-  toName?: string;
-  color?: string;
+  widthCells?: number | undefined;
+  heightCells?: number | undefined;
+  twoWay?: boolean | undefined;
+  snapToGrid?: boolean | undefined;
+  confirm?: boolean | undefined;
+  fromName?: string | undefined;
+  toName?: string | undefined;
+  color?: string | undefined;
 }): Promise<{
   success: boolean;
-  notFound?: string;
-  twoWay?: boolean;
-  from?: Record<string, unknown> & { sceneId: string; sceneName: string };
-  to?: Record<string, unknown> & { sceneId: string; sceneName: string };
+  notFound?: string | undefined;
+  twoWay?: boolean | undefined;
+  from?: (Record<string, unknown> & { sceneId: string; sceneName: string }) | undefined;
+  to?: (Record<string, unknown> & { sceneId: string; sceneName: string }) | undefined;
 }> {
   if (!args?.from?.sceneIdentifier || !args?.to?.sceneIdentifier) {
     throw invalid('both from.sceneIdentifier and to.sceneIdentifier are required');
@@ -618,13 +631,13 @@ export async function createSceneTeleporter(args: {
  */
 export async function addRegionBehavior(
   args: {
-    sceneIdentifier?: string;
+    sceneIdentifier?: string | undefined;
     regionIdentifier: string;
     type: string;
-    name?: string;
-    disabled?: boolean;
-    system?: Record<string, unknown>;
-    teleportTo?: { sceneIdentifier: string; regionIdentifier: string };
+    name?: string | undefined;
+    disabled?: boolean | undefined;
+    system?: Record<string, unknown> | undefined;
+    teleportTo?: { sceneIdentifier: string; regionIdentifier: string } | undefined;
   } & Dnd5eBehaviorOpts
 ): Promise<Record<string, unknown>> {
   if (!args?.regionIdentifier) throw invalid('regionIdentifier is required');

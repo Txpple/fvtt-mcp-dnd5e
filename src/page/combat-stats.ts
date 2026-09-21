@@ -36,7 +36,7 @@ const BF_KEYS = [
 const D20_TYPES = new Set(['attack', 'save', 'ability', 'skill', 'tool', 'concentration', 'death']);
 
 export interface ScanCombatStatsArgs {
-  since?: number;
+  since?: number | undefined;
 }
 
 // --- dnd5e message-data readers (PURE, unit-tested) --------------------------------------------
@@ -97,7 +97,7 @@ export function messageOrigin(m: any): string | null {
  */
 export function messageTargets(
   m: any
-): Array<{ uuid: string; name: string; ac: number | null; token?: string }> | null {
+): Array<{ uuid: string; name: string; ac: number | null; token?: string | undefined }> | null {
   const sys = m?.system?.targets;
   const raw: any[] | null = Array.isArray(sys)
     ? sys
@@ -113,7 +113,7 @@ export function messageTargets(
   }));
 }
 
-export async function scanCombatStats(args: ScanCombatStatsArgs = {}): Promise<unknown> {
+export async function scanCombatStats(args: ScanCombatStatsArgs = {}) {
   const since = Number(args.since) || 0;
   const uuids = new Set<string>();
   const stamped: any[] = [];

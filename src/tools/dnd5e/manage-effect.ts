@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FoundryBridge } from '../../foundry.js';
+import type { FoundryBridge, PageArgs } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import {
   ADVANTAGE_VALUES,
@@ -264,7 +264,7 @@ export class DnD5eManageEffectTool {
 
     await assertDnd5e(this.foundry, this.logger, 'manage-effect');
 
-    const fwd: Record<string, any> = { action: parsed.action };
+    const fwd: PageArgs<'manageEffect'>[0] = { action: parsed.action };
     if (parsed.actorIdentifier) fwd.actorIdentifier = parsed.actorIdentifier;
     if (parsed.itemIdentifier) fwd.itemIdentifier = parsed.itemIdentifier;
     if (parsed.effectId) fwd.effectId = parsed.effectId;

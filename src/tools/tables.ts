@@ -299,7 +299,7 @@ export class TableTools {
   }
 
   async handleListRollTables(_args: any): Promise<string> {
-    const tables = (await this.foundry.call('listRollTables', {})) ?? [];
+    const tables = (await this.foundry.call('listRollTables')) ?? [];
     if (!Array.isArray(tables) || tables.length === 0) return 'No roll tables found.';
     const lines = tables.map(
       (t: any) => `  - "${t.name}" (${t.id}) — ${t.formula}, ${t.resultCount} result(s)`

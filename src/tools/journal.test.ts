@@ -120,14 +120,16 @@ describe('handleCreateQuestJournal (structuring — blocks -> styled HTML, no pr
     }
   });
 
-  it('throws when the bridge returns an error payload', async () => {
-    const { tools } = build({ error: 'boom' });
+  it('propagates a page throw untouched (the page throws on failure; nothing is rewrapped)', async () => {
+    const { tools } = build(() => {
+      throw new Error('boom');
+    });
     await expect(
       tools.handleCreateQuestJournal({
         title: 'X',
         pages: [{ name: 'P', blocks: [{ type: 'paragraph', html: 'y' }] }],
       })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/^boom$/);
   });
 
   it('rejects missing pages / an empty title / a bad block type / empty blocks', async () => {
@@ -600,9 +602,13 @@ describe('handleUpdateJournal', () => {
     expect(calls[0][1].ownership).toEqual({ default: 2 });
   });
 
-  it('throws when the bridge reports success:false', async () => {
-    const { tools } = build({ success: false, error: 'nope' });
-    await expect(tools.handleUpdateJournal({ journalId: 'j1', name: 'X' })).rejects.toThrow();
+  it('propagates a page throw untouched', async () => {
+    const { tools } = build(() => {
+      throw new Error('nope');
+    });
+    await expect(tools.handleUpdateJournal({ journalId: 'j1', name: 'X' })).rejects.toThrow(
+      /^nope$/
+    );
   });
 
   it('rejects when neither name nor content is provided (refine)', async () => {
@@ -640,11 +646,13 @@ describe('handleSetJournalPageVisibility', () => {
     expect(out.message).toContain('GM-only');
   });
 
-  it('throws on the bridge error payload', async () => {
-    const { tools } = build({ success: false, error: 'Page not found: p9' });
+  it('propagates a page throw untouched', async () => {
+    const { tools } = build(() => {
+      throw new Error('Page not found: p9');
+    });
     await expect(
       tools.handleSetJournalPageVisibility({ journalId: 'j1', pageId: 'p9', playerVisible: true })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/^Page not found: p9$/);
   });
 
   it('rejects a missing playerVisible / empty ids', async () => {
@@ -711,9 +719,11 @@ describe('handleDeleteJournal', () => {
     expect(out.message).toBe('Deleted 0 journal(s)');
   });
 
-  it('throws when the bridge returns an error', async () => {
-    const { tools } = build({ error: 'failed' });
-    await expect(tools.handleDeleteJournal({ identifiers: ['a'] })).rejects.toThrow();
+  it('propagates a page throw untouched', async () => {
+    const { tools } = build(() => {
+      throw new Error('failed');
+    });
+    await expect(tools.handleDeleteJournal({ identifiers: ['a'] })).rejects.toThrow(/^failed$/);
   });
 
   it('rejects an empty identifiers array', async () => {

@@ -13,6 +13,9 @@ import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { DEFAULT_SPELL_PACKS } from '../../utils/compendium-sources.js';
 import { invalid, notFound as notFoundError, unsupported } from '../errors.js';
+import type { SpellcastingFeatureArgs } from '../../tools/dnd5e/add-feature.js';
+// The spellcasting arg shape is the tool's zod OUTPUT (a type-only import; nothing of the tool
+// side reaches the page bundle) — the page receives exactly what the tool parsed.
 
 // =============================================================================
 // Spellcasting slot tables — used by setActorSpellcasting.
@@ -213,7 +216,9 @@ export function planSpellcasting(cls: string, lvl: number, ability: string): Spe
 // setActorSpellcasting — configure spell slots + casting ability.
 // ---------------------------------------------------------------------------
 
-export async function setActorSpellcasting(data: any): Promise<unknown> {
+export async function setActorSpellcasting(
+  data: SpellcastingFeatureArgs & { effectiveAbility: string }
+) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('setActorSpellcasting requires the dnd5e game system');
   }
@@ -254,7 +259,19 @@ export async function setActorSpellcasting(data: any): Promise<unknown> {
 // addSpellsToActor — import named spells from compendium packs onto an actor.
 // ---------------------------------------------------------------------------
 
-export async function addSpellsToActor(data: any): Promise<unknown> {
+/**
+ * What `addSpellsToActor` reads. Wider than the add-feature tool's `spells` schema: create-pc calls
+ * it page-side with `alwaysPrepared` (the house rule for known-style casters), which the tool does
+ * not expose.
+ */
+export interface AddSpellsArgs {
+  actorIdentifier: string;
+  spellNames: string[];
+  compendiumPacks?: string[] | undefined;
+  alwaysPrepared?: boolean | undefined;
+}
+
+export async function addSpellsToActor(data: AddSpellsArgs) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addSpellsToActor requires the dnd5e game system');
   }
@@ -418,22 +435,22 @@ export async function addSpellsToActor(data: any): Promise<unknown> {
 export async function addHomebrewSpellToActor(args: {
   actorIdentifier: string;
   name: string;
-  img?: string;
+  img?: string | undefined;
   level: number;
-  school?: string;
-  method?: string;
-  prepared?: number;
-  components?: string[];
-  materials?: string;
-  description?: string;
-  activationType?: string;
-  rangeValue?: number;
-  rangeUnits?: string;
-  durationValue?: number;
-  durationUnits?: string;
-  sourceRules?: string;
-  activity?: Record<string, any>;
-}): Promise<unknown> {
+  school?: string | undefined;
+  method?: string | undefined;
+  prepared?: number | undefined;
+  components?: string[] | undefined;
+  materials?: string | undefined;
+  description?: string | undefined;
+  activationType?: string | undefined;
+  rangeValue?: number | undefined;
+  rangeUnits?: string | undefined;
+  durationValue?: number | undefined;
+  durationUnits?: string | undefined;
+  sourceRules?: string | undefined;
+  activity?: Record<string, any> | undefined;
+}) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported(
       `addHomebrewSpellToActor requires D&D 5e. Current system: "${game.system.id}".`

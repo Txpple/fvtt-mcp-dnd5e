@@ -88,7 +88,7 @@ export function readDnd5eSettings(): Record<string, unknown> {
  * calendar choices, and — after a write — the applied changes (old → new) and which of them need a
  * client reload before they take effect.
  */
-export async function configureDnd5eSettings(args: Record<string, unknown> = {}): Promise<unknown> {
+export async function configureDnd5eSettings(args: Record<string, unknown> = {}) {
   const calendars = liveCalendarIds();
   const current = readDnd5eSettings();
   const changes: Dnd5eSettingChange[] = planDnd5eSettingChanges(current, args ?? {}, {

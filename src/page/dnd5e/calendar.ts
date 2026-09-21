@@ -59,17 +59,17 @@ export function monthLength(cal: any, index: number, leapYear: boolean): number 
 export interface CalendarArgs {
   action: 'read' | 'advance' | 'set';
   // advance (any combination; negative rewinds)
-  rounds?: number;
-  minutes?: number;
-  hours?: number;
-  days?: number;
-  seconds?: number;
+  rounds?: number | undefined;
+  minutes?: number | undefined;
+  hours?: number | undefined;
+  days?: number | undefined;
+  seconds?: number | undefined;
   // set (each optional — omitted parts keep their current value)
-  year?: number;
-  month?: number | string;
-  day?: number;
-  hour?: number;
-  minute?: number;
+  year?: number | undefined;
+  month?: number | string | undefined;
+  day?: number | undefined;
+  hour?: number | undefined;
+  minute?: number | undefined;
 }
 
 /** Localize a calendar label — core's stock calendars carry i18n KEYS as month / day names. */
@@ -159,7 +159,7 @@ function monthIndex(cal: any, month: number | string): number {
  * rewinds); or set the date (year in display terms, month by number or name, day 1-based) and/or
  * the time of day. Writes go through game.time (GM-only); the report shows before → after.
  */
-export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
+export async function manageCalendar(args: CalendarArgs) {
   const action = args?.action ?? 'read';
   if (action === 'read') return { success: true, ...readCalendar() };
   if (!game.user?.isGM)

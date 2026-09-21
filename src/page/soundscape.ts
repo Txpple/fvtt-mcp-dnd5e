@@ -55,8 +55,8 @@ export interface SoundscapeSet {
 /** A library template is a set plus the two taxonomy fields the picker cascades on. */
 export interface SoundscapeTemplate extends Partial<SoundscapeSet> {
   name: string;
-  section?: string;
-  category?: string;
+  section?: string | undefined;
+  category?: string | undefined;
 }
 
 // ⚠️ Mirrors the module's own coercion, sharp edge included: the guard is `Number.isFinite(+v)`,
@@ -171,7 +171,11 @@ export function resolveSet(sets: SoundscapeSet[], identifier: string): Soundscap
  */
 export function matchTemplates(
   templates: SoundscapeTemplate[],
-  filters: { query?: string; section?: string; category?: string }
+  filters: {
+    query?: string | undefined;
+    section?: string | undefined;
+    category?: string | undefined;
+  }
 ): SoundscapeTemplate[] {
   const q = (filters.query ?? '').trim().toLowerCase();
   const section = (filters.section ?? '').trim().toLowerCase();
@@ -211,7 +215,7 @@ export function matchTemplates(
 export function resolveTemplate(
   templates: SoundscapeTemplate[],
   template: string,
-  filters: { section?: string; category?: string } = {}
+  filters: { section?: string | undefined; category?: string | undefined } = {}
 ): SoundscapeTemplate {
   const scoped = matchTemplates(templates, filters);
   const narrowed = scoped.length !== templates.length;
@@ -381,25 +385,25 @@ async function persist(scene: any, sets: SoundscapeSet[]): Promise<void> {
 
 export interface ConfigureSoundscapeArgs {
   action: 'list' | 'library' | 'add' | 'update' | 'remove';
-  sceneIdentifier?: string;
-  setIdentifier?: string;
-  template?: string;
-  query?: string;
-  section?: string;
-  category?: string;
-  limit?: number;
-  verifyFiles?: boolean;
-  name?: string;
-  files?: string[];
-  playStyle?: 'interval' | 'loop';
-  interval?: number;
-  intervalVariation?: number;
-  crossfade?: number;
-  volume?: number;
-  volumeVariation?: number;
-  pitchVariation?: number;
-  whenToPlay?: 'always' | 'day' | 'night';
-  active?: boolean;
+  sceneIdentifier?: string | undefined;
+  setIdentifier?: string | undefined;
+  template?: string | undefined;
+  query?: string | undefined;
+  section?: string | undefined;
+  category?: string | undefined;
+  limit?: number | undefined;
+  verifyFiles?: boolean | undefined;
+  name?: string | undefined;
+  files?: string[] | undefined;
+  playStyle?: 'interval' | 'loop' | undefined;
+  interval?: number | undefined;
+  intervalVariation?: number | undefined;
+  crossfade?: number | undefined;
+  volume?: number | undefined;
+  volumeVariation?: number | undefined;
+  pitchVariation?: number | undefined;
+  whenToPlay?: 'always' | 'day' | 'night' | undefined;
+  active?: boolean | undefined;
 }
 
 /** The set fields a caller may supply, in the order they are reported back. */
@@ -430,7 +434,7 @@ function patchFrom(args: ConfigureSoundscapeArgs): Record<string, unknown> {
  * configure-soundscape — read and author a scene's Soundscape sound sets, and browse the prebaked
  * template library that feeds them.
  */
-export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promise<any> {
+export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
   const action = args?.action;
 
   // ---- library: a read over the Data-root manifest; touches no scene ---------------------------

@@ -30,8 +30,11 @@ const EXHAUSTION_STATIC_KEY = 'dnd5eexhaustion';
  * ids. Pure — tolerates the 6.0 object form, the 5.x array form, and an absent config.
  */
 export function collectStatusIds(config: {
-  DND5E?: { conditionTypes?: Record<string, unknown> };
-  statusEffects?: Record<string, { id?: string }> | Array<{ id?: string }>;
+  DND5E?: { conditionTypes?: Record<string, unknown> | undefined } | undefined;
+  statusEffects?:
+    | Record<string, { id?: string | undefined }>
+    | Array<{ id?: string | undefined }>
+    | undefined;
 }): Set<string> {
   const ids = new Set<string>(Object.keys(config?.DND5E?.conditionTypes ?? {}));
   for (const s of Object.values(config?.statusEffects ?? {})) {
@@ -160,9 +163,9 @@ async function setExhaustion(actor: any, lvl: number, warnings: string[]): Promi
 export async function applyCondition(args: {
   actorIdentifier: string;
   conditions: string[];
-  active?: boolean;
-  exhaustionLevel?: number;
-}): Promise<unknown> {
+  active?: boolean | undefined;
+  exhaustionLevel?: number | undefined;
+}) {
   const actor = resolveActorFuzzy(args?.actorIdentifier);
   if (!actor) throw notFound(`Actor not found: ${args?.actorIdentifier}`);
   if (typeof actor.toggleStatusEffect !== 'function') {

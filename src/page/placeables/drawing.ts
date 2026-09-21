@@ -42,31 +42,31 @@ const SHAPE_ENUM_TO_TYPE: Record<string, string> = {
 };
 
 export interface DrawingInput {
-  x?: number;
-  y?: number;
-  shapeType?: string;
-  width?: number;
-  height?: number;
-  radius?: number;
-  points?: number[];
-  rotation?: number;
-  elevation?: number;
-  sort?: number;
-  strokeWidth?: number;
-  strokeColor?: string;
-  strokeAlpha?: number;
-  fillType?: number;
-  fillColor?: string;
-  fillAlpha?: number;
-  fillTexture?: string;
-  text?: string;
-  fontFamily?: string;
-  fontSize?: number;
-  textColor?: string;
-  textAlpha?: number;
-  hidden?: boolean;
-  locked?: boolean;
-  interface?: boolean;
+  x?: number | undefined;
+  y?: number | undefined;
+  shapeType?: string | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
+  radius?: number | undefined;
+  points?: number[] | undefined;
+  rotation?: number | undefined;
+  elevation?: number | undefined;
+  sort?: number | undefined;
+  strokeWidth?: number | undefined;
+  strokeColor?: string | undefined;
+  strokeAlpha?: number | undefined;
+  fillType?: number | undefined;
+  fillColor?: string | undefined;
+  fillAlpha?: number | undefined;
+  fillTexture?: string | undefined;
+  text?: string | undefined;
+  fontFamily?: string | undefined;
+  fontSize?: number | undefined;
+  textColor?: string | undefined;
+  textAlpha?: number | undefined;
+  hidden?: boolean | undefined;
+  locked?: boolean | undefined;
+  interface?: boolean | undefined;
 }
 
 /**
@@ -75,8 +75,8 @@ export interface DrawingInput {
  * Exported for unit testing.
  */
 export function buildDrawingShape(input: DrawingInput): {
-  shape?: Record<string, unknown>;
-  error?: string;
+  shape?: Record<string, unknown> | undefined;
+  error?: string | undefined;
 } {
   const friendly = input.shapeType ?? 'rectangle';
   const type = SHAPE_TYPE_TO_ENUM[friendly];
@@ -227,13 +227,17 @@ export const drawingDescriptor: PlaceableDescriptor = {
 };
 
 // --- bridge page functions (registered in src/page/index.ts) -----------------
-export const createSceneDrawings = (args: { sceneIdentifier: string; items: DrawingInput[] }) =>
-  crudCreate(drawingDescriptor, args);
-export const listSceneDrawings = (args: { sceneIdentifier: string }) =>
+export const createSceneDrawings = (args: {
+  sceneIdentifier?: string | undefined;
+  items: DrawingInput[];
+}) => crudCreate(drawingDescriptor, args);
+export const listSceneDrawings = (args: { sceneIdentifier?: string | undefined }) =>
   crudList(drawingDescriptor, args);
 export const updateSceneDrawings = (args: {
-  sceneIdentifier: string;
+  sceneIdentifier?: string | undefined;
   patches: Array<{ id: string } & DrawingInput>;
 }) => crudUpdate(drawingDescriptor, args);
-export const deleteSceneDrawings = (args: { sceneIdentifier: string; ids: string[] }) =>
-  crudDelete(drawingDescriptor, args);
+export const deleteSceneDrawings = (args: {
+  sceneIdentifier?: string | undefined;
+  ids: string[];
+}) => crudDelete(drawingDescriptor, args);

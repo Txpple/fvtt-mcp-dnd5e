@@ -320,7 +320,14 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 
 - **Headless bridge.** Playwright drives a real headless-Chromium Foundry session. `src/foundry.ts` is
   the `foundry.call()` seam; `src/index.ts` is the stdio MCP entry; page-side logic lives in
-  `src/page/**` and is bundled into the browser context.
+  `src/page/**` and is bundled into the browser context. The seam is typed end to end from the
+  page's own signatures: `foundry.call(name, args)` takes `PageArgs<name>` and resolves to
+  `PageResult<name>` (both derived from `PageApi` in `src/page/index.ts`), so a wrong argument
+  shape or a field the handler never returns is a compile error in the tool. A compile-time guard
+  next to `PageApi` (`SeamGuard`) refuses a handler that answers `any` / `unknown`, takes an `any`
+  argument or takes more than the one argument the bridge passes — `tsc` names the offender. Nine
+  handlers take the tool's zod output as their argument type (a type-only import; nothing of the
+  tool side reaches the bundle); every other shape is declared page-side.
 - **Hosts.** `src/hosts/**` is the one place that knows where Foundry runs (§2.6). A `Host` gives
   the bridge its optional `wake` and the tools their optional direct `FilePlane`, composed with
   the bridge plane (`filePlaneFor`; `src/hosts/bridge-files.ts` over `src/page/files.ts`);

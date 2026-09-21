@@ -117,15 +117,15 @@ export function toV14WallRestriction(value: unknown): number {
 }
 
 interface SidecarWall {
-  c?: number[];
-  move?: number;
-  sense?: number; // legacy
-  sight?: number; // v14
-  sound?: number;
-  light?: number;
-  door?: number;
-  ds?: number;
-  dir?: number;
+  c?: number[] | undefined;
+  move?: number | undefined;
+  sense?: number | undefined; // legacy
+  sight?: number | undefined; // v14
+  sound?: number | undefined;
+  light?: number | undefined;
+  door?: number | undefined;
+  ds?: number | undefined;
+  dir?: number | undefined;
 }
 
 /**
@@ -188,21 +188,21 @@ export function countWallsMissingSight(walls: SidecarWall[] | undefined): number
 }
 
 interface SidecarLight {
-  x?: number;
-  y?: number;
-  dim?: number;
-  bright?: number;
-  tintColor?: string; // legacy
-  tintAlpha?: number; // legacy
-  color?: string; // v14
-  alpha?: number; // v14
-  rotation?: number;
-  angle?: number;
-  lightAnimation?: Record<string, unknown>; // legacy → config.animation
-  darkness?: Record<string, unknown>; // legacy per-light {min,max} → config.darkness
-  darknessThreshold?: number; // legacy — no v14 top-level equivalent
-  t?: string; // legacy type marker ("l")
-  config?: Record<string, unknown>;
+  x?: number | undefined;
+  y?: number | undefined;
+  dim?: number | undefined;
+  bright?: number | undefined;
+  tintColor?: string | undefined; // legacy
+  tintAlpha?: number | undefined; // legacy
+  color?: string | undefined; // v14
+  alpha?: number | undefined; // v14
+  rotation?: number | undefined;
+  angle?: number | undefined;
+  lightAnimation?: Record<string, unknown> | undefined; // legacy → config.animation
+  darkness?: Record<string, unknown> | undefined; // legacy per-light {min,max} → config.darkness
+  darknessThreshold?: number | undefined; // legacy — no v14 top-level equivalent
+  t?: string | undefined; // legacy type marker ("l")
+  config?: Record<string, unknown> | undefined;
 }
 
 /**
@@ -321,7 +321,7 @@ function tokenDisposition(disposition: unknown): number {
  * element counts. Mirrors the old data-access.getActiveScene shape.
  * Throws if there is no active scene.
  */
-export function getActiveScene(): unknown {
+export function getActiveScene() {
   // The ACTIVE scene (one per world), not `game.scenes.current` — the bridge's viewed scene,
   // which screenshot-scene's view() moves.
   const scene = game.scenes?.active;
@@ -379,10 +379,10 @@ function sceneDarkness(scene: any): number {
  * matter: no skill reads it from a list, and it was 67% of the list's bytes.
  */
 export function listScenes(args?: {
-  filter?: string;
-  includeActiveOnly?: boolean;
-  flagScope?: string;
-}): unknown {
+  filter?: string | undefined;
+  includeActiveOnly?: boolean | undefined;
+  flagScope?: string | undefined;
+}) {
   let scenes: any[] = game.scenes?.contents || [];
 
   if (args?.includeActiveOnly) {
@@ -418,13 +418,13 @@ export function listScenes(args?: {
  * grid cell to a Note's x/y. `scene.dimensions` computes from the document (no active
  * canvas required). Returns `found:false` when the scene doesn't resolve.
  */
-export function getSceneDimensions(args: { sceneIdentifier: string }): unknown {
+export function getSceneDimensions(args: { sceneIdentifier: string }) {
   if (!args?.sceneIdentifier) throw invalid('sceneIdentifier is required');
   const scene = resolveSceneStrict(args.sceneIdentifier);
-  if (!scene) return { found: false, notFound: args.sceneIdentifier };
+  if (!scene) return { found: false as const, notFound: args.sceneIdentifier };
   const d: any = scene.dimensions ?? {};
   return {
-    found: true,
+    found: true as const,
     sceneId: scene.id,
     sceneName: scene.name,
     // total padded canvas
@@ -448,18 +448,18 @@ export function getSceneDimensions(args: { sceneIdentifier: string }): unknown {
 
 /** Shape of the optional cross-cutting scene fields shared by create + update. */
 interface SceneFieldArgs {
-  gridDistance?: number;
-  gridUnits?: string;
-  gridColor?: string;
-  gridAlpha?: number;
-  tokenVision?: boolean;
-  fogMode?: string;
-  darkness?: number;
-  globalLight?: boolean;
-  weather?: string;
-  playlist?: string;
-  journal?: string;
-  thumb?: string;
+  gridDistance?: number | undefined;
+  gridUnits?: string | undefined;
+  gridColor?: string | undefined;
+  gridAlpha?: number | undefined;
+  tokenVision?: boolean | undefined;
+  fogMode?: string | undefined;
+  darkness?: number | undefined;
+  globalLight?: boolean | undefined;
+  weather?: string | undefined;
+  playlist?: string | undefined;
+  journal?: string | undefined;
+  thumb?: string | undefined;
 }
 
 /**
@@ -476,23 +476,23 @@ export async function createScene(
   args: {
     name: string;
     backgroundPath: string;
-    width?: number;
-    height?: number;
-    gridSize?: number;
-    gridType?: number;
-    padding?: number;
-    activate?: boolean;
-    folder?: string;
-    navigation?: boolean;
-    walls?: SidecarWall[];
-    lights?: SidecarLight[];
-    regions?: Record<string, unknown>[];
-    flags?: Record<string, unknown>;
-    environment?: Record<string, unknown>;
-    fog?: Record<string, unknown>;
-    initial?: Record<string, unknown>;
+    width?: number | undefined;
+    height?: number | undefined;
+    gridSize?: number | undefined;
+    gridType?: number | undefined;
+    padding?: number | undefined;
+    activate?: boolean | undefined;
+    folder?: string | undefined;
+    navigation?: boolean | undefined;
+    walls?: SidecarWall[] | undefined;
+    lights?: SidecarLight[] | undefined;
+    regions?: Record<string, unknown>[] | undefined;
+    flags?: Record<string, unknown> | undefined;
+    environment?: Record<string, unknown> | undefined;
+    fog?: Record<string, unknown> | undefined;
+    initial?: Record<string, unknown> | undefined;
   } & SceneFieldArgs
-): Promise<unknown> {
+) {
   if (!args.name || !args.backgroundPath) {
     throw invalid('name and backgroundPath are both required');
   }
@@ -632,28 +632,28 @@ export async function createScene(
 export async function updateScene(
   args: {
     sceneIdentifier: string;
-    name?: string;
-    navName?: string;
-    navigation?: boolean;
-    backgroundPath?: string;
-    width?: number;
-    height?: number;
-    gridSize?: number;
-    gridType?: number;
-    padding?: number;
-    environment?: Record<string, unknown>;
-    fog?: Record<string, unknown>;
-    initial?: Record<string, unknown>;
-    flags?: Record<string, unknown>;
+    name?: string | undefined;
+    navName?: string | undefined;
+    navigation?: boolean | undefined;
+    backgroundPath?: string | undefined;
+    width?: number | undefined;
+    height?: number | undefined;
+    gridSize?: number | undefined;
+    gridType?: number | undefined;
+    padding?: number | undefined;
+    environment?: Record<string, unknown> | undefined;
+    fog?: Record<string, unknown> | undefined;
+    initial?: Record<string, unknown> | undefined;
+    flags?: Record<string, unknown> | undefined;
   } & SceneFieldArgs
-): Promise<unknown> {
+) {
   if (!args?.sceneIdentifier) {
     throw invalid('sceneIdentifier is required');
   }
 
   const scene = resolveSceneStrict(args.sceneIdentifier);
   if (!scene) {
-    return { success: true, updated: false, notFound: args.sceneIdentifier };
+    return { success: true, updated: false as const, notFound: args.sceneIdentifier };
   }
 
   const update: any = {};
@@ -711,7 +711,7 @@ export async function updateScene(
 
   return {
     success: true,
-    updated: true,
+    updated: true as const,
     sceneId: scene.id,
     sceneName: scene.name,
     background: readSceneBackground(scene),
@@ -730,7 +730,7 @@ export async function deleteScenes(args: { identifiers: string[] }): Promise<{
   success: boolean;
   deletedCount: number;
   deleted: Array<{ id: string; name: string }>;
-  notFound?: string[];
+  notFound?: string[] | undefined;
 }> {
   if (!Array.isArray(args?.identifiers) || args.identifiers.length === 0) {
     throw invalid('identifiers array is required and must contain at least one entry');
@@ -770,10 +770,10 @@ export async function deleteScenes(args: { identifiers: string[] }): Promise<{
  */
 export async function activateScene(args: { sceneIdentifier: string }): Promise<{
   success: boolean;
-  scene?: { id: string; name: string };
-  previous?: { id: string; name: string } | null;
-  alreadyActive?: boolean;
-  notFound?: string;
+  scene?: { id: string; name: string } | undefined;
+  previous?: { id: string; name: string } | null | undefined;
+  alreadyActive?: boolean | undefined;
+  notFound?: string | undefined;
 }> {
   const scene = resolveSceneStrict(args?.sceneIdentifier ?? '');
   if (!scene) return { success: false, notFound: args?.sceneIdentifier ?? '' };
@@ -826,12 +826,12 @@ export async function pullUsersToScene(args: {
   userIdentifiers: string[];
 }): Promise<{
   success: boolean;
-  scene?: { id: string; name: string };
+  scene?: { id: string; name: string } | undefined;
   pulled: Array<{ id: string; name: string }>;
   offline: Array<{ id: string; name: string }>;
   selfSkipped: Array<{ id: string; name: string }>;
   notFound: string[];
-  sceneNotFound?: string;
+  sceneNotFound?: string | undefined;
 }> {
   const scene = resolveSceneStrict(args?.sceneIdentifier ?? '');
   if (!scene) {
@@ -907,15 +907,15 @@ export async function setLandingScene(args: {
   userIdentifiers: string[];
 }): Promise<{
   success: boolean;
-  scene?: { id: string; name: string } | null;
+  scene?: { id: string; name: string } | null | undefined;
   cleared: boolean;
   assigned: Array<{ id: string; name: string; previous: string | null }>;
   unchanged: Array<{ id: string; name: string }>;
   notFound: string[];
-  sceneNotFound?: string;
-  activeScene?: { id: string; name: string } | null;
-  followActive?: Array<{ id: string; name: string }>;
-  warnings?: string[];
+  sceneNotFound?: string | undefined;
+  activeScene?: { id: string; name: string } | null | undefined;
+  followActive?: Array<{ id: string; name: string }> | undefined;
+  warnings?: string[] | undefined;
 }> {
   const MODULE_ID = 'fvtt-mod-openserver';
   const FLAG = 'landingScene';
@@ -1064,20 +1064,20 @@ export function sceneGrid(scene: any): { size: number; sceneX: number; sceneY: n
  */
 export async function prepareSceneShot(args: {
   sceneIdentifier: string;
-  fit?: boolean;
-  mark?: boolean;
+  fit?: boolean | undefined;
+  mark?: boolean | undefined;
 }): Promise<{
   found: boolean;
-  notFound?: string;
-  sceneId?: string;
-  sceneName?: string;
-  noteCount?: number;
-  renderer?: string;
-  dimensions?: { width: number; height: number; sceneX: number; sceneY: number };
+  notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  noteCount?: number | undefined;
+  renderer?: string | undefined;
+  dimensions?: { width: number; height: number; sceneX: number; sceneY: number } | undefined;
 }> {
   if (!args?.sceneIdentifier) throw invalid('sceneIdentifier is required');
   const scene = resolveSceneStrict(args.sceneIdentifier);
-  if (!scene) return { found: false, notFound: args.sceneIdentifier };
+  if (!scene) return { found: false as const, notFound: args.sceneIdentifier };
 
   await scene.view();
   const canvas: any = (globalThis as any).canvas;
@@ -1088,7 +1088,7 @@ export async function prepareSceneShot(args: {
     await new Promise(r => setTimeout(r, 250));
   }
   if (!canvas?.ready) {
-    return { found: true, sceneId: scene.id, sceneName: scene.name, noteCount: 0 };
+    return { found: true as const, sceneId: scene.id, sceneName: scene.name, noteCount: 0 };
   }
 
   const d = canvas.dimensions;
@@ -1142,7 +1142,7 @@ export async function prepareSceneShot(args: {
   }
 
   return {
-    found: true,
+    found: true as const,
     sceneId: scene.id,
     sceneName: scene.name,
     noteCount: canvas.notes?.placeables?.length ?? 0,
@@ -1192,10 +1192,10 @@ function buildSceneFields(args: SceneFieldArgs): Record<string, unknown> {
 function applyMoodMerge(
   update: Record<string, unknown>,
   args: {
-    environment?: Record<string, unknown>;
-    fog?: Record<string, unknown>;
-    initial?: Record<string, unknown>;
-    flags?: Record<string, unknown>;
+    environment?: Record<string, unknown> | undefined;
+    fog?: Record<string, unknown> | undefined;
+    initial?: Record<string, unknown> | undefined;
+    flags?: Record<string, unknown> | undefined;
   },
   moodKeys: ReadonlyArray<'environment' | 'fog' | 'initial'>,
   hasFlags: boolean
@@ -1330,11 +1330,11 @@ async function importScenePlaceables(
   lights?: SidecarLight[],
   regions?: Record<string, unknown>[]
 ): Promise<{
-  wallsCreated?: number;
-  lightsCreated?: number;
-  regionsCreated?: number;
-  regionIdMap?: Record<string, string>;
-  placeableErrors?: string[];
+  wallsCreated?: number | undefined;
+  lightsCreated?: number | undefined;
+  regionsCreated?: number | undefined;
+  regionIdMap?: Record<string, string> | undefined;
+  placeableErrors?: string[] | undefined;
 }> {
   if (!scene) return {};
   const hasWalls = Array.isArray(walls) && walls.length > 0;
@@ -1343,11 +1343,11 @@ async function importScenePlaceables(
   if (!hasWalls && !hasLights && !hasRegions) return {};
 
   const out: {
-    wallsCreated?: number;
-    lightsCreated?: number;
-    regionsCreated?: number;
-    regionIdMap?: Record<string, string>;
-    placeableErrors?: string[];
+    wallsCreated?: number | undefined;
+    lightsCreated?: number | undefined;
+    regionsCreated?: number | undefined;
+    regionIdMap?: Record<string, string> | undefined;
+    placeableErrors?: string[] | undefined;
   } = {};
   const errors: string[] = [];
 

@@ -17,8 +17,8 @@ import { invalid, notFound as notFoundError, unsupported } from '../errors.js';
 export async function addFeaturesFromCompendium(args: {
   actorIdentifier: string;
   featureNames: string[];
-  compendiumPacks?: string[];
-}): Promise<unknown> {
+  compendiumPacks?: string[] | undefined;
+}) {
   if (game.system.id !== 'dnd5e') {
     throw unsupported('addFeaturesFromCompendium requires the dnd5e game system');
   }
@@ -100,7 +100,7 @@ export async function addFeaturesFromCompendium(args: {
     itemId: string;
     // Unresolved @scale.* tokens this copied feature carries (advancement-fed; dangle to 0 on an
     // NPC). REPORTED as a fact — the skill sets an explicit die; this code never guesses one.
-    unresolvedScale?: Array<{ path: string; formula: string }>;
+    unresolvedScale?: Array<{ path: string; formula: string }> | undefined;
   }> = [];
   const notFound: string[] = [];
   const failed: Array<{ name: string; error: string }> = [];

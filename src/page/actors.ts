@@ -45,6 +45,7 @@ import {
   type DispositionKey,
 } from './dnd5e/token-defaults.js';
 import { ambiguous, invalid, notFound as notFoundError } from './errors.js';
+import type { UpdateActorArgs } from '../tools/dnd5e/update-actor.js';
 
 // Foundry document class (Actor) lives in the page global scope but is not
 // declared in foundry-globals.d.ts; reach it off globalThis (loosely typed).
@@ -74,11 +75,15 @@ const TOKEN_DISPLAY_MODES: Record<string, number> = {
 // dnd5e spell targeting / slot extraction --------------------------------------
 
 function extractDnd5eSpellTargeting(spellSystem: any): {
-  range?: string;
-  target?: string;
-  area?: string;
+  range?: string | undefined;
+  target?: string | undefined;
+  area?: string | undefined;
 } {
-  const result: { range?: string; target?: string; area?: string } = {};
+  const result: {
+    range?: string | undefined;
+    target?: string | undefined;
+    area?: string | undefined;
+  } = {};
 
   const rangeValue = spellSystem?.range?.value;
   const rangeUnits = spellSystem?.range?.units;
@@ -285,7 +290,7 @@ function extractSpellcastingData(actor: any): SpellcastingEntry[] {
  * List world actors as { id, name, type, img? }, optionally filtered by type.
  * (The old module filtered in the query handler; we fold that filter in here.)
  */
-export function listActors(args?: { type?: string; nameFilter?: string }): unknown {
+export function listActors(args?: { type?: string | undefined; nameFilter?: string | undefined }) {
   const type = args?.type;
   const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
   return Array.from(game.actors ?? [])
@@ -414,7 +419,10 @@ function extractDerived(actor: any): Record<string, any> | undefined {
  * module `flags` when present — the item-piles NaN forensic read path), effects,
  * and (when present) dnd5e spellcasting.
  */
-export function getCharacterInfo(args: { characterName?: string; characterId?: string }): unknown {
+export function getCharacterInfo(args: {
+  characterName?: string | undefined;
+  characterId?: string | undefined;
+}) {
   const identifier = args?.characterName || args?.characterId;
   if (!identifier) {
     throw invalid('characterName or characterId is required');
@@ -521,7 +529,7 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
  * file round-trips through the sheet's Import Data button. Resolves placed-token
  * ids to the token-instance actor (ActorDelta truth), same as the other reads.
  */
-export function exportActorData(args: { identifier?: string }): unknown {
+export function exportActorData(args: { identifier?: string | undefined }) {
   const identifier = args?.identifier;
   if (!identifier) {
     throw invalid('identifier is required');
@@ -564,7 +572,7 @@ export function exportActorData(args: { identifier?: string }): unknown {
 export function getCharacterEntity(args: {
   characterIdentifier: string;
   entityIdentifier: string;
-}): unknown {
+}) {
   const { characterIdentifier, entityIdentifier } = args;
 
   const character = Array.from(game.actors ?? []).find(
@@ -659,11 +667,11 @@ export function getCharacterEntity(args: {
  */
 export function searchCharacterItems(args: {
   characterIdentifier: string;
-  query?: string;
-  type?: string;
-  category?: string;
-  limit?: number;
-}): unknown {
+  query?: string | undefined;
+  type?: string | undefined;
+  category?: string | undefined;
+  limit?: number | undefined;
+}) {
   const { characterIdentifier, query, type, category, limit = 20 } = args;
 
   const actor = resolveActor(characterIdentifier);
@@ -809,7 +817,7 @@ export function searchCharacterItems(args: {
  * Resolve an actor by free-text identifier, returning { id, name } or null.
  * Payload: { identifier }.
  */
-export function findActor(args: { identifier: string }): unknown {
+export function findActor(args: { identifier: string }) {
   try {
     const actor = resolveActor(args.identifier);
     return actor ? { id: actor.id, name: actor.name } : null;
@@ -840,7 +848,7 @@ interface TokenPlacement {
   actorIds: string[];
   placement: 'random' | 'grid' | 'center' | 'coordinates';
   hidden: boolean;
-  coordinates?: { x: number; y: number }[];
+  coordinates?: { x: number; y: number }[] | undefined;
 }
 
 /**
@@ -900,7 +908,7 @@ async function addActorsToScene(placement: TokenPlacement): Promise<{
   success: boolean;
   tokensCreated: number;
   tokenIds: string[];
-  errors?: string[];
+  errors?: string[] | undefined;
 }> {
   const scene = game.scenes.current;
   if (!scene) {
@@ -1059,22 +1067,24 @@ export async function createActorFromCompendium(request: {
   packId: string;
   itemId: string;
   customNames: string[];
-  quantity?: number;
+  quantity?: number | undefined;
   // Destination Actor folder (id or exact name; created if absent). Mirrors create-scene's param.
-  folder?: string;
-  addToScene?: boolean;
-  placement?: {
-    type: 'random' | 'grid' | 'center' | 'coordinates';
-    coordinates?: { x: number; y: number }[];
-  };
+  folder?: string | undefined;
+  addToScene?: boolean | undefined;
+  placement?:
+    | {
+        type: 'random' | 'grid' | 'center' | 'coordinates';
+        coordinates?: { x: number; y: number }[] | undefined;
+      }
+    | undefined;
   // Prefab-as-base bridge (design.md §6 step 2): update-actor-shaped stat edits to layer onto each
   // instantiated WORLD COPY (never the source compendium doc). Applied via the same updateActor
   // correctness; same edits applied to every copy.
-  modifications?: Record<string, any>;
+  modifications?: Record<string, any> | undefined;
   // The caller's friend/foe judgment (authoring-policy rule 10) — e.g. 'neutral' for townsfolk.
   // Absent → by source type: copied PC pregen friendly, copied monster hostile.
-  disposition?: DispositionKey;
-}): Promise<unknown> {
+  disposition?: DispositionKey | undefined;
+}) {
   const { packId, itemId, customNames, quantity = 1, addToScene = false, placement } = request;
   const modifications = request.modifications;
   const hasMods =
@@ -1289,8 +1299,8 @@ export async function createActorFromCompendium(request: {
  */
 export async function deleteActor(data: {
   identifiers: string[];
-  removeEmptyFolder?: boolean;
-}): Promise<unknown> {
+  removeEmptyFolder?: boolean | undefined;
+}) {
   // Default ON: if deleting an actor leaves a bridge-created folder empty,
   // remove it (the auto-foldering litter from createActorFromCompendium).
   const removeEmptyFolder = data.removeEmptyFolder !== false;
@@ -1380,12 +1390,12 @@ function resolveOwnerUser(identifier: string): any {
  */
 export async function duplicateActor(request: {
   actorIdentifiers: string[];
-  newNames?: string[];
-  suffix?: string;
-  folder?: string;
-  owner?: string;
-  ownershipLevel?: number;
-}): Promise<unknown> {
+  newNames?: string[] | undefined;
+  suffix?: string | undefined;
+  folder?: string | undefined;
+  owner?: string | undefined;
+  ownershipLevel?: number | undefined;
+}) {
   const { actorIdentifiers, newNames, suffix, owner } = request;
   if (!Array.isArray(actorIdentifiers) || actorIdentifiers.length === 0) {
     throw invalid('actorIdentifiers is required and must contain at least one entry');
@@ -1495,10 +1505,10 @@ export async function addActorItems(params: {
   items: Array<{
     name: string;
     type: string;
-    img?: string;
-    system?: Record<string, any>;
+    img?: string | undefined;
+    system?: Record<string, any> | undefined;
   }>;
-}): Promise<unknown> {
+}) {
   const { actorIdentifier, items } = params;
 
   if (!actorIdentifier) {
@@ -1560,10 +1570,10 @@ export async function addActorItems(params: {
  */
 export async function removeActorItems(params: {
   actorIdentifier: string;
-  itemIds?: string[];
-  itemNames?: string[];
-  type?: string;
-}): Promise<unknown> {
+  itemIds?: string[] | undefined;
+  itemNames?: string[] | undefined;
+  type?: string | undefined;
+}) {
   const { actorIdentifier, itemIds, itemNames, type } = params;
 
   if (!actorIdentifier) {
@@ -1645,7 +1655,7 @@ export async function removeActorItems(params: {
  * Unknown enum-ish values (damage/condition/creatureType/AC-calc/size/skill) warn but never block.
  * Returns { success, actor:{id,name,type}, applied:[...field names], warnings }.
  */
-export async function updateActor(params: any): Promise<unknown> {
+export async function updateActor(params: UpdateActorArgs) {
   const identifier = params?.actorIdentifier;
   if (!identifier) throw invalid('actorIdentifier is required');
   const actor = resolveActor(identifier);
@@ -2176,12 +2186,12 @@ export async function updateActor(params: any): Promise<unknown> {
 export async function updateActorItem(params: {
   actorIdentifier: string;
   itemIdentifier: string;
-  type?: string;
-  name?: string;
-  img?: string;
-  patch?: Record<string, any>;
-  deletePaths?: string[];
-}): Promise<unknown> {
+  type?: string | undefined;
+  name?: string | undefined;
+  img?: string | undefined;
+  patch?: Record<string, any> | undefined;
+  deletePaths?: string[] | undefined;
+}) {
   const { actorIdentifier, itemIdentifier } = params ?? ({} as any);
   if (!actorIdentifier) throw invalid('actorIdentifier is required');
   if (!itemIdentifier) throw invalid('itemIdentifier is required');

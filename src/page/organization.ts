@@ -91,15 +91,15 @@ async function deleteByResolver(
   _op: string,
   identifiers: string[],
   resolver: (id: string) => any,
-  opts?: { dryRun?: boolean }
+  opts?: { dryRun?: boolean | undefined }
 ): Promise<{
   success: boolean;
   deletedCount: number;
   deleted: Array<{ id: string; name: string }>;
-  dryRun?: boolean;
-  wouldDelete?: Array<{ id: string; name: string }>;
-  notFound?: string[];
-  failed?: Array<{ id: string; name: string; error: string }>;
+  dryRun?: boolean | undefined;
+  wouldDelete?: Array<{ id: string; name: string }> | undefined;
+  notFound?: string[] | undefined;
+  failed?: Array<{ id: string; name: string; error: string }> | undefined;
 }> {
   if (!Array.isArray(identifiers) || identifiers.length === 0) {
     throw invalid('identifiers array is required and must contain at least one entry');
@@ -170,7 +170,7 @@ async function deleteByResolver(
  * parent, direct document count, and subfolder count. Read-only; ids feed update-folder /
  * delete-folder / move-documents / the folder params on the create tools.
  */
-export function listFolders(args?: { type?: string }): unknown {
+export function listFolders(args?: { type?: string | undefined }) {
   const type = args?.type;
   if (type !== undefined && !WORLD_DOC_TYPES.includes(type)) {
     throw invalid(`Unknown folder type "${type}". Valid: ${WORLD_DOC_TYPES.join(', ')}`);
@@ -252,9 +252,9 @@ export function listFolders(args?: { type?: string }): unknown {
 export async function createFolder(data: {
   name: string;
   type: string;
-  parentFolder?: string;
-  color?: string;
-}): Promise<unknown> {
+  parentFolder?: string | undefined;
+  color?: string | undefined;
+}) {
   if (!data?.name || data.name.trim().length === 0) {
     throw invalid('name is required and must be a non-empty string');
   }
@@ -302,18 +302,18 @@ export async function createFolder(data: {
  */
 export async function updateFolder(data: {
   identifier: string;
-  type?: string;
-  name?: string;
-  color?: string;
-  parentFolder?: string;
-  sort?: number;
-}): Promise<unknown> {
+  type?: string | undefined;
+  name?: string | undefined;
+  color?: string | undefined;
+  parentFolder?: string | undefined;
+  sort?: number | undefined;
+}) {
   const type = data.type || 'Actor';
   const folder =
     game.folders?.get(data.identifier) ||
     game.folders?.find((f: any) => f.name === data.identifier && f.type === type);
   if (!folder) {
-    return { success: true, updated: false, notFound: data.identifier };
+    return { success: true, updated: false as const, notFound: data.identifier };
   }
 
   const update: Record<string, unknown> = {};
@@ -351,7 +351,7 @@ export async function updateFolder(data: {
   await folder.update(update);
   return {
     success: true,
-    updated: true,
+    updated: true as const,
     folder: {
       id: folder.id ?? data.identifier,
       name: folder.name ?? '',
@@ -369,8 +369,8 @@ export async function updateFolder(data: {
 export async function moveDocuments(data: {
   documentType: string;
   identifiers: string[];
-  targetFolder?: string;
-}): Promise<unknown> {
+  targetFolder?: string | undefined;
+}) {
   if (!WORLD_DOC_TYPES.includes(data.documentType)) {
     throw invalid(
       `Unknown documentType "${data.documentType}". Valid: ${WORLD_DOC_TYPES.join(', ')}`
@@ -431,8 +431,8 @@ export async function moveDocuments(data: {
 export async function bulkDelete(data: {
   documentType: string;
   identifiers: string[];
-  dryRun?: boolean;
-}): Promise<unknown> {
+  dryRun?: boolean | undefined;
+}) {
   if (!WORLD_DOC_TYPES.includes(data.documentType)) {
     throw invalid(
       `Unknown documentType "${data.documentType}". Valid: ${WORLD_DOC_TYPES.join(', ')}`
@@ -455,9 +455,9 @@ export async function bulkDelete(data: {
  */
 export async function deleteFolder(data: {
   identifier: string;
-  type?: string;
-  deleteContents?: boolean;
-}): Promise<unknown> {
+  type?: string | undefined;
+  deleteContents?: boolean | undefined;
+}) {
   const type = data.type || 'Actor';
 
   // STRICT resolution: exact id, or exact name within the given folder type.
@@ -466,7 +466,7 @@ export async function deleteFolder(data: {
     game.folders?.find((f: any) => f.name === data.identifier && f.type === type);
 
   if (!folder) {
-    return { success: true, deleted: false, notFound: data.identifier };
+    return { success: true, deleted: false as const, notFound: data.identifier };
   }
 
   const { documents, subfolders } = folderChildCounts(folder);
@@ -493,7 +493,7 @@ export async function deleteFolder(data: {
 
   return {
     success: true,
-    deleted: true,
+    deleted: true as const,
     folder: folderInfo,
     deletedContents: !isEmpty,
     removedDocuments: !isEmpty ? documents : 0,

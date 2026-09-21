@@ -67,9 +67,9 @@ interface WorldInfo {
   /** The user the bridge joined as, and its role — writes need ASSISTANT or GAMEMASTER. */
   bridgeUser: { name: string; role: string };
   /** The premium books (§2.3): which have packs in this world (dnd5e only). */
-  library?: Record<string, 'present' | 'missing'>;
+  library?: Record<string, 'present' | 'missing'> | undefined;
   /** dnd5e 6.0 automation switches + the calendar (present on a dnd5e world only). */
-  automation?: Record<string, unknown>;
+  automation?: Record<string, unknown> | undefined;
 }
 
 /**

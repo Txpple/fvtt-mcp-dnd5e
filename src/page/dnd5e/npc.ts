@@ -64,7 +64,7 @@ export interface NpcInput {
   hpAverage: number;
   hpFormula: string;
   acMode: string;
-  acValue?: number;
+  acValue?: number | undefined;
   abilities: { str: number; dex: number; con: number; int: number; wis: number; cha: number };
   savingThrows: string[];
   walkSpeed: number;
@@ -89,10 +89,10 @@ export interface NpcInput {
   sourceBook: string;
   sourcePage: string;
   sourceRules: string;
-  img?: string;
+  img?: string | undefined;
   /** Token disposition — the SKILL decides friend vs foe; defaults to hostile (most authored NPCs
    *  are enemies). Set 'friendly' for allies/townsfolk (e.g. a captive), 'neutral' for bystanders. */
-  disposition?: DispositionKey;
+  disposition?: DispositionKey | undefined;
 }
 
 /**
@@ -240,7 +240,7 @@ export function buildNpcActorData(data: NpcInput): {
   return { actorData, warnings, normalizedCR };
 }
 
-export async function createNpcActor(data: NpcInput): Promise<unknown> {
+export async function createNpcActor(data: NpcInput) {
   const ActorClass = (globalThis as any).Actor;
 
   // 1. System guard

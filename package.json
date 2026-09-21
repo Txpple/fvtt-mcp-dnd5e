@@ -54,7 +54,7 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "knip": "knip",
-    "measure": "node scripts/measure/schema-decompose.mjs && node scripts/measure/schema-toolsets.mjs && node scripts/measure/names-cost.mjs && node scripts/measure/skills-matrix.mjs"
+    "measure": "node scripts/measure/schema-decompose.mjs && node scripts/measure/schema-toolsets.mjs && node scripts/measure/names-cost.mjs && node scripts/measure/skills-matrix.mjs && node scripts/measure/seam-typing.mjs"
   },
   "dependencies": {
     "@foundryvtt/foundryvtt-cli": "^3.0.3",
