@@ -35,8 +35,8 @@ skill.
 
 - **You (this skill) decide the audio** — which tracks belong together, the playback mode, the volume,
   whether it loops. That curation IS the job.
-- **The tool only STRUCTURES** — `create-playlist` builds the Playlist + one PlaylistSound per path
-  (v14 sound field is `path`); `update-playlist` renames / re-modes / sets crossfade. Neither invents
+- **The tool only STRUCTURES** — `manage-playlists` `create` builds the Playlist + one PlaylistSound per
+  path (v14 sound field is `path`); `update` renames / re-modes / sets crossfade. Neither invents
   audio.
 
 ## Authoring policy — what compendium-first means HERE
@@ -56,17 +56,18 @@ Read [`_shared/authoring-policy.md`](../_shared/authoring-policy.md). The clarif
 **[Tabletop Audio](https://tabletopaudio.com/) is our go-to source for FREE music + ambience** for
 playlists — hundreds of loopable, GM-friendly soundscapes and ~10-minute music beds, free to
 download. When the user needs audio they don't already have, point them here **first**, then
-`upload-asset` the downloaded files into `Data/` and chain the returned paths into `create-playlist`.
+`upload-asset` the downloaded files into `Data/` and chain the returned paths into `manage-playlists`
+`create`.
 (Confirm the site's current terms before any redistribution.)
 
 ## Tools
 
-- **`create-playlist`** — the structuring creator. `{ name, soundPaths[], mode?, defaultVolume?,
+- **`manage-playlists { action: "create" }`** — the structuring creator. `{ name, soundPaths[], mode?, defaultVolume?,
   repeat?, fade? }`. Builds the stack with one track per path, in order.
-- **`update-playlist`** — rename, change `mode`, or set `fade` (crossfade). Does not add/remove tracks
+- **`{ action: "update" }`** — rename, change `mode`, or set `fade` (crossfade). Does not add/remove tracks
   (rebuild with create for a different track set).
-- **`list-playlists`** — list playlists + ids (mode, track count, whether playing).
-- **`delete-playlist`** — remove by exact id/name (strict).
+- **`{ action: "list" }`** — one line per playlist: id, name, mode, track count, playing.
+- **`{ action: "delete" }`** — remove by exact id/name (strict).
 - **`upload-asset`** — bring audio files into `Data/` first; chain the returned paths into `soundPaths`.
 
 ## Mode — the core decision

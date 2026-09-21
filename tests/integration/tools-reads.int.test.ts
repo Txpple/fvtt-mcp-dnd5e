@@ -67,7 +67,7 @@ describe.skipIf(!LIVE)('read-tool spine (live)', () => {
     await expect(journal.handleListJournals({})).resolves.not.toBeNull();
   });
 
-  it('list-playlists', async () => {
-    await expect(playlist.handleListPlaylists({})).resolves.toBeDefined();
+  it('manage-playlists list', async () => {
+    await expect(playlist.handle('manage-playlists', { action: 'list' })).resolves.toBeDefined();
   });
 });

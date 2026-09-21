@@ -77,17 +77,18 @@ async function deleteByResolver(
 
 // --- collection lists ---
 
+/** Every playlist: id, name, the playback mode BY NAME (what create / update take), tracks, playing. */
 export function listPlaylists(): Array<{
   id: string;
   name: string;
-  mode: number;
+  mode: string;
   soundCount: number;
   playing: boolean;
 }> {
   return (game.playlists?.contents ?? []).map((p: any) => ({
     id: p.id ?? '',
     name: p.name ?? '',
-    mode: p.mode ?? 0,
+    mode: playlistModeName(p.mode),
     soundCount: p.sounds?.size ?? 0,
     playing: p.playing ?? false,
   }));
@@ -199,13 +200,17 @@ export function getRollTable(args: { identifier: string }) {
 
 // --- playlist writes ---
 
-// Default Foundry playlist-mode constants if CONST.PLAYLIST_MODES is unavailable.
+// Default Foundry playlist-mode constants if CONST.PLAYLIST_MODES is unavailable. There is NO
+// soundboard mode: v14's CONST.PLAYLIST_MODES is exactly these four and the Playlist schema's
+// `mode` choices are [-1, 0, 1, 2] (probed live 2026-09-21) — "Soundboard Only" is the UI's label
+// for DISABLED, so the tool's `soundboard` and `disabled` are the same value. (Before that probe
+// `soundboard` mapped to a phantom 3, was silently stored as sequential, and the create echo
+// reported the requested name — the union's live section caught it.)
 const PLAYLIST_MODE_FALLBACK = {
   DISABLED: -1,
   SEQUENTIAL: 0,
   SHUFFLE: 1,
   SIMULTANEOUS: 2,
-  SOUNDBOARD: 3,
 };
 
 function playlistModeMap(): Record<string, number> {
@@ -214,9 +219,21 @@ function playlistModeMap(): Record<string, number> {
     sequential: PM.SEQUENTIAL,
     shuffle: PM.SHUFFLE,
     simultaneous: PM.SIMULTANEOUS,
-    soundboard: PM.SOUNDBOARD,
+    soundboard: PM.DISABLED,
     disabled: PM.DISABLED,
   };
+}
+
+/** The stored mode by its canonical tool name (DISABLED reads back as `soundboard`). */
+function playlistModeName(mode: unknown): string {
+  const PM = CONST_?.PLAYLIST_MODES || PLAYLIST_MODE_FALLBACK;
+  const names: Record<number, string> = {
+    [PM.SEQUENTIAL]: 'sequential',
+    [PM.SHUFFLE]: 'shuffle',
+    [PM.SIMULTANEOUS]: 'simultaneous',
+    [PM.DISABLED]: 'soundboard',
+  };
+  return names[Number(mode)] ?? String(mode);
 }
 
 // Create a Playlist from Data-relative sound paths, building one PlaylistSound
@@ -239,9 +256,9 @@ export async function createPlaylist(args: {
     throw invalid('soundPaths array is required and must contain at least one path');
   }
 
-  const PM = CONST_?.PLAYLIST_MODES || PLAYLIST_MODE_FALLBACK;
   const modeMap = playlistModeMap();
-  const mode = modeMap[(args.mode || 'sequential').toLowerCase()] ?? PM.SEQUENTIAL;
+  const mode = modeMap[(args.mode || 'sequential').toLowerCase()];
+  if (mode === undefined) throw invalid(`Unknown playlist mode "${args.mode}"`);
   const volume = typeof args.defaultVolume === 'number' ? args.defaultVolume : 0.5;
   const repeat = args.repeat === true;
 
@@ -264,7 +281,7 @@ export async function createPlaylist(args: {
     success: true,
     playlistId: playlist?.id,
     playlistName: playlist?.name,
-    mode: args.mode || 'sequential',
+    mode: playlistModeName(playlist?.mode ?? mode),
     soundCount: playlist?.sounds?.size ?? sounds.length,
     sounds: Array.from(playlist?.sounds || []).map((s: any) => ({
       id: s.id,

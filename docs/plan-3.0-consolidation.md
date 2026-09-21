@@ -393,3 +393,27 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   reparent-to-root + sort read back, the two refusals by name, the two misses as errors, the
   non-empty delete refused, the empty delete), verify-folder-sort 8/8, integration 80 passed /
   6 skipped. Next: playlists → cards → tables → items → journals → scenes → actors.
+- 2026-09-21 — **M8 playlists → `manage-playlists`** (`action`: create / list / update /
+  delete): 4 tools → 1, the union **2,102** against the four's **2,129** (−1.3%; the naive fold
+  was 2,258, +6.1%). The `mode` enum is the `shared` root leaf (create and update each carried
+  it); leaf prose that restated an advertised default or range paid the rest ("Whether each
+  track loops (default false)" beside `default:false` → "Each track loops."). tools/list
+  203,666, names 109 (8,183 chars). The §3 shapes: list is `N playlist(s): id name mode tracks
+  playing` with the mode BY NAME (the page had returned Foundry's number); create is one line
+  (the per-track echo of the paths passed is gone); update's miss is `isError`; delete is the
+  shared `deletedLine` (`src/utils/lines.ts`, over the page's `deleteByResolver` shape — cards /
+  tables / scenes / bulk-delete take it as they land). **Found live, fixed on the page:** v14 has
+  NO soundboard playlist mode — `CONST.PLAYLIST_MODES` is DISABLED / SEQUENTIAL / SHUFFLE /
+  SIMULTANEOUS and the schema's `mode` choices are `[-1, 0, 1, 2]` (probed); "Soundboard Only" is
+  the UI's label for DISABLED. The page had mapped `soundboard` to a phantom 3, stored it as
+  sequential, and the create echo reported the REQUESTED name — the union's dispatch section
+  (create soundboard → list reads sequential) caught it. Now `soundboard` and `disabled` are
+  both DISABLED, the create echo reads the stored mode back, DISABLED lists as `soundboard`, an
+  unknown mode is refused (playlist-builder's mode table — "nothing auto; each track triggered
+  manually" — was right all along). Re-pointed: playlist-builder (5 lines), scene-builder (2),
+  plot-drift-check (1), README (the tool row + counts), tools-reads.int.test + verify-read-tools
+  (both called the class method), tool-results; skills-matrix 0 / 0; siblings 0. Decision #20:
+  the four kept as actions. Live: verify-playlist-tooling **19/19** (the dispatch section: create
+  soundboard, the list row, rename + re-mode + fade read back, the two refusals, the miss, the
+  delete with the not-found tail), verify-read-tools 7/7, integration 80 passed / 6 skipped.
+  Next: cards → tables → items → journals → scenes → actors.

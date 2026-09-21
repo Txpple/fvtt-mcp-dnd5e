@@ -1,37 +1,35 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import { formatDeletionResult } from '../utils/format.js';
-import { toInputSchema } from '../utils/schema.js';
+import { FormattedToolError } from '../utils/error-handler.js';
+import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 /**
- * Playlist tools — create/list/update/delete Foundry Playlist documents over the bridge. Split out of
- * the old AssetBridgeTools so the Node-side tool classes mirror the clean page-side domain split
- * (page/collections.ts owns playlists). Paths are Data-relative (what upload-asset returns), so an
- * uploaded track chains straight into create-playlist with no conversion — the playlist-builder skill's
- * "upload these tracks and make a tavern ambience" becomes upload-asset×N → create-playlist.
+ * Playlist tools — Foundry Playlist documents over the bridge, advertised as ONE tool:
+ * `manage-playlists`, selected by `action` (create / list / update / delete; src/tools/_union.ts —
+ * M8 of the 3.0 plan). The page side is page/collections.ts. Paths are Data-relative (what
+ * upload-asset returns), so an uploaded track chains straight into the create action with no
+ * conversion — the playlist-builder skill's "upload these tracks and make a tavern ambience"
+ * becomes upload-asset×N → manage-playlists create.
  */
 
-// Single source of truth for each tool's input contract: the handler parses with these
-// schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
+export const MANAGE_PLAYLISTS = 'manage-playlists';
+
+const PLAYLIST_MODES = ['sequential', 'shuffle', 'simultaneous', 'soundboard', 'disabled'] as const;
+
+// Single source of truth for each action's input contract: the member parses with these schemas
+// and the advertised JSON Schema is derived from the same zod.
 const CreatePlaylistSchema = z.object({
   name: z.string().min(1).describe('Playlist name.'),
   soundPaths: z
     .array(z.string().min(1))
     .min(1)
     .describe('Data-relative paths to the sound files, in order.'),
-  mode: z
-    .enum(['sequential', 'shuffle', 'simultaneous', 'soundboard', 'disabled'])
-    .default('sequential')
-    .describe('Playback mode (default sequential).'),
-  defaultVolume: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe('Volume 0–1 applied to each track (default 0.5).'),
-  repeat: z.boolean().default(false).describe('Whether each track loops (default false).'),
-  fade: z.number().min(0).optional().describe('Crossfade duration in milliseconds (optional).'),
+  mode: z.enum(PLAYLIST_MODES).default('sequential'),
+  defaultVolume: z.number().min(0).max(1).optional().describe('Per-track volume (default 0.5).'),
+  repeat: z.boolean().default(false).describe('Each track loops.'),
+  fade: z.number().min(0).optional().describe('Crossfade in ms.'),
 });
 
 const ListPlaylistsSchema = z.object({});
@@ -39,19 +37,16 @@ const ListPlaylistsSchema = z.object({});
 const UpdatePlaylistSchema = z.object({
   identifier: z.string().min(1).describe('Playlist id or exact name.'),
   name: z.string().min(1).optional().describe('New playlist name.'),
-  mode: z
-    .enum(['sequential', 'shuffle', 'simultaneous', 'soundboard', 'disabled'])
-    .optional()
-    .describe('New playback mode.'),
-  fade: z.number().min(0).optional().describe('Crossfade duration in milliseconds.'),
+  mode: z.enum(PLAYLIST_MODES).optional(),
+  fade: z.number().min(0).optional().describe('Crossfade in ms.'),
 });
 
 const DeletePlaylistSchema = z.object({
-  identifiers: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Exact ids (preferred) or exact names of playlists to delete.'),
+  identifiers: z.array(z.string().min(1)).min(1).describe('Exact ids (preferred) or exact names.'),
 });
+
+/** The list columns (§3: a fixed, documented order). */
+const LIST_COLUMNS = ['id', 'name', 'mode', 'tracks', 'playing'] as const;
 
 export interface PlaylistToolsOptions {
   foundry: FoundryBridge;
@@ -59,78 +54,86 @@ export interface PlaylistToolsOptions {
 }
 
 export class PlaylistTools {
-  private foundry: FoundryBridge;
   private logger: Logger;
+  private union: UnionTool;
 
   constructor({ foundry, logger }: PlaylistToolsOptions) {
-    this.foundry = foundry;
     this.logger = logger.child({ component: 'PlaylistTools' });
+    this.union = unionTool({
+      name: MANAGE_PLAYLISTS,
+      description: 'Playlists (exact id or name): create / list / update / delete. GM-only.',
+      discriminators: ['action'],
+      shared: {
+        mode: z
+          .enum(PLAYLIST_MODES)
+          .describe(
+            'Playback mode (create default sequential); soundboard = disabled, the UI\'s "Soundboard Only".'
+          ),
+      },
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description: 'Create a Playlist, one track per path.',
+          schema: CreatePlaylistSchema,
+          handler: async parsed => {
+            const r = await foundry.call('createPlaylist', parsed);
+            return (
+              `Created playlist "${r?.playlistName}" (${r?.playlistId}): mode ${r?.mode}, ` +
+              `${r?.soundCount} track(s)` +
+              warningBlock(r?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description: 'Playlists: id, name, mode, track count, playing.',
+          schema: ListPlaylistsSchema,
+          handler: async () => {
+            const playlists = await foundry.call('listPlaylists');
+            const records = (Array.isArray(playlists) ? playlists : []).map(p => ({
+              id: p.id,
+              name: p.name,
+              mode: p.mode,
+              tracks: p.soundCount,
+              playing: p.playing,
+            }));
+            return listLines(`${records.length} playlist(s)`, LIST_COLUMNS, records);
+          },
+        }),
+        unionMember({
+          select: { action: 'update' },
+          description: "Update a Playlist's name, mode or crossfade (not its tracks).",
+          schema: UpdatePlaylistSchema,
+          handler: async parsed => {
+            const r = await foundry.call('updatePlaylist', parsed);
+            if (r?.updated === false) {
+              throw new FormattedToolError(
+                `Playlist not found: "${r?.notFound ?? parsed.identifier}". Nothing changed.`
+              );
+            }
+            return `Updated playlist "${r?.playlistName}" (${r?.playlistId})`;
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: 'Permanently delete playlists.',
+          schema: DeletePlaylistSchema,
+          handler: async ({ identifiers }) => {
+            const r = await foundry.call('deletePlaylists', { identifiers });
+            return deletedLine(r, 'playlist');
+          },
+        }),
+      ],
+    });
   }
 
   getToolDefinitions() {
-    return [
-      {
-        name: 'create-playlist',
-        description:
-          'Create a Playlist from Data-relative sound paths; modes sequential / shuffle / ' +
-          'simultaneous / soundboard. GM-only.',
-        inputSchema: toInputSchema(CreatePlaylistSchema),
-      },
-      {
-        name: 'list-playlists',
-        description: 'Playlists: id, name, mode, track count, playing.',
-        inputSchema: toInputSchema(ListPlaylistsSchema),
-      },
-      {
-        name: 'update-playlist',
-        description: "Update a Playlist's name, mode or crossfade (not its tracks). GM-only.",
-        inputSchema: toInputSchema(UpdatePlaylistSchema),
-      },
-      {
-        name: 'delete-playlist',
-        description: 'Permanently delete playlists by exact id or exact name. GM-only.',
-        inputSchema: toInputSchema(DeletePlaylistSchema),
-      },
-    ];
+    return [this.union.def];
   }
 
-  async handleCreatePlaylist(args: any): Promise<string> {
-    const parsed = CreatePlaylistSchema.parse(args ?? {});
-    const result = await this.foundry.call('createPlaylist', parsed);
-    const sounds = result?.sounds ?? [];
-    const lines = sounds.map((s: any) => `    - ${s.name}  (${s.path})`);
-    let out =
-      `Created playlist "${result?.playlistName}" (${result?.playlistId}) — mode ${result?.mode}, ` +
-      `${result?.soundCount} track(s):\n${lines.join('\n')}`;
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
-    if (warns.length) {
-      out += `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`;
-    }
-    return out;
-  }
-
-  async handleListPlaylists(_args: any): Promise<string> {
-    const playlists = (await this.foundry.call('listPlaylists')) ?? [];
-    if (!Array.isArray(playlists) || playlists.length === 0) return 'No playlists found.';
-    const lines = playlists.map(
-      (p: any) =>
-        `  - "${p.name}" (${p.id}) — mode ${p.mode}, ${p.soundCount} track(s)${p.playing ? ' [playing]' : ''}`
-    );
-    return `Playlists (${playlists.length}):\n${lines.join('\n')}`;
-  }
-
-  async handleUpdatePlaylist(args: any): Promise<string> {
-    const parsed = UpdatePlaylistSchema.parse(args ?? {});
-    const result = await this.foundry.call('updatePlaylist', parsed);
-    if (result?.updated === false) {
-      return `Playlist not found: "${result?.notFound ?? parsed.identifier}". Nothing changed.`;
-    }
-    return `Updated playlist "${result?.playlistName}" (${result?.playlistId}).`;
-  }
-
-  async handleDeletePlaylist(args: any): Promise<string> {
-    const { identifiers } = DeletePlaylistSchema.parse(args ?? {});
-    const result = await this.foundry.call('deletePlaylists', { identifiers });
-    return formatDeletionResult(result, 'playlist(s)');
+  /** Route one playlist tool call to its member (registry-facing). */
+  async handle(name: string, args: unknown): Promise<unknown> {
+    if (name !== MANAGE_PLAYLISTS) throw new Error(`Unknown playlist tool: ${name}`);
+    return this.union.handle(args);
   }
 }

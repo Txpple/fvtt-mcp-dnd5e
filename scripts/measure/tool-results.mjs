@@ -38,7 +38,7 @@ const CALLS = [
   ['list-items', {}],
   ['list-journals', {}],
   ['list-rolltables', {}],
-  ['list-playlists', {}],
+  ['manage-playlists', { action: 'list' }],
   ['manage-folders', { action: 'list' }],
   ['list-users', {}],
   ['list-compendium-packs', {}],

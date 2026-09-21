@@ -49,7 +49,7 @@ offending snippet.
 | Actors | `list-actors` for names; `get-actor` on plot-relevant NPCs/PCs | actor names, token names, biographies |
 | Items | `search-actor-contents` / `list-items` → `get-item` for plot items | descriptions, unidentified vs true names |
 | Scenes & pins | `list-scenes`, `manage-placeables { kind: "notes", action: "list" }` | scene names, map-pin labels |
-| Folders & playlists | `manage-folders { action: "list" }`, `list-playlists` | organizational names that carry old terms |
+| Folders & playlists | `manage-folders` / `manage-playlists` `{ action: "list" }` | organizational names that carry old terms |
 | Visibility | journal page ownership from the journal reads | any **secret** term readable on a player-visible page |
 
 Scope judgment: sweep **every** journal and roll table (text is where drift lives), but only the

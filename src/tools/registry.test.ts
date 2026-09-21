@@ -108,7 +108,8 @@ describe('tool registry', () => {
     //   tokens (−4), regions (−7 incl. the teleporter / behavior / remap specials): 35 → 1.
     // − 2 (M8): create-macro / list-macros / delete-macro → manage-macros (action).
     // − 3 (M8): list / create / update / delete-folder → manage-folders (action).
-    expect(names.length).toBe(112);
+    // − 3 (M8): create / list / update / delete-playlist → manage-playlists (action).
+    expect(names.length).toBe(109);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -536,7 +537,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(112);
+    expect(tools.length).toBe(109);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

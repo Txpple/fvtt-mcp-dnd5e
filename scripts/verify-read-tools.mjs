@@ -100,8 +100,8 @@ try {
     o => o != null
   );
   await check(
-    'list-playlists',
-    () => playlist.handleListPlaylists({}),
+    'manage-playlists list',
+    () => playlist.handle('manage-playlists', { action: 'list' }),
     o => typeof o === 'string' || o != null
   );
 } catch (e) {

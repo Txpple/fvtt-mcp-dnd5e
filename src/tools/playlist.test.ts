@@ -1,43 +1,60 @@
 /**
- * Unit tests for PlaylistTools (create/list/update/delete Playlist documents over the bridge).
- * Split out of asset-bridge.test.ts so each Node-side tool class has its own co-located test.
- * Covers zod input validation (bad input throws, never hits the bridge), the EXACT bridge method
- * name forwarded, and response formatting (empty-list, not-found, playing-flag branches).
+ * Unit tests for PlaylistTools — manage-playlists (the M8 union: action create / list / update /
+ * delete). Covers the two things the handlers own before the bridge is reached: zod validation
+ * (required fields, enum membership, ranges; the member selected by `action` and its refusals by
+ * name) and the §3 shapes (the list lines, the one-line confirmations, a miss as an error).
  */
 
 import { describe, it, expect } from 'vitest';
-import { PlaylistTools } from './playlist.js';
+import { MANAGE_PLAYLISTS, PlaylistTools } from './playlist.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
   const tools = new PlaylistTools({ foundry, logger: makeLogger() });
-  return { tools, calls, foundry };
+  const run = (args: unknown) => tools.handle(MANAGE_PLAYLISTS, args);
+  return { tools, calls, run };
 }
 
-describe('PlaylistTools.getToolDefinitions', () => {
-  it('exposes exactly the four playlist tools', () => {
-    const { tools } = build();
-    const names = tools
-      .getToolDefinitions()
-      .map(t => t.name)
-      .sort();
-    expect(names).toEqual(
-      ['create-playlist', 'delete-playlist', 'list-playlists', 'update-playlist'].sort()
+describe('manage-playlists (the M8 union: action create / list / update / delete)', () => {
+  it('advertises one tool: the action enum, the shared mode leaf at the root, closed members', () => {
+    const [def] = build().tools.getToolDefinitions();
+    expect(def!.name).toBe(MANAGE_PLAYLISTS);
+    const schema = def!.inputSchema as any;
+    expect(schema.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
+    expect(schema.properties.mode.enum).toEqual([
+      'sequential',
+      'shuffle',
+      'simultaneous',
+      'soundboard',
+      'disabled',
+    ]);
+    const byAction = Object.fromEntries(
+      schema.anyOf.map((m: any) => [m.properties.action.const, m])
     );
+    expect(Object.keys(byAction)).toEqual(['create', 'list', 'update', 'delete']);
+    for (const m of schema.anyOf) expect(m.additionalProperties).toBe(false);
+    // the shared leaf is bare on the members that take it — the root carries its prose and enum
+    expect(byAction.create.properties.mode).toEqual({ type: 'string' });
+    expect(byAction.update.properties.mode).toEqual({ type: 'string' });
+    expect(byAction.list.properties.mode).toBeUndefined();
+    expect(byAction.create.required).toEqual(['action', 'name', 'soundPaths']);
   });
 
-  it('every definition has an object inputSchema', () => {
-    const { tools } = build();
-    for (const def of tools.getToolDefinitions()) {
-      expect(def.inputSchema.type).toBe('object');
-    }
+  it('refuses an unknown action and an unknown key by name against the selected member', async () => {
+    const { run } = build();
+    await expect(run({ action: 'play' })).rejects.toThrow(
+      'manage-playlists: action must be one of "create", "list", "update", "delete" (got "play").'
+    );
+    await expect(run({ action: 'list', name: 'x' })).rejects.toThrow(
+      'manage-playlists (action "list"): unknown argument "name" — it takes: action.'
+    );
   });
 });
 
-describe('handleCreatePlaylist', () => {
-  it('forwards a valid playlist and formats tracks', async () => {
-    const { tools, calls } = build({
+describe('manage-playlists create', () => {
+  it('forwards a valid playlist (mode / repeat defaulted) and confirms on one line', async () => {
+    const { calls, run } = build({
       playlistName: 'Tavern',
       playlistId: 'pl1',
       mode: 'sequential',
@@ -47,156 +64,137 @@ describe('handleCreatePlaylist', () => {
         { name: 'crowd.ogg', path: 'snd/crowd.ogg' },
       ],
     });
-    const out = await tools.handleCreatePlaylist({
+    const out = await run({
+      action: 'create',
       name: 'Tavern',
       soundPaths: ['snd/lute.ogg', 'snd/crowd.ogg'],
     });
-    expect(calls[0][0]).toBe('createPlaylist');
-    expect(calls[0][1]).toMatchObject({
+    expect(calls[0]![0]).toBe('createPlaylist');
+    expect(calls[0]![1]).toMatchObject({
       name: 'Tavern',
       soundPaths: ['snd/lute.ogg', 'snd/crowd.ogg'],
       mode: 'sequential',
       repeat: false,
     });
-    expect(out).toContain('Created playlist "Tavern" (pl1) — mode sequential, 2 track(s):');
-    expect(out).toContain('- lute.ogg  (snd/lute.ogg)');
-    expect(out).toContain('- crowd.ogg  (snd/crowd.ogg)');
+    expect(out).toBe('Created playlist "Tavern" (pl1): mode sequential, 2 track(s)');
   });
 
-  it('surfaces page-side warnings about a track that 404s', async () => {
-    const { tools } = build({
+  it('appends the page-side warnings (a track that 404s)', async () => {
+    const { run } = build({
       playlistName: 'Tavern',
       playlistId: 'pl1',
-      mode: 'sequential',
+      mode: 'shuffle',
       soundCount: 1,
-      sounds: [{ name: 'nope.mp3', path: 'snd/nope.mp3' }],
-      warnings: [
-        'Supplied track "snd/nope.mp3" was not found on the server — the document was created',
-      ],
+      sounds: [{ name: 'lute.ogg', path: 'snd/lute.ogg' }],
+      warnings: ['snd/lute.ogg did not resolve on the static server (404); kept as given.'],
     });
-    const out = await tools.handleCreatePlaylist({
+    const out = await run({
+      action: 'create',
       name: 'Tavern',
-      soundPaths: ['snd/nope.mp3'],
-    });
-    expect(out).toContain('not found on the server');
-    expect(out).toContain('1 warning(s)');
-  });
-
-  it('rejects an empty name', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreatePlaylist({ name: '', soundPaths: ['s'] })).rejects.toThrow();
-  });
-
-  it('rejects an empty soundPaths array', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreatePlaylist({ name: 'X', soundPaths: [] })).rejects.toThrow();
-  });
-
-  it('rejects an invalid mode enum', async () => {
-    const { tools } = build();
-    await expect(
-      tools.handleCreatePlaylist({ name: 'X', soundPaths: ['s'], mode: 'loud' })
-    ).rejects.toThrow();
-  });
-
-  it('rejects a defaultVolume out of range', async () => {
-    const { tools } = build();
-    await expect(
-      tools.handleCreatePlaylist({ name: 'X', soundPaths: ['s'], defaultVolume: 2 })
-    ).rejects.toThrow();
-  });
-});
-
-describe('handleListPlaylists', () => {
-  it('forwards listPlaylists and formats playlists incl. playing flag', async () => {
-    const { tools, calls } = build([
-      { name: 'A', id: 'p1', mode: 'shuffle', soundCount: 3, playing: true },
-      { name: 'B', id: 'p2', mode: 'sequential', soundCount: 0, playing: false },
-    ]);
-    const out = await tools.handleListPlaylists({});
-    expect(calls[0][0]).toBe('listPlaylists');
-    expect(out).toContain('Playlists (2):');
-    expect(out).toContain('- "A" (p1) — mode shuffle, 3 track(s) [playing]');
-    expect(out).toContain('- "B" (p2) — mode sequential, 0 track(s)');
-    expect(out).not.toContain('"B" (p2) — mode sequential, 0 track(s) [playing]');
-  });
-
-  it('reports no playlists for an empty array', async () => {
-    const { tools } = build([]);
-    const out = await tools.handleListPlaylists({});
-    expect(out).toBe('No playlists found.');
-  });
-
-  it('reports no playlists for a non-array result', async () => {
-    const { tools } = build(null);
-    const out = await tools.handleListPlaylists({});
-    expect(out).toBe('No playlists found.');
-  });
-});
-
-describe('handleUpdatePlaylist', () => {
-  it('forwards a valid update and reports success', async () => {
-    const { tools, calls } = build({ updated: true, playlistName: 'Tavern', playlistId: 'pl1' });
-    const out = await tools.handleUpdatePlaylist({
-      identifier: 'pl1',
-      name: 'Tavern',
+      soundPaths: ['snd/lute.ogg'],
       mode: 'shuffle',
     });
-    expect(calls[0][0]).toBe('updatePlaylist');
-    expect(calls[0][1]).toMatchObject({ identifier: 'pl1', name: 'Tavern', mode: 'shuffle' });
-    expect(out).toBe('Updated playlist "Tavern" (pl1).');
+    expect(out).toBe(
+      'Created playlist "Tavern" (pl1): mode shuffle, 1 track(s)' +
+        '\n\n⚠️ 1 warning(s):\n- snd/lute.ogg did not resolve on the static server (404); kept as given.'
+    );
   });
 
-  it('reports not-found branch when updated === false', async () => {
-    const { tools } = build({ updated: false, notFound: 'Ghost' });
-    const out = await tools.handleUpdatePlaylist({ identifier: 'Ghost' });
-    expect(out).toBe('Playlist not found: "Ghost". Nothing changed.');
-  });
-
-  it('rejects an empty identifier', async () => {
-    const { tools } = build();
-    await expect(tools.handleUpdatePlaylist({ identifier: '' })).rejects.toThrow();
-  });
-
-  it('rejects an invalid mode enum', async () => {
-    const { tools } = build();
-    await expect(tools.handleUpdatePlaylist({ identifier: 'p', mode: 'nope' })).rejects.toThrow();
+  it('rejects an empty name, an empty soundPaths array, a bad mode, a volume out of range', async () => {
+    const { run } = build();
+    await expect(run({ action: 'create', name: '', soundPaths: ['a.ogg'] })).rejects.toThrow();
+    await expect(run({ action: 'create', name: 'X', soundPaths: [] })).rejects.toThrow();
+    await expect(
+      run({ action: 'create', name: 'X', soundPaths: ['a.ogg'], mode: 'random' })
+    ).rejects.toThrow();
+    await expect(
+      run({ action: 'create', name: 'X', soundPaths: ['a.ogg'], defaultVolume: 1.5 })
+    ).rejects.toThrow();
   });
 });
 
-describe('handleDeletePlaylist', () => {
-  it('forwards .deletePlaylists and lists deleted', async () => {
-    const { tools, calls } = build({
+describe('manage-playlists list (the §3 line shape)', () => {
+  it('one line per playlist under the column header, the mode by name', async () => {
+    const { calls, run } = build([
+      { id: 'p1', name: 'Tavern Night', mode: 'sequential', soundCount: 3, playing: true },
+      { id: 'p2', name: 'Storm', mode: 'shuffle', soundCount: 2, playing: false },
+    ]);
+    const out = await run({ action: 'list' });
+    expect(calls[0]![0]).toBe('listPlaylists');
+    expect(out).toBe(
+      '2 playlist(s): id name mode tracks playing\n' +
+        'p1 "Tavern Night" sequential 3 true\n' +
+        'p2 Storm shuffle 2 false'
+    );
+  });
+
+  it('an empty world (or a non-array result) is the header alone', async () => {
+    expect(await build([]).run({ action: 'list' })).toBe('0 playlist(s).');
+    expect(await build(null).run({ action: 'list' })).toBe('0 playlist(s).');
+  });
+});
+
+describe('manage-playlists update', () => {
+  it('forwards a valid update and confirms on one line', async () => {
+    const { calls, run } = build({ updated: true, playlistName: 'Tavern v2', playlistId: 'pl1' });
+    const out = await run({
+      action: 'update',
+      identifier: 'Tavern',
+      name: 'Tavern v2',
+      mode: 'shuffle',
+    });
+    expect(calls[0]![0]).toBe('updatePlaylist');
+    expect(calls[0]![1]).toMatchObject({
+      identifier: 'Tavern',
+      name: 'Tavern v2',
+      mode: 'shuffle',
+    });
+    expect(out).toBe('Updated playlist "Tavern v2" (pl1)');
+  });
+
+  it('a playlist that does not resolve is an error (§3), never prose in a success shape', async () => {
+    const { run } = build({ updated: false, notFound: 'Ghost' });
+    await expect(run({ action: 'update', identifier: 'Ghost', name: 'X' })).rejects.toThrow(
+      'Playlist not found: "Ghost". Nothing changed.'
+    );
+  });
+
+  it('rejects an empty identifier and an invalid mode', async () => {
+    const { run } = build();
+    await expect(run({ action: 'update', identifier: '', name: 'X' })).rejects.toThrow();
+    await expect(run({ action: 'update', identifier: 'X', mode: 'loop' })).rejects.toThrow();
+  });
+});
+
+describe('manage-playlists delete', () => {
+  it('forwards deletePlaylists and confirms the deletions on one line', async () => {
+    const { calls, run } = build({
       deletedCount: 2,
       deleted: [
-        { name: 'A', id: 'p1' },
-        { name: 'B', id: 'p2' },
+        { id: 'p1', name: 'Tavern' },
+        { id: 'p2', name: 'Storm' },
       ],
-      notFound: [],
     });
-    const out = await tools.handleDeletePlaylist({ identifiers: ['p1', 'p2'] });
-    expect(calls[0][0]).toBe('deletePlaylists');
-    expect(calls[0][1]).toMatchObject({ identifiers: ['p1', 'p2'] });
-    expect(out).toContain('Deleted 2 playlist(s):');
-    expect(out).toContain('- "A" (p1)');
-    expect(out).toContain('- "B" (p2)');
-    expect(out).not.toContain('not found:');
+    const out = await run({ action: 'delete', identifiers: ['p1', 'Storm'] });
+    expect(calls[0]![0]).toBe('deletePlaylists');
+    expect(calls[0]![1]).toEqual({ identifiers: ['p1', 'Storm'] });
+    expect(out).toBe('Deleted 2 playlist(s): "Tavern" (p1), "Storm" (p2)');
   });
 
-  it('appends not-found list when some ids do not resolve', async () => {
-    const { tools } = build({ deletedCount: 0, deleted: [], notFound: ['ghost'] });
-    const out = await tools.handleDeletePlaylist({ identifiers: ['ghost'] });
-    expect(out).toContain('Deleted 0 playlist(s):');
-    expect(out).toContain('not found: ghost');
+  it('appends the not-found tail when some identifiers do not resolve', async () => {
+    const { run } = build({
+      deletedCount: 1,
+      deleted: [{ id: 'p1', name: 'Tavern' }],
+      notFound: ['ghost'],
+    });
+    expect(await run({ action: 'delete', identifiers: ['p1', 'ghost'] })).toBe(
+      'Deleted 1 playlist(s): "Tavern" (p1) (1 not found: ghost)'
+    );
   });
 
-  it('rejects an empty identifiers array', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeletePlaylist({ identifiers: [] })).rejects.toThrow();
-  });
-
-  it('rejects an identifier that is an empty string', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeletePlaylist({ identifiers: [''] })).rejects.toThrow();
+  it('rejects an empty identifiers array and an empty-string identifier', async () => {
+    const { run } = build();
+    await expect(run({ action: 'delete', identifiers: [] })).rejects.toThrow();
+    await expect(run({ action: 'delete', identifiers: [''] })).rejects.toThrow();
   });
 });

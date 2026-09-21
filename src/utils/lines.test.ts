@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cell, listLines, warningBlock } from './lines.js';
+import { cell, deletedLine, listLines, warningBlock } from './lines.js';
 
 describe('listLines (the §3 list shape: header + one line per record)', () => {
   it('names the column order, then one row per record in that order', () => {
@@ -40,5 +40,31 @@ describe('warningBlock', () => {
     expect(warningBlock()).toBe('');
     expect(warningBlock([])).toBe('');
     expect(warningBlock(['a', 'b'])).toBe('\n\n⚠️ 2 warning(s):\n- a\n- b');
+  });
+});
+
+describe('deletedLine', () => {
+  it('names each deleted record, then the not-found and failed tails', () => {
+    expect(deletedLine({ deleted: [{ id: 'a', name: 'Alpha' }] }, 'playlist')).toBe(
+      'Deleted 1 playlist(s): "Alpha" (a)'
+    );
+    expect(
+      deletedLine(
+        {
+          deleted: [
+            { id: 'a', name: 'Alpha' },
+            { id: 'b', name: 'Beta' },
+          ],
+          notFound: ['ghost'],
+          failed: [{ id: 'c', name: 'Gamma', error: 'locked' }],
+        },
+        'table'
+      )
+    ).toBe(
+      'Deleted 2 table(s): "Alpha" (a), "Beta" (b) (1 not found: ghost) (failed: "Gamma" — locked)'
+    );
+    expect(deletedLine({ deleted: [], notFound: ['x'] }, 'card')).toBe(
+      'Deleted 0 card(s) (1 not found: x)'
+    );
   });
 });

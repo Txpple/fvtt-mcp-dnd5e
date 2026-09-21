@@ -17,7 +17,7 @@ mapping, weather validation against the live `CONFIG.weatherEffects`, playlist/j
 resolution, and **auto-detecting scene dimensions from the image**).
 
 Tools used: `create-scene`, `update-scene`, `list-scenes`, `list-assets`, `upload-asset`,
-`list-playlists`, `list-journals` / `search-journals`. To **build** a new playlist or journal to
+`manage-playlists { action: "list" }`, `list-journals` / `search-journals`. To **build** a new playlist or journal to
 attach, hand off to the **`playlist-builder`** / **`journal-builder`** skill — scene-builder wires the
 link onto the scene; those skills author the content.
 
@@ -134,7 +134,7 @@ validated live by the tool — if you guess wrong, its error lists the valid key
 
 ## Step 4 — Offer attachments
 
-- **Playlist** — `list-playlists`, offer to set `playlist: "<name or id>"`. It auto-plays **on scene
+- **Playlist** — `manage-playlists { action: "list" }`, offer to set `playlist: "<name or id>"`. It auto-plays **on scene
   activation** (not on view), so pair it with an offer to activate. To build a NEW playlist to attach,
   hand off to the **`playlist-builder`** skill, then set `playlist` to it here.
 - **Journal** — `list-journals` / `search-journals`, offer to set `journal: "<name or id>"` (e.g. the

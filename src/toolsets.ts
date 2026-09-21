@@ -107,13 +107,7 @@ export const TOOLSETS = {
   /** Card decks. */
   cards: ['create-cards', 'import-cards', 'list-cards', 'delete-cards'],
   /** Playlists and the per-scene soundscape. */
-  audio: [
-    'create-playlist',
-    'list-playlists',
-    'update-playlist',
-    'delete-playlist',
-    'configure-soundscape',
-  ],
+  audio: ['manage-playlists', 'configure-soundscape'],
   /** The chat log — narration, whispers, roll requests, cards, export. */
   chat: [
     'send-chat-message',

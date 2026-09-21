@@ -34,3 +34,26 @@ export function warningBlock(warnings?: string[]): string {
   if (!Array.isArray(warnings) || warnings.length === 0) return '';
   return `\n\n⚠️ ${warnings.length} warning(s):\n${warnings.map(w => `- ${w}`).join('\n')}`;
 }
+
+/**
+ * A deletion as one line — `Deleted N noun(s): "A" (id), "B" (id)` plus the not-found and failed
+ * tails — over the page's `deleteByResolver` shape (src/page/organization.ts).
+ */
+export function deletedLine(
+  r: {
+    deleted?: Array<{ id: string; name: string }> | undefined;
+    notFound?: string[] | undefined;
+    failed?: Array<{ id: string; name: string; error: string }> | undefined;
+  },
+  noun: string
+): string {
+  const deleted = Array.isArray(r?.deleted) ? r.deleted : [];
+  const notFound = Array.isArray(r?.notFound) ? r.notFound : [];
+  const failed = Array.isArray(r?.failed) ? r.failed : [];
+  return (
+    `Deleted ${deleted.length} ${noun}(s)` +
+    (deleted.length ? `: ${deleted.map(d => `"${d.name}" (${d.id})`).join(', ')}` : '') +
+    (notFound.length ? ` (${notFound.length} not found: ${notFound.join(', ')})` : '') +
+    (failed.length ? ` (failed: ${failed.map(f => `"${f.name}" — ${f.error}`).join(', ')})` : '')
+  );
+}

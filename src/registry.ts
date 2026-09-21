@@ -348,11 +348,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // (src/page/_placeables.ts + src/page/placeables/** + src/tools/placeables/**)
     'manage-placeables': args => placeableTools.handle('manage-placeables', args),
 
-    // Playlists
-    'create-playlist': args => playlistTools.handleCreatePlaylist(args),
-    'list-playlists': args => playlistTools.handleListPlaylists(args),
-    'update-playlist': args => playlistTools.handleUpdatePlaylist(args),
-    'delete-playlist': args => playlistTools.handleDeletePlaylist(args),
+    // Playlists — ONE tool (action; M8)
+    'manage-playlists': args => playlistTools.handle('manage-playlists', args),
 
     // configure-soundscape: the per-scene sound sets of house module fvtt-mod-soundscape —
     // randomized one-shots with silence between, and crossfaded ambient beds. Playlists stay
