@@ -119,7 +119,7 @@ campaign-repos memory — active: `fvtt-campaign-greenrest`). **Pull the campaig
      carries what nobody thought to transcribe. If `export-actor` is missing from the tool
      list, the MCP server predates it — restart Claude Code on server ≥ 2026-08-26.)
    - **Human digest (the story):** `party-snapshots\YYYY-MM-DD.md` from the LIVE sheets
-     (`get-actor`). Per PC: class/subclass + LEVEL, HP max, AC, the six ability scores,
+     (`manage-actors` `get`). Per PC: class/subclass + LEVEL, HP max, AC, the six ability scores,
      feats/ASIs taken, weapon masteries, spell slots, attuned + equipped magic items, and
      notable consumables **with their remaining charges/doses/counts** (the table-critical
      numbers belong in the digest too). One file per session date, diffable against the

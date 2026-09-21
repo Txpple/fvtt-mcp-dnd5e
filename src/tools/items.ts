@@ -82,7 +82,9 @@ const RemoveFromActorSchema = z
     itemIds: z
       .array(z.string().min(1))
       .optional()
-      .describe('Ids of items on the actor to delete (most reliable; get them from get-actor).'),
+      .describe(
+        'Ids of items on the actor to delete (most reliable; manage-actors get lists them).'
+      ),
     itemNames: z
       .array(z.string().min(1))
       .optional()
@@ -246,7 +248,7 @@ export class ItemTools {
       {
         name: 'remove-from-actor',
         description:
-          'Delete items already on an actor, identified by itemIds and/or itemNames (optionally constrained by type). GM-only. Use get-actor to find item ids.',
+          'Delete items already on an actor, identified by itemIds and/or itemNames (optionally constrained by type). GM-only.',
         inputSchema: toInputSchema(RemoveFromActorSchema),
       },
     ];

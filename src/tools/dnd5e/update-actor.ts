@@ -3,7 +3,7 @@ import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
-import { toInputSchema } from '../../utils/schema.js';
+import { warningBlock } from '../../utils/lines.js';
 
 /**
  * update-actor — edit an EXISTING dnd5e actor's own stat-block fields (abilities, saves, skills,
@@ -45,7 +45,7 @@ const setField = (what: string, supportsCustom = true) =>
 /** The page handler's arg shape — `updateActor` receives exactly this (a type-only import there). */
 export type UpdateActorArgs = z.output<typeof UpdateActorSchema>;
 
-const UpdateActorSchema = z.object({
+export const UpdateActorSchema = z.object({
   actorIdentifier: actorTarget,
 
   // identity
@@ -341,69 +341,29 @@ const UpdateActorSchema = z.object({
     .describe('Carried coins (pp/gp/ep/sp/cp). Only the coins you list change.'),
 });
 
-export interface DnD5eUpdateActorToolOptions {
-  foundry: FoundryBridge;
-  logger: Logger;
-}
+/** The update member of manage-actors (src/tools/actor.ts): its description and handler. */
+export const UPDATE_ACTOR_DESCRIPTION =
+  "[D&D 5e] Edit an actor's own sheet by field group; only the groups passed change, [NPC] " +
+  'fields warn on a PC. Embedded items: update-actor-item / add-feature / manage-activity; ' +
+  'placed tokens: manage-placeables.';
 
-export class DnD5eUpdateActorTool {
-  private foundry: FoundryBridge;
-  private logger: Logger;
-
-  constructor({ foundry, logger }: DnD5eUpdateActorToolOptions) {
-    this.foundry = foundry;
-    this.logger = logger.child({ component: 'DnD5eUpdateActorTool' });
-  }
-
-  getToolDefinitions() {
-    return [
-      {
-        name: 'update-actor',
-        description:
-          "[D&D 5e] Edit an actor's own sheet: identity + prototype token, details, abilities / " +
-          'saves / skills, weapon masteries, HP / AC / initiative, movement, senses, defenses, NPC ' +
-          'resources and spellcasting, habitat / treasure, coins. Only the groups passed change; ' +
-          '[NPC] fields warn on a PC. Embedded items: update-actor-item / add-feature / ' +
-          'manage-activity; placed tokens: manage-placeables.',
-        inputSchema: toInputSchema(UpdateActorSchema),
-      },
-    ];
-  }
-
-  async handleUpdateActor(args: any): Promise<any> {
-    const parsed = UpdateActorSchema.parse(args ?? {});
-    this.logger.info('Updating dnd5e actor', { actorIdentifier: parsed.actorIdentifier });
-
-    await assertDnd5e(this.foundry, this.logger, 'update-actor');
-    const result = await this.foundry.call('updateActor', parsed);
-
-    this.logger.info('Actor updated', {
-      actorId: result?.actor?.id,
-      applied: result?.applied?.length,
-      warnings: result?.warnings?.length,
-    });
-    return this.formatResponse(result);
-  }
-
-  private formatResponse(result: any): any {
-    const applied: string[] = result?.applied ?? [];
-    const warnings: string[] = result?.warnings ?? [];
-    const summary = `✅ Updated "${result?.actor?.name}" — ${applied.length ? applied.join(', ') : 'no changes'}`;
-    const details = [
-      `**Actor:** ${result?.actor?.name} (id: \`${result?.actor?.id}\`, type: ${result?.actor?.type})`,
-      `**Applied:** ${applied.length ? applied.join(', ') : '(none)'}`,
-    ].join('\n');
-    const warningSection =
-      warnings.length > 0
-        ? `\n\n⚠️ **Warnings (${warnings.length}):**\n${warnings.map(w => `- ${w}`).join('\n')}`
-        : '';
-    return {
-      summary,
-      success: true,
-      actor: result?.actor,
-      applied,
-      warnings,
-      message: `${summary}\n\n${details}${warningSection}`,
-    };
-  }
+export async function updateActor(
+  foundry: FoundryBridge,
+  logger: Logger,
+  parsed: UpdateActorArgs
+): Promise<string> {
+  logger.info('Updating dnd5e actor', { actorIdentifier: parsed.actorIdentifier });
+  await assertDnd5e(foundry, logger, 'manage-actors update');
+  const result = await foundry.call('updateActor', parsed);
+  logger.info('Actor updated', {
+    actorId: result?.actor?.id,
+    applied: result?.applied?.length,
+    warnings: result?.warnings?.length,
+  });
+  const applied: string[] = result?.applied ?? [];
+  return (
+    `Updated "${result?.actor?.name}" (${result?.actor?.id}, ${result?.actor?.type}): ` +
+    (applied.length ? applied.join(', ') : 'no changes') +
+    warningBlock(result?.warnings)
+  );
 }

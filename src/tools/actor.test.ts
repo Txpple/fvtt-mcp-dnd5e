@@ -1,6 +1,8 @@
 /**
- * Unit tests for ActorTools (actor reads: get-actor, get-actor-entity, list-actors,
- * search-actor-contents). World-Item CRUD + add/remove-from-actor moved to ItemTools — see
+ * Unit tests for ActorTools — manage-actors (the M8 union: action list / get / update / delete;
+ * the update and delete members' bodies are tested with their own modules, update-actor.test.ts
+ * and actor-creation.test.ts) and the reads that stay their own (get-actor-entity, export-actor,
+ * search-actor-contents). World-Item CRUD + add/remove-from-actor live in ItemTools — see
  * items.test.ts.
  *
  * These exercise the two things each handler owns before/after the bridge call:
@@ -19,7 +21,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ActorTools } from './actor.js';
+import { ActorTools, MANAGE_ACTORS } from './actor.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 /**
@@ -31,7 +33,8 @@ import { makeLogger, makeFoundry } from './test-helpers.js';
 function build(responses: Record<string, any> = {}) {
   const { foundry, calls } = makeFoundry((method: string) => responses[method]);
   const tools = new ActorTools({ foundry, logger: makeLogger() });
-  return { tools, calls, foundry };
+  const run = (args: unknown) => tools.handleManageActors(args);
+  return { tools, calls, foundry, run };
 }
 
 /** Find the [method, data] pair for a given bare bridge op name. */
@@ -48,11 +51,39 @@ describe('ActorTools.getToolDefinitions', () => {
       .sort();
     expect(names).toEqual([
       'export-actor',
-      'get-actor',
       'get-actor-entity',
-      'list-actors',
+      MANAGE_ACTORS,
       'search-actor-contents',
     ]);
+  });
+
+  it('manage-actors: the action enum, the shared actorIdentifier leaf, closed members', () => {
+    const def = build()
+      .tools.getToolDefinitions()
+      .find(t => t.name === MANAGE_ACTORS)!;
+    const schema = def.inputSchema as any;
+    expect(schema.properties.action.enum).toEqual(['list', 'get', 'update', 'delete']);
+    expect(schema.properties.actorIdentifier.description).toContain('Actor');
+    const byAction = Object.fromEntries(
+      schema.anyOf.map((m: any) => [m.properties.action.const, m])
+    );
+    for (const m of schema.anyOf) expect(m.additionalProperties).toBe(false);
+    expect(byAction.get.properties.actorIdentifier).toEqual({ type: 'string' });
+    expect(byAction.get.required).toEqual(['action', 'actorIdentifier']);
+    expect(byAction.update.properties.actorIdentifier).toEqual({ type: 'string' });
+    // delete takes the STRICT array, its own leaf
+    expect(byAction.delete.required).toEqual(['action', 'identifiers']);
+    expect(byAction.delete.properties.identifiers.items.description).toContain('exact');
+  });
+
+  it('refuses an unknown action and an unknown key by name against the selected member', async () => {
+    const { run } = build();
+    await expect(run({ action: 'create', actorIdentifier: 'x' })).rejects.toThrow(
+      'manage-actors: action must be one of "list", "get", "update", "delete" (got "create").'
+    );
+    await expect(run({ action: 'get', identifier: 'x' })).rejects.toThrow(
+      'manage-actors (action "get"): unknown argument "identifier" — it takes: action, actorIdentifier.'
+    );
   });
 
   it('every definition has an object inputSchema', () => {
@@ -65,7 +96,7 @@ describe('ActorTools.getToolDefinitions', () => {
   it('definitions with required fields expose a required array', () => {
     const { tools } = build();
     const byName = Object.fromEntries(tools.getToolDefinitions().map(d => [d.name, d]));
-    expect(byName['get-actor'].inputSchema.required).toEqual(['identifier']);
+    expect(byName['export-actor'].inputSchema.required).toEqual(['identifier', 'localPath']);
   });
 });
 
@@ -167,9 +198,9 @@ describe('handleExportActor', () => {
   });
 });
 
-describe('handleGetCharacter', () => {
+describe('manage-actors get', () => {
   it('forwards characterName and shapes the formatted response', async () => {
-    const { tools, calls } = build({
+    const { calls, run } = build({
       getCharacterInfo: {
         id: 'actor1',
         name: 'Aria',
@@ -208,7 +239,7 @@ describe('handleGetCharacter', () => {
       },
     });
 
-    const out = await tools.handleGetCharacter({ identifier: 'Aria' });
+    const out = await run({ action: 'get', actorIdentifier: 'Aria' });
 
     const c = callFor(calls, 'getCharacterInfo');
     expect(c).toBeTruthy();
@@ -253,7 +284,7 @@ describe('handleGetCharacter', () => {
   });
 
   it("surfaces a weapon's 2024 mastery property and the actor's mastery kinds", async () => {
-    const { tools } = build({
+    const { run } = build({
       getCharacterInfo: {
         id: 'a9',
         name: 'Morgash',
@@ -274,14 +305,14 @@ describe('handleGetCharacter', () => {
         effects: [],
       },
     });
-    const out = await tools.handleGetCharacter({ identifier: 'Morgash' });
+    const out = await run({ action: 'get', actorIdentifier: 'Morgash' });
     expect(out.stats.weaponMasteries).toEqual(['greatsword']);
     expect(out.items[0].mastery).toBe('graze');
     expect(out.items[1].mastery).toBeUndefined();
   });
 
   it('collapses an embedded race item to its name and omits empty actions/spellcasting', async () => {
-    const { tools } = build({
+    const { run } = build({
       getCharacterInfo: {
         id: 'a2',
         name: 'Bran',
@@ -294,7 +325,7 @@ describe('handleGetCharacter', () => {
       },
     });
 
-    const out = await tools.handleGetCharacter({ identifier: 'Bran' });
+    const out = await run({ action: 'get', actorIdentifier: 'Bran' });
     expect(out.basicInfo.race).toBe('Dwarf');
     expect(out.hasImage).toBe(false);
     expect(out.actions).toBeUndefined();
@@ -308,18 +339,20 @@ describe('handleGetCharacter', () => {
     });
     void calls;
     const tools = new ActorTools({ foundry, logger: makeLogger() });
-    await expect(tools.handleGetCharacter({ identifier: 'Ghost' })).rejects.toThrow(/boom/);
+    await expect(
+      tools.handleManageActors({ action: 'get', actorIdentifier: 'Ghost' })
+    ).rejects.toThrow(/boom/);
   });
 
   it('rejects an empty identifier', async () => {
-    const { tools } = build();
-    await expect(tools.handleGetCharacter({ identifier: '' })).rejects.toThrow();
+    const { run } = build();
+    await expect(run({ action: 'get', actorIdentifier: '' })).rejects.toThrow();
   });
 
   it('rejects missing args', async () => {
-    const { tools } = build();
-    await expect(tools.handleGetCharacter({})).rejects.toThrow();
-    await expect(tools.handleGetCharacter(undefined)).rejects.toThrow();
+    const { run } = build();
+    await expect(run({ action: 'get' })).rejects.toThrow();
+    await expect(run(undefined)).rejects.toThrow();
   });
 });
 
@@ -451,33 +484,70 @@ describe('handleGetCharacterEntity', () => {
   });
 });
 
-describe('handleListCharacters', () => {
-  it('forwards the type + name filters and shapes the compact list', async () => {
-    const { tools, calls } = build({
+describe('manage-actors list (the §3 line shape)', () => {
+  it('forwards the type + name filters; one line per actor under the column header', async () => {
+    const { calls, run } = build({
       listActors: [
-        { id: 'a1', name: 'Aria', type: 'character' },
+        { id: 'a1', name: 'Aria Windrun', type: 'character' },
         { id: 'a2', name: 'Goblin', type: 'npc' },
       ],
     });
-
-    const out = await tools.handleListCharacters({ type: 'character', nameFilter: 'ari' });
-
-    const c = callFor(calls, 'listActors');
-    expect(c![1]).toEqual({ type: 'character', nameFilter: 'ari' });
-    expect(out).toEqual({
-      characters: [
-        { id: 'a1', name: 'Aria', type: 'character' },
-        { id: 'a2', name: 'Goblin', type: 'npc' },
-      ],
-      total: 2,
-    });
+    const out = await run({ action: 'list', type: 'character', nameFilter: 'ari' });
+    expect(callFor(calls, 'listActors')![1]).toEqual({ type: 'character', nameFilter: 'ari' });
+    expect(out).toBe('2 actor(s): id name type\na1 "Aria Windrun" character\na2 Goblin npc');
   });
 
-  it('sends no filter keys when none are supplied', async () => {
-    const { tools, calls } = build({ listActors: [] });
-    const out = await tools.handleListCharacters({});
+  it('sends no filter keys when none are supplied; an empty world is the header alone', async () => {
+    const { calls, run } = build({ listActors: [] });
+    expect(await run({ action: 'list' })).toBe('0 actor(s).');
     expect(callFor(calls, 'listActors')![1]).toEqual({});
-    expect(out.total).toBe(0);
+  });
+});
+
+describe('manage-actors update / delete (the members ride their modules; the dispatch is here)', () => {
+  it('update: parses the dnd5e contract, guards the system, confirms on one line', async () => {
+    const { calls, run } = build({
+      getWorldInfo: { system: 'dnd5e' },
+      updateActor: {
+        actor: { id: 'a1', name: 'Gren', type: 'npc' },
+        applied: ['identity', 'vitals'],
+        warnings: ['cr: skipped on a PC'],
+      },
+    });
+    const out = await run({ action: 'update', actorIdentifier: 'Gren', name: 'Gren the Bold' });
+    expect(callFor(calls, 'updateActor')![1]).toMatchObject({
+      actorIdentifier: 'Gren',
+      name: 'Gren the Bold',
+    });
+    expect(out).toBe(
+      'Updated "Gren" (a1, npc): identity, vitals\n\n⚠️ 1 warning(s):\n- cr: skipped on a PC'
+    );
+  });
+
+  it('delete: the strict identifiers, one line with the removed folders and the not-found tail', async () => {
+    const { calls, run } = build({
+      deleteActor: {
+        success: true,
+        deletedCount: 1,
+        deleted: [{ id: 'a1', name: 'Gren' }],
+        notFound: ['ghost'],
+        removedFolders: [{ id: 'f1', name: 'Bandits' }],
+      },
+    });
+    const out = await run({ action: 'delete', identifiers: ['a1', 'ghost'] });
+    expect(callFor(calls, 'deleteActor')![1]).toEqual({
+      identifiers: ['a1', 'ghost'],
+      removeEmptyFolder: true,
+    });
+    expect(out).toBe(
+      'Deleted 1 actor(s): "Gren" (a1) (1 not found: ghost); removed emptied folder(s): Bandits'
+    );
+  });
+
+  it('delete: rejects an empty identifiers array and an empty-string identifier', async () => {
+    const { run } = build();
+    await expect(run({ action: 'delete', identifiers: [] })).rejects.toThrow();
+    await expect(run({ action: 'delete', identifiers: [''] })).rejects.toThrow();
   });
 });
 

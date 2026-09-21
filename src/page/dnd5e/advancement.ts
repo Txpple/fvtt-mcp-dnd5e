@@ -21,7 +21,7 @@
 //   • The AdvancementManager is NEVER touched (its .close() prompts a discard Dialog → headless hang).
 
 import { isPremiumBookPack } from '../../utils/compendium-sources.js';
-import { updateActor } from '../actors.js';
+import { updateActor } from '../actors/update.js';
 import {
   findUnresolvedScaleTokens,
   getOrCreateFolder,

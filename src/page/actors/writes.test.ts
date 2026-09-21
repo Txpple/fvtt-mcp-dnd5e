@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractDamageProfile } from './actors.js';
+import { extractDamageProfile } from './writes.js';
 
 // Minimal source-item shapes (as toSource(item) yields): a weapon's base damage + activity parts.
 const weapon = (name: string, baseTypes: string[]) => ({

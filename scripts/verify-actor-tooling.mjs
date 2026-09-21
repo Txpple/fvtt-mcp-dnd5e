@@ -1,16 +1,23 @@
-// Live acceptance for the ACTOR TOOLING build (update-actor, apply-condition, update-actor-item,
-// manage-activity, add-feature spell mode, manage-effect) + the step-0 read-fixes. Exercises the
-// page-side write/read seams against the live Molten world; unit tests mock the seam, so this is the
+// Live acceptance for the ACTOR TOOLING build (the page's updateActor, apply-condition,
+// update-actor-item, manage-activity, add-feature spell mode, manage-effect) + the step-0
+// read-fixes, then manage-actors (action list / get / update / delete — the M8 union,
+// src/tools/actor.ts) through buildToolRegistry().dispatch: the four per-op tools are gone; list is
+// the §3 line shape; get is the compact sheet JSON; update and delete answer one line; an unknown
+// action / key is refused by name; the dnd5e guard and the strict delete resolution hold. Exercises
+// the page-side write/read seams against the live world; unit tests mock the seam, so this is the
 // real correctness gate. Test docs are tagged ZZ-MCP-AT and cleaned up in a finally.
 //
 // Build first: npm run build. Run: node scripts/verify-actor-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { extractActorStats, extractActorBasicInfo } from '../dist/tools/dnd5e/actor-stats.js';
 
 const env = loadEnv();
-const foundry = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const foundry = new Foundry(cfg);
 
 const results = [];
 const pass = (n, s) => {
@@ -846,6 +853,69 @@ try {
         );
       }
     }
+  }
+
+  // ── manage-actors through the registry (the M8 union: action list / get / update / delete) ──
+  {
+    const { dispatch, tools } = buildToolRegistry({
+      foundry,
+      logger: new Logger({ level: 'error' }),
+      host: cfg.host,
+    });
+    const names = new Set(tools.map(t => t.name));
+    names.has('manage-actors') &&
+    ['list-actors', 'get-actor', 'update-actor', 'delete-actor'].every(n => !names.has(n))
+      ? pass('manage-actors: advertised; the four per-op tools gone')
+      : fail('manage-actors: advertised', [...names].filter(n => /actor/.test(n)).join(','));
+    const ma = args => dispatch('manage-actors', args);
+    const npc = await makeTempNpc('ZZ-MCP-AT Union Orc');
+    const lines = String(await ma({ action: 'list', nameFilter: 'ZZ-MCP-AT Union' })).split('\n');
+    lines[0] === '1 actor(s): id name type' && lines[1] === `${npc.id} "ZZ-MCP-AT Union Orc" npc`
+      ? pass('manage-actors list: the header + the row', lines[1])
+      : fail('manage-actors list', lines.join(' | '));
+    const got = await ma({ action: 'get', actorIdentifier: 'ZZ-MCP-AT Union Orc' });
+    got?.id === npc.id && got?.type === 'npc' && got?.basicInfo
+      ? pass('manage-actors get: the compact sheet JSON', `${got.name} / ${got.type}`)
+      : fail('manage-actors get', JSON.stringify(got).slice(0, 120));
+    const up = String(
+      await ma({ action: 'update', actorIdentifier: npc.id, cr: 3, abilities: { str: 18 } })
+    );
+    up === `Updated "ZZ-MCP-AT Union Orc" (${npc.id}, npc): abilities, cr` ||
+    up === `Updated "ZZ-MCP-AT Union Orc" (${npc.id}, npc): cr, abilities`
+      ? pass('manage-actors update: one line naming the groups applied', up)
+      : fail('manage-actors update', up);
+    for (const [args, want] of [
+      [
+        { action: 'create', actorIdentifier: 'x' },
+        'action must be one of "list", "get", "update", "delete"',
+      ],
+      [
+        { action: 'get', identifier: npc.id },
+        'unknown argument "identifier" — it takes: action, actorIdentifier',
+      ],
+      [{ action: 'get', actorIdentifier: 'ZZ-no-such-actor-zzz' }, 'not found'],
+    ]) {
+      let msg = '';
+      try {
+        await ma(args);
+      } catch (e) {
+        msg = e?.message ?? String(e);
+      }
+      msg.toLowerCase().includes(want.toLowerCase())
+        ? pass(`manage-actors refused by name / a miss is an error: ${want.slice(0, 50)}`)
+        : fail(`manage-actors refusal: ${want.slice(0, 50)}`, msg.slice(0, 140));
+    }
+    // the delete member resolves STRICTLY: a substring of the name matches nothing (reported, the
+    // orc untouched) where the fuzzy get above would have found it
+    const strict = String(await ma({ action: 'delete', identifiers: ['ZZ-MCP-AT Union'] }));
+    strict === 'Deleted 0 actor(s) (1 not found: ZZ-MCP-AT Union)'
+      ? pass('manage-actors delete: strict resolution — a substring deletes nothing', strict)
+      : fail('manage-actors delete: strict resolution', strict);
+    const del = String(await ma({ action: 'delete', identifiers: [npc.id] }));
+    del.startsWith(`Deleted 1 actor(s): "ZZ-MCP-AT Union Orc" (${npc.id})`)
+      ? pass('manage-actors delete: one line', del)
+      : fail('manage-actors delete', del);
+    tempActorIds.splice(tempActorIds.indexOf(npc.id), 1);
   }
 } catch (e) {
   fail('SUITE', e?.message || String(e));

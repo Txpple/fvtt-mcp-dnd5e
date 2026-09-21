@@ -67,11 +67,11 @@
     - **Disposition follows role, at creation time:** civilians / townsfolk / bystanders → **neutral**;
       actual enemies → hostile; party allies → friendly. Pass `disposition` to
       `create-actor-from-compendium` / `author-npc` when you create — never leave background folk on
-      the copied-monster hostile default (fix stragglers with `update-actor` `disposition`).
+      the copied-monster hostile default (fix stragglers with `manage-actors` `update` `disposition`).
     - **Auto-rotate ON, dynamic ring OFF, `randomImg` OFF** — the 2024-book prototype tokens ship
       all three the other way; the creation tools bake the corrections into every created actor. The
       art scale is left as the source ships it (right for the book's own art). Flip an existing actor
-      with `update-actor` `tokenAutoRotate` / `tokenRing` / `tokenScale`.
+      with `manage-actors` `update` `tokenAutoRotate` / `tokenRing` / `tokenScale`.
     - **Swapping token art onto an EXISTING actor:** `set-actor-art` resets the inherited texture
       scale to 1 and the ring off along with a changed texture (a book copy's scale 2 / ring on are
       wrong for trimmed art) and reports it; pass `autoRotate: true` once the art's facing is checked.

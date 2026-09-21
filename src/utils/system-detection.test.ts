@@ -96,12 +96,12 @@ describe('assertDnd5e', () => {
 
   it('does not refuse when the world reports no version at all', async () => {
     const { foundry, logger } = world({ system: 'dnd5e' });
-    await expect(assertDnd5e(foundry, logger, 'update-actor')).resolves.toBeUndefined();
+    await expect(assertDnd5e(foundry, logger, 'manage-actors update')).resolves.toBeUndefined();
   });
 
   it('passes on a FUTURE major', async () => {
     const { foundry, logger } = world({ system: 'dnd5e', systemVersion: '7.1.0' });
-    await expect(assertDnd5e(foundry, logger, 'update-actor')).resolves.toBeUndefined();
+    await expect(assertDnd5e(foundry, logger, 'manage-actors update')).resolves.toBeUndefined();
   });
 });
 

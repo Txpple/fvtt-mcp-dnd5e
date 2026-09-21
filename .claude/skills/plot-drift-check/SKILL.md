@@ -46,7 +46,7 @@ offending snippet.
 |---|---|---|
 | Journals (the big one) | `search-journals` per stem; `manage-journals` `list` → `get` | old names in content, contradicted facts, page names |
 | Roll tables | `manage-rolltables` `list` → `get` on plot-adjacent tables | entry text (the classic straggler — a rename misses table entries) |
-| Actors | `list-actors` for names; `get-actor` on plot-relevant NPCs/PCs | actor names, token names, biographies |
+| Actors | `manage-actors` `list` for names; `manage-actors` `get` on plot-relevant NPCs/PCs | actor names, token names, biographies |
 | Items | `search-actor-contents` / `manage-items` `list` → `get` for plot items | descriptions, unidentified vs true names |
 | Scenes & pins | `manage-scenes { action: "list" }`, `manage-placeables { kind: "notes", action: "list" }` | scene names, map-pin labels |
 | Folders & playlists | `manage-folders` / `manage-playlists` `{ action: "list" }` | organizational names that carry old terms |
@@ -85,7 +85,7 @@ Narrowest write wins; never rebuild a document to change a phrase:
 
 - Journal page text → `manage-journals { action: "update" }` (the affected page only).
 - Roll-table entry → `manage-rolltables { action: "update" }` with `editResults` (surgical per-entry; siblings untouched).
-- Actor name/token name/bio → `update-actor` (`name`, `tokenName`, `biography`).
+- Actor name/token name/bio → `manage-actors` `update` (`name`, `tokenName`, `biography`).
 - Item description/name → `update-actor-item` / `manage-items` `update` (mind the unidentified true-name
   masking — verify the echo).
 - Leaks → `set-journal-page-visibility` (or move the text to a GM page).

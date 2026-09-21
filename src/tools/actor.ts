@@ -5,20 +5,29 @@ import { dirname, isAbsolute } from 'node:path';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { FormattedToolError } from '../utils/error-handler.js';
+import { listLines } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
 import { humanSize } from '../hosts/paths.js';
 import { extractActorStats, extractActorBasicInfo } from './dnd5e/actor-stats.js';
+import { DELETE_ACTOR_DESCRIPTION, DeleteActorSchema, deleteActors } from './actor-creation.js';
+import { UPDATE_ACTOR_DESCRIPTION, UpdateActorSchema, updateActor } from './dnd5e/update-actor.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
-// ActorTools — read/inspect actors (the §5 actor building block, read side). Actor *creation* lives
-// in ActorCreationTools + DnD5eNpcTools (create-actor-from-compendium / author-npc); world-Item CRUD
-// and add/remove-from-actor live in ItemTools (src/tools/items.ts).
+// ActorTools — the actor building block (§5): the lifecycle as ONE tool, `manage-actors` (action
+// list / get / update / delete; src/tools/_union.ts — M8 of the 3.0 plan; the update member's
+// contract lives in dnd5e/update-actor.ts, the delete member's in actor-creation.ts), plus the
+// reads that stay their own (get-actor-entity, export-actor, search-actor-contents). Actor
+// *creation* lives in ActorCreationTools + DnD5eNpcTools (create-actor-from-compendium /
+// author-npc); world-Item CRUD and add/remove-from-actor live in ItemTools (src/tools/items.ts).
 //
 // Single source of truth for each tool's input contract: the handler parses with these schemas and
-// getToolDefinitions() advertises toInputSchema(...) of the same schema, so the advertised and
-// enforced contracts cannot drift.
+// the advertised JSON Schema is derived from the same zod, so the advertised and enforced
+// contracts cannot drift.
+
+export const MANAGE_ACTORS = 'manage-actors';
 
 const GetActorSchema = z.object({
-  identifier: actorTarget,
+  actorIdentifier: actorTarget,
 });
 
 const GetActorEntitySchema = z.object({
@@ -72,26 +81,77 @@ export interface ActorToolsOptions {
 export class ActorTools {
   private foundry: FoundryBridge;
   private logger: Logger;
+  private union: UnionTool;
 
   constructor({ foundry, logger }: ActorToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'ActorTools' });
+    const log = this.logger;
+    this.union = unionTool({
+      name: MANAGE_ACTORS,
+      description:
+        'World actors: list / get / update / delete (creation: create-actor-from-compendium / ' +
+        'author-npc / create-pc). GM-only writes.',
+      discriminators: ['action'],
+      shared: { actorIdentifier: actorTarget },
+      members: [
+        unionMember({
+          select: { action: 'list' },
+          description: 'Actors: id, name, type.',
+          schema: ListActorsSchema,
+          handler: async ({ type, nameFilter }) => {
+            log.info('Listing actors', { type, nameFilter });
+            const actors = await foundry.call('listActors', {
+              ...(type !== undefined ? { type } : {}),
+              ...(nameFilter !== undefined ? { nameFilter } : {}),
+            });
+            const records = (Array.isArray(actors) ? actors : []).map(a => ({
+              id: a.id,
+              name: a.name,
+              type: a.type,
+            }));
+            return listLines(`${records.length} actor(s)`, ['id', 'name', 'type'], records);
+          },
+        }),
+        unionMember({
+          select: { action: 'get' },
+          description:
+            'Compact sheet read: abilities, skills, saves, AC, HP, weapon-mastery kinds, action ' +
+            'names, effects and conditions by name, every item with name / type / equipped / ' +
+            'attunement / mastery (no descriptions; one in full: get-actor-entity).',
+          schema: GetActorSchema,
+          handler: async ({ actorIdentifier }) => {
+            log.info('Getting character information', { identifier: actorIdentifier });
+            const characterData = await foundry.call('getCharacterInfo', {
+              characterName: actorIdentifier,
+            });
+            return this.formatCharacterResponse(characterData);
+          },
+        }),
+        unionMember({
+          select: { action: 'update' },
+          description: UPDATE_ACTOR_DESCRIPTION,
+          schema: UpdateActorSchema,
+          handler: parsed => updateActor(foundry, log, parsed),
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: DELETE_ACTOR_DESCRIPTION,
+          schema: DeleteActorSchema,
+          handler: parsed => deleteActors(foundry, log, parsed),
+        }),
+      ],
+    });
   }
 
-  /**
-   * Tool: get-actor
-   * Retrieve detailed information about a specific character
-   */
+  /** The actor union (registry-facing). */
+  async handleManageActors(args: unknown): Promise<unknown> {
+    return this.union.handle(args);
+  }
+
   getToolDefinitions() {
     return [
-      {
-        name: 'get-actor',
-        description:
-          'Compact sheet read: abilities, skills, saves, AC, HP, weapon-mastery kinds, action names, ' +
-          'effects and conditions by name, every item with name / type / equipped / attunement / ' +
-          'mastery (no descriptions). One item, spell or effect in full: get-actor-entity.',
-        inputSchema: toInputSchema(GetActorSchema),
-      },
+      this.union.def,
       {
         name: 'get-actor-entity',
         description:
@@ -109,11 +169,6 @@ export class ActorTools {
         inputSchema: toInputSchema(ExportActorSchema),
       },
       {
-        name: 'list-actors',
-        description: 'List world actors: id, name, type. Filter by type and/or name substring.',
-        inputSchema: toInputSchema(ListActorsSchema),
-      },
-      {
         name: 'search-actor-contents',
         description:
           "Search an actor's items, spells, actions and effects by text and type; matches come back " +
@@ -121,24 +176,6 @@ export class ActorTools {
         inputSchema: toInputSchema(SearchActorContentsSchema),
       },
     ];
-  }
-
-  async handleGetCharacter(args: any): Promise<any> {
-    const { identifier } = GetActorSchema.parse(args);
-
-    this.logger.info('Getting character information', { identifier });
-
-    const characterData = await this.foundry.call('getCharacterInfo', {
-      characterName: identifier,
-    });
-
-    this.logger.debug('Successfully retrieved character data', {
-      characterId: characterData.id,
-      characterName: characterData.name,
-    });
-
-    // Format the response for Claude
-    return await this.formatCharacterResponse(characterData);
   }
 
   /**
@@ -266,28 +303,6 @@ export class ActorTools {
     }
 
     return entity;
-  }
-
-  async handleListCharacters(args: any): Promise<any> {
-    const { type, nameFilter } = ListActorsSchema.parse(args);
-
-    this.logger.info('Listing actors', { type, nameFilter });
-
-    const actors = await this.foundry.call('listActors', {
-      ...(type !== undefined ? { type } : {}),
-      ...(nameFilter !== undefined ? { nameFilter } : {}),
-    });
-
-    this.logger.debug('Successfully retrieved actor list', { count: actors.length });
-
-    return {
-      characters: actors.map((actor: any) => ({
-        id: actor.id,
-        name: actor.name,
-        type: actor.type,
-      })),
-      total: actors.length,
-    };
   }
 
   async handleSearchCharacterItems(args: any): Promise<any> {

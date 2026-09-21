@@ -524,3 +524,37 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   refusals, the miss, the delete with the not-found tail), verify-scene-sidecar 13/13,
   verify-teleporter-scene-fields 13/13, verify-read-tools 7/7, verify-toolsets 10/10,
   integration 80 passed / 6 skipped. Next: actors → search-compendium ×4 → the actor projections.
+- 2026-09-21 — **M8 actors → `manage-actors`** (`action`: list / get / update / delete): 4
+  tools → 1, the union **13,381** against the four's **13,403** (−0.2%; the naive fold was 13,621,
+  +1.6% — the update member's description had listed every field group its leaves already
+  name). The members ride their modules — `update-actor`'s contract, dnd5e guard and
+  confirmation stay in `src/tools/dnd5e/update-actor.ts` (`UpdateActorSchema` / `updateActor`;
+  the class is gone), `delete-actor`'s in `actor-creation.ts` (`DeleteActorSchema` /
+  `deleteActors`; the class keeps create-from-compendium + duplicate) — and `get` takes
+  `actorIdentifier` like the rest of the family (`get-actor` had been the one `identifier`),
+  the `shared` root leaf get and update advertise bare; delete keeps its strict `identifiers`
+  array. The reads that stay their own: get-actor-entity, export-actor, search-actor-contents
+  (the projections step folds the first two). tools/list **202,010**, names **86** (6,582 chars
+  — both M8 name targets met: ≤ 90 names, ≤ 7,000 chars). The §3 shapes: list is `N actor(s): id
+  name type`; get stays the compact-sheet JSON; update is one line naming the groups applied;
+  delete is `deletedLine` + the removed folders. **F45 rides this commit:** `src/page/actors.ts`
+  (2,257 lines, 14 exports) is split along its export groups into `src/page/actors/reads.ts`
+  (771: list / sheet / export / entity / search / find), `writes.ts` (837: create-from-compendium,
+  delete, duplicate, add / remove items), `update.ts` (665: updateActor / updateActorItem) with
+  an `index.ts` barrel (page/index.ts and dnd5e/advancement.ts import through it); each file
+  carries only the imports and constants it uses; the two pure spell builders are exported for
+  `reads.test.ts` (6 cases) beside the moved `writes.test.ts` (extractDamageProfile). Re-pointed:
+  stat-block-builder (21 lines), physical-item-builder (12), pc-builder (8), session-audit (7),
+  authoring-policy (4), plot-drift-check (3), token-cutout / session-scribe (1 each), the
+  artificer's illustration-builder (2, sibling, uncommitted), the six tool descriptions / leaves
+  that named an old actor tool (items, token, pc, create-actor-from-compendium), the group page's
+  hint, README (counts + three mentions), the measure test's strict-tool set, the error-handler /
+  system-detection tests' sample names, tools-reads.int.test + verify-read-tools (the first row's
+  name cell parsed as the §3 line prints it), tool-results, the registry tests (89 → 86);
+  skills-matrix 0 / 0. Live: verify-actor-tooling **47/47** (the new dispatch section: the list
+  row, the sheet JSON, an update naming its groups, the two refusals, the get miss, the strict
+  delete — a substring of the name deletes nothing where the fuzzy get finds it — then the
+  delete), verify-pc-build 70/70, verify-reskin-visibility 18/18, verify-effects-6 51/51,
+  verify-item-tooling 24/24, verify-actor-export 9/9, verify-read-tools 7/7, integration 80 passed
+  / 6 skipped (the split bundle under every one). Next: search-compendium ×4 → the actor
+  projections.

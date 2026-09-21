@@ -23,9 +23,8 @@ export const TOOLSETS = {
   settings: ['update-user', 'set-user-avatar', 'configure-dnd5e-settings', 'manage-calendar'],
   /** Actors — NPCs and PCs, their sheets, effects, activities, inventory, groups, art, ownership. */
   actors: [
-    'get-actor',
+    'manage-actors',
     'export-actor',
-    'list-actors',
     'get-actor-entity',
     'search-actor-contents',
     'create-actor-from-compendium',
@@ -35,8 +34,6 @@ export const TOOLSETS = {
     'level-up-pc',
     'create-pc-from-prefab',
     'duplicate-actor',
-    'delete-actor',
-    'update-actor',
     'update-actor-item',
     'manage-activity',
     'add-free-cast',

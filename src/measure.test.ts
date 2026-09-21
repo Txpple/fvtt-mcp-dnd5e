@@ -117,13 +117,15 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
 
   it('every target leaf advertises the rule its page handler implements (F22)', () => {
     // The page resolves an actor two ways (src/tools/_targets.ts): fuzzy everywhere except the
-    // three tools below, where a substring hit would be the wrong actor. A leaf may append a note,
-    // but the rule's text comes first, verbatim — so a tool cannot say "exact" and resolve fuzzy.
-    const STRICT_ACTOR_TOOLS = new Set(['set-actor-art', 'delete-actor', 'duplicate-actor']);
+    // tools below, where a substring hit would be the wrong actor (manage-actors' delete member
+    // takes `identifiers`, the strict array — a key this check does not read). A leaf may append
+    // a note, but the rule's text comes first, verbatim — so a tool cannot say "exact" and resolve
+    // fuzzy.
+    const STRICT_ACTOR_TOOLS = new Set(['set-actor-art', 'duplicate-actor']);
     const ACTOR_LEAVES = new Set(['actorIdentifier', 'actorIdentifiers', 'characterIdentifier']);
     // The same rule under another property name (renamed in M8; the rule is the contract today).
     const ACTOR_ALIASES: Record<string, string[]> = {
-      identifier: ['get-actor', 'export-actor'],
+      identifier: ['export-actor'],
       actor: ['post-item-card'],
       character: ['update-user'],
     };

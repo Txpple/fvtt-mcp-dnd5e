@@ -163,7 +163,7 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
     placeableAction({
       action: 'update',
       description:
-        'Edit placed tokens (not the prototype: update-actor) by ids and/or actorIds (every placed ' +
+        'Edit placed tokens (not the prototype: manage-actors update) by ids and/or actorIds (every placed ' +
         'copy of an actor) — ONE patch for every match: rotation, scale, art, elevation, hidden, ' +
         "lockRotation, position, name, nameplate / bar visibility, bars, ring, hp on the token's " +
         'own delta. Reports each token as it stands.',

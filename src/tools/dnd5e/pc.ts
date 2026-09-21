@@ -168,13 +168,13 @@ const INSPECT_PC_ADVANCEMENT_DESCRIPTION =
 
 const CREATE_PC_FROM_PREFAB_DESCRIPTION =
   'Create a PC by copying a PHB class pregen (`prefab` name, or packId + actorId) into the PC ' +
-  'folder; `abilities` and update-actor-shaped `modifications` apply to the copy. Premium packs ' +
+  'folder; `abilities` and manage-actors-update-shaped `modifications` apply to the copy. Premium packs ' +
   'only. Returns {success, from, actor, modificationsApplied, unresolvedScale, warnings}.';
 
 const LEVEL_UP_PC_DESCRIPTION =
   'Add one level to a PC in place: a class it has levels up, one it lacks is a multiclass add ' +
   '(2024 proficiency subset). Missing choices → a needsChoices[] dry run, actor untouched. ASI ' +
-  'bumps and feats are not applied (update-actor / add-feature). A failed required advancement is ' +
+  'bumps and feats are not applied (manage-actors update / add-feature). A failed required advancement is ' +
   'rolled back. Returns {success, actor, applied, needsChoices, unresolvedScale, errors, warnings}.';
 
 // ---------------------------------------------------------------------------

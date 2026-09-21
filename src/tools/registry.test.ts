@@ -117,7 +117,8 @@ describe('tool registry', () => {
     // − 4 (M8): create / update / list / delete-journal + delete-journal-page → manage-journals
     //   (action; list-journals' journalId / pageId modes are its `get`).
     // − 3 (M8): create / list / update / delete-scene → manage-scenes (action).
-    expect(names.length).toBe(89);
+    // − 3 (M8): list / get / update / delete-actor → manage-actors (action).
+    expect(names.length).toBe(86);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -300,7 +301,7 @@ describe('tool registry', () => {
   it('advertises the actor-editing tools by name', () => {
     const { tools } = build();
     const names = new Set(tools.map(t => t.name));
-    expect(names.has('update-actor')).toBe(true);
+    expect(names.has('manage-actors')).toBe(true);
     expect(names.has('update-actor-item')).toBe(true);
     expect(names.has('manage-activity')).toBe(true);
     expect(names.has('manage-effect')).toBe(true);
@@ -546,7 +547,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(89);
+    expect(tools.length).toBe(86);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

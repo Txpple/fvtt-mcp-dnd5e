@@ -30,8 +30,11 @@ describe.skipIf(!LIVE)('read-tool spine (live)', () => {
     journal = new JournalTools({ foundry, logger: noopLogger });
     playlist = new PlaylistTools({ foundry, logger: noopLogger });
 
-    const list = await character.handleListCharacters({});
-    firstActorName = list?.characters?.[0]?.name;
+    // the §3 list lines: the first row's name cell (JSON-quoted when it has a space)
+    const list = String(await character.handleManageActors({ action: 'list' }));
+    const firstRow = list.split('\n')[1] ?? '';
+    const cell = /^\S+ ("(?:[^"\\]|\\.)*"|\S+) /.exec(firstRow)?.[1];
+    firstActorName = cell?.startsWith('"') ? JSON.parse(cell) : cell;
   }, CONNECT_TIMEOUT_MS);
 
   afterAll(async () => {
@@ -44,14 +47,17 @@ describe.skipIf(!LIVE)('read-tool spine (live)', () => {
     expect(out.system ?? out.worldId ?? out.title).toBeTruthy();
   });
 
-  it('list-actors returns { characters: [] }', async () => {
-    const out = await character.handleListCharacters({});
-    expect(Array.isArray(out?.characters)).toBe(true);
+  it('manage-actors list answers the §3 header', async () => {
+    const out = String(await character.handleManageActors({ action: 'list' }));
+    expect(out).toMatch(/^\d+ actor\(s\)/);
   });
 
-  it('get-actor for the first character', async ctx => {
+  it('manage-actors get for the first actor', async ctx => {
     if (!firstActorName) return ctx.skip();
-    const out = await character.handleGetCharacter({ identifier: firstActorName });
+    const out: any = await character.handleManageActors({
+      action: 'get',
+      actorIdentifier: firstActorName,
+    });
     expect(out?.name).toBeTruthy();
   });
 

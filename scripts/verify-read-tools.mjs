@@ -72,15 +72,18 @@ try {
     o => o && (o.system || o.worldId || o.title)
   );
   const list = await check(
-    'list-actors',
-    () => character.handleListCharacters({}),
-    o => o && Array.isArray(o.characters)
+    'manage-actors list',
+    () => character.handleManageActors({ action: 'list' }),
+    o => typeof o === 'string' && /^\d+ actor\(s\)/.test(o)
   );
-  firstActorName = list?.characters?.[0]?.name;
+  // the §3 list lines: the first row's name cell (JSON-quoted when it has a space)
+  const firstRow = String(list ?? '').split('\n')[1] ?? '';
+  const cell = /^\S+ ("(?:[^"\\]|\\.)*"|\S+) /.exec(firstRow)?.[1];
+  firstActorName = cell?.startsWith('"') ? JSON.parse(cell) : cell;
   if (firstActorName) {
     await check(
-      `get-actor("${firstActorName}")`,
-      () => character.handleGetCharacter({ identifier: firstActorName }),
+      `manage-actors get("${firstActorName}")`,
+      () => character.handleManageActors({ action: 'get', actorIdentifier: firstActorName }),
       o => o && o.name
     );
   }

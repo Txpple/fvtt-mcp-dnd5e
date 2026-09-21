@@ -32,7 +32,7 @@ Tools used: **`create-pc`** (build + persist the PC, running advancement), **`cr
 (name lookup to confirm a class/species/background/spell exists in the premium books),
 `search-compendium-spells` (find spells by facet for casters), **`manage-items { action: "import" }`** (starting equipment —
 copy real gear from the PHB), `add-feature` (a feat taken at an ASI tier), `set-actor-art`,
-`set-actor-ownership` (assign the *player* as owner), `move-documents` (file the PC), `get-actor` /
+`set-actor-ownership` (assign the *player* as owner), `move-documents` (file the PC), `manage-actors` `get` /
 `get-actor-entity` (read back). Defer gear judgment to [[physical-item-builder]].
 
 ## Authoring policy — READ FIRST
@@ -198,7 +198,7 @@ off. (A spell added later to a known caster — a level-up pick via `manage-item
   starting-equipment package, **or** the gold option if the player would rather buy — ask. Worn armor /
   shield, the primary weapon(s), adventuring gear, any spellbook/focus. Defer item judgment to
   [[physical-item-builder]]. Equipped armor and a shield drive AC through the `armored` calc on
-  their own — only reach for `update-actor` AC fields when the sheet shows a value the block
+  their own — only reach for `manage-actors` `update` AC fields when the sheet shows a value the block
   disagrees with (an unarmored-defense class needs its calc, not a flat number).
 - **Feats** — for a PC **above level 3** whose player took a **feat** at an ASI tier (4/8/12/16/19),
   add it now: `add-feature` mode `compendium-features` with the feat name (it copies the real PHB feat),
@@ -226,7 +226,7 @@ off. (A spell added later to a known caster — a level-up pick via `manage-item
 
 ## Step 8 — Read back and confirm
 
-`get-actor` for the summary (HP/AC/abilities/skills/saves with real derived modifiers; class/species/
+`manage-actors` `get` for the summary (HP/AC/abilities/skills/saves with real derived modifiers; class/species/
 background; spell slots; inventory) and `get-actor-entity` to spot-check a feature's activities or a
 `@scale` value. **Confirm @scale resolved** — a level-scaling feature (sneak attack, rage, breath
 weapon) should show a real die, not `@scale.…` or 0. Report the full build — class/species/background,
@@ -245,7 +245,7 @@ so there's nothing to hand-patch.
 - **Call:** `create-pc-from-prefab` `{ name, prefab: "Fighter" }` (resolve by name) or
   `{ name, packId, actorId }` (explicit). Premium books only — copying an SRD character is refused.
 - **Tweak the copy, not the source:** pass `abilities` (final scores, overrides the pregen's array)
-  and/or any update-actor-shaped `modifications` (e.g. `hp`, `biography`, `currency`). They apply to the
+  and/or any manage-actors-update-shaped `modifications` (e.g. `hp`, `biography`, `currency`). They apply to the
   copy only.
 - **Finish:** assign the *player* as owner with `set-actor-ownership`; the art comes from the book
   already. To customise the build further (different species, a subclass earlier, swapped gear), either
@@ -282,7 +282,7 @@ place. It's the "ding, you levelled" workflow AND the way to multiclass.
   fill `choices` (keyed by the **class** level → advancement-id) and re-call. Ask the player for the
   meaningful picks.
 - **Ability scores & feats on level-up** — `level-up-pc` does NOT apply ASI ability bumps. When the
-  player takes an **ASI** at 4/8/12/16/19, raise the final scores yourself with `update-actor`; when they
+  player takes an **ASI** at 4/8/12/16/19, raise the final scores yourself with `manage-actors` `update`; when they
   take a **feat**, add it with `add-feature` (compendium-features). HP re-derives from the new CON.
 - **Multiclass spellcasting caveat** — the combined-caster slot table is dnd5e's job and mostly
   auto-derives, but spell *preparation* limits across two casters can get fiddly; read back and sanity-

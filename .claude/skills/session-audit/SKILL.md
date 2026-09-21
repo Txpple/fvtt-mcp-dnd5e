@@ -44,11 +44,11 @@ their intent; do not stop to litigate it.
 
 | Surface | Tools | What you are actually after |
 |---|---|---|
-| PC sheets | `get-actor` per PC | AC, HP, saves, **and whether they have Extra Attack yet** |
+| PC sheets | `manage-actors` `get` per PC | AC, HP, saves, **and whether they have Extra Attack yet** |
 | Magic items | `get-actor-entity` on every attuned/equipped magic item | the item's real mechanics |
 | The stash | `get-group` | loot nobody is carrying — that is a finding, not background |
 | The site | `manage-scenes { action: "list" }` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
-| The monsters | `get-actor` on the **placed token id** | that instance's delta, not the library actor |
+| The monsters | `manage-actors` `get` on the **placed token id** | that instance's delta, not the library actor |
 | Signature abilities | `get-actor-entity` on multiattack + the gimmick | the activity, not the name |
 | Intent | `manage-journals` `list` → `get` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |
 | The ground | `screenshot-scene` on combat maps only | chokepoints, approach length, sightlines |
@@ -58,7 +58,7 @@ Four things about this list are load-bearing:
 - **Extra Attack is the most-missed number in the whole audit.** A level-4 fighter, paladin, or
   ranger has *one* attack. A damage estimate that quietly assumes two is off by more than half, and
   every downstream conclusion inherits the error. Check the class level, every time.
-- **Read the placed token, not the base actor.** The tokens list gives ids that `get-actor` accepts,
+- **Read the placed token, not the base actor.** The tokens list gives ids that `manage-actors` `get` accepts,
   and an unlinked token carries its own delta — different gear, different HP, sometimes a different
   name. The library actor is not what the players will fight.
 - **Read the item, not its name.** "Ember-Touched Greatsword" is a common item with +1 fire and no
@@ -67,11 +67,11 @@ Four things about this list are load-bearing:
   is usually the best finding in the report — a named villain in the wrong room, a reveal that now
   fires out of order.
 
-**Read the numbers from `get-actor`, not from the campaign repo.** A PC's max HP (`hitPoints.max`,
+**Read the numbers from `manage-actors` `get`, not from the campaign repo.** A PC's max HP (`hitPoints.max`,
 with `tempmax` when an Aid is up), AC, and the damage / condition immunities, resistances and
 vulnerabilities (`defenses`, each with its `bypasses`) all come from the live sheet. If a read
 ever comes back `0`/`null` for something the sheet shows, name it in the report as a tool gap
-(design.md §2.1) and propose extending `get-actor` — never substitute a snapshot or a compendium
+(design.md §2.1) and propose extending `manage-actors` `get` — never substitute a snapshot or a compendium
 source silently.
 
 ## Step 2 — the arithmetic (the script owns this)

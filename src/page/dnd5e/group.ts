@@ -153,7 +153,7 @@ function resolveGroupStrict(identifier: string): any {
   if (actor.type !== 'group') {
     throw invalid(
       `"${actor.name}" (${actor.id}) is type "${actor.type}", not a group actor — ` +
-        `list-actors shows which actors are groups`
+        `manage-actors list shows which actors are groups`
     );
   }
   return actor;

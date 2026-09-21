@@ -27,9 +27,9 @@ play. The **item-specific** shaping rules are in "House rules for shaping items"
 Tools: **`manage-items { action: "import" }`** (copy from a compendium — the default path), **`search-compendium-items`**
 (faceted discovery by rarity / subtype / magical — the default way to *find* gear), **`search-compendium`**
 (broad name lookup) / **`get-compendium-entry`** (confirm the entry; you copy by the hit's `pack` + `id`),
-**`add-item`** (author from scratch — homebrew last resort only), **`update-actor`** (actor
+**`add-item`** (author from scratch — homebrew last resort only), **`manage-actors` `update`** (actor
 `currency`/coins), **`update-actor-item`** / **`manage-activity`** / **`manage-effect`** (modify a copied
-base into a custom item), **`get-actor` / `get-actor-entity`** (read back).
+base into a custom item), **`manage-actors` `get` / `get-actor-entity`** (read back).
 
 ## Target: actor inventory vs world library
 
@@ -187,7 +187,7 @@ them — and **pull an approximating icon from the compendium** (see House rules
 - **Worn armor and AC:** adding body armor does not change an actor's AC while a fixed AC override is
   set (how stat-block NPCs are authored). When authoring body armor with `add-item`, pass
   `wireAc: true` to put the actor back on armor-based AC. (A copied armor item is just an item —
-  clear the override with `update-actor` `ac: {override: null}` if needed; a shield's +2 applies
+  clear the override with `manage-actors` `update` `ac: {override: null}` if needed; a shield's +2 applies
   under every calculation except an override.)
 - **The description is PLAYER-VISIBLE and NOT audited — keep it innocuous (shared-policy rule 12).** A
   player can read an item's `system.description` the instant they see it, and `content-audit` doesn't
@@ -199,14 +199,14 @@ them — and **pull an approximating icon from the compendium** (see House rules
 
 ## Coins and containers
 
-- **Coins are actor-level, not an item.** Set a purse with `update-actor`
+- **Coins are actor-level, not an item.** Set a purse with `manage-actors` `update`
   `currency: { mode: "set"|"add", pp, gp, ep, sp, cp }`. A container can hold its own coins via the
   `currency` param.
 - **Nesting:** create/copy the `container` first, then place items with `container: "<name or id>"`.
 
 ## Read back and confirm
 
-`get-actor` for the inventory summary (equipped/attunement/quantity) and `get-actor-entity` to
+`manage-actors` `get` for the inventory summary (equipped/attunement/quantity) and `get-actor-entity` to
 spot-check one item's full system data (and that copied art/activities came across). Report what was
 built — each item, where it was copied from (or that it was authored), its rarity/bonus/attunement, and
 any coins — and flag anything you had to ask about or approximate.

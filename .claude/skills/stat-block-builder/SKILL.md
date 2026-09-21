@@ -16,14 +16,14 @@ defenses, senses, special traits, actions, spellcasting, effects, **its full inv
 biography, and a finishing pass — by sequencing the right tool calls. It adds NO new mechanics; every
 tool it calls holds its own correctness.
 
-Tools used: `create-actor-from-compendium` (prefab copy · prefab-as-base via `modifications`), `author-npc` (authored from scratch), `update-actor`, `add-feature` (features /
+Tools used: `create-actor-from-compendium` (prefab copy · prefab-as-base via `modifications`), `author-npc` (authored from scratch), `manage-actors` `update`, `add-feature` (features /
 compendium-features / spells), **`manage-items { action: "import" }`** (COPY gear from a compendium — the default for
 inventory), `add-item` (author homebrew gear — last resort), `manage-activity`, `manage-effect`,
 `apply-condition`, `set-actor-art`, `set-actor-ownership`, `move-documents`, `update-actor-item`
 (per-item corrections), the faceted discovery tools `search-compendium-creatures` /
 `search-compendium-spells` / `search-compendium-items` (find things to copy by **type + facet** —
 each searches the premium books only and never the SRD, so you don't reason about pack ids),
-`search-compendium` (broad **name** lookup) / `get-compendium-entry` (full entry), plus `get-actor` /
+`search-compendium` (broad **name** lookup) / `get-compendium-entry` (full entry), plus `manage-actors` `get` /
 `get-actor-entity` to read back. Defer item judgment to the [[physical-item-builder]] skill.
 
 > **Faceted discovery returns minimal hits.** `search-compendium-creatures` / `-spells` / `-items`
@@ -71,7 +71,7 @@ preference:
    (feeding the hit's `pack` + `id`) and you're done — jump to the finishing pass (Step 10). Real stats
    *and* art, zero authoring.
 2. **Prefab-as-base — custom from a copy.** No exact match but a close one exists? Copy that MM
-   creature and pass **`modifications`** (update-actor-shaped stat edits — cr/hp/ac/abilities/skills/
+   creature and pass **`modifications`** (manage-actors-update-shaped stat edits — cr/hp/ac/abilities/skills/
    defenses/biography/currency) in the SAME `create-actor-from-compendium` call to layer your changes onto the world
    copy; then add the distinguishing features/gear in the steps below. The edits land on the copy — the
    compendium entry is never touched. **This is the normal way to build a custom NPC:** start from real
@@ -117,14 +117,14 @@ scratch, after the books had no workable base):
 hpFormula, acMode, … — the NPC builder sets abilities, saves, HP, AC, movement, senses, CR, type,
 size, skills, languages, defenses in one call).
 
-## Step 3 — Actor-level edits (`update-actor`)
+## Step 3 — Actor-level edits (`manage-actors` `update`)
 
 For a **prefab-as-base** build (rung 2), the bulk of your stat changes already went in the
-`modifications` at create time — use this step only for what's left. Otherwise `update-actor` for
+`modifications` at create time — use this step only for what's left. Otherwise `manage-actors` `update` for
 anything the base builder doesn't cover or that you want to set precisely:
 `telepathy`, `legendaryActions`, `legendaryResistances`, `lair`, 2024 `habitat` / `treasure`,
 `biography`, `source`, and **`currency`** (the creature's coin purse — `{mode:"set", gp, sp, …}`). Use
-`update-actor` for ALL later actor-level corrections too (Set fields take `mode: replace|add|remove`).
+`manage-actors` `update` for ALL later actor-level corrections too (Set fields take `mode: replace|add|remove`).
 
 ## Step 4 — Special traits, class features & racial abilities (prefer compendium import)
 
@@ -189,7 +189,7 @@ premium books only, so no pack-id reasoning. Then import the confirmed names via
 
 For ongoing derived modifiers that aren't a base-stat value (a permanent +1 AC aura, granted resistance)
 → `manage-effect` (`create`, `changes: [{key, value, type}]`). Prefer putting *static* defenses (fixed
-resistances, a fixed AC) on the actor via `update-actor`; reserve effects for toggleable/derived bonuses.
+resistances, a fixed AC) on the actor via `manage-actors` `update`; reserve effects for toggleable/derived bonuses.
 Conditions the creature *starts* with (rare) → `apply-condition`.
 
 ### dnd5e 6.0 effects — when a trait is really a rule, a condition, or a timer
@@ -248,7 +248,7 @@ unknown Filter operator, a `roll.*` key in the wrong place); you choose the mode
   (a curse that deals the caster's `@abilities.cha.mod`); `"target"` uses the receiver's.
 - **`magical: true`** marks the effect as magical (the flag other automation reads — e.g. an
   antimagic-field or dispel handler; dnd5e itself only records it).
-- **Read it back.** `manage-effect` `list` and `get-actor` show each effect's `type`, `magical`,
+- **Read it back.** `manage-effect` `list` and `manage-actors` `get` show each effect's `type`, `magical`,
   `conditions` (parsed) and every rules change as a sentence ("+1d4 to attack rolls when
   roll.attack.type = ranged"). `content-audit` flags a dead rule (a rules type on a data path, or a core
   type on a roll category) — a silent no-op in play.
@@ -325,7 +325,7 @@ defer item judgment to [[physical-item-builder]]:
   `dnd5e.*` SRD, so no pack-id reasoning) → `manage-items` `import` the chosen hit (`packId` = its `pack`,
   `itemId` = its `id`, plus `actorIdentifier`). Copies bring correct stats AND art.
 - **Worn armor / shield** → `manage-items` `import` the real armor/shield. A stat block's fixed AC is
-  `ac: {override: N}` on `update-actor` (author-npc `acMode: "flat"` does the same); a creature whose
+  `ac: {override: N}` on `manage-actors` `update` (author-npc `acMode: "flat"` does the same); a creature whose
   AC should come from worn armor needs the override cleared (`ac: {override: null}` — the default
   calcs then use the armor) and natural armor is `ac: {natural: N}`. A shield's +2 applies under
   every calculation except an override. When you must AUTHOR body armor via `add-item`, pass
@@ -335,7 +335,7 @@ defer item judgment to [[physical-item-builder]]:
 - **Custom magic gear** → copy the closest base, then modify (`update-actor-item` / `manage-activity` /
   `manage-effect`) and rename. Author with `add-item` only as a last resort (and ASK first).
 - **Containers** → copy/create a `container` first, then place items with `container: "<name>"`.
-- **Coins** → already on the actor via `update-actor` `currency` (Step 3).
+- **Coins** → already on the actor via `manage-actors` `update` `currency` (Step 3).
 > **⚠ A magic item on the NPC is ALSO loot — now AUTOMATIC.** When you `manage-items` `import` / `add-item` a
 > magic item onto the NPC, the tool also mints a matching loose **world Item** (same stats + real icon)
 > in a loot folder so the party can loot it (shared-policy rule 9). Steer it with `lootCopyFolder`
@@ -344,7 +344,7 @@ defer item judgment to [[physical-item-builder]]:
 
 ## Step 9 — Biography
 
-If not set in Step 3, `update-actor` `biography` (HTML) — lore, tactics, appearance, roleplay notes.
+If not set in Step 3, `manage-actors` `update` `biography` (HTML) — lore, tactics, appearance, roleplay notes.
 
 ## Step 10 — Finishing pass
 
@@ -361,7 +361,7 @@ If not set in Step 3, `update-actor` `biography` (HTML) — lore, tactics, appea
 
 ## Step 11 — Read back and confirm
 
-`get-actor` for the summary (HP/AC/abilities/skills/saves show real derived modifiers; inventory shows
+`manage-actors` `get` for the summary (HP/AC/abilities/skills/saves show real derived modifiers; inventory shows
 equipped/attunement/quantity; coins show under currency) and `get-actor-entity` to spot-check a specific
 item's activities. Report the full build — base stats, traits, each action/attack, spells, effects,
 **inventory + loot + coins**, biography, art/ownership/folder — and flag anything you had to ask about
@@ -376,4 +376,4 @@ or approximate.
 - Keep `sourceRules` consistent across the whole build (**2024 by default** — see the shared authoring
   policy; pass `2014` only when the user explicitly wants legacy content).
 - Per-item corrections after the fact → `update-actor-item` (dot-path patch); per-actor corrections →
-  `update-actor`.
+  `manage-actors` `update`.

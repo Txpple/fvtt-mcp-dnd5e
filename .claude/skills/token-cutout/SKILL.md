@@ -25,7 +25,7 @@ survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade m
    `get-world-info`).
 2. Assign it. **`set-actor-art` sets the portrait AND the prototype token in one call** — `imagePath`
    is the portrait and doubles as the token texture unless `tokenImagePath` overrides it. So by default
-   **both** get set; say so plainly before you run it. Find the actor with `list-actors` / `get-actor`.
+   **both** get set; say so plainly before you run it. Find the actor with `manage-actors` `list` / `manage-actors` `get`.
    - **Token-only, keeping the existing portrait, IS possible** — read the current portrait back and
      pass it straight through. `export-actor` to a scratch path dumps the full document (`img`,
      `prototypeToken`, `folder`, ownership), so: `imagePath` = the `img` you just read,

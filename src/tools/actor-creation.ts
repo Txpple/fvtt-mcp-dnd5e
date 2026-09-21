@@ -5,6 +5,7 @@ import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
 import { assertNoSrdPacks } from '../utils/compendium-sources.js';
 import { formatUnresolvedScale } from '../utils/format.js';
+import { deletedLine } from '../utils/lines.js';
 
 export interface ActorCreationToolsOptions {
   foundry: FoundryBridge;
@@ -61,7 +62,7 @@ const CreateActorFromCompendiumSchema = z.object({
     .record(z.string(), z.any())
     .optional()
     .describe(
-      'update-actor-shaped edits applied to every copy (never the source): cr, hp, ac, abilities, ' +
+      'manage-actors-update-shaped edits applied to every copy (never the source): cr, hp, ac, abilities, ' +
         'skills, defenses …'
     ),
 });
@@ -114,7 +115,8 @@ const DuplicateActorSchema = z
     }
   });
 
-const DeleteActorSchema = z.object({
+/** The delete member of manage-actors (src/tools/actor.ts): its contract, description, handler. */
+export const DeleteActorSchema = z.object({
   identifiers: z.array(actorTargetStrict).min(1).describe('The actors to delete.'),
   removeEmptyFolder: z
     .boolean()
@@ -123,6 +125,31 @@ const DeleteActorSchema = z.object({
       'Also delete a bridge-created folder this leaves empty (default true); never a user folder.'
     ),
 });
+
+export const DELETE_ACTOR_DESCRIPTION =
+  'Permanently delete world actors (no undo). A bridge-created folder left empty is removed too ' +
+  'unless removeEmptyFolder:false.';
+
+export async function deleteActors(
+  foundry: FoundryBridge,
+  logger: Logger,
+  { identifiers, removeEmptyFolder }: z.output<typeof DeleteActorSchema>
+): Promise<string> {
+  logger.info('Deleting actor(s)', { identifiers, removeEmptyFolder });
+  const result = await foundry.call('deleteActor', { identifiers, removeEmptyFolder });
+  logger.info('Actor deletion completed', {
+    deletedCount: result.deletedCount,
+    notFound: result.notFound?.length || 0,
+    removedFolders: result.removedFolders?.length || 0,
+  });
+  const folders = Array.isArray(result.removedFolders) ? result.removedFolders : [];
+  return (
+    deletedLine(result, 'actor') +
+    (folders.length
+      ? `; removed emptied folder(s): ${folders.map((f: { name: string }) => f.name).join(', ')}`
+      : '')
+  );
+}
 
 export class ActorCreationTools {
   private foundry: FoundryBridge;
@@ -142,7 +169,7 @@ export class ActorCreationTools {
         name: 'create-actor-from-compendium',
         description:
           'Copy one or more actors from a compendium entry (packId + itemId, from search-compendium) ' +
-          'under names[]. `modifications` (update-actor-shaped: cr / hp / ac / abilities / skills / ' +
+          'under names[]. `modifications` (manage-actors-update-shaped: cr / hp / ac / abilities / skills / ' +
           'defenses / biography / currency) are applied to each world copy, never the source; ' +
           '`folder` files them. Premium packs only: an SRD pack is refused.',
         inputSchema: toInputSchema(CreateActorFromCompendiumSchema),
@@ -156,13 +183,6 @@ export class ActorCreationTools {
           '{default NONE, that user}; omitted, the source ownership is copied. A missing source is ' +
           'reported, not fatal. GM-only.',
         inputSchema: toInputSchema(DuplicateActorSchema),
-      },
-      {
-        name: 'delete-actor',
-        description:
-          'Permanently delete world actors (no undo). A bridge-created folder left empty is removed ' +
-          'too unless removeEmptyFolder:false. GM-only.',
-        inputSchema: toInputSchema(DeleteActorSchema),
       },
     ];
   }
@@ -310,61 +330,6 @@ export class ActorCreationTools {
       },
       message:
         summary + (rows ? `\n\n${rows}` : '') + ownerInfo + notFoundInfo + warningsInfo + errorInfo,
-    };
-  }
-
-  /**
-   * Handle permanent deletion of one or more world actors
-   */
-  async handleDeleteActor(args: any): Promise<any> {
-    const { identifiers, removeEmptyFolder } = DeleteActorSchema.parse(args);
-
-    this.logger.info('Deleting actor(s)', { identifiers, removeEmptyFolder });
-
-    const result = await this.foundry.call('deleteActor', {
-      identifiers,
-      removeEmptyFolder,
-    });
-
-    this.logger.info('Actor deletion completed', {
-      deletedCount: result.deletedCount,
-      notFound: result.notFound?.length || 0,
-      removedFolders: result.removedFolders?.length || 0,
-    });
-
-    return this.formatDeleteActorResponse(result);
-  }
-
-  /**
-   * Format actor deletion response
-   */
-  private formatDeleteActorResponse(result: any): any {
-    const count = result.deletedCount || 0;
-    const summary = `🗑️ Deleted ${count} actor${count === 1 ? '' : 's'}`;
-
-    const deletedList = (result.deleted || [])
-      .map((actor: any) => `• **${actor.name}** (${actor.id})`)
-      .join('\n');
-
-    const notFoundInfo =
-      result.notFound?.length > 0
-        ? `\n⚠️ Not found (nothing deleted): ${result.notFound.join(', ')}`
-        : '';
-
-    const foldersInfo =
-      result.removedFolders?.length > 0
-        ? `\n📁 Also removed emptied folder(s): ${result.removedFolders.map((f: any) => f.name).join(', ')}`
-        : '';
-
-    return {
-      summary,
-      success: result.success,
-      details: {
-        deleted: result.deleted || [],
-        notFound: result.notFound,
-        removedFolders: result.removedFolders,
-      },
-      message: summary + (deletedList ? `\n\n${deletedList}` : '') + notFoundInfo + foldersInfo,
     };
   }
 

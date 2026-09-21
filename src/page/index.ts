@@ -89,7 +89,7 @@ import {
   removeActorItems,
   updateActor,
   updateActorItem,
-} from './actors.js';
+} from './actors/index.js';
 import {
   searchCompendium,
   getAvailablePacks,

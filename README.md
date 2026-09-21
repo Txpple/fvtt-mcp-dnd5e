@@ -47,7 +47,7 @@ audit behind it, tool by tool, is in
 
 What changed at the tool surface:
 
-- **`update-actor` → `ac`** now speaks the 6.0 model: `override` (a fixed stat-block AC), `natural`
+- **`manage-actors` `update` → `ac`** (`update-actor` before M8) now speaks the 6.0 model: `override` (a fixed stat-block AC), `natural`
   (natural armor), `calcs` (the base calculations the actor qualifies for) and `formulas` (custom
   formulas). The 5.x `calc` / `flat` / `formula` fields are still accepted and translated, but
   deprecated.
@@ -77,7 +77,7 @@ validated against the 6.0.1 source, re-checked against the 6.0.3 diff, and prove
   value validated, and a core-type change on a roll category is refused as a write to nowhere),
   per-change `replacement` (origin / target), `magical`, and the full **expiry** vocabulary
   (`turnEnd` … + `shortRest` / `longRest` + `sourceStart` / `sourceEnd` / `targetStart` /
-  `targetEnd`). Read-back (`get-actor`, `manage-effect list`) shows each effect's type, conditions
+  `targetEnd`). Read-back (`manage-actors` `get`, `manage-effect list`) shows each effect's type, conditions
   and every rule as a sentence; `content-audit` flags a dead rules change.
 - **`manage-activity`** — a **`duration`** override with expiry the applied effects inherit, an area
   **`template`** + `affects`, and **`behaviors`** the template carries (`applyActiveEffect`,
@@ -124,7 +124,7 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 89 tools (14 named toolsets;
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 86 tools (14 named toolsets;
   `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
   instead of ~57k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
@@ -136,9 +136,9 @@ commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings
 / regions × `action`: create / list / update / delete, plus the region specials) replaces 35 tools
 for fewer advertised bytes than they cost; `manage-macros` (`action`: create / list / delete) the
 three macro tools; `manage-folders`, `manage-playlists`, `manage-cards`, `manage-rolltables`,
-`manage-items`, `manage-journals` and `manage-scenes` (`action`: create / import / list / get /
-update / delete as each family has them) the folder, playlist, cards, roll-table, world-item,
-journal and scene-document tools.
+`manage-items`, `manage-journals`, `manage-scenes` and `manage-actors` (`action`: create /
+import / list / get / update / delete as each family has them) the folder, playlist, cards,
+roll-table, world-item, journal, scene-document and actor tools.
 
 ---
 
@@ -344,7 +344,7 @@ Register the built MCP server in your Claude Code config. Copy
 
 ### Toolsets — advertise less
 
-The full surface is 89 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
+The full surface is 86 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
 schemas eagerly pays that on every registration before the first word (Claude Code defers them and
 only lists names, so it pays far less). A registration that only ever does part of the job can say
 so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
@@ -396,7 +396,7 @@ variable to set if something it needs is missing.
 
 ## Tools
 
-**89 tools total: 79 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
+**86 tools total: 76 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
@@ -448,7 +448,7 @@ The remaining Plane A tools cover world CRUD (`create-actor-from-compendium`/`au
 features / spells), `manage-items` (`import`: copy a real PHB/DMG item — art + stats — onto an actor
 or the sidebar; `create` from raw data), `add-item` (author structured weapons/armor/consumables/loot/containers),
 `manage-journals`/`create-quest-journal`, `manage-rolltables`, `manage-cards`, …), listing/search
-(`list-actors`, `search-compendium`, `manage-journals`, …), and organization (`manage-folders`,
+(`manage-actors`, `search-compendium`, `manage-journals`, …), and organization (`manage-folders`,
 `move-documents`, `bulk-delete`). See the `handlers` map in [`src/registry.ts`](src/registry.ts) for the full dispatch table.
 
 > Plane B file ops run over the file plane: Foundry's own FilePicker through the bridge on every

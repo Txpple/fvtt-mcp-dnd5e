@@ -31,7 +31,6 @@ import { DnD5eAddFeatureTool } from './tools/dnd5e/add-feature.js';
 import { DnD5eNpcTools } from './tools/dnd5e/npc.js';
 import { DnD5ePcTools } from './tools/dnd5e/pc.js';
 import { DnD5eFeaturesFromCompendiumTools } from './tools/dnd5e/features.js';
-import { DnD5eUpdateActorTool } from './tools/dnd5e/update-actor.js';
 import { DnD5eUpdateActorItemTool } from './tools/dnd5e/update-actor-item.js';
 import { DnD5eManageActivityTool } from './tools/dnd5e/manage-activity.js';
 import { DnD5eFreeCastTool } from './tools/dnd5e/free-cast.js';
@@ -108,7 +107,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     foundry,
     logger,
   });
-  const dnd5eUpdateActorTool = new DnD5eUpdateActorTool({ foundry, logger });
   const dnd5eUpdateActorItemTool = new DnD5eUpdateActorItemTool({ foundry, logger });
   const dnd5eManageActivityTool = new DnD5eManageActivityTool({ foundry, logger });
   const dnd5eFreeCastTool = new DnD5eFreeCastTool({ foundry, logger });
@@ -165,7 +163,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     ...actorCreationTools.getToolDefinitions(),
     ...dnd5eNpcTools.getToolDefinitions(),
     ...dnd5ePcTools.getToolDefinitions(),
-    ...dnd5eUpdateActorTool.getToolDefinitions(),
     ...dnd5eUpdateActorItemTool.getToolDefinitions(),
     ...dnd5eManageActivityTool.getToolDefinitions(),
     ...dnd5eFreeCastTool.getToolDefinitions(),
@@ -199,9 +196,9 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
 
   const handlers: Record<string, (args: any) => Promise<any>> = {
     // Actor reads (ActorTools)
-    'get-actor': args => actorTools.handleGetCharacter(args),
+    // the lifecycle as ONE tool (action list / get / update / delete; M8) + the reads that stay
+    'manage-actors': args => actorTools.handleManageActors(args),
     'export-actor': args => actorTools.handleExportActor(args),
-    'list-actors': args => actorTools.handleListCharacters(args),
     'get-actor-entity': args => actorTools.handleGetCharacterEntity(args),
     'search-actor-contents': args => actorTools.handleSearchCharacterItems(args),
 
@@ -239,8 +236,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // duplicate-actor: clone existing WORLD actors (toObject → rename → folder → ownership →
     // Actor.create) — the "(Sim)" sandbox path; full sheets stay rollable.
     'duplicate-actor': args => actorCreationTools.handleDuplicateActor(args),
-    'delete-actor': args => actorCreationTools.handleDeleteActor(args),
-    'update-actor': args => dnd5eUpdateActorTool.handleUpdateActor(args),
     'update-actor-item': args => dnd5eUpdateActorItemTool.handleUpdateActorItem(args),
     'manage-activity': args => dnd5eManageActivityTool.handleManageActivity(args),
     'add-free-cast': args => dnd5eFreeCastTool.handleAddFreeCast(args),

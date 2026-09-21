@@ -40,12 +40,12 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
     ],
     ['manage-scenes', 'updateScene', 'invalid', 'background.src must be a Data-relative path'],
     [
-      'get-actor',
+      'manage-actors',
       'getCharacterInfo',
       'not-found',
       'Actor "Gren" not found (did you mean "Grendel"?)',
     ],
-    ['update-actor', 'updateActor', 'invalid', 'invalid field path system.attributes.hp.vale'],
+    ['manage-actors', 'updateActor', 'invalid', 'invalid field path system.attributes.hp.vale'],
     [
       'set-actor-ownership',
       'setActorOwnership',
@@ -117,7 +117,7 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
       const msg = eh.toUserMessage(pageThrow('createActorFromCompendium', 'not-found', 'x'), tool);
       expect(msg).toContain('use search-compendium first to see available creatures');
     }
-    const other = eh.toUserMessage(pageThrow('updateActor', 'not-found', 'x'), 'update-actor');
+    const other = eh.toUserMessage(pageThrow('updateActor', 'not-found', 'x'), 'manage-actors');
     expect(other).not.toContain('use search-compendium first');
   });
 
@@ -126,7 +126,7 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
       code: 'connection',
       detail: 'net::ERR_CONNECTION_REFUSED at http://x/join',
     });
-    const msg = eh.toUserMessage(err, 'list-actors');
+    const msg = eh.toUserMessage(err, 'manage-actors');
     expect(msg).toBe(
       `net::ERR_CONNECTION_REFUSED at http://x/join [connection] ${HINTS.connection}`
     );
@@ -151,7 +151,7 @@ describe('ErrorHandler.toUserMessage — an uncoded error is its raw words, noth
       'getCharacterInfo',
       new Error('page.evaluate: Error: Actor "Gren" not found')
     );
-    expect(eh.toUserMessage(err, 'get-actor')).toBe('Actor "Gren" not found');
+    expect(eh.toUserMessage(err, 'manage-actors')).toBe('Actor "Gren" not found');
   });
 
   it('passes ZodError messages through verbatim', () => {

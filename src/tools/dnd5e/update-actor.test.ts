@@ -1,11 +1,13 @@
 /**
- * Unit tests for the update-actor tool: validation + forwarding to the bridge + response shaping.
- * The bridge seam is mocked (the page-side updateActor correctness is covered by the live
- * acceptance script), so these assert the tool contract, not Foundry behavior.
+ * Unit tests for manage-actors' update member (src/tools/dnd5e/update-actor.ts): validation +
+ * forwarding to the bridge + the one-line confirmation. The bridge seam is mocked (the page-side
+ * updateActor correctness is covered by the live acceptance script), so these assert the member's
+ * contract, not Foundry behavior. The member is driven the way the union drives it: the schema
+ * parses, then the handler runs.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DnD5eUpdateActorTool } from './update-actor.js';
+import { UpdateActorSchema, updateActor } from './update-actor.js';
 import { makeFoundry, makeLogger } from '../test-helpers.js';
 import { clearSystemCache } from '../../utils/system-detection.js';
 
@@ -17,17 +19,19 @@ function makeTool(response: any = {}) {
   const { foundry, calls } = makeFoundry((name: string) =>
     name === 'getWorldInfo' ? { system: 'dnd5e' } : response
   );
-  const tool = new DnD5eUpdateActorTool({ foundry, logger: makeLogger() });
+  const logger = makeLogger();
+  const tool = {
+    // async so a parse failure REJECTS (as the union's dispatch does) rather than throws
+    handleUpdateActor: async (args: unknown) =>
+      updateActor(foundry, logger, UpdateActorSchema.parse(args ?? {})),
+  };
   return { tool, calls };
 }
 
-describe('update-actor tool definition', () => {
-  it('advertises update-actor with a generated inputSchema', () => {
-    const { tool } = makeTool();
-    const def = tool.getToolDefinitions()[0];
-    expect(def.name).toBe('update-actor');
-    expect(def.inputSchema).toBeTruthy();
-    expect((def.inputSchema as any).required).toContain('actorIdentifier');
+describe('the update member contract', () => {
+  it('requires actorIdentifier', () => {
+    expect(() => UpdateActorSchema.parse({ cr: 5 })).toThrow();
+    expect(UpdateActorSchema.parse({ actorIdentifier: 'x' }).actorIdentifier).toBe('x');
   });
 });
 
@@ -48,9 +52,7 @@ describe('handleUpdateActor', () => {
     expect(call).toBeTruthy();
     expect(call?.[1].actorIdentifier).toBe('Barbed Devil');
     expect(call?.[1].abilities).toEqual({ str: 20 });
-    expect(res.success).toBe(true);
-    expect(res.applied).toEqual(['abilities', 'cr']);
-    expect(res.message).toContain('Barbed Devil');
+    expect(res).toBe('Updated "Barbed Devil" (a1, npc): abilities, cr');
   });
 
   it('forwards the prototype-token toggles (auto-rotate / ring)', async () => {
@@ -246,7 +248,7 @@ describe('handleUpdateActor', () => {
     });
     const call = calls.find(([n]) => n === 'updateActor');
     expect(call?.[1].spellcasting).toEqual({ level: 3, ability: 'int' });
-    expect(res.applied).toEqual(['spellcasting.level', 'spellcasting.ability']);
+    expect(res).toContain(': spellcasting.level, spellcasting.ability');
   });
 
   it('accepts a caster level of 0 (not a slot caster — the 2024-MM free-cast default)', async () => {
@@ -314,8 +316,8 @@ describe('handleUpdateActor', () => {
       abilities: { str: 18 },
       cr: 5,
     });
-    expect(res.warnings).toHaveLength(1);
-    expect(res.message).toContain('NPC-only');
+    expect(res).toContain('⚠️ 1 warning(s):');
+    expect(res).toContain('NPC-only');
   });
 
   it('surfaces a bad-img (404) warning from the page layer', async () => {
@@ -331,8 +333,8 @@ describe('handleUpdateActor', () => {
       actorIdentifier: 'Goblin',
       img: 'x/nope.webp',
     });
-    expect(res.warnings).toHaveLength(1);
-    expect(res.message).toContain('not found on the server');
+    expect(res).toContain('⚠️ 1 warning(s):');
+    expect(res).toContain('not found on the server');
   });
 
   it('rejects a missing actorIdentifier', async () => {

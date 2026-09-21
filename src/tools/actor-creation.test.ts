@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ActorCreationTools } from './actor-creation.js';
+import { ActorCreationTools, DeleteActorSchema, deleteActors } from './actor-creation.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 function build(response: any = {}) {
@@ -28,7 +28,7 @@ describe('ActorCreationTools.getToolDefinitions', () => {
       .getToolDefinitions()
       .map(t => t.name)
       .sort();
-    expect(names).toEqual(['create-actor-from-compendium', 'delete-actor', 'duplicate-actor']);
+    expect(names).toEqual(['create-actor-from-compendium', 'duplicate-actor']);
   });
 
   it('every definition has an object inputSchema', () => {
@@ -568,67 +568,60 @@ describe('handleDuplicateActor', () => {
   });
 });
 
-describe('handleDeleteActor', () => {
+describe('the delete member of manage-actors (deleteActors — driven as the union drives it)', () => {
+  const run = (responses: any, args: unknown) => {
+    const { foundry, calls } = makeFoundry(responses);
+    const out = deleteActors(foundry, makeLogger(), DeleteActorSchema.parse(args));
+    return { calls, out };
+  };
+
   it('forwards the deleteActor bridge call with defaults', async () => {
-    const { tools, calls } = build({
-      success: true,
-      deletedCount: 1,
-      deleted: [{ name: 'Goblin', id: 'g1' }],
-      notFound: [],
-    });
-    await tools.handleDeleteActor({ identifiers: ['Goblin'] });
+    const { calls, out } = run(
+      { success: true, deletedCount: 1, deleted: [{ name: 'Goblin', id: 'g1' }], notFound: [] },
+      { identifiers: ['Goblin'] }
+    );
+    await out;
     expect(calls[0][0]).toBe('deleteActor');
     expect(calls[0][1]).toMatchObject({ identifiers: ['Goblin'], removeEmptyFolder: true });
   });
 
-  it('formats the deleted list with singular wording for one actor', async () => {
-    const { tools } = build({
-      success: true,
-      deletedCount: 1,
-      deleted: [{ name: 'Goblin', id: 'g1' }],
-      notFound: [],
-    });
-    const out = await tools.handleDeleteActor({ identifiers: ['Goblin'] });
-    expect(out.message).toContain('🗑️ Deleted 1 actor');
-    expect(out.message).not.toContain('actors');
-    expect(out.message).toContain('• **Goblin** (g1)');
-  });
-
-  it('uses plural wording and appends not-found + removed-folder info', async () => {
-    const { tools } = build({
-      success: true,
-      deletedCount: 2,
-      deleted: [
-        { name: 'Goblin', id: 'g1' },
-        { name: 'Kobold', id: 'k1' },
-      ],
-      notFound: ['ghost'],
-      removedFolders: [{ name: 'Foundry MCP Creatures' }],
-    });
-    const out = await tools.handleDeleteActor({ identifiers: ['g1', 'k1', 'ghost'] });
-    expect(out.message).toContain('🗑️ Deleted 2 actors');
-    expect(out.message).toContain('⚠️ Not found (nothing deleted): ghost');
-    expect(out.message).toContain('📁 Also removed emptied folder(s): Foundry MCP Creatures');
+  it('confirms on one line: each actor, the not-found tail, the removed folders', async () => {
+    const one = run(
+      { success: true, deletedCount: 1, deleted: [{ name: 'Goblin', id: 'g1' }], notFound: [] },
+      { identifiers: ['Goblin'] }
+    );
+    expect(await one.out).toBe('Deleted 1 actor(s): "Goblin" (g1)');
+    const two = run(
+      {
+        success: true,
+        deletedCount: 2,
+        deleted: [
+          { name: 'Goblin', id: 'g1' },
+          { name: 'Kobold', id: 'k1' },
+        ],
+        notFound: ['ghost'],
+        removedFolders: [{ name: 'Foundry MCP Creatures' }],
+      },
+      { identifiers: ['g1', 'k1', 'ghost'] }
+    );
+    expect(await two.out).toBe(
+      'Deleted 2 actor(s): "Goblin" (g1), "Kobold" (k1) (1 not found: ghost); ' +
+        'removed emptied folder(s): Foundry MCP Creatures'
+    );
   });
 
   it('passes removeEmptyFolder=false through', async () => {
-    const { tools, calls } = build({ deletedCount: 0, deleted: [], notFound: [] });
-    await tools.handleDeleteActor({ identifiers: ['x'], removeEmptyFolder: false });
+    const { calls, out } = run(
+      { deletedCount: 0, deleted: [], notFound: [] },
+      { identifiers: ['x'], removeEmptyFolder: false }
+    );
+    await out;
     expect(calls[0][1].removeEmptyFolder).toBe(false);
   });
 
-  it('rejects an empty identifiers array', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteActor({ identifiers: [] })).rejects.toThrow();
-  });
-
-  it('rejects an identifier that is an empty string', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteActor({ identifiers: [''] })).rejects.toThrow();
-  });
-
-  it('rejects missing identifiers entirely', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteActor({})).rejects.toThrow();
+  it('the contract rejects an empty identifiers array, an empty-string identifier, no identifiers', () => {
+    expect(() => DeleteActorSchema.parse({ identifiers: [] })).toThrow();
+    expect(() => DeleteActorSchema.parse({ identifiers: [''] })).toThrow();
+    expect(() => DeleteActorSchema.parse({})).toThrow();
   });
 });
