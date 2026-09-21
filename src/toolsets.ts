@@ -24,8 +24,6 @@ export const TOOLSETS = {
   /** Actors — NPCs and PCs, their sheets, effects, activities, inventory, groups, art, ownership. */
   actors: [
     'manage-actors',
-    'export-actor',
-    'get-actor-entity',
     'search-actor-contents',
     'create-actor-from-compendium',
     'author-npc',

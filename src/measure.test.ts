@@ -125,7 +125,6 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
     const ACTOR_LEAVES = new Set(['actorIdentifier', 'actorIdentifiers', 'characterIdentifier']);
     // The same rule under another property name (renamed in M8; the rule is the contract today).
     const ACTOR_ALIASES: Record<string, string[]> = {
-      identifier: ['export-actor'],
       actor: ['post-item-card'],
       character: ['update-user'],
     };

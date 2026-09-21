@@ -24,7 +24,7 @@ inventory), `add-item` (author homebrew gear — last resort), `manage-activity`
 `"spells"` / `"items"` (find things to copy by **type + facet** —
 each searches the premium books only and never the SRD, so you don't reason about pack ids),
 `search-compendium` (broad **name** lookup) / `get-compendium-entry` (full entry), plus `manage-actors` `get` /
-`get-actor-entity` to read back. Defer item judgment to the [[physical-item-builder]] skill.
+`manage-actors` `get-entity` to read back. Defer item judgment to the [[physical-item-builder]] skill.
 
 > **Faceted discovery returns minimal hits.** `search-compendium` (`type` creatures / spells / items)
 > each return `results: [{ id, name, type, uuid, pack, img, facets }]` plus `totalFound` (the
@@ -362,7 +362,7 @@ If not set in Step 3, `manage-actors` `update` `biography` (HTML) — lore, tact
 ## Step 11 — Read back and confirm
 
 `manage-actors` `get` for the summary (HP/AC/abilities/skills/saves show real derived modifiers; inventory shows
-equipped/attunement/quantity; coins show under currency) and `get-actor-entity` to spot-check a specific
+equipped/attunement/quantity; coins show under currency) and `manage-actors` `get-entity` to spot-check a specific
 item's activities. Report the full build — base stats, traits, each action/attack, spells, effects,
 **inventory + loot + coins**, biography, art/ownership/folder — and flag anything you had to ask about
 or approximate.

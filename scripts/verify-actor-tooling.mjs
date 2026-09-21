@@ -864,8 +864,15 @@ try {
     });
     const names = new Set(tools.map(t => t.name));
     names.has('manage-actors') &&
-    ['list-actors', 'get-actor', 'update-actor', 'delete-actor'].every(n => !names.has(n))
-      ? pass('manage-actors: advertised; the four per-op tools gone')
+    [
+      'list-actors',
+      'get-actor',
+      'update-actor',
+      'delete-actor',
+      'get-actor-entity',
+      'export-actor',
+    ].every(n => !names.has(n))
+      ? pass('manage-actors: advertised; the six per-op tools gone')
       : fail('manage-actors: advertised', [...names].filter(n => /actor/.test(n)).join(','));
     const ma = args => dispatch('manage-actors', args);
     const npc = await makeTempNpc('ZZ-MCP-AT Union Orc');
@@ -877,6 +884,19 @@ try {
     got?.id === npc.id && got?.type === 'npc' && got?.basicInfo
       ? pass('manage-actors get: the compact sheet JSON', `${got.name} / ${got.type}`)
       : fail('manage-actors get', JSON.stringify(got).slice(0, 120));
+    // get-entity: one embedded item in full (the orc gets a dagger first)
+    await foundry.call('addActorItems', {
+      actorIdentifier: npc.id,
+      items: [{ name: 'ZZ Union Dagger', type: 'weapon' }],
+    });
+    const ent = await ma({
+      action: 'get-entity',
+      actorIdentifier: npc.id,
+      entityIdentifier: 'ZZ Union Dagger',
+    });
+    ent?.entityType === 'item' && ent?.name === 'ZZ Union Dagger' && ent?.type === 'weapon'
+      ? pass('manage-actors get-entity: one embedded item in full', `${ent.name} (${ent.id})`)
+      : fail('manage-actors get-entity', JSON.stringify(ent).slice(0, 120));
     const up = String(
       await ma({ action: 'update', actorIdentifier: npc.id, cr: 3, abilities: { str: 18 } })
     );
@@ -887,7 +907,7 @@ try {
     for (const [args, want] of [
       [
         { action: 'create', actorIdentifier: 'x' },
-        'action must be one of "list", "get", "update", "delete"',
+        'action must be one of "list", "get", "get-entity", "export", "update", "delete"',
       ],
       [
         { action: 'get', identifier: npc.id },

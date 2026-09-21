@@ -46,7 +46,7 @@ const ManageActivitySchema = z.object({
   activityId: z
     .string()
     .optional()
-    .describe('Required for edit / remove (from "list" or get-actor-entity).'),
+    .describe('Required for edit / remove (from "list" or manage-actors get-entity).'),
 
   // add — activity definition
   type: z

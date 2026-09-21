@@ -49,12 +49,7 @@ describe('ActorTools.getToolDefinitions', () => {
       .getToolDefinitions()
       .map(t => t.name)
       .sort();
-    expect(names).toEqual([
-      'export-actor',
-      'get-actor-entity',
-      MANAGE_ACTORS,
-      'search-actor-contents',
-    ]);
+    expect(names).toEqual([MANAGE_ACTORS, 'search-actor-contents']);
   });
 
   it('manage-actors: the action enum, the shared actorIdentifier leaf, closed members', () => {
@@ -62,7 +57,14 @@ describe('ActorTools.getToolDefinitions', () => {
       .tools.getToolDefinitions()
       .find(t => t.name === MANAGE_ACTORS)!;
     const schema = def.inputSchema as any;
-    expect(schema.properties.action.enum).toEqual(['list', 'get', 'update', 'delete']);
+    expect(schema.properties.action.enum).toEqual([
+      'list',
+      'get',
+      'get-entity',
+      'export',
+      'update',
+      'delete',
+    ]);
     expect(schema.properties.actorIdentifier.description).toContain('Actor');
     const byAction = Object.fromEntries(
       schema.anyOf.map((m: any) => [m.properties.action.const, m])
@@ -71,6 +73,12 @@ describe('ActorTools.getToolDefinitions', () => {
     expect(byAction.get.properties.actorIdentifier).toEqual({ type: 'string' });
     expect(byAction.get.required).toEqual(['action', 'actorIdentifier']);
     expect(byAction.update.properties.actorIdentifier).toEqual({ type: 'string' });
+    expect(byAction['get-entity'].required).toEqual([
+      'action',
+      'actorIdentifier',
+      'entityIdentifier',
+    ]);
+    expect(byAction.export.required).toEqual(['action', 'actorIdentifier', 'localPath']);
     // delete takes the STRICT array, its own leaf
     expect(byAction.delete.required).toEqual(['action', 'identifiers']);
     expect(byAction.delete.properties.identifiers.items.description).toContain('exact');
@@ -79,7 +87,7 @@ describe('ActorTools.getToolDefinitions', () => {
   it('refuses an unknown action and an unknown key by name against the selected member', async () => {
     const { run } = build();
     await expect(run({ action: 'create', actorIdentifier: 'x' })).rejects.toThrow(
-      'manage-actors: action must be one of "list", "get", "update", "delete" (got "create").'
+      'manage-actors: action must be one of "list", "get", "get-entity", "export", "update", "delete" (got "create").'
     );
     await expect(run({ action: 'get', identifier: 'x' })).rejects.toThrow(
       'manage-actors (action "get"): unknown argument "identifier" — it takes: action, actorIdentifier.'
@@ -96,7 +104,7 @@ describe('ActorTools.getToolDefinitions', () => {
   it('definitions with required fields expose a required array', () => {
     const { tools } = build();
     const byName = Object.fromEntries(tools.getToolDefinitions().map(d => [d.name, d]));
-    expect(byName['export-actor'].inputSchema.required).toEqual(['identifier', 'localPath']);
+    expect(byName['search-actor-contents'].inputSchema.required).toEqual(['characterIdentifier']);
   });
 });
 
@@ -143,34 +151,37 @@ function exportResponse(overrides: Record<string, any> = {}) {
   };
 }
 
-describe('handleExportActor', () => {
+describe('manage-actors export', () => {
   it('rejects missing localPath and empty identifier (zod)', async () => {
-    const { tools } = build();
-    await expect(tools.handleExportActor({ identifier: 'Gren' })).rejects.toThrow();
+    const { run } = build();
+    await expect(run({ action: 'export', actorIdentifier: 'Gren' })).rejects.toThrow();
     await expect(
-      tools.handleExportActor({ identifier: '', localPath: 'C:\\x.json' })
+      run({ action: 'export', actorIdentifier: '', localPath: 'C:\\x.json' })
     ).rejects.toThrow();
   });
 
   it('refuses a relative localPath before calling the bridge', async () => {
-    const { tools, calls } = build();
-    const res = await tools.handleExportActor({ identifier: 'Gren', localPath: 'party/gren.json' });
-    expect(res).toMatch(/^Refused: localPath must be an absolute path/);
+    const { calls, run } = build();
+    await expect(
+      run({ action: 'export', actorIdentifier: 'Gren', localPath: 'party/gren.json' })
+    ).rejects.toThrow(/^Refused: localPath must be an absolute path/);
     expect(calls).toHaveLength(0);
   });
 
   it('refuses to overwrite an existing file unless overwrite:true', async () => {
     const path = tmpFile('exists.json');
     await writeFile(path, 'sentinel');
-    const { tools, calls } = build({ exportActorData: exportResponse() });
+    const { calls, run } = build({ exportActorData: exportResponse() });
 
-    const refused = await tools.handleExportActor({ identifier: 'Gren', localPath: path });
-    expect(refused).toMatch(/already exists/);
+    await expect(
+      run({ action: 'export', actorIdentifier: 'Gren', localPath: path })
+    ).rejects.toThrow(/already exists/);
     expect(calls).toHaveLength(0);
     expect(await readFile(path, 'utf8')).toBe('sentinel');
 
-    const replaced = await tools.handleExportActor({
-      identifier: 'Gren',
+    const replaced = await run({
+      action: 'export',
+      actorIdentifier: 'Gren',
       localPath: path,
       overwrite: true,
     });
@@ -180,9 +191,9 @@ describe('handleExportActor', () => {
 
   it('writes the FULL document JSON and summarizes name/type/counts', async () => {
     const path = tmpFile('gren.json');
-    const { tools, calls } = build({ exportActorData: exportResponse() });
+    const { calls, run } = build({ exportActorData: exportResponse() });
 
-    const res = await tools.handleExportActor({ identifier: 'Gren', localPath: path });
+    const res = await run({ action: 'export', actorIdentifier: 'Gren', localPath: path });
 
     const call = callFor(calls, 'exportActorData');
     expect(call?.[1]).toEqual({ identifier: 'Gren' });
@@ -356,7 +367,7 @@ describe('manage-actors get', () => {
   });
 });
 
-describe('handleGetCharacterEntity', () => {
+describe('manage-actors get-entity', () => {
   const charWith = (extra: any) => ({
     getCharacterInfo: {
       id: 'c1',
@@ -369,7 +380,7 @@ describe('handleGetCharacterEntity', () => {
   });
 
   it('resolves an item entity by name and returns full item shape', async () => {
-    const { tools, calls } = build(
+    const { calls, run } = build(
       charWith({
         items: [
           {
@@ -388,8 +399,9 @@ describe('handleGetCharacterEntity', () => {
       })
     );
 
-    const out = await tools.handleGetCharacterEntity({
-      characterIdentifier: 'Aria',
+    const out = await run({
+      action: 'get-entity',
+      actorIdentifier: 'Aria',
       entityIdentifier: 'flaming sword',
     });
 
@@ -408,7 +420,7 @@ describe('handleGetCharacterEntity', () => {
   });
 
   it('surfaces item module flags (the flag-forensics read path) when the page reports them', async () => {
-    const { tools } = build(
+    const { run } = build(
       charWith({
         items: [
           {
@@ -423,8 +435,9 @@ describe('handleGetCharacterEntity', () => {
       })
     );
 
-    const out = await tools.handleGetCharacterEntity({
-      characterIdentifier: 'Aria',
+    const out = await run({
+      action: 'get-entity',
+      actorIdentifier: 'Aria',
       entityIdentifier: 'Old Greatsword',
     });
 
@@ -433,13 +446,14 @@ describe('handleGetCharacterEntity', () => {
   });
 
   it('resolves an action entity by name', async () => {
-    const { tools } = build(
+    const { run } = build(
       charWith({
         actions: [{ name: 'Power Attack', type: 'action', itemId: 'x' }],
       })
     );
-    const out = await tools.handleGetCharacterEntity({
-      characterIdentifier: 'Aria',
+    const out = await run({
+      action: 'get-entity',
+      actorIdentifier: 'Aria',
       entityIdentifier: 'Power Attack',
     });
     expect(out.entityType).toBe('action');
@@ -449,13 +463,14 @@ describe('handleGetCharacterEntity', () => {
   });
 
   it('resolves an effect entity by name', async () => {
-    const { tools } = build(
+    const { run } = build(
       charWith({
         effects: [{ id: 'ef1', name: 'Blessed', duration: { expiry: 'turnEnd' } }],
       })
     );
-    const out = await tools.handleGetCharacterEntity({
-      characterIdentifier: 'Aria',
+    const out = await run({
+      action: 'get-entity',
+      actorIdentifier: 'Aria',
       entityIdentifier: 'blessed',
     });
     expect(out.entityType).toBe('effect');
@@ -465,22 +480,22 @@ describe('handleGetCharacterEntity', () => {
   });
 
   it('throws when the entity is not found anywhere', async () => {
-    const { tools } = build(charWith({}));
+    const { run } = build(charWith({}));
     await expect(
-      tools.handleGetCharacterEntity({ characterIdentifier: 'Aria', entityIdentifier: 'Nope' })
-    ).rejects.toThrow(/not found on character "Aria"/);
+      run({ action: 'get-entity', actorIdentifier: 'Aria', entityIdentifier: 'Nope' })
+    ).rejects.toThrow(/not found on actor "Aria"/);
   });
 
-  it('rejects an empty characterIdentifier', async () => {
-    const { tools } = build();
+  it('rejects an empty actorIdentifier', async () => {
+    const { run } = build();
     await expect(
-      tools.handleGetCharacterEntity({ characterIdentifier: '', entityIdentifier: 'x' })
+      run({ action: 'get-entity', actorIdentifier: '', entityIdentifier: 'x' })
     ).rejects.toThrow();
   });
 
   it('rejects a missing entityIdentifier', async () => {
-    const { tools } = build();
-    await expect(tools.handleGetCharacterEntity({ characterIdentifier: 'Aria' })).rejects.toThrow();
+    const { run } = build();
+    await expect(run({ action: 'get-entity', actorIdentifier: 'Aria' })).rejects.toThrow();
   });
 });
 
@@ -577,7 +592,7 @@ describe('handleSearchCharacterItems', () => {
     expect(callFor(calls, 'searchCharacterItems')![1].limit).toBe(5);
   });
 
-  it('rejects an empty characterIdentifier', async () => {
+  it('rejects an empty actorIdentifier', async () => {
     const { tools } = build();
     await expect(tools.handleSearchCharacterItems({ characterIdentifier: '' })).rejects.toThrow();
   });

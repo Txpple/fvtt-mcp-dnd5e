@@ -45,11 +45,11 @@ their intent; do not stop to litigate it.
 | Surface | Tools | What you are actually after |
 |---|---|---|
 | PC sheets | `manage-actors` `get` per PC | AC, HP, saves, **and whether they have Extra Attack yet** |
-| Magic items | `get-actor-entity` on every attuned/equipped magic item | the item's real mechanics |
+| Magic items | `manage-actors` `get-entity` on every attuned/equipped magic item | the item's real mechanics |
 | The stash | `get-group` | loot nobody is carrying — that is a finding, not background |
 | The site | `manage-scenes { action: "list" }` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
 | The monsters | `manage-actors` `get` on the **placed token id** | that instance's delta, not the library actor |
-| Signature abilities | `get-actor-entity` on multiattack + the gimmick | the activity, not the name |
+| Signature abilities | `manage-actors` `get-entity` on multiattack + the gimmick | the activity, not the name |
 | Intent | `manage-journals` `list` → `get` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |
 | The ground | `screenshot-scene` on combat maps only | chokepoints, approach length, sightlines |
 

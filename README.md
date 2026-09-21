@@ -124,22 +124,22 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 83 tools (14 named toolsets;
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 81 tools (14 named toolsets;
   `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
   instead of ~57k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
 
-Underway in **3.0** (M8 of `docs/plan-3.0-consolidation.md`): folding the 17
-`list/create/update/delete-X` families into one tool each, selected by `action` (and `kind` for
-the placeables) — the biggest context lever left, and a change to every skill, so one family per
-commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings / sounds / notes / tokens
+Done in **3.0** (M8 of `docs/plan-3.0-consolidation.md`): the 17 `list/create/update/delete-X`
+families folded into one tool each, selected by `action` (and `kind` for the placeables) — the
+biggest context lever left, and a change to every skill, so one family per commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings / sounds / notes / tokens
 / regions × `action`: create / list / update / delete, plus the region specials) replaces 35 tools
 for fewer advertised bytes than they cost; `manage-macros` (`action`: create / list / delete) the
 three macro tools; `manage-folders`, `manage-playlists`, `manage-cards`, `manage-rolltables`,
 `manage-items`, `manage-journals`, `manage-scenes` and `manage-actors` (`action`: create /
 import / list / get / update / delete as each family has them) the folder, playlist, cards,
-roll-table, world-item, journal, scene-document and actor tools; `search-compendium` (`type`: any /
-creatures / spells / items) the four compendium searches.
+roll-table, world-item, journal, scene-document and actor tools (`manage-actors` also carries the
+`get-entity` and `export` reads); `search-compendium` (`type`: any / creatures / spells / items) the
+four compendium searches. 151 tools became 81.
 
 ---
 
@@ -345,7 +345,7 @@ Register the built MCP server in your Claude Code config. Copy
 
 ### Toolsets — advertise less
 
-The full surface is 83 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
+The full surface is 81 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
 schemas eagerly pays that on every registration before the first word (Claude Code defers them and
 only lists names, so it pays far less). A registration that only ever does part of the job can say
 so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
@@ -397,7 +397,7 @@ variable to set if something it needs is missing.
 
 ## Tools
 
-**83 tools total: 73 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
+**81 tools total: 71 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
@@ -413,7 +413,7 @@ placeables nor Playlists can express), ownership,
 folders/organization, macros, combat-tracker config, the dnd5e 6.0 **automation switches** and
 **in-world calendar** (`configure-dnd5e-settings`, `manage-calendar`), and 5e-specific helpers (NPC creation,
 **PC building & leveling**, feature/spell granting, structured inventory/loot
-authoring), **full-fidelity actor JSON export** (`export-actor`), and **per-combat session
+authoring), **full-fidelity actor JSON export** (`manage-actors` `export`), and **per-combat session
 analytics** (`get-combat-stats`, folded from the companion
 [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) module's stat stamps),
 **plus the asset-composition + reference-integrity tools**. Plane B (the host's file plane —

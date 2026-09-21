@@ -53,7 +53,7 @@ export class DnD5eUpdateActorItemTool {
         description:
           '[D&D 5e] Edit an item embedded on an actor: name, img, a dot-path `patch`, `deletePaths`. ' +
           'Activities have their own editor (manage-activity); the paths and ids come from ' +
-          'get-actor-entity.',
+          'manage-actors get-entity.',
         inputSchema: toInputSchema(UpdateActorItemSchema),
       },
     ];

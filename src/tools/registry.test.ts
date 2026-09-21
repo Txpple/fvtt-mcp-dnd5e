@@ -119,7 +119,8 @@ describe('tool registry', () => {
     // − 3 (M8): create / list / update / delete-scene → manage-scenes (action).
     // − 3 (M8): list / get / update / delete-actor → manage-actors (action).
     // − 3 (M8): search-compendium-creatures / -spells / -items → search-compendium (type).
-    expect(names.length).toBe(83);
+    // − 2 (M8): get-actor-entity / export-actor → manage-actors get-entity / export.
+    expect(names.length).toBe(81);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -550,7 +551,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(83);
+    expect(tools.length).toBe(81);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

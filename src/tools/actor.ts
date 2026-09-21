@@ -16,7 +16,7 @@ import { unionMember, unionTool, type UnionTool } from './_union.js';
 // ActorTools — the actor building block (§5): the lifecycle as ONE tool, `manage-actors` (action
 // list / get / update / delete; src/tools/_union.ts — M8 of the 3.0 plan; the update member's
 // contract lives in dnd5e/update-actor.ts, the delete member's in actor-creation.ts), plus the
-// reads that stay their own (get-actor-entity, export-actor, search-actor-contents). Actor
+// read that stays its own (search-actor-contents). Actor
 // *creation* lives in ActorCreationTools + DnD5eNpcTools (create-actor-from-compendium /
 // author-npc); world-Item CRUD and add/remove-from-actor live in ItemTools (src/tools/items.ts).
 //
@@ -31,7 +31,7 @@ const GetActorSchema = z.object({
 });
 
 const GetActorEntitySchema = z.object({
-  characterIdentifier: actorTarget,
+  actorIdentifier: actorTarget,
   entityIdentifier: z
     .string()
     .min(1)
@@ -39,7 +39,7 @@ const GetActorEntitySchema = z.object({
 });
 
 const ExportActorSchema = z.object({
-  identifier: actorTarget,
+  actorIdentifier: actorTarget,
   localPath: z
     .string()
     .min(1)
@@ -90,8 +90,8 @@ export class ActorTools {
     this.union = unionTool({
       name: MANAGE_ACTORS,
       description:
-        'World actors: list / get / update / delete (creation: create-actor-from-compendium / ' +
-        'author-npc / create-pc). GM-only writes.',
+        'World actors: list / get / get-entity / export / update / delete (creation: ' +
+        'create-actor-from-compendium / author-npc / create-pc). GM-only writes.',
       discriminators: ['action'],
       shared: { actorIdentifier: actorTarget },
       members: [
@@ -118,7 +118,7 @@ export class ActorTools {
           description:
             'Compact sheet read: abilities, skills, saves, AC, HP, weapon-mastery kinds, action ' +
             'names, effects and conditions by name, every item with name / type / equipped / ' +
-            'attunement / mastery (no descriptions; one in full: get-actor-entity).',
+            'attunement / mastery (no descriptions; one in full: get-entity).',
           schema: GetActorSchema,
           handler: async ({ actorIdentifier }) => {
             log.info('Getting character information', { identifier: actorIdentifier });
@@ -127,6 +127,24 @@ export class ActorTools {
             });
             return this.formatCharacterResponse(characterData);
           },
+        }),
+        unionMember({
+          select: { action: 'get-entity' },
+          description:
+            'One item, action, spell or effect on an actor, in full: description, system data, ' +
+            'module flags.',
+          schema: GetActorEntitySchema,
+          handler: parsed => this.getEntity(parsed),
+        }),
+        unionMember({
+          select: { action: 'export' },
+          description:
+            'Write one actor to a local JSON file as a full-fidelity Foundry export (system, ' +
+            'embedded items with uses and flags, effects, prototype token, ownership, the ' +
+            "exportSource envelope — round-trips through the sheet's Import Data). An existing " +
+            'file is refused unless overwrite:true.',
+          schema: ExportActorSchema,
+          handler: parsed => this.exportActor(parsed),
         }),
         unionMember({
           select: { action: 'update' },
@@ -153,22 +171,6 @@ export class ActorTools {
     return [
       this.union.def,
       {
-        name: 'get-actor-entity',
-        description:
-          'One item, action, spell or effect on an actor, in full: description, system data, module ' +
-          'flags.',
-        inputSchema: toInputSchema(GetActorEntitySchema),
-      },
-      {
-        name: 'export-actor',
-        description:
-          'Write one actor to a local JSON file as a full-fidelity Foundry export: system, embedded ' +
-          'items with uses and flags, effects, prototype token, ownership, the exportSource envelope ' +
-          "(round-trips through the sheet's Import Data). Refuses an existing file unless " +
-          'overwrite:true.',
-        inputSchema: toInputSchema(ExportActorSchema),
-      },
-      {
         name: 'search-actor-contents',
         description:
           "Search an actor's items, spells, actions and effects by text and type; matches come back " +
@@ -178,28 +180,30 @@ export class ActorTools {
     ];
   }
 
-  /**
-   * Tool: export-actor
-   * Full-fidelity native JSON export of one actor to a local file (the backup path).
-   */
-  async handleExportActor(args: any): Promise<string> {
-    const parsed = ExportActorSchema.parse(args ?? {});
+  /** The export member: a full-fidelity native JSON export of one actor to a local file. */
+  private async exportActor(parsed: z.output<typeof ExportActorSchema>): Promise<string> {
     if (!isAbsolute(parsed.localPath)) {
-      return `Refused: localPath must be an absolute path (got "${parsed.localPath}").`;
+      throw new FormattedToolError(
+        `Refused: localPath must be an absolute path (got "${parsed.localPath}").`
+      );
     }
     if (!parsed.overwrite && (await fileExists(parsed.localPath))) {
-      return `Refused: local file "${parsed.localPath}" already exists. Pass overwrite:true to replace it.`;
+      throw new FormattedToolError(
+        `Refused: local file "${parsed.localPath}" already exists. Pass overwrite:true to replace it.`
+      );
     }
 
-    this.logger.info('Exporting actor', { identifier: parsed.identifier });
-    const res = await this.foundry.call('exportActorData', { identifier: parsed.identifier });
+    this.logger.info('Exporting actor', { identifier: parsed.actorIdentifier });
+    const res = await this.foundry.call('exportActorData', { identifier: parsed.actorIdentifier });
 
     const bytes = Buffer.from(JSON.stringify(res.data, null, 2), 'utf8');
     try {
       await mkdir(dirname(parsed.localPath), { recursive: true });
       await writeFile(parsed.localPath, bytes);
     } catch (err) {
-      return `export-actor failed writing "${parsed.localPath}": ${(err as Error).message}`;
+      throw new FormattedToolError(
+        `manage-actors export failed writing "${parsed.localPath}": ${(err as Error).message}`
+      );
     }
 
     return (
@@ -208,14 +212,16 @@ export class ActorTools {
     );
   }
 
-  async handleGetCharacterEntity(args: any): Promise<any> {
-    const { characterIdentifier, entityIdentifier } = GetActorEntitySchema.parse(args);
-
-    this.logger.info('Getting character entity', { characterIdentifier, entityIdentifier });
+  /** The get-entity member: one item / action / spell / effect on an actor, in full. */
+  private async getEntity({
+    actorIdentifier,
+    entityIdentifier,
+  }: z.output<typeof GetActorEntitySchema>): Promise<Record<string, unknown>> {
+    this.logger.info('Getting character entity', { actorIdentifier, entityIdentifier });
 
     // First get the character
     const characterData = await this.foundry.call('getCharacterInfo', {
-      characterName: characterIdentifier,
+      characterName: actorIdentifier,
     });
 
     // Try to find the entity in different collections
@@ -253,7 +259,7 @@ export class ActorTools {
 
     if (!entity) {
       throw new FormattedToolError(
-        `Entity "${entityIdentifier}" not found on character "${characterIdentifier}". Tried items, actions, and effects.`
+        `Entity "${entityIdentifier}" not found on actor "${actorIdentifier}". Tried items, actions, and effects.`
       );
     }
 
@@ -355,7 +361,7 @@ export class ActorTools {
       response.spellcasting = this.formatSpellcasting(characterData.spellcasting);
     }
 
-    // Exclude itemVariants and itemToggles - these are verbose and can be fetched via get-actor-entity if needed
+    // Exclude itemVariants and itemToggles - these are verbose and can be fetched via get-entity if needed
 
     return response;
   }
@@ -377,7 +383,7 @@ export class ActorTools {
         formatted.slots = entry.slots;
       }
 
-      // Format spells - minimal data for browsing, use get-actor-entity for full details
+      // Format spells - minimal data for browsing, use get-entity for full details
       if (entry.spells && entry.spells.length > 0) {
         formatted.spells = entry.spells.map((spell: any) => {
           const spellData: any = {
@@ -476,7 +482,7 @@ export class ActorTools {
 
       // dnd5e 2024 weapons: the mastery property (vex/topple/graze/...) — whether the ACTOR can
       // use it is stats.weaponMasteries (the weapon-kind unlock); surfacing both makes mastery
-      // questions a single get-actor call instead of a get-actor-entity per weapon.
+      // questions a single get call instead of a get-entity per weapon.
       if (typeof item.system?.mastery === 'string' && item.system.mastery) {
         formattedItem.mastery = item.system.mastery;
       }
@@ -486,7 +492,7 @@ export class ActorTools {
   }
 
   // Minimal projection: name-level facts plus the dnd5e 6.0 hooks a skill needs to reason about
-  // an effect without get-actor-entity — its type when not a plain "base" effect, whether it is
+  // an effect without get-entity — its type when not a plain "base" effect, whether it is
   // conditional, and the roll-time rules it carries in readable form.
   private formatEffects(effects: any[]): any[] {
     return effects.map(effect => {

@@ -1,6 +1,6 @@
 // Live verification for the 2026-07-08 actor-read/folder-guard fixes (four in one pass):
 //
-//   1. TOKEN-ID READS — getCharacterInfo (the page fn behind get-actor AND get-actor-entity) now
+//   1. TOKEN-ID READS — getCharacterInfo (the page fn behind manage-actors get AND get-entity) now
 //      resolves via the shared fuzzy resolver, so a PLACED TOKEN id reaches that token's
 //      ActorDelta-backed actor (the path its tool description always advertised; it used to throw
 //      "Character not found"). Proves delta isolation: the token read differs from the base read.
@@ -13,7 +13,7 @@
 //      unresolved @scale (class ScaleValue advancement is intact, roll data resolves natively).
 //      NPC reporting is covered by verify-scale-report.mjs + unit tests (unchanged literal path).
 //   4. ITEM FLAGS READ — getCharacterInfo items now carry sanitized module `flags` (the
-//      item-piles NaN forensic read path; get-actor-entity surfaces them, get-actor drops them).
+//      item-piles NaN forensic read path; get-entity surfaces them, get drops them).
 //
 // Drives a real headless session through the foundry.call seam (fresh dist/, no CC restart).
 // foundry.evaluate is used ONLY to stage fixtures (place a token, mint legacy-shaped folders,
@@ -84,7 +84,9 @@ try {
   );
 
   // --- 1. token-id reads through getCharacterInfo -------------------------------------------
-  console.log('\n# getCharacterInfo resolves a PLACED TOKEN id (get-actor/get-actor-entity path)');
+  console.log(
+    '\n# getCharacterInfo resolves a PLACED TOKEN id (manage-actors get / get-entity path)'
+  );
   tokenId = await f.evaluate(async id => {
     const actor = game.actors.get(id);
     const scene = game.scenes.active;

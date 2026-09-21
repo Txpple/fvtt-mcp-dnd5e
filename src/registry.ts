@@ -198,8 +198,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // Actor reads (ActorTools)
     // the lifecycle as ONE tool (action list / get / update / delete; M8) + the reads that stay
     'manage-actors': args => actorTools.handleManageActors(args),
-    'export-actor': args => actorTools.handleExportActor(args),
-    'get-actor-entity': args => actorTools.handleGetCharacterEntity(args),
     'search-actor-contents': args => actorTools.handleSearchCharacterItems(args),
 
     // World-item lifecycle (ItemTools): ONE tool for the sidebar Items (action create / list / get

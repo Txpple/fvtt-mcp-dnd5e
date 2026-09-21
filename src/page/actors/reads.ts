@@ -356,7 +356,7 @@ function extractDerived(actor: any): Record<string, any> | undefined {
  * Detailed character info for one actor, resolved via the shared fuzzy resolver
  * (exact id, exact name, substring, then PLACED-TOKEN id → that token's
  * ActorDelta-backed actor — the same path searchCharacterItems already had; the
- * ad-hoc game.actors-only lookup here was why get-actor/get-actor-entity threw
+ * ad-hoc game.actors-only lookup here was why manage-actors get / get-entity threw
  * "Character not found" on the token ids their descriptions advertise).
  * Payload mirrors the bridge query: { characterName?, characterId? }.
  * Returns the full CharacterInfo shape the Node character tool consumes:
@@ -396,7 +396,7 @@ export function getCharacterInfo(args: {
         ...(item.img ? { img: item.img } : {}),
         system: sanitize(toSource(item).system),
         // Module flags (dnd5e riders, item-piles transfer residue, …) — surfaced by
-        // get-actor-entity for flag forensics; get-actor's minimal projection drops them.
+        // the get-entity action for flag forensics; get's minimal projection drops them.
         ...(flags && Object.keys(flags).length > 0 ? { flags } : {}),
       };
     }),

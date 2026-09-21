@@ -27,10 +27,10 @@ survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade m
    is the portrait and doubles as the token texture unless `tokenImagePath` overrides it. So by default
    **both** get set; say so plainly before you run it. Find the actor with `manage-actors` `list` / `manage-actors` `get`.
    - **Token-only, keeping the existing portrait, IS possible** — read the current portrait back and
-     pass it straight through. `export-actor` to a scratch path dumps the full document (`img`,
+     pass it straight through. `manage-actors` `export` to a scratch path dumps the full document (`img`,
      `prototypeToken`, `folder`, ownership), so: `imagePath` = the `img` you just read,
      `tokenImagePath` = the new cutout. The portrait write becomes a no-op and only the token changes.
-     (`export-actor` is also how you tell two same-named actors apart — `folder` gives it away.)
+     (`manage-actors` `export` is also how you tell two same-named actors apart — `folder` gives it away.)
    - **Portrait-only** is the plain `applyToToken: false`.
 3. **The inherited prototype config is normalized for you.** A 2024 `dnd-monster-manual` copy ships
    a dynamic ring on and `texture.scaleX`/`scaleY` at 2 (a small subject on a big plate — wrong for a

@@ -108,7 +108,7 @@ campaign-repos memory — active: `fvtt-campaign-greenrest`). **Pull the campaig
      "the docs", copy the eight files to a `Desktop\<Campaign> Session N` folder.
 6. **Snapshot the party (owner directives 2026-08-06 + 2026-08-16)** — two artifacts per
    session date, both committed:
-   - **Full JSON backup (the durable record):** for EACH party PC, call the `export-actor`
+   - **Full JSON backup (the durable record):** for EACH party PC, call the `manage-actors` `export`
      MCP tool → `<campaign-repo>\party-snapshots\YYYY-MM-DD\<PC>.json` (`overwrite: true`
      when re-running the same date). This is the complete native Foundry export — every
      item's `system.uses.value` (wand charges, potion counts), effects, attunement,
@@ -116,7 +116,7 @@ campaign-repos memory — active: `fvtt-campaign-greenrest`). **Pull the campaig
      roster only, per the campaign repo's PC rules; never DM test PCs like Salyth.
      (Origin lesson, session 3: "how many charges on Gren's Wand of Magic Missiles?" was
      unanswerable from the `.md` summary and had to be dug out of the transcript. The JSON
-     carries what nobody thought to transcribe. If `export-actor` is missing from the tool
+     carries what nobody thought to transcribe. If `manage-actors` `export` is missing from the tool
      list, the MCP server predates it — restart Claude Code on server ≥ 2026-08-26.)
    - **Human digest (the story):** `party-snapshots\YYYY-MM-DD.md` from the LIVE sheets
      (`manage-actors` `get`). Per PC: class/subclass + LEVEL, HP max, AC, the six ability scores,

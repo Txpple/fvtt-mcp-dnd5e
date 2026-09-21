@@ -29,7 +29,7 @@ Tools: **`manage-items { action: "import" }`** (copy from a compendium — the d
 (broad name lookup) / **`get-compendium-entry`** (confirm the entry; you copy by the hit's `pack` + `id`),
 **`add-item`** (author from scratch — homebrew last resort only), **`manage-actors` `update`** (actor
 `currency`/coins), **`update-actor-item`** / **`manage-activity`** / **`manage-effect`** (modify a copied
-base into a custom item), **`manage-actors` `get` / `get-actor-entity`** (read back).
+base into a custom item), **`manage-actors` `get` / `manage-actors` `get-entity`** (read back).
 
 ## Target: actor inventory vs world library
 
@@ -206,7 +206,7 @@ them — and **pull an approximating icon from the compendium** (see House rules
 
 ## Read back and confirm
 
-`manage-actors` `get` for the inventory summary (equipped/attunement/quantity) and `get-actor-entity` to
+`manage-actors` `get` for the inventory summary (equipped/attunement/quantity) and `manage-actors` `get-entity` to
 spot-check one item's full system data (and that copied art/activities came across). Report what was
 built — each item, where it was copied from (or that it was authored), its rarity/bonus/attunement, and
 any coins — and flag anything you had to ask about or approximate.

@@ -33,7 +33,7 @@ Tools used: **`create-pc`** (build + persist the PC, running advancement), **`cr
 `search-compendium { type: "spells" }` (find spells by facet for casters), **`manage-items { action: "import" }`** (starting equipment —
 copy real gear from the PHB), `add-feature` (a feat taken at an ASI tier), `set-actor-art`,
 `set-actor-ownership` (assign the *player* as owner), `move-documents` (file the PC), `manage-actors` `get` /
-`get-actor-entity` (read back). Defer gear judgment to [[physical-item-builder]].
+`manage-actors` `get-entity` (read back). Defer gear judgment to [[physical-item-builder]].
 
 ## Authoring policy — READ FIRST
 
@@ -227,7 +227,7 @@ off. (A spell added later to a known caster — a level-up pick via `manage-item
 ## Step 8 — Read back and confirm
 
 `manage-actors` `get` for the summary (HP/AC/abilities/skills/saves with real derived modifiers; class/species/
-background; spell slots; inventory) and `get-actor-entity` to spot-check a feature's activities or a
+background; spell slots; inventory) and `manage-actors` `get-entity` to spot-check a feature's activities or a
 `@scale` value. **Confirm @scale resolved** — a level-scaling feature (sneak attack, rage, breath
 weapon) should show a real die, not `@scale.…` or 0. Report the full build — class/species/background,
 final abilities, HP, the chosen skills/feats/fighting-style/ancestry, spells, equipment,

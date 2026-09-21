@@ -1,4 +1,4 @@
-// LIVE acceptance for export-actor — driven through the TOOL REGISTRY (the soundscape lesson:
+// LIVE acceptance for manage-actors export — driven through the TOOL REGISTRY (the soundscape lesson:
 // a tool is done when the FORMATTED output is right, not when the page function returns).
 //
 // Proves the v14 gotcha fix: toObject() pre-defines flags.exportSource as a getter-only
@@ -66,8 +66,9 @@ try {
   if (!target) throw new Error('no target actor');
   console.log(`[verify-actor-export] target="${target}" → ${outPath}\n`);
 
-  const out = await registry.dispatch('export-actor', {
-    identifier: target,
+  const out = await registry.dispatch('manage-actors', {
+    action: 'export',
+    actorIdentifier: target,
     localPath: outPath,
     overwrite: true,
   });
@@ -86,11 +87,18 @@ try {
     JSON.stringify(es)
   );
 
-  const refuse = await registry.dispatch('export-actor', {
-    identifier: target,
-    localPath: outPath,
-  });
-  check('second write without overwrite refuses', /already exists/.test(refuse), refuse);
+  // a refusal is an error (§3), never prose in a success shape
+  let refuse = '';
+  try {
+    await registry.dispatch('manage-actors', {
+      action: 'export',
+      actorIdentifier: target,
+      localPath: outPath,
+    });
+  } catch (e) {
+    refuse = e?.message ?? String(e);
+  }
+  check('second write without overwrite refuses (an error)', /already exists/.test(refuse), refuse);
 } catch (err) {
   fail++;
   console.error(`\n[verify-actor-export] 💥 ${err.message}`);

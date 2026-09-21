@@ -25,10 +25,21 @@ const mdOut = argValue('--md');
 const jsonOut = argValue('--json');
 
 const toolToSet = toolsetOf();
-const ALL_TOOLS = buildRegistry().tools.map(t => t.name);
-const KNOWN = new Set(ALL_TOOLS);
+const REGISTRY_TOOLS = buildRegistry().tools;
+const ALL_TOOLS = REGISTRY_TOOLS.map(t => t.name);
+// A union tool's discriminator values (`action` / `kind` / `type` enums, M8) are names a skill
+// may write in backticks beside the tool — `manage-actors` `get-entity` — and are not stale.
+const ACTIONS = new Set(
+  REGISTRY_TOOLS.flatMap(t =>
+    Object.values(t.inputSchema?.properties ?? {}).flatMap(p =>
+      Array.isArray(p?.enum) ? p.enum : []
+    )
+  )
+);
+const TOOL_NAMES = new Set(ALL_TOOLS);
+const KNOWN = new Set([...ALL_TOOLS, ...ACTIONS]);
 // The verbs the registry uses — a backticked `verb-noun` in a skill that starts with one of these
-// and is not a registered tool is probably a stale tool name.
+// and is not a registered tool (or a union action) is probably a stale tool name.
 const VERBS = new Set(ALL_TOOLS.map(t => t.split('-')[0]));
 
 const skills = readSkillDescriptions();
@@ -61,7 +72,7 @@ for (const { skill } of skills) {
     if (found.size) rec.byFile[rel] = [...found].sort();
     for (const t of found) rec.tools.add(t);
     for (const m of text.matchAll(/mcp__[A-Za-z0-9-]+__([a-z0-9-]+)/g)) {
-      if (!KNOWN.has(m[1])) unresolved.push({ skill, file: rel, name: m[1] });
+      if (!TOOL_NAMES.has(m[1])) unresolved.push({ skill, file: rel, name: m[1] });
     }
     for (const m of text.matchAll(/`([a-z]+(?:-[a-z0-9]+)+)`/g)) {
       if (VERBS.has(m[1].split('-')[0]) && !KNOWN.has(m[1])) {
