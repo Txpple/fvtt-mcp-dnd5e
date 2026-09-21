@@ -27,7 +27,7 @@ const makeLogger = (): any => ({
 
 function client() {
   return new WebDavClient({
-    webdavUrl: 'https://eoh-test.webdav.moltenhosting.com/',
+    webdavUrl: 'https://your-server.webdav.moltenhosting.com/',
     user: 'foundry-ftp',
     password: 'secret',
     logger: makeLogger(),
@@ -104,7 +104,7 @@ describe('WebDavClient request/auth/redirect', () => {
     fetchMock.mockResolvedValueOnce(res(207, { body: '<multistatus/>' }));
     await client().stat('assets/x.webp');
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://eoh-test.webdav.moltenhosting.com/Data/assets/x.webp');
+    expect(url).toBe('https://your-server.webdav.moltenhosting.com/Data/assets/x.webp');
     expect(init.method).toBe('PROPFIND');
     expect(init.headers.get('Authorization')).toBe(
       `Basic ${Buffer.from('foundry-ftp:secret').toString('base64')}`
@@ -116,20 +116,20 @@ describe('WebDavClient request/auth/redirect', () => {
   it('re-issues a 301 to http:// over https WITH auth preserved (the Molten gotcha)', async () => {
     fetchMock
       .mockResolvedValueOnce(
-        res(301, { headers: { location: 'http://eoh-test.webdav.moltenhosting.com/Data/dir/' } })
+        res(301, { headers: { location: 'http://your-server.webdav.moltenhosting.com/Data/dir/' } })
       )
       .mockResolvedValueOnce(res(207, { body: '<multistatus/>' }));
     await client().propfind('dir', '1');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const secondUrl = fetchMock.mock.calls[1][0];
-    expect(secondUrl).toBe('https://eoh-test.webdav.moltenhosting.com/Data/dir/'); // forced back to https
+    expect(secondUrl).toBe('https://your-server.webdav.moltenhosting.com/Data/dir/'); // forced back to https
     expect(fetchMock.mock.calls[1][1].headers.get('Authorization')).toBeTruthy();
   });
 
   it('stops following after 3 redirect hops', async () => {
     // Always redirect; client should give up and surface the last (redirect) response as non-207.
     fetchMock.mockResolvedValue(
-      res(301, { headers: { location: 'http://eoh-test.webdav.moltenhosting.com/Data/loop/' } })
+      res(301, { headers: { location: 'http://your-server.webdav.moltenhosting.com/Data/loop/' } })
     );
     await expect(client().propfind('loop', '1')).rejects.toBeInstanceOf(FilePlaneError);
     // initial + 3 hops = 4 calls

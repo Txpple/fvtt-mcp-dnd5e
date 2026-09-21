@@ -140,7 +140,7 @@ function exportResponse(overrides: Record<string, any> = {}) {
       ownership: { default: 0, u1: 3 },
       flags: {
         exportSource: {
-          world: 'greenrest',
+          world: 'example-world',
           system: 'dnd5e',
           coreVersion: '14',
           systemVersion: '5.3.3',

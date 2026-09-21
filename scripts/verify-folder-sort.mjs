@@ -58,7 +58,7 @@ try {
   );
   // GROUND TRUTH: unlike documents, Folder.create does NOT space sort values — every new folder
   // lands on sort 0. And the tie is never broken by sort at all: the v14 sidebar renders sibling
-  // FOLDERS alphabetically by name and IGNORES `sort` (confirmed live on the Greenrest Scene
+  // FOLDERS alphabetically by name and IGNORES `sort` (confirmed live on a world's Scene
   // folders — 100000/200000/300000 against siblings at 0 did not move them, so they were renamed
   // "99 - " instead). This script therefore proves round-trip fidelity of the field, NOT that it
   // repositions anything. Rename is the only lever on folder order.

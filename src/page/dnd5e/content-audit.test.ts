@@ -65,7 +65,7 @@ describe('findGmLeakLanguage — catches GM-note / spoiler leaks in a player-vis
   const LEAKS = [
     // The exact leak this rule was written for (the "sealed letter" GM aside).
     'GM: a ready-made thread if you want one. Fill in the name and the news to suit your table.',
-    'GM — this letter points to the villain in Greenrest.',
+    'GM — this letter points to the villain in the next town.',
     'GM, decide what the note says.',
     'GM note: the seal hides a map to the shard.',
     'The DM can decide what it contains.',

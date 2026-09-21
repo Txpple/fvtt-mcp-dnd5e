@@ -79,7 +79,7 @@ describe('tool registry', () => {
     //   actors — the shared party stash; membership via system.addMember/removeMember, the
     //   group-shaped read, and the dnd5e primaryParty world setting, one typed tool per setting)
     // + disconnect-bridge (bridge-lifecycle courtesy logout: dispose the Playwright session so the
-    //   DM Assistant user goes inactive; the next tool call reconnects lazily — "log out please"
+    //   bridge user goes inactive; the next tool call reconnects lazily — "log out please"
     //   no longer requires exiting Claude Code)
     // + duplicate-actor (clone existing WORLD actors: toObject → rename → folder → ownership →
     //   Actor.create — the "(Sim)" sandbox path; full sheets stay rollable)

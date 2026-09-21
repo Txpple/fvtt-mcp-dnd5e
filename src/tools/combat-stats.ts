@@ -15,7 +15,7 @@ import { toInputSchema } from '../utils/schema.js';
  * = pre-plane legacy (excluded but counted), healing as negative `taken` with
  * overheal = rolled − applied, synthetic token actors aggregated by archetype name.
  *
- * ALL output is GM-facing by default (owner ruling 2026-08-27) — filtering happens at call
+ * ALL output is GM-facing by default (a ruling, not a default to guess) — filtering happens at call
  * time via the sections/actor params, not by baked-in redaction.
  */
 

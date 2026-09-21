@@ -10,7 +10,7 @@
 //   3. NPC-link primitives — findActor resolves a real actor; an appended @UUID[Actor.id] link
 //      round-trips and preserves existing content;
 //   4. findActor refuses an unknown NPC (the basis of link-quest-to-npc's dead-link guard);
-//   5. append a session-recap page from blocks (the §8 log path);
+//   5. append a session-recap page from blocks (the session-recap log path);
 //   6. manage-journals (action create / list / get / update / delete / delete-page — the M8 union,
 //      src/tools/journal.ts) through buildToolRegistry().dispatch: the five per-op tools are gone;
 //      create answers one line with each page id; list is the §3 line shape (header + one row per
@@ -161,7 +161,7 @@ try {
     'findActor returns null for an unknown NPC (link-quest-to-npc would throw)'
   );
 
-  // --- 5. append a session-recap page (the §8 log path) -------------------
+  // --- 5. append a session-recap page (the session-recap log path) -------------------
   console.log('\n# session-recap append (new page from blocks)');
   const recap = await f.call('updateJournalContent', {
     journalId,

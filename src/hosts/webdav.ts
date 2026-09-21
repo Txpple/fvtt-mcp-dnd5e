@@ -17,7 +17,7 @@ import { toDataRelative } from './paths.js';
  */
 
 export interface WebDavClientOptions {
-  /** WebDAV host root, e.g. `https://eoh-test.webdav.moltenhosting.com`. */
+  /** WebDAV host root, e.g. `https://your-server.webdav.moltenhosting.com`. */
   webdavUrl: string;
   user: string;
   password: string;

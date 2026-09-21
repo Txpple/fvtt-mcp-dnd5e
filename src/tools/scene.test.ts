@@ -213,12 +213,12 @@ describe('handlePullUsersToScene', () => {
       scene: { id: 's1', name: 'X' },
       pulled: [],
       offline: [],
-      selfSkipped: [{ id: 'bridge', name: 'DM Assistant' }],
+      selfSkipped: [{ id: 'bridge', name: 'MCP-Claude' }],
       notFound: [],
     });
     const out = await tools.handlePullUsersToScene({
       sceneIdentifier: 'X',
-      userIdentifiers: ['DM Assistant'],
+      userIdentifiers: ['MCP-Claude'],
     });
     expect(out).toContain('Cannot pull the bridge user itself');
     expect(out).toContain('never echoed back to the sending client');
