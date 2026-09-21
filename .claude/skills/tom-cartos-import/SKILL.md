@@ -15,8 +15,8 @@ scene-pack module** — a `module.json` plus LevelDB/NeDB compendiums holding fu
 (thousands of walls, hundreds of configured lights, a journal of numbered legend keys) — into real
 scenes **in the user's own world**, without enabling the module as a permanent dependency.
 
-Strategy is **extract-and-recreate**, not install-as-module: Molten's hosting blocks flipping a
-module's enable-flag and the bridge has no enable-module driver, so "drop the folder and enable it"
+Strategy is **extract-and-recreate**, not install-as-module: a managed host may not let you enable a
+module at all, and the bridge has no enable-module driver, so "drop the folder and enable it"
 dead-ends. We read the pack off disk, upload its images, and recreate the documents through the tools.
 See [`docs/history/tom-cartos-import-plan.md`](../../../docs/history/tom-cartos-import-plan.md) for the full design.
 
@@ -27,16 +27,22 @@ action: "remap-teleporters" }`** (the second-pass
 teleporter fixer), `manage-journals` / `add-journal-image`, `manage-folders` / `move-documents`,
 To boot the world first, hand off to **`start-session`**.
 
-> **🎯 OWNER DEFAULT — MAPS ONLY (directed 2026-07-08):** the owner repurposes pack maps into his
-> own setting (e.g. Ostenwold → Greenrest), so an import delivers **pre-made scenes with their
-> walls, doors, lights, and mood — nothing else**. **SKIP Step 5 (pack journals), scene→journal
-> links, and the legend→map-pins pass entirely** unless the owner explicitly asks for them that
-> session — the pack's lore/names must not enter the world. Teleporters (when a pack ships
-> regions) and tiles remain in scope; folder/naming follow the owner's campaign convention (his
-> chapter folders, his scene names), not the pack's. **Stamp every imported town/social map with
-> `flags["fvtt-mod-autoexplore"].enabled: true`** (pass it in the create action's `flags` alongside the
-> provenance flag) — the house autoexplore module renders the scene born-explored (architecture
-> through fog, tokens still LOS-gated); the GM can untick it per scene in the Custom tab.
+> **Import modes — ask in Step 2, once.** The default is **pack-faithful**: every scene with its
+> walls, lights, mood, teleporters and tiles, the pack's legend journal (Step 5) linked from each
+> scene, the legend→map-pins pass (below), the pack's folder and scene names (Step 7). Two things
+> the user may ask for instead, per import — or once, as `scenePacks` in the campaign repo's
+> `campaign.json` ([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)), which then stands
+> without asking:
+>
+> - **Maps only** — a DM repurposing the maps into their own setting wants the scenes and nothing
+>   of the pack's lore: **skip Step 5, the scene→journal links and the legend→map-pins pass**;
+>   folder and naming follow the user's convention (their chapter folders, their scene names),
+>   not the pack's. Teleporters and tiles stay in scope.
+> - **Born-explored** — when the world runs the companion `fvtt-mod-autoexplore` module, stamp a
+>   town / social map with `flags["fvtt-mod-autoexplore"].enabled: true` (in the create action's
+>   `flags` beside the provenance flag) so the architecture shows through fog from the start
+>   (tokens still LOS-gated); the GM can untick it per scene in the Custom tab. Never on a
+>   dungeon unless asked.
 
 > **Scope — all eras:** this skill imports **modern** (v13/LevelDB), **mid** (v10–v11), and **legacy**
 > (≤v9 / NeDB `.db`) packs. `read-pack` detects the era and normalizes the on-disk shape for you: a
@@ -57,7 +63,7 @@ To boot the world first, hand off to **`start-session`**.
 ## Step 0 — Boot the world and locate the module
 
 - Make sure the world is up (the tools need the live bridge). If unsure, run the **`start-session`**
-  skill (Molten cold-start is ~25 s).
+  skill (a cold box takes ~30–60 s).
 - Get the **absolute path to the unzipped module folder** (the one containing `module.json`). Ask for
   it if the user only described the pack. Everything else flows from `read-pack`.
 

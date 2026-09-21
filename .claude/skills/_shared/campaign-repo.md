@@ -1,9 +1,9 @@
 # The campaign repo — one convention for the skills that read or write a campaign
 
-Four skills work against a **campaign**, not just a world: `session-scribe` (writes the session
+Five skills work against a **campaign**, not just a world: `session-scribe` (writes the session
 record), `session-audit` and `plot-drift-check` (read the plot and the record), `bestiary-builder`
-(reads the record for what the party fought). None of them carries campaign facts — names, the
-party, house style, where the files go. Those live in a **campaign repo**: a private git repo (or
+(reads the record for what the party fought), `tom-cartos-import` (the standing import mode).
+None of them carries campaign facts — names, the party, house style, where the files go. Those live in a **campaign repo**: a private git repo (or
 plain folder) per campaign, beside the world, that the DM owns. This file is the contract between
 the skills and that repo.
 
@@ -51,7 +51,8 @@ asks, it does not invent one.
     "pdf": true,
     "skewSeconds": 0
   },
-  "snapshots": { "dir": "party-snapshots" }
+  "snapshots": { "dir": "party-snapshots" },
+  "scenePacks": { "mode": "pack-faithful", "bornExplored": false }
 }
 ```
 
@@ -67,6 +68,7 @@ asks, it does not invent one.
 | `sessions.outputs` | session-scribe | which documents a session produces (any of `recap`, `combat-log`, `gm-notes`, `gm-notes-story`, `gm-notes-mechanics`) |
 | `sessions.pdf` | session-scribe | also render each HTML output to PDF |
 | `sessions.skewSeconds` | session-scribe | the measured Craig ↔ Foundry clock skew (`--skew-seconds`), 0 until measured |
+| `scenePacks` | tom-cartos-import | the standing import mode — `mode`: `pack-faithful` (default) or `maps-only`; `bornExplored`: stamp town maps for the autoexplore module (optional; absent = ask) |
 
 ## `STYLE.md`
 
