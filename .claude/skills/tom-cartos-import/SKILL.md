@@ -24,8 +24,8 @@ Tools used: **`read-pack`** (the off-line extractor/detector — owns all the Le
 era detection, tile discovery, and asset path-rewrite math), `upload-asset` / **`upload-asset-tree`**
 (Plane B — single file vs whole subtree), `create-scene`, **`manage-placeables` `{ kind: "regions",
 action: "remap-teleporters" }`** (the second-pass
-teleporter fixer), `create-journal` / `add-journal-image`, `manage-folders` / `move-documents`,
-`list-scenes` / `list-journals`. To boot the world first, hand off to **`start-session`**.
+teleporter fixer), `manage-journals` / `add-journal-image`, `manage-folders` / `move-documents`,
+`list-scenes`. To boot the world first, hand off to **`start-session`**.
 
 > **🎯 OWNER DEFAULT — MAPS ONLY (directed 2026-07-08):** the owner repurposes pack maps into his
 > own setting (e.g. Ostenwold → Greenrest), so an import delivers **pre-made scenes with their
@@ -172,7 +172,7 @@ specific scene stays a GM drag (there's no place-tile tool, same as token placem
 ## Step 5 — Recreate the journal(s) and keep their links
 
 For each `journals[]` entry, recreate it so the legend keys travel with the scenes:
-- Build it in ONE `create-journal` call: pass each page in `pages[]` as either a text page
+- Build it in ONE `manage-journals { action: "create" }` call: pass each page in `pages[]` as either a text page
   (`{name, content}`) or an **image** page (`{name, kind:"image", src}`, where `src` = the page's
   rewritten `dataPath`, plus an optional `caption`). Keep the pack's page order (or set `sort`). An
   image-only legend journal now builds cleanly with **no spurious leading "Map Keys" text page** and
@@ -284,7 +284,7 @@ For each imported map with its own (non-overview) legend key:
    (the padding offset), `size` (px/cell), `columns/rows`. Compute each pin's canvas pixel from the room's
    cell, snapping to the **cell center**: `x = sceneX + (col + 0.5) * size`, `y = sceneY + (row + 0.5) * size`.
    Validate cells against `columns`/`rows` — never against the key image's own pixel size.
-3. **Build the GM journal (TOOL).** `create-journal` a GM-only entry (e.g. `"<NN Map> — Room Keys"`); its
+3. **Build the GM journal (TOOL).** `manage-journals` `create` a GM-only entry (e.g. `"<NN Map> — Room Keys"`); its
    default `ownership.default:0` IS the secrecy (players can't open it, so the pins don't render for them).
    Add one text page per room named `"NN — Room Name"` with the key's blurb (follow `journal-builder`).
 4. **Place the pins (TOOL).** `manage-placeables { kind:"notes", action:"create", sceneIdentifier,
@@ -312,6 +312,6 @@ For each imported map with its own (non-overview) legend key:
 - **Tools (correctness):** `read-pack` does all extraction, era detection, artifact stripping, and the
   asset path-rewrite math; `upload-asset` does the byte upload + content-type; `create-scene` writes the
   scene + places walls/lights/regions whole + stamps flags; the teleporter remap reconstructs the id maps
-  from world state and rewrites every cross-scene teleporter destination; `create-journal`/
+  from world state and rewrites every cross-scene teleporter destination; `manage-journals` `create`/
   `add-journal-image` build the journal; `manage-folders`/`move-documents` organize. The skill never
   parses a `.db`/LevelDB file, rewrites a path string, or transcribes a document id by hand.

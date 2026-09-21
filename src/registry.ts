@@ -279,17 +279,14 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
       );
     },
 
-    // Quests / journals
+    // Journals — the generic lifecycle is ONE tool (action; M8); the styled-block quest tools,
+    // search and the visibility flip stay their own
+    'manage-journals': args => journalTools.handleManageJournals(args),
     'create-quest-journal': args => journalTools.handleCreateQuestJournal(args),
     'link-quest-to-npc': args => journalTools.handleLinkQuestToNPC(args),
     'update-quest-journal': args => journalTools.handleUpdateQuestJournal(args),
-    'list-journals': args => journalTools.handleListJournals(args),
     'search-journals': args => journalTools.handleSearchJournals(args),
-    'create-journal': args => journalTools.handleCreateJournal(args),
-    'update-journal': args => journalTools.handleUpdateJournal(args),
     'set-journal-page-visibility': args => journalTools.handleSetJournalPageVisibility(args),
-    'delete-journal-page': args => journalTools.handleDeleteJournalPage(args),
-    'delete-journal': args => journalTools.handleDeleteJournal(args),
 
     // Ownership
     'set-actor-ownership': args => ownershipTools.handleToolCall('set-actor-ownership', args),

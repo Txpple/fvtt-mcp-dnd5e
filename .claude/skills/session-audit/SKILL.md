@@ -50,7 +50,7 @@ their intent; do not stop to litigate it.
 | The site | `list-scenes` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
 | The monsters | `get-actor` on the **placed token id** | that instance's delta, not the library actor |
 | Signature abilities | `get-actor-entity` on multiattack + the gimmick | the activity, not the name |
-| Intent | `list-journals` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |
+| Intent | `manage-journals` `list` → `get` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |
 | The ground | `screenshot-scene` on combat maps only | chokepoints, approach length, sightlines |
 
 Four things about this list are load-bearing:
@@ -171,7 +171,7 @@ work these questions:
 
 Deliver **one two-part report**: *Part one — the site as built*, then *Part two — the campaign*.
 Publish it as an artifact so the DM can keep it open on a second screen while they run, and offer
-to write it into the campaign repo or as a GM-only journal (`create-journal`, GM visibility) if
+to write it into the campaign repo or as a GM-only journal (`manage-journals` `create`, GM visibility) if
 they want it filed.
 
 Part one runs: verdict findings first, severity-ranked and each with a one-line claim a reader can

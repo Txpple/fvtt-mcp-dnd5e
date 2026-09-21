@@ -239,7 +239,7 @@ campaign-repos memory — active: `fvtt-campaign-greenrest`). **Pull the campaig
   recap.html, append ONE player-visible text page to the world's single **`Session Diary`**
   journal (folder *Adventure Log*) — **never a new journal per session** (revised 2026-08-08:
   the per-session journals were consolidated). Page name = `Session N — <title>`, e.g.
-  "Session 3 — The Road Interlude"; the date lives in the page body. Use `update-journal` with
+  "Session 3 — The Road Interlude"; the date lives in the page body. Use `manage-journals` `update` with
   `newPageName` + `playerVisible: true`, then keep the pages in order (they sort by name, so the
   `Session N` prefix does the work). Content is the `mcp-journal` format (p.lead TL;DR →
   h2.spaced story beats → readaloud blocks for item/lore quotes → "Where Things Stand" ul), the

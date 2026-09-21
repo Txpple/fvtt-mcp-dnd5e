@@ -474,3 +474,27 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   sidebar with a rename, the two refusals, the SRD refusal, the get miss, the delete with the
   not-found tail), verify-loot-copy 11/11 (the import path), integration 80 passed / 6 skipped.
   Next: journals → scenes → actors.
+- 2026-09-21 — **M8 journals → `manage-journals`** (`action`: create / list / get / update /
+  delete / delete-page): 5 tools → 1, the union **3,415** against the five's **3,442** (−0.8%; the
+  naive fold was 3,668, +6.6%). `list-journals` had been three tools in one (a list, a journal
+  read by `journalId`, a page read by `pageId`) — the union splits them per §3: `list` is the
+  line shape `N journal(s): id name pages` (the page manifest no longer rides every row; the
+  `includeContent` preview — N extra page reads no skill named — is dropped, decision #20) and
+  `get` is the JSON read (the entry: first text page + page list with visibility; with
+  `pageId`, that page), now resolving by exact name as the writes do (the page's
+  `getJournalContent` / `getJournalPageContent` used `game.journal.get` — id only). `journalId`
+  is the `shared` root leaf (get / update / delete-page). create / update / delete-page are one
+  line (create names each page id; update says what changed); a page miss on delete-page is
+  `isError`; delete is `deletedLine`. The styled-block quest tools, `search-journals`,
+  `set-journal-page-visibility` and `add-journal-image` stay their own tools. tools/list 203,526,
+  names 92 (**6,982** chars — the M8 name target ≤ 7,000 is met with three families still to go).
+  Re-pointed: tom-cartos-import (5 lines), bestiary-builder (4), plot-drift-check (3),
+  journal-builder (3), session-audit (2), scene-builder (2), session-scribe (1), the artificer's
+  illustration-builder (1 line — a sibling tool list; edited in that repo, uncommitted), README,
+  tools-reads.int.test + verify-read-tools, the error-handler test's sample tool name, the page's
+  multi-page note, tool-results, the registry tests (96 → 92); skills-matrix 0 / 0. Live:
+  verify-journal-tooling **32/32** with the new section 6 (create with a handout page, the list
+  row, get by exact name with the page visibility, get by pageId, rename + page write, delete-page,
+  the two refusals, the page miss, the entry miss, the delete with the not-found tail),
+  verify-read-tools 7/7, integration 80 passed / 6 skipped. Next: scenes → actors →
+  search-compendium ×4 → the actor projections.

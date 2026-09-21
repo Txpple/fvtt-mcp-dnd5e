@@ -87,18 +87,13 @@ const candidateRows = uniq(candidates);
 // consolidated family is its one tool (the eight placeable kinds → manage-placeables; the
 // macros → manage-macros; the folders → manage-folders; the playlists → manage-playlists; the
 // cards → manage-cards; the six table CRUD tools → manage-rolltables, roll-on-table staying; the
-// six item tools → manage-items, remove-from-actor staying).
+// six item tools → manage-items, remove-from-actor staying; the five generic journal tools →
+// manage-journals).
 const FAMILIES = {
   placeables: ['manage-placeables'],
   items: ['manage-items'],
   tables: ['manage-rolltables'],
-  journals: [
-    'create-journal',
-    'update-journal',
-    'list-journals',
-    'delete-journal',
-    'delete-journal-page',
-  ],
+  journals: ['manage-journals'],
   actors: ['list-actors', 'get-actor', 'update-actor', 'delete-actor'],
   folders: ['manage-folders'],
   scenes: ['create-scene', 'list-scenes', 'update-scene', 'delete-scene'],

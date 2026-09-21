@@ -10,12 +10,19 @@
 //   3. NPC-link primitives — findActor resolves a real actor; an appended @UUID[Actor.id] link
 //      round-trips and preserves existing content;
 //   4. findActor refuses an unknown NPC (the basis of link-quest-to-npc's dead-link guard);
-//   5. append a session-recap page from blocks (the §8 log path).
+//   5. append a session-recap page from blocks (the §8 log path);
+//   6. manage-journals (action create / list / get / update / delete / delete-page — the M8 union,
+//      src/tools/journal.ts) through buildToolRegistry().dispatch: the five per-op tools are gone;
+//      create answers one line with each page id; list is the §3 line shape (header + one row per
+//      journal); get is the JSON read (the entry, then one page); update / delete-page / delete are
+//      one line; an unknown action / key is refused by name; a page miss is an error.
 // Everything created is namespaced ZZ-JOURNAL-IT and cleaned up.
 //
 // Build first: npm run build. Run: node scripts/verify-journal-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 import { renderStyledHtml } from '../dist/tools/journal/blocks.js';
 
@@ -34,9 +41,11 @@ function assert(cond, msg) {
   }
 }
 
-const f = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const f = new Foundry(cfg);
 
 let journalId;
+let unionId;
 
 try {
   console.log('[verify-journal] connecting to sandbox…');
@@ -169,14 +178,119 @@ try {
     recapContent.includes('Session 1') && recapContent.includes('set out for the grove'),
     'recap content round-trips'
   );
+
+  // --- 6. manage-journals through the registry (the M8 union) ---------------
+  console.log('\n# 6) manage-journals (action) through dispatch');
+  const { dispatch, tools } = buildToolRegistry({
+    foundry: f,
+    logger: new Logger({ level: 'error' }),
+    host: cfg.host,
+  });
+  const names = new Set(tools.map(t => t.name));
+  assert(
+    names.has('manage-journals') &&
+      [
+        'create-journal',
+        'update-journal',
+        'list-journals',
+        'delete-journal',
+        'delete-journal-page',
+      ].every(n => !names.has(n)),
+    '6 — manage-journals is advertised, the five per-op tools are gone'
+  );
+  const mj = args => dispatch('manage-journals', args);
+  const cr = String(
+    await mj({
+      action: 'create',
+      name: `${TAG} Union`,
+      pages: [
+        { name: 'Overview', content: '<p>The grove.</p>' },
+        { name: 'Handout', content: '<p>For the players.</p>', playerVisible: true },
+      ],
+    })
+  );
+  unionId = /\((\w{16})\): 2 page/.exec(cr)?.[1];
+  const pageIds = [...cr.matchAll(/"(?:Overview|Handout)" \((\w{16})\)/g)].map(m => m[1]);
+  assert(
+    !!unionId &&
+      pageIds.length === 2 &&
+      cr ===
+        `Created journal "${TAG} Union" (${unionId}): 2 page(s): "Overview" (${pageIds[0]}), "Handout" (${pageIds[1]})`,
+    `6 — create: one line with each page id (${cr})`
+  );
+  const lines = String(await mj({ action: 'list', nameFilter: TAG })).split('\n');
+  assert(
+    /^\d+ journal\(s\): id name pages$/.test(lines[0] ?? '') &&
+      lines.includes(`${unionId} "${TAG} Union" 2`),
+    `6 — list: the header + the row (${lines[0]} / ${lines.find(x => x.startsWith(unionId))})`
+  );
+  const got = await mj({ action: 'get', journalId: `${TAG} Union` });
+  assert(
+    got?.content === '<p>The grove.</p>' &&
+      got?.pageCount === 2 &&
+      got?.pages?.[1]?.playerVisible === true &&
+      got?.pages?.[1]?.id === pageIds[1],
+    `6 — get by exact name: the first text page, the page list with visibility (${JSON.stringify(got?.pages)})`
+  );
+  const gotPage = await mj({ action: 'get', journalId: unionId, pageId: pageIds[1] });
+  assert(gotPage?.page?.content === '<p>For the players.</p>', '6 — get with pageId: that page');
+  const up = String(
+    await mj({
+      action: 'update',
+      journalId: unionId,
+      name: `${TAG} Union 2`,
+      content: '<p>Rewritten.</p>',
+      pageId: pageIds[0],
+    })
+  );
+  assert(
+    up ===
+      `Updated journal ${unionId}: renamed to "${TAG} Union 2"; page "Overview" (${pageIds[0]}) written`,
+    `6 — update: rename + the page written on one line (${up})`
+  );
+  const dp = String(await mj({ action: 'delete-page', journalId: unionId, pageId: pageIds[1] }));
+  assert(
+    dp === `Deleted page "Handout" (${pageIds[1]}) of journal ${unionId}`,
+    `6 — delete-page: one line (${dp})`
+  );
+  for (const [args, want] of [
+    [
+      { action: 'search', journalId: unionId },
+      'action must be one of "create", "list", "get", "update", "delete", "delete-page"',
+    ],
+    [
+      { action: 'list', journalId: unionId },
+      'unknown argument "journalId" — it takes: action, nameFilter, filterQuests',
+    ],
+    [
+      { action: 'delete-page', journalId: unionId, pageId: 'ZZ-no-such-page' },
+      'Page not found: "ZZ-no-such-page". Nothing deleted.',
+    ],
+    [{ action: 'get', journalId: 'ZZ-no-such-journal' }, 'not found'],
+  ]) {
+    let msg = '';
+    try {
+      await mj(args);
+    } catch (e) {
+      msg = e?.message ?? String(e);
+    }
+    assert(msg.includes(want), `6 — refused by name / a miss is an error: ${want.slice(0, 60)}`);
+  }
+  const del = String(await mj({ action: 'delete', identifiers: [unionId, 'ZZ-NOPE-JOURNAL'] }));
+  assert(
+    del === `Deleted 1 journal(s): "${TAG} Union 2" (${unionId}) (1 not found: ZZ-NOPE-JOURNAL)`,
+    `6 — delete: one line with the not-found tail (${del})`
+  );
+  unionId = undefined;
 } catch (e) {
   fails++;
   console.log(`\n[verify-journal] FATAL: ${e?.message || String(e)}`);
 } finally {
-  if (journalId) {
+  const strays = [journalId, unionId].filter(Boolean);
+  if (strays.length) {
     try {
-      await f.call('deleteJournals', { identifiers: [journalId] });
-      console.log('\n[verify-journal] cleaned up journal');
+      await f.call('deleteJournals', { identifiers: strays });
+      console.log('\n[verify-journal] cleaned up journal(s)');
     } catch {
       /* best-effort */
     }

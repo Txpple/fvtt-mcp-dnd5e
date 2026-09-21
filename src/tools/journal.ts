@@ -2,14 +2,21 @@ import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { FormattedToolError } from '../utils/error-handler.js';
+import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 // Journal STRUCTURING (typed blocks -> styled HTML) lives in ./journal/blocks (pure). The skill
 // supplies the words as blocks; this class arranges/styles them. No prose is generated here — the
 // former quest/quest-content.ts prose generators were deleted (design.md §2.1 / Invariant 1).
 import { renderStyledHtml, blockSchema, type Block } from './journal/blocks.js';
 
 // Single source of truth for each tool's input contract: the handler parses with these
-// schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
+// schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema. The generic
+// JournalEntry lifecycle is ONE tool, `manage-journals` (action create / list / get / update /
+// delete / delete-page; src/tools/_union.ts — M8 of the 3.0 plan); the styled-block quest tools,
+// search-journals and set-journal-page-visibility stay their own tools.
+
+export const MANAGE_JOURNALS = 'manage-journals';
 
 // A journal page = a name + ordered typed blocks (the skill's words) + optional player visibility.
 // The tool renders the blocks into the `.mcp-journal` house style; it NEVER generates the words.
@@ -61,10 +68,12 @@ const UpdateQuestJournalSchema = z.object({
 
 const ListJournalsSchema = z.object({
   nameFilter: z.string().optional().describe('Case-insensitive substring match on journal name.'),
-  filterQuests: z.boolean().optional().default(false).describe('Quest-like journals only.'),
-  includeContent: z.boolean().optional().default(false).describe('A content preview per journal.'),
-  journalId: z.string().optional().describe('Read this journal instead of listing.'),
-  pageId: z.string().optional().describe('With journalId: read this page.'),
+  filterQuests: z.boolean().optional().describe('Quest-like journals only.'),
+});
+
+const GetJournalSchema = z.object({
+  journalId: z.string().min(1),
+  pageId: z.string().optional().describe('Read this page instead of the entry.'),
 });
 
 const SearchJournalsSchema = z.object({
@@ -82,13 +91,13 @@ const createJournalPageSchema = z
     name: z.string().min(1).describe('Page title.'),
     kind: z.enum(['text', 'image']).default('text'),
     content: z.string().optional().default('').describe('text: the HTML body.'),
-    src: z.string().optional().describe('image: the Data-relative image path (required).'),
+    src: z.string().optional().describe('image: the Data-relative path.'),
     caption: z.string().optional().describe('image: the caption.'),
     sort: z.number().optional().describe('Sort key; default the array order.'),
     playerVisible: z
       .boolean()
       .optional()
-      .describe('Players can observe the page (a handout); default GM-only.'),
+      .describe('A handout players can observe; default GM-only.'),
   })
   .refine(p => p.kind !== 'image' || (typeof p.src === 'string' && p.src.trim().length > 0), {
     message: 'An image page requires "src" (a Data-relative image path).',
@@ -100,12 +109,22 @@ const CreateJournalSchema = z.object({
   folderName: z.string().optional().describe('Folder (created if absent).'),
 });
 
+/** Map a playerVisible flag to a page ownership patch: true = OBSERVER (2), false = GM-only (0). */
+function ownershipFor(playerVisible?: boolean): { default: number } | undefined {
+  if (playerVisible === undefined) return undefined;
+  return { default: playerVisible ? 2 : 0 };
+}
+
+/** Quest-like by name — the `filterQuests` heuristic of the list action. */
+function isQuestRelated(journalName: string): boolean {
+  const questKeywords = ['quest', 'mission', 'task', 'adventure', 'job', 'contract'];
+  const nameLower = journalName.toLowerCase();
+  return questKeywords.some(keyword => nameLower.includes(keyword));
+}
+
 const UpdateJournalSchema = z
   .object({
-    journalId: z
-      .string()
-      .min(1, 'Journal ID is required')
-      .describe('Journal entry id or exact name.'),
+    journalId: z.string().min(1, 'Journal ID is required'),
     name: z.string().optional().describe('Rename the entry.'),
     content: z.string().optional().describe('HTML that replaces the target page.'),
     pageId: z.string().optional().describe('The target page id; default the first text page.'),
@@ -113,7 +132,7 @@ const UpdateJournalSchema = z
     playerVisible: z
       .boolean()
       .optional()
-      .describe('Visibility of the written page (true = a handout); omitted, unchanged.'),
+      .describe("Written page's visibility (true = a handout); omitted = unchanged."),
   })
   .refine(v => v.name !== undefined || v.content !== undefined, {
     message: 'Provide at least one of: name, content',
@@ -129,10 +148,7 @@ const SetJournalPageVisibilitySchema = z.object({
 });
 
 const DeleteJournalPageSchema = z.object({
-  journalId: z
-    .string()
-    .min(1, 'Journal ID is required')
-    .describe('Journal entry id or exact name.'),
+  journalId: z.string().min(1, 'Journal ID is required'),
   pageId: z.string().min(1).describe('Page id.'),
 });
 
@@ -140,8 +156,11 @@ const DeleteJournalSchema = z.object({
   identifiers: z
     .array(z.string().min(1))
     .min(1, 'At least one identifier is required')
-    .describe('Exact ids (preferred) or exact names of journals to delete.'),
+    .describe('Exact ids or exact names.'),
 });
+
+/** The list columns (§3: a fixed, documented order). */
+const LIST_COLUMNS = ['id', 'name', 'pages'] as const;
 
 export interface JournalToolsOptions {
   foundry: FoundryBridge;
@@ -151,10 +170,141 @@ export interface JournalToolsOptions {
 export class JournalTools {
   private foundry: FoundryBridge;
   private logger: Logger;
+  private union: UnionTool;
 
   constructor(options: JournalToolsOptions) {
     this.foundry = options.foundry;
     this.logger = options.logger;
+    const foundry = this.foundry;
+    this.union = unionTool({
+      name: MANAGE_JOURNALS,
+      description:
+        'JournalEntries (HTML / image pages), by exact id or name: create / list / get / update / ' +
+        'delete / delete-page; styled blocks are the quest-journal tools. GM-only writes.',
+      discriminators: ['action'],
+      shared: { journalId: z.string().describe('Journal entry id or exact name.') },
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description: 'Create a JournalEntry from explicit pages.',
+          schema: CreateJournalSchema,
+          handler: async request => {
+            // Map each page to the bridge shape: a TEXT page forwards `content`; an IMAGE page
+            // forwards `kind:'image'` + `src` (+ optional caption). `playerVisible` ->
+            // ownership.default 2 (observe); an explicit `sort` is forwarded when given (otherwise
+            // the page side keeps the array order).
+            const pages = request.pages.map(p => ({
+              name: p.name,
+              ...(p.kind === 'image'
+                ? {
+                    kind: 'image' as const,
+                    src: p.src,
+                    ...(p.caption ? { caption: p.caption } : {}),
+                  }
+                : { content: p.content }),
+              ...(typeof p.sort === 'number' ? { sort: p.sort } : {}),
+              ...(p.playerVisible ? { ownership: { default: 2 } } : {}),
+            }));
+            const r = await foundry.call('createJournal', {
+              name: request.name,
+              pages,
+              ...(request.folderName ? { folderName: request.folderName } : {}),
+            });
+            const made = Array.isArray(r?.pages) ? r.pages : [];
+            // Surface any page-side asset warnings (an image page src that 404s — KEEP+WARN).
+            return (
+              `Created journal "${r.name}" (${r.id}): ${r.pageCount} page(s): ` +
+              made.map((p: { id: string; name: string }) => `"${p.name}" (${p.id})`).join(', ') +
+              warningBlock(r?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description: 'Journals: id, name, page count.',
+          schema: ListJournalsSchema,
+          handler: async ({ nameFilter, filterQuests }) => {
+            const journals = await foundry.call('listJournals', {
+              ...(nameFilter !== undefined ? { nameFilter } : {}),
+            });
+            const records = (Array.isArray(journals) ? journals : [])
+              .filter(j => !filterQuests || isQuestRelated(j.name))
+              .map(j => ({ id: j.id, name: j.name, pages: j.pages?.length ?? 0 }));
+            return listLines(`${records.length} journal(s)`, LIST_COLUMNS, records);
+          },
+        }),
+        unionMember({
+          select: { action: 'get' },
+          description:
+            'One journal: its first text page + page list (id, name, type, playerVisible); with ' +
+            'pageId, that page.',
+          schema: GetJournalSchema,
+          handler: async ({ journalId, pageId }) => {
+            if (pageId) {
+              const page = await foundry.call('getJournalPageContent', { journalId, pageId });
+              return { journalId, page };
+            }
+            const c = await foundry.call('getJournalContent', { journalId });
+            return {
+              journalId,
+              content: c.content,
+              currentPage: c.currentPage,
+              pages: c.allPages,
+              pageCount: c.pageCount,
+              ...(c.note ? { note: c.note } : {}),
+            };
+          },
+        }),
+        unionMember({
+          select: { action: 'update' },
+          description:
+            "Rename the entry and/or replace a page's HTML; appending blocks: update-quest-journal.",
+          schema: UpdateJournalSchema,
+          handler: async request => {
+            const ownership = ownershipFor(request.playerVisible);
+            const r = await foundry.call('updateJournal', {
+              journalId: request.journalId,
+              ...(request.name !== undefined ? { name: request.name } : {}),
+              ...(request.content !== undefined ? { content: request.content } : {}),
+              ...(request.pageId !== undefined ? { pageId: request.pageId } : {}),
+              ...(request.newPageName !== undefined ? { newPageName: request.newPageName } : {}),
+              ...(ownership ? { ownership } : {}),
+            });
+            const bits = [
+              r.renamed ? `renamed to "${request.name}"` : null,
+              r.pageId ? `page "${r.pageName}" (${r.pageId}) written` : null,
+            ].filter(Boolean);
+            return `Updated journal ${request.journalId}: ${bits.join('; ') || 'nothing changed'}`;
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: 'Permanently delete journals.',
+          schema: DeleteJournalSchema,
+          handler: async ({ identifiers }) => {
+            const r = await foundry.call('deleteJournals', { identifiers });
+            return deletedLine(r, 'journal');
+          },
+        }),
+        unionMember({
+          select: { action: 'delete-page' },
+          description: 'Delete one page of a JournalEntry by id.',
+          schema: DeleteJournalPageSchema,
+          handler: async ({ journalId, pageId }) => {
+            const r = await foundry.call('deleteJournalPage', { journalId, pageId });
+            if (r.deleted === false) {
+              throw new FormattedToolError(`Page not found: "${r.notFound}". Nothing deleted.`);
+            }
+            return `Deleted page "${r.page?.name}" (${r.page?.id}) of journal ${journalId}`;
+          },
+        }),
+      ],
+    });
+  }
+
+  /** The generic-journal union (registry-facing). */
+  async handleManageJournals(args: unknown): Promise<unknown> {
+    return this.union.handle(args);
   }
 
   /**
@@ -162,12 +312,13 @@ export class JournalTools {
    */
   getToolDefinitions() {
     return [
+      this.union.def,
       {
         name: 'create-quest-journal',
         description:
           'Create a multi-page journal from typed blocks (heading / lead / paragraph / readaloud / ' +
           'gmnote / list / grid / html), rendered in the house style, with per-page visibility. ' +
-          'Raw HTML pages: create-journal.',
+          'Raw HTML pages: manage-journals create.',
         inputSchema: toInputSchema(CreateQuestJournalSchema),
       },
       {
@@ -185,31 +336,10 @@ export class JournalTools {
         inputSchema: toInputSchema(UpdateQuestJournalSchema),
       },
       {
-        name: 'list-journals',
-        description:
-          'Journals with their pages (id, name, type, playerVisible); with journalId, that journal ' +
-          "(first text page + page list); with pageId too, that page's content.",
-        inputSchema: toInputSchema(ListJournalsSchema),
-      },
-      {
         name: 'search-journals',
         description:
           'Search every journal page by title and/or content; reports the matching pages.',
         inputSchema: toInputSchema(SearchJournalsSchema),
-      },
-      {
-        name: 'create-journal',
-        description:
-          'Create a JournalEntry from explicit pages: text (HTML) or image (kind:"image" + src), ' +
-          'each with its own visibility. Styled blocks: create-quest-journal.',
-        inputSchema: toInputSchema(CreateJournalSchema),
-      },
-      {
-        name: 'update-journal',
-        description:
-          'Rename a JournalEntry and/or replace a page (the first text page, pageId, or a new page ' +
-          'via newPageName) with HTML. Appending blocks: update-quest-journal. GM-only.',
-        inputSchema: toInputSchema(UpdateJournalSchema),
       },
       {
         name: 'set-journal-page-visibility',
@@ -218,23 +348,7 @@ export class JournalTools {
           'GM-only.',
         inputSchema: toInputSchema(SetJournalPageVisibilitySchema),
       },
-      {
-        name: 'delete-journal-page',
-        description: 'Delete one page of a JournalEntry by id. GM-only.',
-        inputSchema: toInputSchema(DeleteJournalPageSchema),
-      },
-      {
-        name: 'delete-journal',
-        description: 'Permanently delete journals by exact id or exact name. GM-only.',
-        inputSchema: toInputSchema(DeleteJournalSchema),
-      },
     ];
-  }
-
-  /** Map a playerVisible flag to a page ownership patch: true = OBSERVER (2), false = GM-only (0). */
-  private ownershipFor(playerVisible?: boolean): { default: number } | undefined {
-    if (playerVisible === undefined) return undefined;
-    return { default: playerVisible ? 2 : 0 };
   }
 
   /**
@@ -321,7 +435,7 @@ export class JournalTools {
   async handleUpdateQuestJournal(args: any): Promise<any> {
     const request = UpdateQuestJournalSchema.parse(args);
     const sectionHtml = renderStyledHtml(request.blocks);
-    const ownership = this.ownershipFor(request.playerVisible);
+    const ownership = ownershipFor(request.playerVisible);
 
     // New page: set its content directly (nothing to append to).
     if (request.newPageName) {
@@ -368,76 +482,6 @@ export class JournalTools {
   /**
    * Handle list journals request
    */
-  async handleListJournals(args: any): Promise<any> {
-    const request = ListJournalsSchema.parse(args);
-
-    // Mode: Read a specific page
-    if (request.journalId && request.pageId) {
-      const pageResult = await this.foundry.call('getJournalPageContent', {
-        journalId: request.journalId,
-        pageId: request.pageId,
-      });
-
-      return {
-        success: true,
-        mode: 'page',
-        journalId: request.journalId,
-        page: pageResult,
-      };
-    }
-
-    // Mode: Read a specific journal (first page + page manifest)
-    if (request.journalId) {
-      const journalContent = await this.foundry.call('getJournalContent', {
-        journalId: request.journalId,
-      });
-
-      return {
-        success: true,
-        mode: 'journal',
-        journalId: request.journalId,
-        content: journalContent.content,
-        currentPage: journalContent.currentPage,
-        allPages: journalContent.allPages,
-        pageCount: journalContent.pageCount,
-        note: journalContent.note,
-      };
-    }
-
-    // Mode: List all journals
-    const journals = await this.foundry.call('listJournals', {
-      ...(request.nameFilter !== undefined ? { nameFilter: request.nameFilter } : {}),
-    });
-
-    let filteredJournals: Array<(typeof journals)[number] & { contentPreview?: string }> = journals;
-
-    // Filter for quest-related journals if requested
-    if (request.filterQuests) {
-      filteredJournals = journals.filter((journal: any) => this.isQuestRelated(journal.name));
-    }
-
-    // Include content if requested
-    if (request.includeContent) {
-      for (const journal of filteredJournals) {
-        try {
-          const content = await this.foundry.call('getJournalContent', {
-            journalId: journal.id,
-          });
-          journal.contentPreview = `${content?.content?.substring(0, 150)}...` || '';
-        } catch (_error) {
-          journal.contentPreview = 'Error loading content';
-        }
-      }
-    }
-
-    return {
-      success: true,
-      mode: 'list',
-      journals: filteredJournals,
-      total: filteredJournals.length,
-    };
-  }
-
   /**
    * Handle search journals request
    */
@@ -511,73 +555,6 @@ export class JournalTools {
   }
 
   /**
-   * Handle create generic journal request
-   */
-  async handleCreateJournal(args: any): Promise<any> {
-    const request = CreateJournalSchema.parse(args);
-
-    // Map each page to the bridge shape: a TEXT page forwards `content`; an IMAGE page forwards
-    // `kind:'image'` + `src` (+ optional caption). `playerVisible` -> ownership.default 2 (observe);
-    // an explicit `sort` is forwarded when given (otherwise the page side keeps the array order).
-    const pages = request.pages.map(p => ({
-      name: p.name,
-      ...(p.kind === 'image'
-        ? { kind: 'image' as const, src: p.src, ...(p.caption ? { caption: p.caption } : {}) }
-        : { content: p.content }),
-      ...(typeof p.sort === 'number' ? { sort: p.sort } : {}),
-      ...(p.playerVisible ? { ownership: { default: 2 } } : {}),
-    }));
-
-    const result = await this.foundry.call('createJournal', {
-      name: request.name,
-      pages,
-      ...(request.folderName ? { folderName: request.folderName } : {}),
-    });
-
-    // Surface any page-side asset warnings (e.g. an image page src that 404s — KEEP+WARN).
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
-    let message = `Journal "${result.name}" created with ${result.pageCount} page(s)`;
-    if (warns.length) {
-      message += `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`;
-    }
-
-    return {
-      success: true,
-      journalId: result.id,
-      journalName: result.name,
-      pageCount: result.pageCount,
-      pages: result.pages,
-      message,
-    };
-  }
-
-  /**
-   * Handle generic journal update (rename and/or set page content)
-   */
-  async handleUpdateJournal(args: any): Promise<any> {
-    const request = UpdateJournalSchema.parse(args);
-    const ownership = this.ownershipFor(request.playerVisible);
-
-    const result = await this.foundry.call('updateJournal', {
-      journalId: request.journalId,
-      ...(request.name !== undefined ? { name: request.name } : {}),
-      ...(request.content !== undefined ? { content: request.content } : {}),
-      ...(request.pageId !== undefined ? { pageId: request.pageId } : {}),
-      ...(request.newPageName !== undefined ? { newPageName: request.newPageName } : {}),
-      ...(ownership ? { ownership } : {}),
-    });
-
-    return {
-      success: true,
-      journalId: request.journalId,
-      renamed: result.renamed ?? false,
-      pageId: result.pageId,
-      pageName: result.pageName,
-      message: 'Journal updated',
-    };
-  }
-
-  /**
    * Flip a single journal page's player visibility without rewriting its content.
    */
   async handleSetJournalPageVisibility(args: any): Promise<any> {
@@ -597,61 +574,6 @@ export class JournalTools {
       playerVisible: request.playerVisible,
       message: `Page "${result.pageName}" is now ${request.playerVisible ? 'player-visible (handout)' : 'GM-only'}.`,
     };
-  }
-
-  /**
-   * Delete one page from a journal by id, leaving the rest of the entry intact.
-   */
-  async handleDeleteJournalPage(args: any): Promise<any> {
-    const request = DeleteJournalPageSchema.parse(args);
-
-    const result = await this.foundry.call('deleteJournalPage', {
-      journalId: request.journalId,
-      pageId: request.pageId,
-    });
-    if (result.deleted === false) {
-      return {
-        success: true,
-        deleted: false,
-        notFound: result.notFound,
-        message: `Page not found: "${result.notFound}". Nothing deleted.`,
-      };
-    }
-
-    return {
-      success: true,
-      deleted: true,
-      page: result.page,
-      message: `Deleted page "${result.page?.name}" (${result.page?.id}).`,
-    };
-  }
-
-  /**
-   * Handle delete journal request
-   */
-  async handleDeleteJournal(args: any): Promise<any> {
-    const request = DeleteJournalSchema.parse(args);
-
-    const result = await this.foundry.call('deleteJournals', {
-      identifiers: request.identifiers,
-    });
-
-    return {
-      success: true,
-      deletedCount: result.deletedCount,
-      deleted: result.deleted,
-      notFound: result.notFound,
-      message: `Deleted ${result.deletedCount} journal(s)`,
-    };
-  }
-
-  /**
-   * Check if a journal appears to be quest-related
-   */
-  private isQuestRelated(journalName: string): boolean {
-    const questKeywords = ['quest', 'mission', 'task', 'adventure', 'job', 'contract'];
-    const nameLower = journalName.toLowerCase();
-    return questKeywords.some(keyword => nameLower.includes(keyword));
   }
 
   /**

@@ -95,8 +95,8 @@ try {
     o => typeof o === 'string' || o != null
   );
   await check(
-    'list-journals',
-    () => journal.handleListJournals({}),
+    'manage-journals list',
+    () => journal.handleManageJournals({ action: 'list' }),
     o => o != null
   );
   await check(

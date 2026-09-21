@@ -44,13 +44,13 @@ SRD · ask-don't-invent). One journal-specific clarification:
   page (`newPageName`). The progress-log / session-recap path.
 - **`link-quest-to-npc`** — insert a real `@UUID[Actor.id]{Name}` link to a world NPC, labelled by
   `relationship` (questGiver / target / ally / enemy / contact). Refuses an unknown NPC (no dead links).
-- **`create-journal`** / **`update-journal`** — generic pages: raw HTML content (+ per-page
+- **`manage-journals`** `create` / `update` — generic pages: raw HTML content (+ per-page
   `playerVisible`). Use when you already have HTML, or want a plain page with no house style. A
-  `create-journal` page can also be an **image** page — `{name, kind:"image", src, caption?}` — so a
+  `create` page can also be an **image** page — `{name, kind:"image", src, caption?}` — so a
   mixed text+image or image-only journal (e.g. a map-key pack) builds in one call (set `sort` to order).
 - **`add-journal-image`** — append an image page (a map, a handout picture) to an EXISTING journal,
   with an optional `caption` and `playerVisible` (expose it as a handout; default GM-only).
-- **`list-journals`** / **`search-journals`** — find/read existing journals + their page ids (needed to
+- **`manage-journals`** `list` → `get` / **`search-journals`** — find/read existing journals + their page ids (needed to
   target `pageId` for updates/links).
 
 ## The block vocabulary (what you pass to the structuring tools)

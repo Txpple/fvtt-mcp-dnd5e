@@ -79,7 +79,7 @@ export function listJournals(args?: { nameFilter?: string | undefined }): Journa
  * A journal id that does not resolve is a not-found error (a miss is an error, design.md §3).
  */
 export function getJournalContent(args: { journalId: string }): JournalContent {
-  const journal = game.journal.get(args.journalId);
+  const journal = resolveJournalStrict(args.journalId);
   if (!journal) throw notFound(`Journal entry "${args.journalId}" not found`);
 
   const allPages = mapPages(journal);
@@ -98,7 +98,7 @@ export function getJournalContent(args: { journalId: string }): JournalContent {
   };
 
   if (pageCount > 1) {
-    result.note = `This journal has ${pageCount} pages. Use list-journals with journalId and pageId to read other pages: ${allPages
+    result.note = `This journal has ${pageCount} pages. Read another with pageId: ${allPages
       .map(p => `"${p.name}" (${p.id})`)
       .join(', ')}`;
   }
@@ -115,7 +115,7 @@ export function getJournalPageContent(args: {
   journalId: string;
   pageId: string;
 }): JournalPageContent {
-  const journal = game.journal.get(args.journalId);
+  const journal = resolveJournalStrict(args.journalId);
   if (!journal) throw notFound(`Journal entry "${args.journalId}" not found`);
 
   const page = journal.pages.get(args.pageId);

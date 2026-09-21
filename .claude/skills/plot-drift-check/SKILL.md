@@ -44,7 +44,7 @@ offending snippet.
 
 | Surface | Tools | What to check |
 |---|---|---|
-| Journals (the big one) | `search-journals` per stem; `list-journals` | old names in content, contradicted facts, page names |
+| Journals (the big one) | `search-journals` per stem; `manage-journals` `list` → `get` | old names in content, contradicted facts, page names |
 | Roll tables | `manage-rolltables` `list` → `get` on plot-adjacent tables | entry text (the classic straggler — a rename misses table entries) |
 | Actors | `list-actors` for names; `get-actor` on plot-relevant NPCs/PCs | actor names, token names, biographies |
 | Items | `search-actor-contents` / `manage-items` `list` → `get` for plot items | descriptions, unidentified vs true names |
@@ -76,14 +76,14 @@ Each hit becomes one of:
 Deliver one report, ordered **Leaks → Contradictions → Stale names → Orphans → Deliberate? →
 Gaps**. Each finding: the document (type, name, id, page), the snippet, what canon says, and the
 proposed fix + tool. End with the summary counts and the explicit ask: *"say which to fix."*
-Offer to also write the report as a GM-only journal (`create-journal`, GM visibility, the DM-tools
+Offer to also write the report as a GM-only journal (`manage-journals` `create`, GM visibility, the DM-tools
 folder) if the user wants it in-world.
 
 ## Step 5 — fixes (only on go-ahead)
 
 Narrowest write wins; never rebuild a document to change a phrase:
 
-- Journal page text → `update-journal` (the affected page only).
+- Journal page text → `manage-journals { action: "update" }` (the affected page only).
 - Roll-table entry → `manage-rolltables { action: "update" }` with `editResults` (surgical per-entry; siblings untouched).
 - Actor name/token name/bio → `update-actor` (`name`, `tokenName`, `biography`).
 - Item description/name → `update-actor-item` / `manage-items` `update` (mind the unidentified true-name

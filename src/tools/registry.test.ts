@@ -114,7 +114,9 @@ describe('tool registry', () => {
     //   (action); roll-on-table stays (a play op, not CRUD).
     // − 5 (M8): create / list / get / update / delete-item + import-item → manage-items (action);
     //   remove-from-actor stays (an actor-side op).
-    expect(names.length).toBe(96);
+    // − 4 (M8): create / update / list / delete-journal + delete-journal-page → manage-journals
+    //   (action; list-journals' journalId / pageId modes are its `get`).
+    expect(names.length).toBe(92);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -243,10 +245,10 @@ describe('tool registry', () => {
     expect(union.anyOf).toHaveLength(35);
   });
 
-  it('registers the journal page-visibility tools + manage-folders (dogfood tooling gaps)', () => {
+  it('registers the journal page-visibility tool + manage-journals + manage-folders (dogfood tooling gaps)', () => {
     const { tools, handlers } = build();
     const names = new Set(tools.map(t => t.name));
-    for (const name of ['set-journal-page-visibility', 'delete-journal-page', 'manage-folders']) {
+    for (const name of ['set-journal-page-visibility', 'manage-journals', 'manage-folders']) {
       expect(names.has(name)).toBe(true);
       expect(typeof handlers[name]).toBe('function');
     }
@@ -543,7 +545,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(96);
+    expect(tools.length).toBe(92);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

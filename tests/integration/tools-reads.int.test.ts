@@ -63,8 +63,8 @@ describe.skipIf(!LIVE)('read-tool spine (live)', () => {
     await expect(scene.handleListScenes({})).resolves.toBeDefined();
   });
 
-  it('list-journals', async () => {
-    await expect(journal.handleListJournals({})).resolves.not.toBeNull();
+  it('manage-journals list', async () => {
+    await expect(journal.handleManageJournals({ action: 'list' })).resolves.not.toBeNull();
   });
 
   it('manage-playlists list', async () => {

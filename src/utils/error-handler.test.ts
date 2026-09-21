@@ -83,7 +83,7 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
       'entry owlbear not found in dnd-monster-manual.actors',
     ],
     [
-      'list-journals',
+      'manage-journals',
       'listJournals',
       'invalid',
       "Cannot read properties of undefined (reading 'pages')",
@@ -141,7 +141,7 @@ describe('ErrorHandler.toUserMessage — an uncoded error is its raw words, noth
         "page.evaluate: TypeError: Cannot read properties of undefined (reading 'pages')\n    at listJournals (<anonymous>:12:3)"
       )
     );
-    expect(eh.toUserMessage(err, 'list-journals')).toBe(
+    expect(eh.toUserMessage(err, 'manage-journals')).toBe(
       "TypeError: Cannot read properties of undefined (reading 'pages')"
     );
   });

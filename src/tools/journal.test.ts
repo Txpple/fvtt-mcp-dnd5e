@@ -1,43 +1,39 @@
 /**
- * Unit tests for JournalTools.
+ * Unit tests for JournalTools — manage-journals (the M8 union: action create / list / get / update
+ * / delete / delete-page) and the five tools that stay their own (the styled-block quest tools,
+ * search-journals, set-journal-page-visibility).
  *
- * Eight handlers, each: zod.parse(args) -> one or more
- * foundry.call('<op>', data) calls -> a result
- * OBJECT (these handlers return structured objects, not human strings). The
- * tests assert (a) the correct bridge method + payload is forwarded and the
- * returned object's fields match what the format code builds, and (b) zod
- * rejects bad input. Handlers no longer map their own errors — a validation
- * failure (or a page-reported failure) just throws and bubbles to the central
- * mapper in index.ts, so the rejection tests only assert that a throw occurs.
+ * Each handler: zod.parse(args) -> one or more foundry.call('<op>', data) calls -> a result. The
+ * tests assert (a) the correct bridge method + payload is forwarded and the result matches what the
+ * format code builds (the union's §3 shapes: the list lines, the one-line confirmations, get's
+ * JSON, a miss as an error), and (b) zod rejects bad input. Handlers do not map their own errors —
+ * a validation failure (or a page-reported failure) just throws and bubbles to the central mapper.
  */
 
 import { describe, it, expect } from 'vitest';
-import { JournalTools } from './journal.js';
+import { JournalTools, MANAGE_JOURNALS } from './journal.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
   const tools = new JournalTools({ foundry, logger: makeLogger() });
-  return { tools, calls, foundry };
+  const run = (args: unknown) => tools.handleManageJournals(args);
+  return { tools, calls, foundry, run };
 }
 
 describe('JournalTools.getToolDefinitions', () => {
-  it('exposes exactly the ten expected tools', () => {
+  it('exposes the union and the five tools that stay', () => {
     const { tools } = build();
     const names = tools
       .getToolDefinitions()
       .map(t => t.name)
       .sort();
     expect(names).toEqual([
-      'create-journal',
       'create-quest-journal',
-      'delete-journal',
-      'delete-journal-page',
       'link-quest-to-npc',
-      'list-journals',
+      MANAGE_JOURNALS,
       'search-journals',
       'set-journal-page-visibility',
-      'update-journal',
       'update-quest-journal',
     ]);
   });
@@ -47,6 +43,257 @@ describe('JournalTools.getToolDefinitions', () => {
     for (const def of tools.getToolDefinitions()) {
       expect(def.inputSchema.type).toBe('object');
     }
+  });
+});
+
+describe('manage-journals (the M8 union: action create / list / get / update / delete / delete-page)', () => {
+  it('advertises the action enum, the shared journalId leaf, closed members', () => {
+    const def = build()
+      .tools.getToolDefinitions()
+      .find(t => t.name === MANAGE_JOURNALS)!;
+    const schema = def.inputSchema as any;
+    expect(schema.properties.action.enum).toEqual([
+      'create',
+      'list',
+      'get',
+      'update',
+      'delete',
+      'delete-page',
+    ]);
+    expect(schema.properties.journalId.description).toBe('Journal entry id or exact name.');
+    const byAction = Object.fromEntries(
+      schema.anyOf.map((m: any) => [m.properties.action.const, m])
+    );
+    for (const m of schema.anyOf) expect(m.additionalProperties).toBe(false);
+    expect(byAction.get.properties.journalId).toEqual({ type: 'string' });
+    expect(byAction.get.required).toEqual(['action', 'journalId']);
+    expect(byAction['delete-page'].required).toEqual(['action', 'journalId', 'pageId']);
+  });
+
+  it('refuses an unknown action and an unknown key by name against the selected member', async () => {
+    const { run } = build();
+    await expect(run({ action: 'search', journalId: 'x' })).rejects.toThrow(
+      'manage-journals: action must be one of "create", "list", "get", "update", "delete", "delete-page" (got "search").'
+    );
+    await expect(run({ action: 'list', journalId: 'x' })).rejects.toThrow(
+      'manage-journals (action "list"): unknown argument "journalId" — it takes: action, nameFilter, filterQuests.'
+    );
+  });
+});
+
+describe('manage-journals list (the §3 line shape)', () => {
+  it('one line per journal with its page count; forwards the name filter', async () => {
+    const journals = [
+      { id: 'a', name: 'Quest One', pages: [{ id: 'p1' }, { id: 'p2' }] },
+      { id: 'b', name: 'Lore', pages: [] },
+    ];
+    const { calls, run } = build((method: string) => (method === 'listJournals' ? journals : {}));
+    const out = await run({ action: 'list', nameFilter: 'o' });
+    expect(calls[0][0]).toBe('listJournals');
+    expect(calls[0][1]).toEqual({ nameFilter: 'o' });
+    expect(out).toBe('2 journal(s): id name pages\na "Quest One" 2\nb Lore 0');
+  });
+
+  it('filters to quest-related journals when filterQuests is true; an empty result is the header alone', async () => {
+    const journals = [
+      { id: 'a', name: 'Quest One', pages: [] },
+      { id: 'b', name: 'Lore Notes', pages: [] },
+      { id: 'c', name: 'The Mission', pages: [] },
+    ];
+    const { run } = build((method: string) => (method === 'listJournals' ? journals : {}));
+    expect(await run({ action: 'list', filterQuests: true })).toBe(
+      '2 journal(s): id name pages\na "Quest One" 0\nc "The Mission" 0'
+    );
+    expect(
+      await build((m: string) => (m === 'listJournals' ? [] : {})).run({ action: 'list' })
+    ).toBe('0 journal(s).');
+  });
+});
+
+describe('manage-journals get (JSON)', () => {
+  it('reads a journal: the first text page + the page list', async () => {
+    const { calls, run } = build((method: string) =>
+      method === 'getJournalContent'
+        ? {
+            content: '<p>body</p>',
+            currentPage: 'Quest',
+            allPages: [{ id: 'p1', name: 'Quest', type: 'text', playerVisible: false }],
+            pageCount: 1,
+          }
+        : {}
+    );
+    const out = await run({ action: 'get', journalId: 'j1' });
+    expect(calls[0][0]).toBe('getJournalContent');
+    expect(calls[0][1]).toEqual({ journalId: 'j1' });
+    expect(out).toEqual({
+      journalId: 'j1',
+      content: '<p>body</p>',
+      currentPage: 'Quest',
+      pages: [{ id: 'p1', name: 'Quest', type: 'text', playerVisible: false }],
+      pageCount: 1,
+    });
+  });
+
+  it('reads one page when pageId is supplied', async () => {
+    const page = { id: 'p1', name: 'Quest', type: 'text', content: '<p>page body</p>' };
+    const { calls, run } = build((method: string) =>
+      method === 'getJournalPageContent' ? page : {}
+    );
+    expect(await run({ action: 'get', journalId: 'j1', pageId: 'p1' })).toEqual({
+      journalId: 'j1',
+      page,
+    });
+    expect(calls[0][1]).toEqual({ journalId: 'j1', pageId: 'p1' });
+  });
+});
+
+describe('manage-journals create', () => {
+  it('forwards name + pages and confirms on one line with each page id', async () => {
+    const { calls, run } = build({
+      id: 'j1',
+      name: 'My Journal',
+      pageCount: 2,
+      pages: [
+        { id: 'p1', name: 'Intro' },
+        { id: 'p2', name: 'Details' },
+      ],
+    });
+    const out = await run({
+      action: 'create',
+      name: 'My Journal',
+      pages: [
+        { name: 'Intro', content: '<p>Hi</p>' },
+        { name: 'Details', content: '<p>More</p>' },
+      ],
+    });
+    expect(calls[0][0]).toBe('createJournal');
+    expect(calls[0][1].name).toBe('My Journal');
+    expect(calls[0][1].pages).toHaveLength(2);
+    expect(out).toBe('Created journal "My Journal" (j1): 2 page(s): "Intro" (p1), "Details" (p2)');
+  });
+
+  it('defaults missing page content to an empty string and passes folderName', async () => {
+    const { calls, run } = build({ id: 'j2', name: 'J', pageCount: 1, pages: [] });
+    await run({ action: 'create', name: 'J', pages: [{ name: 'OnlyName' }], folderName: 'Lore' });
+    expect(calls[0][1].pages[0]).toEqual({ name: 'OnlyName', content: '' });
+    expect(calls[0][1].folderName).toBe('Lore');
+  });
+
+  it('forwards an image page (kind:image -> src + caption + ownership) beside text pages', async () => {
+    const { calls, run } = build({ id: 'j3', name: 'Keys', pageCount: 2, pages: [] });
+    await run({
+      action: 'create',
+      name: 'Keys',
+      pages: [
+        { name: 'Overview', content: '<p>Map keys</p>' },
+        {
+          name: 'Iris Key',
+          kind: 'image',
+          src: 'worlds/w/assets/iris_Key.webp',
+          caption: 'Iris',
+          playerVisible: true,
+        },
+      ],
+    });
+    const pages = calls[0][1].pages;
+    // text page unchanged (no kind/src leaks in)
+    expect(pages[0]).toEqual({ name: 'Overview', content: '<p>Map keys</p>' });
+    // image page carries kind + src + caption + ownership, NOT a content field
+    expect(pages[1]).toEqual({
+      name: 'Iris Key',
+      kind: 'image',
+      src: 'worlds/w/assets/iris_Key.webp',
+      caption: 'Iris',
+      ownership: { default: 2 },
+    });
+  });
+
+  it('forwards an explicit sort key when given', async () => {
+    const { calls, run } = build({ id: 'j', name: 'J', pageCount: 1, pages: [] });
+    await run({ action: 'create', name: 'J', pages: [{ name: 'P', content: 'x', sort: 200 }] });
+    expect(calls[0][1].pages[0]).toEqual({ name: 'P', content: 'x', sort: 200 });
+  });
+
+  it('appends page-side asset warnings (a non-resolving image src is kept, not substituted)', async () => {
+    const { run } = build({
+      id: 'j4',
+      name: 'Keys',
+      pageCount: 1,
+      pages: [{ id: 'p1', name: 'Bad' }],
+      warnings: [
+        'Supplied src "x/nope.webp" was not found on the server — the document was created.',
+      ],
+    });
+    const out = String(
+      await run({
+        action: 'create',
+        name: 'Keys',
+        pages: [{ name: 'Bad', kind: 'image', src: 'x/nope.webp' }],
+      })
+    );
+    expect(out.startsWith('Created journal "Keys" (j4): 1 page(s): "Bad" (p1)')).toBe(true);
+    expect(out).toContain('⚠️ 1 warning(s):');
+    expect(out).toContain('not found on the server');
+  });
+
+  it('rejects an image page with no src (refine), an empty name, no pages, a nameless page', async () => {
+    const { run } = build();
+    await expect(
+      run({ action: 'create', name: 'J', pages: [{ name: 'Img', kind: 'image' }] })
+    ).rejects.toThrow();
+    await expect(run({ action: 'create', name: '', pages: [{ name: 'p' }] })).rejects.toThrow();
+    await expect(run({ action: 'create', name: 'J', pages: [] })).rejects.toThrow();
+    await expect(run({ action: 'create', name: 'J', pages: [{ name: '' }] })).rejects.toThrow();
+  });
+});
+
+describe('manage-journals update', () => {
+  it('forwards a rename + content update and confirms on one line', async () => {
+    const { calls, run } = build({ success: true, renamed: true, pageId: 'p1', pageName: 'Body' });
+    const out = await run({
+      action: 'update',
+      journalId: 'j1',
+      name: 'Renamed',
+      content: '<p>new</p>',
+    });
+    expect(calls[0][0]).toBe('updateJournal');
+    expect(calls[0][1]).toMatchObject({ journalId: 'j1', name: 'Renamed', content: '<p>new</p>' });
+    expect(out).toBe('Updated journal j1: renamed to "Renamed"; page "Body" (p1) written');
+  });
+
+  it('omits unset optional fields from the bridge payload', async () => {
+    const { calls, run } = build({ success: true, renamed: true });
+    expect(await run({ action: 'update', journalId: 'j1', name: 'OnlyName' })).toBe(
+      'Updated journal j1: renamed to "OnlyName"'
+    );
+    expect(calls[0][1]).toEqual({ journalId: 'j1', name: 'OnlyName' });
+  });
+
+  it('forwards ownership when playerVisible is given', async () => {
+    const { calls, run } = build({ success: true, pageId: 'p1', pageName: 'Handout' });
+    expect(
+      await run({
+        action: 'update',
+        journalId: 'j1',
+        newPageName: 'Handout',
+        content: '<p>x</p>',
+        playerVisible: true,
+      })
+    ).toBe('Updated journal j1: page "Handout" (p1) written');
+    expect(calls[0][1].ownership).toEqual({ default: 2 });
+  });
+
+  it('propagates a page throw untouched', async () => {
+    const { run } = build(() => {
+      throw new Error('nope');
+    });
+    await expect(run({ action: 'update', journalId: 'j1', name: 'X' })).rejects.toThrow(/^nope$/);
+  });
+
+  it('rejects when neither name nor content is provided (refine), and an empty journalId', async () => {
+    const { run } = build();
+    await expect(run({ action: 'update', journalId: 'j1', pageId: 'p1' })).rejects.toThrow();
+    await expect(run({ action: 'update', journalId: '', name: 'X' })).rejects.toThrow();
   });
 });
 
@@ -306,73 +553,6 @@ describe('handleUpdateQuestJournal (append a styled section from blocks)', () =>
   });
 });
 
-describe('handleListJournals', () => {
-  it('lists all journals when no journalId is given', async () => {
-    const journals = [
-      { id: 'a', name: 'Quest One' },
-      { id: 'b', name: 'Lore Notes' },
-    ];
-    const { tools, calls } = build((method: string) => (method === 'listJournals' ? journals : {}));
-
-    const out = await tools.handleListJournals({});
-    expect(calls[0][0]).toBe('listJournals');
-    expect(calls[0][1]).toEqual({});
-    expect(out).toEqual({ success: true, mode: 'list', journals, total: 2 });
-  });
-
-  it('forwards a name filter to the page', async () => {
-    const { tools, calls } = build((method: string) => (method === 'listJournals' ? [] : {}));
-    await tools.handleListJournals({ nameFilter: 'lore' });
-    expect(calls[0][1]).toEqual({ nameFilter: 'lore' });
-  });
-
-  it('filters to quest-related journals when filterQuests is true', async () => {
-    const journals = [
-      { id: 'a', name: 'Quest One' },
-      { id: 'b', name: 'Lore Notes' },
-      { id: 'c', name: 'The Mission' },
-    ];
-    const { tools } = build((method: string) => (method === 'listJournals' ? journals : {}));
-    const out = await tools.handleListJournals({ filterQuests: true });
-    expect(out.total).toBe(2); // "Quest One" + "The Mission"
-    expect(out.journals.map((j: any) => j.id)).toEqual(['a', 'c']);
-  });
-
-  it('reads a single journal when journalId is supplied', async () => {
-    const { tools, calls } = build((method: string) =>
-      method === 'getJournalContent'
-        ? {
-            content: '<p>body</p>',
-            currentPage: 'Quest',
-            allPages: [{ id: 'p1', name: 'Quest' }],
-            pageCount: 1,
-          }
-        : {}
-    );
-    const out = await tools.handleListJournals({ journalId: 'j1' });
-    expect(calls[0][0]).toBe('getJournalContent');
-    expect(calls[0][1]).toEqual({ journalId: 'j1' });
-    expect(out).toMatchObject({
-      success: true,
-      mode: 'journal',
-      journalId: 'j1',
-      content: '<p>body</p>',
-      pageCount: 1,
-    });
-  });
-
-  it('reads a specific page when journalId + pageId are supplied', async () => {
-    const page = { id: 'p1', name: 'Quest', content: '<p>page body</p>' };
-    const { tools, calls } = build((method: string) =>
-      method === 'getJournalPageContent' ? page : {}
-    );
-    const out = await tools.handleListJournals({ journalId: 'j1', pageId: 'p1' });
-    expect(calls[0][0]).toBe('getJournalPageContent');
-    expect(calls[0][1]).toEqual({ journalId: 'j1', pageId: 'p1' });
-    expect(out).toMatchObject({ success: true, mode: 'page', journalId: 'j1', page });
-  });
-});
-
 describe('handleSearchJournals', () => {
   it('matches by title and reports the totals', async () => {
     const journals = [
@@ -435,193 +615,6 @@ describe('handleSearchJournals', () => {
   });
 });
 
-describe('handleCreateJournal', () => {
-  it('forwards name + pages and reports the page count', async () => {
-    const { tools, calls } = build({
-      id: 'j1',
-      name: 'My Journal',
-      pageCount: 2,
-      pages: [{ id: 'p1' }, { id: 'p2' }],
-    });
-    const out = await tools.handleCreateJournal({
-      name: 'My Journal',
-      pages: [
-        { name: 'Intro', content: '<p>Hi</p>' },
-        { name: 'Details', content: '<p>More</p>' },
-      ],
-    });
-    expect(calls[0][0]).toBe('createJournal');
-    expect(calls[0][1].name).toBe('My Journal');
-    expect(calls[0][1].pages).toHaveLength(2);
-    expect(out).toMatchObject({
-      success: true,
-      journalId: 'j1',
-      journalName: 'My Journal',
-      pageCount: 2,
-      message: 'Journal "My Journal" created with 2 page(s)',
-    });
-  });
-
-  it('defaults missing page content to an empty string and passes folderName', async () => {
-    const { tools, calls } = build({ id: 'j2', name: 'J', pageCount: 1, pages: [] });
-    await tools.handleCreateJournal({
-      name: 'J',
-      pages: [{ name: 'OnlyName' }],
-      folderName: 'Lore',
-    });
-    expect(calls[0][1].pages[0]).toEqual({ name: 'OnlyName', content: '' });
-    expect(calls[0][1].folderName).toBe('Lore');
-  });
-
-  it('forwards an image page (kind:image -> src + caption + ownership) beside text pages', async () => {
-    const { tools, calls } = build({ id: 'j3', name: 'Keys', pageCount: 2, pages: [] });
-    await tools.handleCreateJournal({
-      name: 'Keys',
-      pages: [
-        { name: 'Overview', content: '<p>Map keys</p>' },
-        {
-          name: 'Iris Key',
-          kind: 'image',
-          src: 'worlds/w/assets/iris_Key.webp',
-          caption: 'Iris',
-          playerVisible: true,
-        },
-      ],
-    });
-    const pages = calls[0][1].pages;
-    // text page unchanged (no kind/src leaks in)
-    expect(pages[0]).toEqual({ name: 'Overview', content: '<p>Map keys</p>' });
-    // image page carries kind + src + caption + ownership, NOT a content field
-    expect(pages[1]).toEqual({
-      name: 'Iris Key',
-      kind: 'image',
-      src: 'worlds/w/assets/iris_Key.webp',
-      caption: 'Iris',
-      ownership: { default: 2 },
-    });
-  });
-
-  it('forwards an explicit sort key when given', async () => {
-    const { tools, calls } = build({ id: 'j', name: 'J', pageCount: 1, pages: [] });
-    await tools.handleCreateJournal({ name: 'J', pages: [{ name: 'P', content: 'x', sort: 200 }] });
-    expect(calls[0][1].pages[0]).toEqual({ name: 'P', content: 'x', sort: 200 });
-  });
-
-  it('surfaces page-side asset warnings (a non-resolving image src is kept, not substituted)', async () => {
-    const { tools } = build({
-      id: 'j4',
-      name: 'Keys',
-      pageCount: 1,
-      pages: [{ id: 'p1' }],
-      warnings: [
-        'Supplied src "x/nope.webp" was not found on the server — the document was created.',
-      ],
-    });
-    const out = await tools.handleCreateJournal({
-      name: 'Keys',
-      pages: [{ name: 'Bad', kind: 'image', src: 'x/nope.webp' }],
-    });
-    expect(out.message).toContain('not found on the server');
-    expect(out.message).toContain('⚠️ 1 warning(s):');
-  });
-
-  it('rejects an image page with no src (refine)', async () => {
-    const { tools } = build();
-    await expect(
-      tools.handleCreateJournal({ name: 'J', pages: [{ name: 'Img', kind: 'image' }] })
-    ).rejects.toThrow();
-  });
-
-  it('rejects an empty name', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateJournal({ name: '', pages: [{ name: 'p' }] })).rejects.toThrow();
-  });
-
-  it('rejects an empty pages array', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateJournal({ name: 'J', pages: [] })).rejects.toThrow();
-  });
-
-  it('rejects a page with an empty name', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateJournal({ name: 'J', pages: [{ name: '' }] })).rejects.toThrow();
-  });
-});
-
-describe('handleUpdateJournal', () => {
-  it('forwards a rename + content update and reports success', async () => {
-    const { tools, calls } = build({
-      success: true,
-      renamed: true,
-      pageId: 'p1',
-      pageName: 'Body',
-    });
-    const out = await tools.handleUpdateJournal({
-      journalId: 'j1',
-      name: 'Renamed',
-      content: '<p>new</p>',
-    });
-    expect(calls[0][0]).toBe('updateJournal');
-    expect(calls[0][1]).toMatchObject({
-      journalId: 'j1',
-      name: 'Renamed',
-      content: '<p>new</p>',
-    });
-    expect(out).toMatchObject({
-      success: true,
-      journalId: 'j1',
-      renamed: true,
-      pageId: 'p1',
-      pageName: 'Body',
-      message: 'Journal updated',
-    });
-  });
-
-  it('omits unset optional fields from the bridge payload', async () => {
-    const { tools, calls } = build({ success: true });
-    await tools.handleUpdateJournal({ journalId: 'j1', name: 'OnlyName' });
-    expect(calls[0][1]).toEqual({ journalId: 'j1', name: 'OnlyName' });
-    expect('content' in calls[0][1]).toBe(false);
-    expect('pageId' in calls[0][1]).toBe(false);
-  });
-
-  it('defaults renamed to false when the bridge omits it', async () => {
-    const { tools } = build({ success: true });
-    const out = await tools.handleUpdateJournal({ journalId: 'j1', content: '<p>x</p>' });
-    expect(out.renamed).toBe(false);
-  });
-
-  it('forwards ownership when playerVisible is given', async () => {
-    const { tools, calls } = build({ success: true, pageId: 'p1', pageName: 'P' });
-    await tools.handleUpdateJournal({
-      journalId: 'j1',
-      newPageName: 'Handout',
-      content: '<p>x</p>',
-      playerVisible: true,
-    });
-    expect(calls[0][1].ownership).toEqual({ default: 2 });
-  });
-
-  it('propagates a page throw untouched', async () => {
-    const { tools } = build(() => {
-      throw new Error('nope');
-    });
-    await expect(tools.handleUpdateJournal({ journalId: 'j1', name: 'X' })).rejects.toThrow(
-      /^nope$/
-    );
-  });
-
-  it('rejects when neither name nor content is provided (refine)', async () => {
-    const { tools } = build();
-    await expect(tools.handleUpdateJournal({ journalId: 'j1', pageId: 'p1' })).rejects.toThrow();
-  });
-
-  it('rejects an empty journalId', async () => {
-    const { tools } = build();
-    await expect(tools.handleUpdateJournal({ journalId: '', name: 'X' })).rejects.toThrow();
-  });
-});
-
 describe('handleSetJournalPageVisibility', () => {
   it('forwards journalId/pageId/playerVisible and reports the new state', async () => {
     const { tools, calls } = build({ success: true, pageId: 'p1', pageName: 'Flavor' });
@@ -666,34 +659,35 @@ describe('handleSetJournalPageVisibility', () => {
   });
 });
 
-describe('handleDeleteJournalPage', () => {
-  it('forwards journalId/pageId and reports the deleted page', async () => {
-    const { tools, calls } = build({
+describe('manage-journals delete-page', () => {
+  it('forwards journalId/pageId and confirms on one line', async () => {
+    const { calls, run } = build({
       success: true,
       deleted: true,
       page: { id: 'p2', name: 'Stray' },
     });
-    const out = await tools.handleDeleteJournalPage({ journalId: 'j1', pageId: 'p2' });
+    const out = await run({ action: 'delete-page', journalId: 'j1', pageId: 'p2' });
     expect(calls[0][0]).toBe('deleteJournalPage');
     expect(calls[0][1]).toEqual({ journalId: 'j1', pageId: 'p2' });
-    expect(out).toMatchObject({ success: true, deleted: true, page: { id: 'p2', name: 'Stray' } });
+    expect(out).toBe('Deleted page "Stray" (p2) of journal j1');
   });
 
-  it('reports not-found when the page id does not resolve', async () => {
-    const { tools } = build({ success: true, deleted: false, notFound: 'p9' });
-    const out = await tools.handleDeleteJournalPage({ journalId: 'j1', pageId: 'p9' });
-    expect(out).toMatchObject({ success: true, deleted: false, notFound: 'p9' });
+  it('a page that does not resolve is an error (§3), never prose in a success shape', async () => {
+    const { run } = build({ success: true, deleted: false, notFound: 'p9' });
+    await expect(run({ action: 'delete-page', journalId: 'j1', pageId: 'p9' })).rejects.toThrow(
+      'Page not found: "p9". Nothing deleted.'
+    );
   });
 
   it('rejects empty ids', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteJournalPage({ journalId: 'j1', pageId: '' })).rejects.toThrow();
+    const { run } = build();
+    await expect(run({ action: 'delete-page', journalId: 'j1', pageId: '' })).rejects.toThrow();
   });
 });
 
-describe('handleDeleteJournal', () => {
-  it('forwards identifiers and reports the deleted count', async () => {
-    const { tools, calls } = build({
+describe('manage-journals delete', () => {
+  it('forwards identifiers and confirms the deletions on one line', async () => {
+    const { calls, run } = build({
       deletedCount: 2,
       deleted: [
         { name: 'Quest One', id: 'a' },
@@ -701,38 +695,29 @@ describe('handleDeleteJournal', () => {
       ],
       notFound: [],
     });
-    const out = await tools.handleDeleteJournal({ identifiers: ['a', 'b'] });
+    const out = await run({ action: 'delete', identifiers: ['a', 'b'] });
     expect(calls[0][0]).toBe('deleteJournals');
     expect(calls[0][1]).toEqual({ identifiers: ['a', 'b'] });
-    expect(out).toMatchObject({
-      success: true,
-      deletedCount: 2,
-      message: 'Deleted 2 journal(s)',
-    });
-    expect(out.deleted).toHaveLength(2);
+    expect(out).toBe('Deleted 2 journal(s): "Quest One" (a), "Quest Two" (b)');
   });
 
-  it('passes through a notFound list from the bridge', async () => {
-    const { tools } = build({ deletedCount: 0, deleted: [], notFound: ['ghost'] });
-    const out = await tools.handleDeleteJournal({ identifiers: ['ghost'] });
-    expect(out.notFound).toEqual(['ghost']);
-    expect(out.message).toBe('Deleted 0 journal(s)');
+  it('appends the not-found tail', async () => {
+    const { run } = build({ deletedCount: 0, deleted: [], notFound: ['ghost'] });
+    expect(await run({ action: 'delete', identifiers: ['ghost'] })).toBe(
+      'Deleted 0 journal(s) (1 not found: ghost)'
+    );
   });
 
   it('propagates a page throw untouched', async () => {
-    const { tools } = build(() => {
+    const { run } = build(() => {
       throw new Error('failed');
     });
-    await expect(tools.handleDeleteJournal({ identifiers: ['a'] })).rejects.toThrow(/^failed$/);
+    await expect(run({ action: 'delete', identifiers: ['a'] })).rejects.toThrow(/^failed$/);
   });
 
-  it('rejects an empty identifiers array', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteJournal({ identifiers: [] })).rejects.toThrow();
-  });
-
-  it('rejects an identifier that is an empty string', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteJournal({ identifiers: [''] })).rejects.toThrow();
+  it('rejects an empty identifiers array and an empty-string identifier', async () => {
+    const { run } = build();
+    await expect(run({ action: 'delete', identifiers: [] })).rejects.toThrow();
+    await expect(run({ action: 'delete', identifiers: [''] })).rejects.toThrow();
   });
 });

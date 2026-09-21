@@ -16,7 +16,7 @@ creature, alphabetical**. Players can open it; it is how they learn what they ju
 The deterministic half is the bundled script `bestiary-entry.mjs` (next to this file). There is **no
 MCP tool for this**: reading a compendium journal page and setting *entry-level* journal ownership
 both sit outside the tool surface, so the script drives the live session directly through
-`dist/foundry.js`. Everything else — `upload-asset`, `list-journals`,
+`dist/foundry.js`. Everything else — `upload-asset`, `manage-journals`,
 `set-journal-page-visibility` — is normal tooling.
 
 ## Step 0 — Has it been earned?
@@ -52,7 +52,7 @@ Manual** names it:
 - **Not in the Monster Manual** (homebrew, a Ravenloft/adventure-pack creature, a custom NPC): the
   script exits with `not in the Monster Manual` or `no lore embed in its biography`. **Stop and ask
   the DM for the narrative** — never invent monster lore, and never paste a stat block. Then build
-  the page by hand with `create-journal`/`update-journal` in the same house shape, or run with
+  the page by hand with `manage-journals` `create`/`update` in the same house shape, or run with
   `--no-art` and edit the text in after.
 
 ## Step 2 — Art
@@ -100,12 +100,12 @@ What the script guarantees, so you don't have to check it by hand:
 - the page is **upserted by name** (safe to re-run) and **every page is re-sorted alphabetically**;
 - **ownership**: the journal entry is set to players-OBSERVE, and each page gets an *explicit*
   ownership default. That explicitness matters — a page created without one **inherits** the open
-  entry and would leak a GM-only monster. This is also why `create-journal`'s `playerVisible` is not
+  entry and would leak a GM-only monster. This is also why the create action's `playerVisible` is not
   enough on its own here: it sets the page but leaves the *entry* GM-only, so players never see the
   journal at all.
 
 ## Step 4 — Verify and report
 
-`list-journals` with the Bestiary's `journalId`: confirm the new page is present, the order is
+`manage-journals { action: "get" }` with the Bestiary's `journalId`: confirm the new page is present, the order is
 alphabetical, and anything staged reads GM-only. Tell the DM which page was created vs refreshed, and
 name any page still hidden from players.
