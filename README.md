@@ -1,509 +1,217 @@
 # fvtt-mcp-dnd5e
 
-A **D&D 5e** Dungeon Master's assistant for [Foundry VTT](https://foundryvtt.com) — a [Model
-Context Protocol](https://modelcontextprotocol.io) server driven by **Claude Code**. It lets an AI
-GM assistant read and edit a **live** Foundry world (actors, items, journals, scenes, compendia,
-roll tables, cards…) and manage its static files. It is a Foundry MCP first: the world can run on
-**[Molten Hosting](https://moltenhosting.com)**, on **this machine**, or at **any URL** — where it
-runs is a *host*, an option chosen per registration (`FOUNDRY_HOST`), never the product
-([design.md §2.6](design.md)). *(Formerly `fvtt-mcp-molten5e`.)*
+A Dungeon Master's assistant for **D&D 5e** on [Foundry VTT](https://foundryvtt.com), driven by
+[Claude Code](https://claude.com/claude-code). It is a [Model Context Protocol](https://modelcontextprotocol.io)
+server that reads and edits a **live** Foundry world — actors, items, journals, scenes and
+everything on them, compendia, roll tables, cards, playlists, chat — plus a set of **skills**
+that know how to build D&D content properly: a stat block becomes a complete NPC with its loot, a
+map image becomes a lit and walled scene, a pasted adventure becomes journals, tables and
+handouts, a Discord recording becomes the session recap.
 
-Paired with its bundled **skills**, it goes well beyond CRUD: it can author a **complete, table-ready
-adventure end to end** — scene, monsters, NPCs, a pregen PC or party, treasure, linked journals, and
-roll tables — scaled to however much the DM provides. Hand it **only a map image** and Claude reads the
-map and builds the whole module; hand it **your own finished module** and it faithfully recreates every
-stat block, item, and handout in the VTT.
+It works with the world wherever it runs — a hosting provider, this machine, any URL — and
+builds from the **2024 premium books** you own (*Monster Manual*, *Player's Handbook*,
+*Dungeon Master's Guide* as Foundry modules), never from the SRD. The current line targets
+**dnd5e 6.0.3+ on Foundry 14.368+**.
 
-**An importer worth calling out:**
+## Start in 60 seconds
 
-- **Adventure map packs → your world.** Import a battlemap *module* (a distributed Foundry scene-pack
-  with its own compendiums) faithfully: every scene with its walls, lights, day/night mood, and
-  navigation thumbnails, plus the journal of map keys — with all assets re-pointed into your world, and
-  cross-version (older and newer Foundry formats) handled. **[Tom Cartos](https://www.tomcartos.com)**
-  packs are the first supported format; more to come.
-
----
-
-## 2.0 — built for the D&D 5e system 6.x
-
-**Version 2.0 targets the D&D 5e system 6.x on Foundry VTT 14** (developed and verified against
-dnd5e **6.0.3** / Foundry **14.368** on the local sandbox; the production world stays on dnd5e 5.3.3 /
-Foundry 14.364 until the 2.x line has been tested there — a 2.x tool refuses to author against a
-pre-6.0 world, since it writes native 6.0 keys that a 5.3.3 schema prunes). dnd5e 6.0 is, by the system team's own account, the biggest
-release in the system's history: a ground-up pass that leans on everything new in Foundry v14. The
-Levels feature now drives falling and fall damage; ActiveEffect v2 underpins conditional effects,
-rules-based effects that apply at roll time, region-attached effects, and smarter expiry; chat cards
-were rebuilt on typed message data; armor class became a list of qualifying calculations the sheet
-picks the best of; and the calendar now drives dawn/dusk recovery and bastion turns. (See the
-[dnd5e 6.0 release notes](https://github.com/foundryvtt/dnd5e/releases/tag/release-6.0.0) for the
-full picture.)
-
-A good deal of the **persisted data model moved with it**, so 2.0 is the version of this MCP that
-speaks 6.x natively — armor class, conditions (including leveled exhaustion), Active Effect changes
-and durations, movement, item rarities, and typed chat messages are all read and written in the 6.0
-shapes, and the compendium readers cope with premium book packs that are still built for 5.x. The
-audit behind it, tool by tool, is in
-[`docs/history/dnd5e-6.0-compat-review.md`](docs/history/dnd5e-6.0-compat-review.md).
-
-What changed at the tool surface:
-
-- **`manage-actors` `update` → `ac`** (`update-actor` before M8) now speaks the 6.0 model: `override` (a fixed stat-block AC), `natural`
-  (natural armor), `calcs` (the base calculations the actor qualifies for) and `formulas` (custom
-  formulas). The 5.x `calc` / `flat` / `formula` fields are still accepted and translated, but
-  deprecated.
-- **`manage-effect`** writes changes to `system.changes` and takes a v14 `duration`
-  (`{ value, units, expiry }`; the old `rounds` / `turns` / `seconds` keys are translated).
-- **`apply-condition`** sets exhaustion levels 1–6 (0 removes) through the system's own lever; the
-  5.x flag no longer exists.
-- **`get-combat-stats`**, **`list-chat-messages`** and **`export-chat-log`** read 6.0's typed chat
-  messages; card bodies that the system renders on the fly are rendered into the export.
-- **`post-item-card`** reports honestly when a module hook vetoes a use (e.g. a require-target rule).
-
-**1.x** remains the line for dnd5e 5.3.x on Foundry 14.
-
-## 2.1 — tools for what 6.0 introduced
-
-2.0 made the existing tools speak 6.x; **2.1 adds tools for the features dnd5e 6.0 introduced**, so an
-authored monster trait, magic item or map area can express what a 2024 book entry can. Every shape is
-validated against the 6.0.1 source, re-checked against the 6.0.3 diff, and proven live (`scripts/verify-effects-6.mjs`,
-`scripts/verify-region-effects.mjs`); the plan and status are in
-[`docs/history/plan-2.1-dnd5e-6-features.md`](docs/history/plan-2.1-dnd5e-6-features.md).
-
-- **`manage-effect`** — **conditions** (the system's Filter JSON, on the whole effect or on one
-  change: "+2 AC while Bloodied", "only ranged or thrown weapons"), **rules-type changes** that modify
-  a roll at roll time (`dnd5e.advantage` / `dnd5e.bonus` / `dnd5e.minimum` / `dnd5e.maximum` on
-  `attack` / `check` / `d20` / `save`, bonus on `damage` / `healing` — "+1d4 on History checks",
-  "disadvantage on Strength-based d20 tests", "ranged attacks never roll below 10"; key × type ×
-  value validated, and a core-type change on a roll category is refused as a write to nowhere),
-  per-change `replacement` (origin / target), `magical`, and the full **expiry** vocabulary
-  (`turnEnd` … + `shortRest` / `longRest` + `sourceStart` / `sourceEnd` / `targetStart` /
-  `targetEnd`). Read-back (`manage-actors` `get`, `manage-effect list`) shows each effect's type, conditions
-  and every rule as a sentence; `content-audit` flags a dead rules change.
-- **`manage-activity`** — a **`duration`** override with expiry the applied effects inherit, an area
-  **`template`** + `affects`, and **`behaviors`** the template carries (`applyActiveEffect`,
-  `difficultTerrain`): an authored Web is a save + a 20-ft cube + `["Restrained"]` + web terrain.
-- **`add-region-behavior`** — `dnd5e.applyActiveEffect` / `dnd5e.difficultTerrain` with
-  `effects` resolved **by name** (a poison pool is `effects: ["Poisoned"]`), `dispositions`,
-  `sizes`, `creatureTypes`, `terrainTypes`, `magical`. Effect names resolve from the system's stock
-  `dnd5e.effects` pack (the one `dnd5e.*` pack that is a permitted source — it holds mechanics,
-  not book content; design.md §2.3), from a world item's effect (`"Item#Effect"`), or a uuid — never
-  an actor's effect (the behavior copies it on entry and removes it on exit).
-- **`add-item`** / **`update-actor-item`** — `rarity` accepts a list for a "Rarity Varies" item and
-  is written natively to `system.rarities`.
-
-2.1.1 rounds out the surface:
-
-- **`manage-activity`** — `type: "teleport"` (`teleportDistance`, self-targeted by default) and
-  `type: "transform"` in all three 6.0 modes: by CR (`profiles` with cr / size / type / movement
-  filters + a `transformPreset`), direct link (`profiles[].actor` by Monster Manual name or uuid),
-  and Select Form (`forms` — the item's own effects are the forms: a lycanthrope's Humanoid / Hybrid
-  / Beast shapes, Disguise Self).
-- **`add-region-behavior`** — `dnd5e.rotateArea` gets a typed `rotate` (stop angles + the tiles /
-  walls / lights / regions / sounds that turn with the platform, validated to exist on the scene);
-  `manage-activity` transform gets `transformSettings` (keep / merge / effects / minimumAC /
-  tempFormula / spellLists) on top of the presets — the last 6.0 shapes that were pass-through.
-- **`configure-dnd5e-settings`** *(new)* — read or set the 6.0 automation switches through an
-  allow-list: falling, token-size and vision sync, exhaustion, initiative grouping, auto-Downed,
-  encounter placement, the player damage / effects trays, bastions, and the calendar (enabled,
-  daily recovery mode, which calendar). Every change echoes previous → new; the ones that need a
-  client reload are named. `get-world-info` carries the same block as `automation`.
-- **`manage-calendar`** *(new)* — the in-world date and time on Foundry v14's `game.time` with the
-  dnd5e calendar layer: read it in display terms, advance it (rounds / minutes / hours / days —
-  what triggers dawn / dusk / day recovery and bastion turns), or set a date by month name or number
-  and a time of day.
-- The PC leveling engine applies 6.0's **ModifyItem** advancement (an enchantment placed on an
-  identified item) as a forced step, like ItemGrant.
-
-## 2.2 — a Foundry MCP first, hosts as options
-
-No tool behaviour changed in 2.2; what changed is what the project *is*. It was named for one host
-(`fvtt-mcp-molten5e`) while the code had long been host-agnostic in fact — so the host left the
-name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md`](docs/history/plan-2.2-hosts.md)):
-
-- **`FOUNDRY_HOST`** = `generic` (any Foundry at a URL — the default) · `molten` (Molten Hosting:
-  the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
-  asset file tools work straight on its `Data/` directory). One `.env`, one registration per
-  instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 81 tools (14 named toolsets;
-  `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
-  instead of ~57k.
-- **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
-
-Done in **3.0** (M8 of `docs/plan-3.0-consolidation.md`): the 17 `list/create/update/delete-X`
-families folded into one tool each, selected by `action` (and `kind` for the placeables) — the
-biggest context lever left, and a change to every skill, so one family per commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings / sounds / notes / tokens
-/ regions × `action`: create / list / update / delete, plus the region specials) replaces 35 tools
-for fewer advertised bytes than they cost; `manage-macros` (`action`: create / list / delete) the
-three macro tools; `manage-folders`, `manage-playlists`, `manage-cards`, `manage-rolltables`,
-`manage-items`, `manage-journals`, `manage-scenes` and `manage-actors` (`action`: create /
-import / list / get / update / delete as each family has them) the folder, playlist, cards,
-roll-table, world-item, journal, scene-document and actor tools (`manage-actors` also carries the
-`get-entity` and `export` reads); `search-compendium` (`type`: any / creatures / spells / items) the
-four compendium searches. 151 tools became 81.
-
----
-
-> 📐 **Design north star — [`design.md`](design.md).** The mission, scope, the *skills decide, tools
-> do* contract, and the NPC authoring doctrine all live there; it's the document every skill, tool,
-> and refactor traces back to. **🚧 Still under construction** — actively evolving alongside the
-> project, so expect it (and the tool surface) to change.
-
-## Why this shape
-
-Foundry has no server-side plugin API, and managed hosts (like Molten) don't expose a control API
-either — you can't run a process next to the game server. The only supported way in, on *every*
-host, is Foundry's own authenticated client.
-
-So the MCP server drives a **headless Chromium** client (via [Playwright](https://playwright.dev)):
-it lets the host wake a sleeping instance (Molten's **Magic URL**), joins the world as a dedicated
-Foundry user, waits for `game.ready`, and injects a page-side library that exposes the world's own
-client APIs. Claude Code talks to the MCP server over stdio; the server turns each tool call into a
-call inside that live page. Everything that depends on **where** the world runs — the wake step,
-the file channel into `Data/`, the env vars — lives behind one seam, `src/hosts/**`; the rest of
-the server never knows.
-
-```
-Claude Code  ──stdio──>  MCP server  (dist/index.js, on your PC)
-                              │  Playwright → headless Chromium (src/foundry.ts)
-                              │  + the host (src/hosts: molten | local | generic)
-                              ▼
-                    Headless Foundry client
-                    (host wakes the instance if it sleeps; joins as a dedicated GM user)
-                              │  the world's own client APIs (window.__fvtt)
-                              ▼
-                    Foundry VTT world (Molten, this machine, or any URL)
+```bash
+git clone https://github.com/Txpple/fvtt-mcp-dnd5e && cd fvtt-mcp-dnd5e
+npm install && npx playwright install chromium && npm run build
+cp .env.example .env        # set FOUNDRY_URL, and FOUNDRY_USER / _PASSWORD for the user it joins as
+cp .mcp.json.example .mcp.json   # absolute paths; one registration per Foundry instance
+node scripts/install-skills.mjs ~/my-campaign   # optional: link the skills into another project
 ```
 
-The headless client connects **lazily**: `tools/list` answers without touching Foundry, and the
-first actual tool call is what wakes the instance and joins the world. The whole tool tree depends
-on one seam — `foundry.call(name, args)` — and only `src/foundry.ts` ever imports Playwright.
+Then, in Foundry, create the user the server joins as (Users → Create User, role Gamemaster or
+Assistant GM; default name `MCP-Claude`), start Claude Code, and say **"start the world"** — the
+`start-session` skill calls `get-world-info`, which wakes the instance if it sleeps, launches the
+world if it can (`FOUNDRY_ADMIN_KEY`), joins, and reports what it found: the world, the host, the
+bridge user's role, which premium books are present. From there, ask for content.
 
-### Two-plane model
+Claude Code loads the skills from `.claude/skills` of the directory it runs in, so running it
+from this repo needs nothing; `install-skills.mjs` links them into any other project (or `~` for
+user scope).
 
-- **Plane A — the live bridge.** World documents (actors, items, journals, scenes, compendia, roll
-  tables, cards, ownership). Goes through the headless Foundry client while the server is awake — the
-  **only** safe way to read/write live world data.
-- **Plane B — the host's file plane.** Talks to the file channel of wherever Foundry runs, directly
-  (no bridge): on Molten that is WebDAV, on a local install it is the `Data/` directory itself.
-  Uploads/serves static assets and maps `Data/`-relative paths to public URLs. Which host a
-  registration targets is `FOUNDRY_HOST` (`molten` / `local` / `generic` — [design.md §2.6](design.md)).
+## What you can do
 
-**Safety rule baked in:** a running world's database (LevelDB stores under `Data/worlds/<world>/data/`)
-must **never** be written over the file channel — that corrupts it. Plane-B file ops are restricted
-to static assets and refuse world-DB paths; bulk DB edits are an offline-only flow (stop → Create
-Backup → `fvtt unpack` → edit → `fvtt pack` → start, via
-[foundryvtt-cli](https://github.com/foundryvtt/foundryvtt-cli)). The Molten **management panel is
-never scripted** (their ToU forbids it); only the Magic-URL wake, WebDAV, and the Foundry server are
-automated.
+Say it in plain words; the matching skill takes over and calls the tools.
 
-## Scope
+| Skill | Does |
+| --- | --- |
+| `start-session` | boot the world and report its state (read-only) |
+| `stat-block-builder` | a complete NPC from a pasted or described stat block — stats, actions, spells, effects, inventory, loot, art, folder |
+| `pc-builder` | a complete player character — class, species, background, scores, level-1 choices, spells, gear, art, owner |
+| `physical-item-builder` | weapons, armor, wondrous items, potions, loot, containers — the real PHB / DMG item first, modified or custom last |
+| `scene-builder` | a map image into a ready-to-play scene: sized to the image, walls + lights, mood, playlist, journal |
+| `journal-builder` | quests, handouts, lore, boxed text, GM notes, session recaps — with the links between them |
+| `table-builder` · `cards-builder` · `playlist-builder` | roll tables, card decks, music and ambience playlists |
+| `soundscape-builder` | atmospheric sound for a scene (needs the companion module — below) |
+| `tom-cartos-import` | a scene-pack module (Tom Cartos and the like) into your world: every scene with its walls, lights, teleporters, legend |
+| `token-cutout` | a cut-out token image onto an actor, facing checked |
+| `chat-and-narration` | narration, NPC dialogue, whispers, roll requests, item cards; export or prune the log |
+| `session-scribe` | a Craig (Discord) recording → speaker-labeled transcript aligned with the chat log → recap, combat report, GM notes |
+| `session-audit` · `plot-drift-check` · `bestiary-builder` | audit next session's encounters and pacing; diff the world against the plot document; file what the party fought |
 
-**In scope:** actors — both **NPCs** and full leveled **PCs** — items, journals, scenes (the scene **document** _and_ its **placeables** —
-walls, lights, tokens, regions/teleporters, ambient sounds, tiles, drawings, map notes), playlists,
-roll tables, cards, macros, combat-tracker config, compendium manipulation — especially **pulling**
-content out ("make an actor from the MM owlbear") — and asset upload. With the bundled skills these
-compose into **end-to-end adventures** — from **reading a provided map image** to drive a scene and
-everything in it, to **importing a distributed battlemap module** (e.g. Tom Cartos scene-packs)
-faithfully into your world. Authoring prefers the **2024** dnd5e data model, sourced from
-**PHB / DMG / MM**; if the requested content isn't in those packs the tool says so rather than
-inventing it.
+The skills compose into whole adventures: hand over only a map and the assistant reads it and
+builds the scene and everything in it; hand over a finished module and it recreates every stat
+block, item and handout faithfully. The campaign-facing skills (`session-scribe`, the audits,
+the bestiary) keep your campaign's facts and house style in a **campaign repo** of your own —
+`campaign.json` + `STYLE.md`, laid out as [`.claude/skills/_shared/campaign-repo.md`](.claude/skills/_shared/campaign-repo.md)
+describes — so nothing about one table lives in this repo.
 
-**Out of scope:** non-5e game systems; **live session assistance** — monitoring a running game and
-interjecting during play — by decision (there is no in-session assistant in this project; see
-[`design.md`](design.md) §1); AI **map-image** generation (Claude reads a *provided* map, it does not
-draw one); scripting a hosting provider's management panel. (Scene placeables — walls, lights,
-tokens, regions — _are_ authored and edited as scene contents; what's out of scope is driving them
-live on the canvas during a running session.)
+## Requirements
 
-**Removed deliberately: D&D Beyond import.** DDB character exports strip the embedded effect
-automation the premium compendium items carry, so an imported PC looks right and silently fails at
-the table. Ask for the character instead and it's built **natively from the premium books**, using
-the DDB sheet only as a reading reference.
+- **Node.js 22+** (developed on 24; `.nvmrc`), and Chromium for Playwright
+  (`npx playwright install chromium`) — the server drives a headless browser.
+- **Foundry VTT 14.368+** with **dnd5e 6.0.3+** (the tools refuse to author against a pre-6.0
+  world; 1.5.2 is the last release for dnd5e 5.3.x), and a dedicated **Foundry user** for the
+  server to join as.
+- **The 2024 premium books as Foundry modules** — `dnd-monster-manual`, `dnd-players-handbook`,
+  `dnd-dungeon-masters-guide` are **required for authoring** (the skills copy from them); *Heroes
+  of Faerûn* and *Ravenloft: The Horrors Within* are optional extensions. `get-world-info` reports
+  each as `present` / `missing`; the non-authoring tools work with none.
 
----
+## Where Foundry runs — hosts
+
+The server reaches the world through Foundry's own client, so it works on every host. Where the
+world runs is a **host preset** chosen per registration with `FOUNDRY_HOST`
+([`docs/hosts.md`](docs/hosts.md)):
+
+| `FOUNDRY_HOST` | Means |
+| --- | --- |
+| `generic` (default) | any Foundry at `FOUNDRY_URL`; `FOUNDRY_WAKE_URL` if it sleeps, `FOUNDRY_DATA_DIR` / `FOUNDRY_WEBDAV_*` for a direct file plane |
+| `molten` | [Molten Hosting](https://moltenhosting.com): the wake URL from the panel, the WebDAV plane derived from the URL |
+| `local` | an install on this machine — no wake, its `Data/` directory as the file plane ([`docs/local-sandbox.md`](docs/local-sandbox.md)) |
+
+One `.env` serves every registration ([`.env.example`](.env.example) explains every variable); a
+registration's `env` block sets what differs. `FOUNDRY_TOOLSETS` lets a registration advertise a
+subset of the tools (`chat,combat` is 12 tools instead of 81).
+
+## The tools
+
+**81 tools.** Everything a world holds, one family tool each with an `action`
+(`manage-actors`, `manage-scenes`, `manage-placeables` with a `kind` for walls / lights / tokens /
+regions / sounds / tiles / drawings / notes, `manage-items`, `manage-journals`, `manage-rolltables`,
+`manage-cards`, `manage-playlists`, `manage-folders`, `manage-macros`) plus the D&D-specific ones:
+
+- **Authoring** — `author-npc`, `create-actor-from-compendium`, `create-pc` / `level-up-pc` /
+  `create-pc-from-prefab` / `inspect-pc-advancement`, `add-feature`, `add-item`,
+  `update-actor-item`, `remove-from-actor`, `add-free-cast`, `manage-effect` (the dnd5e 6.x
+  effect model: conditions, rules-type changes, expiry), `manage-activity` (attacks, saves,
+  templates, teleport, transform), `apply-condition`, `set-actor-art`, `create-quest-journal` /
+  `update-quest-journal` / `link-quest-to-npc`, `content-audit`.
+- **Reading** — `get-world-info`, `get-current-scene`, `search-compendium` (creatures / spells /
+  items with facets), `get-compendium-entry`, `list-compendium-packs`, `read-pack` (a scene-pack
+  module on disk), `search-journals`, `search-actor-contents`, `screenshot-scene`,
+  `get-scene-dimensions`.
+- **The table** — `send-chat-message`, `request-roll`, `post-item-card`, `list-chat-messages`,
+  `export-chat-log`, `delete-chat-messages`, `roll-on-table`, `configure-combat-tracker`, `activate-scene`,
+  `pull-users-to-scene`, `configure-dnd5e-settings` (the 6.0 automation switches),
+  `manage-calendar` (the in-world date; advancing it triggers dawn / dusk / bastion turns).
+- **Files** — `upload-asset`, `upload-asset-tree`, `list-assets`, `asset-info`, `download-asset`,
+  `copy-asset`, `move-asset`, `delete-asset`, `create-asset-folder`, `asset-url`,
+  `find-asset-references`, `relink-asset`, `add-journal-image`. They work on every host through
+  Foundry's own file picker; a direct plane (`FOUNDRY_DATA_DIR` or WebDAV) is faster and the only
+  way delete / move work.
+- **People and organization** — `list-users`, `update-user`, `set-user-avatar`,
+  `set-actor-ownership`, `list-actor-ownership`, `create-group` / `manage-group-members` /
+  `get-group` / `set-primary-party`, `move-documents`, `bulk-delete`, `duplicate-actor`,
+  `set-journal-page-visibility`, `disconnect-bridge`.
+
+Every list answers one line per record; every `get` is JSON; a miss is an error that names what
+was looked for; an unknown argument is refused by name. The full dispatch table is
+[`src/registry.ts`](src/registry.ts).
+
+### Tools that need a companion module
+
+Three tools write or read a flag that a module of the same family acts on, and **warn instead of
+claiming success** when it is not installed ([`docs/contracts.md`](docs/contracts.md)):
+
+| Tool | Module | What it adds |
+| --- | --- | --- |
+| `configure-soundscape` | [`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape) | per-scene sound sets — randomized one-shots with silence between, crossfaded ambient beds; neither AmbientSound placeables nor Playlists can express them |
+| `get-combat-stats` | [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) | a per-combat ledger from the module's stat stamps: damage, healing, buff margins, spend economy, the moments |
+| `set-landing-scene` | [`fvtt-mod-openserver`](https://github.com/Txpple/fvtt-mod-openserver) | where each user comes up at login — core Foundry has no such thing |
+
+## How it works
+
+Foundry has no server-side plugin API and a managed host does not expose one either; the one
+supported way in, on every host, is Foundry's own authenticated client. So the server drives a
+**headless Chromium** (Playwright): it wakes the instance if the host sleeps, joins the world as
+the dedicated user, waits for `game.ready`, and injects a page-side library that exposes the
+world's own client APIs. Claude Code talks to the server over stdio; each tool call becomes a call
+inside that live page.
+
+```
+Claude Code ──stdio──▶ MCP server (dist/index.js, on your machine)
+                          │  Playwright → headless Chromium (src/foundry.ts)
+                          │  + the host preset (src/hosts: generic | molten | local)
+                          ▼
+                 the world's own client APIs, in the page (window.__fvtt)
+                          ▼
+                 Foundry VTT world — wherever it runs
+```
+
+The client connects **lazily**: `tools/list` answers without touching Foundry, and the first real
+tool call is what wakes and joins. World documents always go through that page (the only safe
+way to write a live world); the file tools go through the host's file plane and refuse a running
+world's database. Everything that depends on *where* the world runs lives behind one seam,
+`src/hosts/**` — the rest of the server never knows.
+
+**As a library:** the sister repos (the companion modules' `tools/` harnesses) drive a live world
+through the same bridge with `import { connectFoundry } from 'fvtt-mcp-dnd5e/client'` —
+[`docs/contracts.md`](docs/contracts.md) declares that surface. The package is not published;
+clone and build is the install.
 
 ## Repository layout
 
 ```
 src/
-  index.ts          MCP server entry (stdio) — serves the registry's tools over JSON-RPC
-  registry.ts       single source of truth: tool name → handler (advertised list derived from it)
-  foundry.ts        THE Playwright seam: launch headless Chromium → wake → join → inject → call()
-  hosts/            WHERE Foundry runs — molten (Magic-URL wake, WebDAV plane) / local (Data/ dir) / generic
-  config.ts         env/config loader (reads .env from the repo root; FOUNDRY_HOST picks the host)
-  tools/            MCP tool classes — Plane A world tools + assets/ (Plane B file tools over the host's plane)
-  page/             page-side domain library, bundled into dist/page.bundle.js and injected
-scripts/            the live proof (verify-*.mjs), the sandbox toolkit, the measurements — scripts/README.md
-  measure/          the context budgets — tools/list bytes, tool-name bytes, skill descriptions (`npm run measure`)
-tests/              gated live integration suites (offline unit tests live beside the code in src/**)
+  index.ts       MCP server entry (stdio)
+  registry.ts    tool name → handler; the advertised list is derived from it
+  foundry.ts     the Playwright seam: launch → wake → join → inject → call()
+  hosts/         where Foundry runs: the presets, the file planes, the one env selector
+  tools/         the MCP tools (zod schemas; the JSON Schema is generated)
+  page/          the page-side library, bundled into dist/page.bundle.js and injected
+  client.ts      the library surface the sister repos import
+.claude/skills/  the skills — tracked, part of the deliverable
+scripts/         the live proof (verify-*.mjs), the sandbox toolkit, the measurements
+tests/           the gated live integration suites (unit tests sit beside the code)
+docs/            hosts, contracts, the sandbox, the release gate; done work under history/
 ```
 
-## Requirements
+## Development
 
-- **Node.js 22+** (developed/tested on Node 24; see `.nvmrc`; CI runs 22 + 24). On Windows, if Node
-  isn't on `PATH`, use the full path to `node.exe` (see wiring below).
-- A **Chromium for Playwright** — `npx playwright install chromium` (Playwright is a runtime
-  dependency; the headless bridge drives this browser).
-- **Foundry VTT 14.368+** with the **D&D 5e system 6.0.3+** (2.x is the dnd5e **6.x** line and
-  refuses to author against an older system; v1.5.2 is the last release that runs on dnd5e 5.3.x),
-  anywhere it runs (Molten Hosting, this machine, a URL — `FOUNDRY_HOST`), plus a dedicated
-  **Foundry user** for the MCP to join as (Users → Create User, role Gamemaster or Assistant GM;
-  `FOUNDRY_USER`, default `MCP-Claude`; a lower role is warned about at connect and every write
-  fails).
-- **The premium 2024 books as Foundry modules** — the *Monster Manual*, *Player's Handbook* and
-  *Dungeon Master's Guide* (`dnd-monster-manual`, `dnd-players-handbook`,
-  `dnd-dungeon-masters-guide`) are **required for authoring** (the skills copy from them, never
-  from the SRD); *Heroes of Faerûn* and *Ravenloft: The Horrors Within* are optional extensions.
-  `get-world-info` reports each as `present` / `missing`; the non-authoring tools work with none.
+`npm run build` (tsc, then esbuild bundles the page library), `npm test` (offline; it prints the
+context budgets — `tools/list` bytes, tool-name bytes, skill-description bytes — and fails when
+one climbs past its ratchet), `npm run check` / `typecheck` / `knip`, `npm run measure`. The
+live gates run against a sandbox: `FOUNDRY_HOST=local node scripts/verify-<family>.mjs` and
+`FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration`. The house rules — the gates, one
+world-driver at a time, what a Foundry upgrade requires — are [`CONTRIBUTING.md`](CONTRIBUTING.md);
+the release gate is [`docs/RELEASE.md`](docs/RELEASE.md); the design the code answers to is
+[`design.md`](design.md); what changed per release is [`CHANGELOG.md`](CHANGELOG.md).
 
-## Build
-
-```bash
-npm install
-npx playwright install chromium   # one-time: the headless browser the bridge drives
-npm run build                     # tsc → dist/, then esbuild bundles the in-page library
-```
-
-`npm run build` clears `dist/` (`prebuild`), then runs `tsc && node esbuild.page.mjs`: TypeScript
-compiles `src/**` to `dist/`, then esbuild bundles the page-side library (`src/page/**`) into
-`dist/page.bundle.js` for injection. Tests: `npm test` (offline unit suite on vitest; it prints the
-context budgets — `tools/list` bytes, tool-name bytes, skill-description bytes, the always-on set,
-and the prose budget of every tool: a leaf `.describe()` ≤ 120 chars, a description ≤ 400 — and
-fails when one climbs past its ceiling in `src/measure.test.ts`). Live integration suites are gated — see
-[`vitest.integration.config.ts`](vitest.integration.config.ts) and `npm run test:integration`.
-`npm run measure` prints the same budgets in detail (per tool, per toolset, per skill) from
-`scripts/measure/`; the live per-call result sizes are `FOUNDRY_HOST=local node
-scripts/measure/tool-results.mjs`.
-
-### As a library (the sister repos)
-
-The house modules' `tools/` harnesses and the artificer drive a live world through the same
-headless bridge, never through the server. The package declares that surface — add
-`"fvtt-mcp-dnd5e": "file:../fvtt-mcp-dnd5e"` to the sibling's `package.json` (the family is
-cloned side by side) and:
-
-```js
-import { connectFoundry } from 'fvtt-mcp-dnd5e/client';
-
-const { f, dispose } = await connectFoundry({ host: 'local', identity: 'suite', tag: 'smoke', watchdogMs: 300_000 });
-try {
-  const id = await f.evaluate(() => game.world.id, null);
-} finally {
-  await dispose(); // Foundry#dispose() raced against a ceiling; the watchdog is cleared
-}
-```
-
-`connectFoundry` reads this repo's `.env` (or `FVTT_MCP_ENV`), picks the host (`FOUNDRY_HOST`,
-or the `host` option), joins as the bridge user, the suite user (`FOUNDRY_SUITE_USER` /
-`_PASSWORD` — a distinct account, so a bridge left connected shows up as a second user instead of
-an invisible collision) or the player user (`FOUNDRY_PLAYER_USER` / `_PASSWORD`, no admin key),
-and returns the live `Foundry` (`evaluate` / `call` / `screenshot` / `dispose`, alias
-`disconnect`). The lower-level pieces are exported too: `Foundry`, `loadEnv`
-(`fvtt-mcp-dnd5e/env`), and the host seam (`fvtt-mcp-dnd5e/hosts`: `resolveHostConfig`,
-`createHost`, `bridgeConfigOf`, `filePlaneFor`). The package is not published; "clone and build"
-is the install.
-
-> **Dev watch:** `npm run dev` rebuilds the page bundle once, then runs `tsc --watch` for `src/**`.
-> Because the page library is a **separate** esbuild artifact, editing anything under `src/page/**`
-> while developing needs `npm run dev:page` (esbuild `--watch`) alongside it — otherwise the running
-> server keeps injecting the stale `dist/page.bundle.js`.
-
-## Wire into Claude Code
-
-Register the built MCP server in your Claude Code config. Copy
-[`.mcp.json.example`](.mcp.json.example) to a `.mcp.json` Claude Code reads (project-scoped, or your
-`~/.claude.json` `mcpServers`) and set **absolute** paths:
-
-```json
-{
-  "mcpServers": {
-    "foundry": {
-      "command": "C:/Program Files/nodejs/node.exe",
-      "args": ["C:/path/to/fvtt-mcp-dnd5e/dist/index.js"],
-      "env": { "FOUNDRY_URL": "https://your-box.example.com" }
-    },
-    "foundry-sandbox": {
-      "command": "C:/Program Files/nodejs/node.exe",
-      "args": ["C:/path/to/fvtt-mcp-dnd5e/dist/index.js"],
-      "env": { "FOUNDRY_HOST": "local" }
-    }
-  }
-}
-```
-
-- **One registration per Foundry instance.** The registration's `env` names the instance
-  (`FOUNDRY_URL`) and, when it is not a bare URL, how it is reached — `FOUNDRY_HOST=molten`
-  (Molten Hosting) or `local` (an install on this machine); `generic` is the default
-  ([design.md §2.6](design.md)). A registration's `env` beats the shared `.env`, so one `.env`
-  serves all of them. Which instance a call touches is fixed by which server it goes to.
-- Use an **absolute** path to the root `dist/index.js` (Claude Code may launch the server from any
-  directory).
-- On Windows, point `command` at the full `node.exe` path if Node isn't on `PATH`.
-- The server loads its `.env` from the repo root regardless of working directory.
-- The headless client connects lazily — the first tool call wakes the instance (on a host that
-  sleeps) and joins the world, so the initial call after a cold box can take a while.
-
-### Toolsets — advertise less
-
-The full surface is 81 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
-schemas eagerly pays that on every registration before the first word (Claude Code defers them and
-only lists names, so it pays far less). A registration that only ever does part of the job can say
-so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
-
-```json
-"env": { "FOUNDRY_HOST": "molten", "FOUNDRY_TOOLSETS": "chat,combat" }
-```
-
-| Toolset | What it holds |
-| --- | --- |
-| `session` | `get-world-info`, `get-current-scene`, `disconnect-bridge`, `list-users` — **always on** |
-| `settings` | `update-user`, `set-user-avatar`, the dnd5e automation switches, the calendar |
-| `actors` | NPCs and PCs: sheets, effects, activities, inventory, groups, art, ownership |
-| `items` · `compendium` · `journals` · `tables` · `cards` · `audio` | the document families |
-| `scenes` | scenes, who-sees-what routing, every placeable kind |
-| `chat` · `combat` | the chat log; combat tracker + analytics |
-| `assets` | the Plane-B file tools + reference integrity |
-| `organization` | folders, moves, bulk delete, macros |
-
-Unset = everything (the bundled skills need the whole surface). `chat,combat` advertises 12 tools
-at ~3k tokens. A call to a tool outside the enabled set is refused **by name** — which toolset it
-is in and how to enable it — never as "unknown tool"; a misspelt toolset stops the server at
-startup with the valid names. The table is [`src/toolsets.ts`](src/toolsets.ts).
-
-## Configuration
-
-Copy [`.env.example`](.env.example) to `.env` (gitignored) and fill in your instance. One variable
-set on every host, `FOUNDRY_*`:
-
-- **`FOUNDRY_URL`** (required — the placeholder is refused at startup), **`FOUNDRY_USER`** (the
-  dedicated user to join as, default `MCP-Claude`) / `FOUNDRY_PASSWORD`.
-- **`FOUNDRY_ADMIN_KEY`** — the admin access key; with it the bridge launches the world itself when
-  the instance is up but no world is active. **`FOUNDRY_WORLD_ID`** only when `/setup` lists more
-  than one world (unset = the one world there is launched).
-- **`FOUNDRY_WAKE_URL`** — a GET that wakes a sleeping instance (Molten's "Server Startup / Magic
-  URL", `…?s=token`); redacted from logs.
-- **A direct file plane** (optional — every host already uploads through Foundry's own FilePicker
-  via the bridge): `FOUNDRY_DATA_DIR` (the install's `Data/` directory, when it is on this
-  machine) or `FOUNDRY_WEBDAV_URL` / `_USER` / `_PASSWORD` (a WebDAV endpoint over `Data/`).
-  Faster for bulk, takes any file type, and the only way `delete-asset` / `move-asset` work.
-  `FOUNDRY_HOST=molten` derives the WebDAV URL and user from `FOUNDRY_URL`, so it needs only the
-  password (the panel's File Manager password).
-
-`FOUNDRY_HOST` (per registration; default `generic`) is the preset: `molten` (WebDAV derived, never
-a filesystem plane), `local` (`FOUNDRY_URL` defaults to `http://localhost:30000`, no wake, never
-WebDAV), `generic` (reads everything). The 2.x names (`MOLTEN_*`, `LOCAL_*`, `FOUNDRY_PROFILE`)
-are still read as aliases under their own host and logged once at startup. Each tool reports which
-variable to set if something it needs is missing.
-
-## Tools
-
-**81 tools total: 71 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
-
-Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
-journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
-ambient sounds, tiles, drawings, notes), **who-sees-what routing** (the one active scene, pulling
-connected users to a side scene, and per-user landing scenes for where players come up at login —
-core Foundry has no such thing, so `set-landing-scene` writes a flag the companion
-[`fvtt-mod-openserver`](https://github.com/Txpple/fvtt-mod-openserver) module acts on, and warns
-when that module is absent rather than claiming success),
-roll tables, cards, playlists, **per-scene atmospheric sound sets** (`configure-soundscape`, for the
-companion [`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape) module — randomized
-one-shots with silence between them, or crossfaded ambient beds, which neither AmbientSound
-placeables nor Playlists can express), ownership,
-folders/organization, macros, combat-tracker config, the dnd5e 6.0 **automation switches** and
-**in-world calendar** (`configure-dnd5e-settings`, `manage-calendar`), and 5e-specific helpers (NPC creation,
-**PC building & leveling**, feature/spell granting, structured inventory/loot
-authoring), **full-fidelity actor JSON export** (`manage-actors` `export`), and **per-combat session
-analytics** (`get-combat-stats`, folded from the companion
-[`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) module's stat stamps),
-**plus the asset-composition + reference-integrity tools**. Plane B (the host's file plane —
-WebDAV on Molten, the `Data/` directory on a local install) is the asset file library.
-
-**Plane B — asset file tools:**
-
-| Tool                  | What it does                                                                     |
-| --------------------- | -------------------------------------------------------------------------------- |
-| `list-assets`         | List a directory under `Data/` (folders + files, with size/type/public URL)      |
-| `asset-info`          | Existence + size/type/mtime/public URL for one path under `Data/`                |
-| `download-asset`      | Download a file from under `Data/` to a local path                               |
-| `upload-asset`        | Upload a local file under `Data/` (auto-creates parents; refuses world-DB paths) |
-| `upload-asset-tree`   | Recursively upload a local directory tree under `Data/` (preserves layout)        |
-| `create-asset-folder` | Create a folder (and missing parents) under `Data/` (idempotent)                 |
-| `delete-asset`        | Delete a file (reference-aware; refuses if still used unless `force`)            |
-| `move-asset`          | Move/rename a file (refuses or relinks references; `relink`/`force`)             |
-| `copy-asset`          | Copy a file under `Data/`                                                        |
-| `asset-url`           | Map a `Data/`-relative path to its public HTTPS URL (pure, no network)           |
-
-**Plane A — asset composition + reference integrity (bridge):**
-
-| Tool                    | What it does                                                                 |
-| ----------------------- | ---------------------------------------------------------------------------- |
-| `find-asset-references` | Find every scene/actor/journal/playlist/… that references an asset path      |
-| `relink-asset`          | Rewrite all references from one asset path to another (`dryRun` supported)   |
-| `manage-playlists`      | `action: "create"` — a Playlist from sound paths (the flagship "upload → playlist" wiring) |
-| `manage-scenes`         | `create`: a Scene from a background image path; `update`: its fields, incl. the background |
-| `set-actor-art`         | Set an actor's portrait (+ prototype token) from an image path               |
-| `add-journal-image`     | Append an image page to a journal entry                                      |
-
-The remaining Plane A tools cover world CRUD (`create-actor-from-compendium`/`author-npc`, `add-feature` (features / compendium
-features / spells), `manage-items` (`import`: copy a real PHB/DMG item — art + stats — onto an actor
-or the sidebar; `create` from raw data), `add-item` (author structured weapons/armor/consumables/loot/containers),
-`manage-journals`/`create-quest-journal`, `manage-rolltables`, `manage-cards`, …), listing/search
-(`manage-actors`, `search-compendium`, `manage-journals`, …), and organization (`manage-folders`,
-`move-documents`, `bulk-delete`). See the `handlers` map in [`src/registry.ts`](src/registry.ts) for the full dispatch table.
-
-> Plane B file ops run over the file plane: Foundry's own FilePicker through the bridge on every
-> host (browse / upload / mkdir; media and text formats), with a direct plane as the fast path when
-> configured (WebDAV — `FOUNDRY_WEBDAV_*`, on Molten just the password — or the `Data/` directory
-> of an install on this machine, `FOUNDRY_DATA_DIR`); delete / move need a direct plane.
-> Plane A tools run over the headless bridge (need the world joined). Write tools refuse live
-> world-DB paths; destructive file ops consult `find-asset-references` first.
+**Out of scope, by design:** other game systems; a live in-session assistant that watches play
+and interjects; AI map-image generation (it reads a map you provide); scripting a hosting
+provider's management panel; D&D Beyond import (a DDB export strips the effect automation the
+premium items carry, so a PC is built natively from the books instead).
 
 ## Security
 
-- **Outbound-only, nothing public.** The server and the headless browser run on your machine and make
-  only outbound connections (to Foundry on Molten, and to Anthropic); nothing listens for inbound
-  traffic, and the headless client authenticates to Foundry exactly as a normal user would.
-- **Secrets stay in `.env`** (gitignored), with tight file perms — never commit `FOUNDRY_WEBDAV_PASSWORD`,
-  `FOUNDRY_ADMIN_KEY`, a wake URL, or your Claude token. Errors name the missing variable, never its value.
-- **Treat all agent inputs as untrusted** (chat, transcripts, web) — prompt-injection can ride in.
-  Plane-A writes are inherently safe because they go through Foundry's own client APIs; Plane-B
-  destructive file ops are reference-aware, refuse live world-DB paths (canonicalized, `..`-rejecting),
-  and deletes resolve strictly (exact id/name, no fuzzy match).
-- **Anything under `Data/` is served publicly over HTTPS with no auth** — don't upload anything
-  sensitive.
+- **Outbound only.** The server and the headless browser run on your machine and make only
+  outbound connections; the browser authenticates to Foundry exactly as a user would.
+- **Secrets stay in `.env`** (gitignored): never commit `FOUNDRY_PASSWORD`, `FOUNDRY_ADMIN_KEY`,
+  a wake URL or a WebDAV password. Errors name a missing variable, never its value; the wake URL
+  is redacted from every log line.
+- **Agent inputs are untrusted** (chat, transcripts, web pages). Writes go through Foundry's own
+  client APIs; destructive file operations are reference-aware, refuse a live world's database,
+  and delete only on an exact match.
+- Anything under Foundry's `Data/` is served to the world's users without further auth — don't
+  upload anything sensitive.
 
-## Contributing
+## Support · Acknowledgments · License
 
-The project is one package: a Node-side MCP server (`src/`) that drives a headless Foundry page
-through the `foundry.call(name, args)` seam, plus a page-side library (`src/page/**`, bundled into
-`dist/page.bundle.js` and injected as `window.__fvtt`). Adding a tool touches both halves:
-
-1. **MCP tool class** (`src/tools/<category>.ts`) — declare the input contract **once** as a hoisted
-   zod schema; `getToolDefinitions()` returns `{ name, description, inputSchema: toInputSchema(schema) }`
-   (the advertised JSON Schema is **generated** from that zod via `src/utils/schema.ts` — never
-   hand-written), plus a `handleX(args)` that `schema.parse`es and calls `foundry.call('<op>', data)`.
-2. **Register it** (`src/registry.ts`) — instantiate the class, add its `getToolDefinitions()` to the
-   collected definitions, and add a `'<tool-name>': args => tool.handleX(args)` entry to the `handlers`
-   map. The advertised tool list is **derived** from `handlers`, so a handler with no matching
-   definition fails loudly at startup (`src/tools/registry.test.ts` guards the surface).
-3. **Page-side op** (`src/page/<domain>.ts`) — implement `<op>(args)` and register it in
-   `src/page/index.ts`. This runs **inside** the live Foundry page (the actual `Document.create` /
-   `update` / `delete`): import only browser + Foundry globals here, never Node/Playwright.
-4. **Build + verify** — `npm run build`, then `npm test`, `npm run typecheck`, `npm run knip`, and
-   biome (`npm run check`). For live changes, `npm run test:integration` against a real world.
-
----
-
-## Support
-
-Issues: [GitHub Issues](https://github.com/Txpple/fvtt-mcp-dnd5e/issues)
-
-## Acknowledgments
-
-Used as a reference:
-[adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp) by Adam Dooley.  
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+Issues: [GitHub Issues](https://github.com/Txpple/fvtt-mcp-dnd5e/issues). Used as a reference:
+[adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp) by Adam Dooley.
+MIT — see [LICENSE](LICENSE).
