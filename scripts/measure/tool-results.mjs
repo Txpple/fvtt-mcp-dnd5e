@@ -39,7 +39,7 @@ const CALLS = [
   ['list-journals', {}],
   ['list-rolltables', {}],
   ['list-playlists', {}],
-  ['list-folders', {}],
+  ['manage-folders', { action: 'list' }],
   ['list-users', {}],
   ['list-compendium-packs', {}],
   ['search-compendium', { query: 'sword' }],

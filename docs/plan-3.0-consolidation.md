@@ -374,3 +374,22 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   delete through `dispatch`, the three refusals, the member refinement surviving dispatch),
   verify-placeables-tooling 87/87 (the moved formatter), integration 80 passed / 6 skipped.
   Next: folders → playlists → cards → tables → items → journals → scenes → actors.
+- 2026-09-21 — **M8 folders → `manage-folders`** (`action`: create / list / update / delete):
+  4 tools → 1, the union **2,441** against the four's **2,846** (−14.2%) — the first family to
+  land well under, because the document-type enum the four each advertised (85 chars × 3) is the
+  `shared` root leaf described once ("create requires it; list omitted = every type; update /
+  delete default Actor") and every member advertises it bare. tools/list 203,696, names 112
+  (8,404 chars). `delete-folder` moves out of `actor-creation.ts` into the union (its `type`
+  becomes the same enum the other three took; the free string it accepted named no folder type
+  the page lists). The §3 shapes: list is `N folder(s)` / `N <Type> folder(s)` then
+  `id name type depth path color sort parent docs subfolders` (+ `orphaned` only when a row
+  dangles) in the page's DFS order; create / update / delete are one-line confirmations; a folder
+  miss on update / delete is `isError` (both had answered prose in a success shape). Re-pointed:
+  plot-drift-check (1 line), tom-cartos-import (3), README's organization parenthetical,
+  bulk-delete's "Folders:" pointer, tool-results, the registry tests (115 → 112, the dogfood-gap
+  test names the union); skills-matrix 0 / 0; siblings 0. Decision #20 for the four: kept as
+  actions. Live: verify-folder-tooling **25/25** (the new dispatch section: create under a parent
+  with a color, the list header + row for the child and the parent's subfolder count, rename +
+  reparent-to-root + sort read back, the two refusals by name, the two misses as errors, the
+  non-empty delete refused, the empty delete), verify-folder-sort 8/8, integration 80 passed /
+  6 skipped. Next: playlists → cards → tables → items → journals → scenes → actors.

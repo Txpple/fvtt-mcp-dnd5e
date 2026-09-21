@@ -1,4 +1,5 @@
-// Live verification for update-folder's `sort` param — ROUND-TRIP FIDELITY of the Folder field.
+// Live verification for manage-folders' update `sort` param — ROUND-TRIP FIDELITY of the Folder
+// field (the page's updateFolder under src/tools/organization.ts).
 //
 // ⚠️ Read the ground-truth note below before trusting `sort` to order anything: the v14 sidebar
 // renders sibling FOLDERS alphabetically by name and ignores it. This drives a real headless
@@ -66,7 +67,7 @@ try {
     'a freshly created folder gets sort 0 (Foundry does not auto-space folders)'
   );
 
-  console.log('\n— update-folder writes sort —');
+  console.log('\n— updateFolder writes sort —');
   const parked = Math.max(...Object.values(before)) + 100000;
   const upd = await f.call('updateFolder', {
     identifier: made[0],

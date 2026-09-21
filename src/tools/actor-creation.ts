@@ -124,15 +124,6 @@ const DeleteActorSchema = z.object({
     ),
 });
 
-const DeleteFolderSchema = z.object({
-  identifier: z.string().min(1).describe('Folder id or exact name.'),
-  type: z.string().min(1).default('Actor').describe('Folder document type (default Actor).'),
-  deleteContents: z
-    .boolean()
-    .default(false)
-    .describe('Also delete everything inside; default refuses a non-empty folder.'),
-});
-
 export class ActorCreationTools {
   private foundry: FoundryBridge;
   private logger: Logger;
@@ -172,13 +163,6 @@ export class ActorCreationTools {
           'Permanently delete world actors (no undo). A bridge-created folder left empty is removed ' +
           'too unless removeEmptyFolder:false. GM-only.',
         inputSchema: toInputSchema(DeleteActorSchema),
-      },
-      {
-        name: 'delete-folder',
-        description:
-          'Permanently delete a folder by exact id or exact name; a non-empty one is refused unless ' +
-          'deleteContents:true. GM-only.',
-        inputSchema: toInputSchema(DeleteFolderSchema),
       },
     ];
   }
@@ -381,63 +365,6 @@ export class ActorCreationTools {
         removedFolders: result.removedFolders,
       },
       message: summary + (deletedList ? `\n\n${deletedList}` : '') + notFoundInfo + foldersInfo,
-    };
-  }
-
-  /**
-   * Handle permanent deletion of a folder
-   */
-  async handleDeleteFolder(args: any): Promise<any> {
-    const { identifier, type, deleteContents } = DeleteFolderSchema.parse(args);
-
-    this.logger.info('Deleting folder', { identifier, type, deleteContents });
-
-    const result = await this.foundry.call('deleteFolder', {
-      identifier,
-      type,
-      deleteContents,
-    });
-
-    this.logger.info('Folder deletion completed', {
-      deleted: result.deleted,
-      notFound: result.notFound || null,
-      deletedContents: result.deletedContents || false,
-    });
-
-    return this.formatDeleteFolderResponse(result, identifier);
-  }
-
-  /**
-   * Format folder deletion response
-   */
-  private formatDeleteFolderResponse(result: any, identifier: string): any {
-    if (!result.deleted) {
-      const summary = `⚠️ Folder not found: ${result.notFound ?? identifier}`;
-      return {
-        summary,
-        success: result.success,
-        details: { deleted: false, notFound: result.notFound ?? identifier },
-        message: summary,
-      };
-    }
-
-    const f = result.folder || {};
-    const summary = `🗑️ Deleted folder **${f.name}**`;
-    const contentsInfo = result.deletedContents
-      ? `\n⚠️ Also deleted ${result.removedDocuments} document(s) and ${result.removedSubfolders} subfolder(s) inside it`
-      : '\n(was empty)';
-
-    return {
-      summary,
-      success: result.success,
-      details: {
-        deleted: true,
-        folder: f,
-        deletedContents: result.deletedContents || false,
-        removedDocuments: result.removedDocuments || 0,
-        removedSubfolders: result.removedSubfolders || 0,
-      },
-      message: `${summary} (${f.id})${contentsInfo}`,
     };
   }
 

@@ -59,7 +59,8 @@ describe('tool registry', () => {
     // + create/list/update/delete-drawings (Drawing CRUD)
     // + create/list/update/delete-walls (Wall CRUD — doors/sight edit loop)
     // + place-tokens + delete-tokens (placed-token lifecycle; update-token stays bespoke)
-    // + list-folders (the folder-tree read/inspect step the write tools were missing)
+    // + list-folders (the folder-tree read/inspect step the write tools were missing; since M8
+    //   the folders are the actions of ONE tool, manage-folders)
     // + list-users + update-user (user-account admin: roster read + role/name/color/character)
     // + add-free-cast (feature-granted free cast → cast activity ON the feature + repertoire copy;
     //   projects the native "Additional Spells" spellbook entry)
@@ -106,7 +107,8 @@ describe('tool registry', () => {
     //   placeable kinds joined it in their own family commits — sounds (−4), notes (−4),
     //   tokens (−4), regions (−7 incl. the teleporter / behavior / remap specials): 35 → 1.
     // − 2 (M8): create-macro / list-macros / delete-macro → manage-macros (action).
-    expect(names.length).toBe(115);
+    // − 3 (M8): list / create / update / delete-folder → manage-folders (action).
+    expect(names.length).toBe(112);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -235,10 +237,10 @@ describe('tool registry', () => {
     expect(union.anyOf).toHaveLength(35);
   });
 
-  it('registers the journal page-visibility tools + update-folder (dogfood tooling gaps)', () => {
+  it('registers the journal page-visibility tools + manage-folders (dogfood tooling gaps)', () => {
     const { tools, handlers } = build();
     const names = new Set(tools.map(t => t.name));
-    for (const name of ['set-journal-page-visibility', 'delete-journal-page', 'update-folder']) {
+    for (const name of ['set-journal-page-visibility', 'delete-journal-page', 'manage-folders']) {
       expect(names.has(name)).toBe(true);
       expect(typeof handlers[name]).toBe('function');
     }
@@ -534,7 +536,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(115);
+    expect(tools.length).toBe(112);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

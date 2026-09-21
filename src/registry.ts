@@ -248,7 +248,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // Actor.create) — the "(Sim)" sandbox path; full sheets stay rollable.
     'duplicate-actor': args => actorCreationTools.handleDuplicateActor(args),
     'delete-actor': args => actorCreationTools.handleDeleteActor(args),
-    'delete-folder': args => actorCreationTools.handleDeleteFolder(args),
     'update-actor': args => dnd5eUpdateActorTool.handleUpdateActor(args),
     'update-actor-item': args => dnd5eUpdateActorItemTool.handleUpdateActorItem(args),
     'manage-activity': args => dnd5eManageActivityTool.handleManageActivity(args),
@@ -400,10 +399,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // Bridge session lifecycle (courtesy logout — the next tool call reconnects)
     'disconnect-bridge': args => bridgeTools.handleDisconnectBridge(args),
 
-    // Organization & batch
-    'list-folders': args => organizationTools.handleListFolders(args),
-    'create-folder': args => organizationTools.handleCreateFolder(args),
-    'update-folder': args => organizationTools.handleUpdateFolder(args),
+    // Organization & batch — the folders are ONE tool (action; M8)
+    'manage-folders': args => organizationTools.handleManageFolders(args),
     'move-documents': args => organizationTools.handleMoveDocuments(args),
     'bulk-delete': args => organizationTools.handleBulkDelete(args),
   };

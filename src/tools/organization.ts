@@ -1,20 +1,26 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
+import { FormattedToolError } from '../utils/error-handler.js';
 import { formatDeletionResult } from '../utils/format.js';
+import { listLines } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 /**
- * Organization & batch tools — list-folders (the read/inspect step), create-folder,
- * update-folder, move-documents, bulk-delete. General-purpose document wrangling across
- * every world collection (Actor, Item, JournalEntry, Scene, RollTable, Cards, Playlist,
- * Macro). Runs over the bridge; GM-only for writes. delete-folder lives in actor-creation.ts.
+ * Organization & batch tools — the sidebar folders as ONE tool, `manage-folders` (action create /
+ * list / update / delete; src/tools/_union.ts — M8 of the 3.0 plan), plus move-documents and
+ * bulk-delete. General-purpose document wrangling across every world collection (Actor, Item,
+ * JournalEntry, Scene, RollTable, Cards, Playlist, Macro). Runs over the bridge; GM-only for
+ * writes. Folder resolution is STRICT: exact id, or exact name within the document type.
  */
 
 export interface OrganizationToolsOptions {
   foundry: FoundryBridge;
   logger: Logger;
 }
+
+export const MANAGE_FOLDERS = 'manage-folders';
 
 const DOC_TYPES = [
   'Actor',
@@ -28,15 +34,14 @@ const DOC_TYPES = [
 ] as const;
 
 // Single source of truth for each tool's input contract: the handlers parse with these schemas
-// and getToolDefinitions() advertises toInputSchema(...) of the same schema. Descriptions are
-// copied verbatim from the previous hand-written JSON Schema; only `.describe()` is added.
+// and the advertised JSON Schema is derived from the same zod.
 const ListFoldersSchema = z.object({
-  type: z.enum(DOC_TYPES).optional().describe('One document type; default the whole sidebar.'),
+  type: z.enum(DOC_TYPES).optional(),
 });
 
 const CreateFolderSchema = z.object({
   name: z.string().min(1).describe('Folder name.'),
-  type: z.enum(DOC_TYPES).describe('The document type the folder holds.'),
+  type: z.enum(DOC_TYPES),
   parentFolder: z.string().optional().describe('Parent folder id or exact name (same type).'),
   color: z.string().optional().describe('Hex color.'),
 });
@@ -44,7 +49,7 @@ const CreateFolderSchema = z.object({
 const UpdateFolderSchema = z
   .object({
     identifier: z.string().min(1).describe('Folder id or exact name.'),
-    type: z.enum(DOC_TYPES).default('Actor').describe('Resolves a name; default Actor.'),
+    type: z.enum(DOC_TYPES).default('Actor'),
     name: z.string().min(1).optional().describe('Rename.'),
     color: z.string().optional().describe('Hex color.'),
     parentFolder: z
@@ -66,6 +71,15 @@ const UpdateFolderSchema = z
     { message: 'Provide at least one of: name, color, parentFolder, sort' }
   );
 
+const DeleteFolderSchema = z.object({
+  identifier: z.string().min(1).describe('Folder id or exact name.'),
+  type: z.enum(DOC_TYPES).default('Actor'),
+  deleteContents: z
+    .boolean()
+    .default(false)
+    .describe('Also delete everything inside; default refuses a non-empty folder.'),
+});
+
 const MoveDocumentsSchema = z.object({
   documentType: z.enum(DOC_TYPES),
   identifiers: z.array(z.string().min(1)).min(1).describe('Exact ids or exact names.'),
@@ -84,37 +98,124 @@ const BulkDeleteSchema = z.object({
     .describe('Report what would be deleted (and what was not found) without deleting.'),
 });
 
+/** The list columns (§3: a fixed, documented order); `orphaned` is appended when any row carries it. */
+const FOLDER_COLUMNS = [
+  'id',
+  'name',
+  'type',
+  'depth',
+  'path',
+  'color',
+  'sort',
+  'parent',
+  'docs',
+  'subfolders',
+] as const;
+
 export class OrganizationTools {
   private foundry: FoundryBridge;
   private logger: Logger;
+  private folders: UnionTool;
 
   constructor({ foundry, logger }: OrganizationToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'OrganizationTools' });
+    this.folders = unionTool({
+      name: MANAGE_FOLDERS,
+      description:
+        'Sidebar folders of any world document type: action create / list / update / delete. ' +
+        'A folder resolves by exact id, or exact name within its type; a miss is an error. ' +
+        'GM-only.',
+      discriminators: ['action'],
+      shared: {
+        type: z
+          .enum(DOC_TYPES)
+          .describe(
+            'The document type: create requires it; list omitted = every type; update / delete ' +
+              'default Actor.'
+          ),
+      },
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description: 'Create a folder, optionally under a parent of the same type.',
+          schema: CreateFolderSchema,
+          handler: async parsed => {
+            const result = await foundry.call('createFolder', parsed);
+            return `Created ${result?.type} folder "${result?.folderName}" (${result?.folderId})`;
+          },
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description:
+            'The folder tree in sidebar order (siblings by name): id, name, type, depth, path, ' +
+            'color, sort, parent, document and subfolder counts.',
+          schema: ListFoldersSchema,
+          handler: async parsed => {
+            const result = await foundry.call('listFolders', parsed);
+            const folders = Array.isArray(result?.folders) ? result.folders : [];
+            const records = folders.map(f => ({
+              id: f.id,
+              name: f.name,
+              type: f.type,
+              depth: f.depth,
+              path: f.path,
+              color: f.color ?? null,
+              sort: f.sort ?? 0,
+              parent: f.parentId ?? null,
+              docs: f.documentCount,
+              subfolders: f.subfolderCount,
+              ...(f.orphaned ? { orphaned: true } : {}),
+            }));
+            const columns = records.some(r => 'orphaned' in r)
+              ? [...FOLDER_COLUMNS, 'orphaned']
+              : [...FOLDER_COLUMNS];
+            const noun = parsed.type ? `${parsed.type} folder(s)` : 'folder(s)';
+            return listLines(`${records.length} ${noun}`, columns, records);
+          },
+        }),
+        unionMember({
+          select: { action: 'update' },
+          description: 'Rename, recolor, re-sort or reparent a folder.',
+          schema: UpdateFolderSchema,
+          handler: async parsed => {
+            const result = await foundry.call('updateFolder', parsed);
+            if (result?.updated === false) {
+              throw new FormattedToolError(
+                `Folder not found: "${result?.notFound ?? parsed.identifier}" (type ${parsed.type}). Nothing changed.`
+              );
+            }
+            const sortBit =
+              parsed.sort !== undefined ? ` [sort ${result?.folder?.sort ?? parsed.sort}]` : '';
+            return `Updated ${result?.folder?.type} folder → "${result?.folder?.name}" (${result?.folder?.id})${sortBit}`;
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description:
+            'Permanently delete a folder; a non-empty one is refused unless deleteContents:true.',
+          schema: DeleteFolderSchema,
+          handler: async parsed => {
+            const result = await foundry.call('deleteFolder', parsed);
+            if (!result?.deleted) {
+              throw new FormattedToolError(
+                `Folder not found: "${result?.notFound ?? parsed.identifier}" (type ${parsed.type}). Nothing deleted.`
+              );
+            }
+            const f = result.folder;
+            const contents = result.deletedContents
+              ? `; also ${result.removedDocuments} document(s) and ${result.removedSubfolders} subfolder(s) inside it`
+              : ' (was empty)';
+            return `Deleted ${f.type} folder "${f.name}" (${f.id})${contents}`;
+          },
+        }),
+      ],
+    });
   }
 
   getToolDefinitions() {
     return [
-      {
-        name: 'list-folders',
-        description:
-          'The sidebar folder tree (or one document type) in sidebar order (siblings by name): id, ' +
-          'depth, path, color, sort, parent, document and subfolder counts.',
-        inputSchema: toInputSchema(ListFoldersSchema),
-      },
-      {
-        name: 'create-folder',
-        description:
-          'Create a sidebar folder, optionally under a parent of the same type. GM-only.',
-        inputSchema: toInputSchema(CreateFolderSchema),
-      },
-      {
-        name: 'update-folder',
-        description:
-          'Rename, recolor, re-sort or reparent a sidebar folder (exact id, or exact name + type). ' +
-          'GM-only.',
-        inputSchema: toInputSchema(UpdateFolderSchema),
-      },
+      this.folders.def,
       {
         name: 'move-documents',
         description:
@@ -126,53 +227,15 @@ export class OrganizationTools {
         name: 'bulk-delete',
         description:
           'Permanently delete world documents of one type by exact id or exact name; dryRun ' +
-          'previews. Folders: delete-folder. GM-only.',
+          'previews. Folders: manage-folders. GM-only.',
         inputSchema: toInputSchema(BulkDeleteSchema),
       },
     ];
   }
 
-  async handleListFolders(args: any): Promise<string> {
-    const parsed = ListFoldersSchema.parse(args ?? {});
-    const result: any = await this.foundry.call('listFolders', parsed);
-    const folders: any[] = Array.isArray(result?.folders) ? result.folders : [];
-    if (folders.length === 0) {
-      return parsed.type ? `No ${parsed.type} folders exist.` : 'No folders exist.';
-    }
-    const types: string[] = Array.isArray(result?.types) ? result.types : [];
-    const lines: string[] = [`Folders (${folders.length} across ${types.length} type(s)):`];
-    for (const t of types) {
-      const ofType = folders.filter(f => f.type === t);
-      lines.push(`\n${t} (${ofType.length}):`);
-      for (const f of ofType) {
-        const bits = [
-          f.color ? `${f.color}` : null,
-          f.sort ? `sort ${f.sort}` : null,
-          `${f.documentCount} doc(s)`,
-          f.subfolderCount > 0 ? `${f.subfolderCount} subfolder(s)` : null,
-          f.orphaned ? 'ORPHANED (dangling parent)' : null,
-        ].filter(Boolean);
-        lines.push(`${'  '.repeat(f.depth + 1)}- "${f.name}" (${f.id}) — ${bits.join(', ')}`);
-      }
-    }
-    return lines.join('\n');
-  }
-
-  async handleCreateFolder(args: any): Promise<string> {
-    const parsed = CreateFolderSchema.parse(args ?? {});
-    const result = await this.foundry.call('createFolder', parsed);
-    return `Created ${result?.type} folder "${result?.folderName}" (${result?.folderId}).`;
-  }
-
-  async handleUpdateFolder(args: any): Promise<string> {
-    const parsed = UpdateFolderSchema.parse(args ?? {});
-    const result = await this.foundry.call('updateFolder', parsed);
-    if (result?.updated === false) {
-      return `Folder not found: "${result?.notFound ?? parsed.identifier}" (type ${parsed.type}). Nothing changed.`;
-    }
-    const sortBit =
-      parsed.sort !== undefined ? ` [sort ${result?.folder?.sort ?? parsed.sort}]` : '';
-    return `Updated ${result?.folder?.type} folder → "${result?.folder?.name}" (${result?.folder?.id})${sortBit}.`;
+  /** The folder union (registry-facing). */
+  async handleManageFolders(args: unknown): Promise<unknown> {
+    return this.folders.handle(args);
   }
 
   async handleMoveDocuments(args: any): Promise<string> {

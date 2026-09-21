@@ -24,7 +24,7 @@ Tools used: **`read-pack`** (the off-line extractor/detector — owns all the Le
 era detection, tile discovery, and asset path-rewrite math), `upload-asset` / **`upload-asset-tree`**
 (Plane B — single file vs whole subtree), `create-scene`, **`manage-placeables` `{ kind: "regions",
 action: "remap-teleporters" }`** (the second-pass
-teleporter fixer), `create-journal` / `add-journal-image`, `create-folder` / `move-documents`,
+teleporter fixer), `create-journal` / `add-journal-image`, `manage-folders` / `move-documents`,
 `list-scenes` / `list-journals`. To boot the world first, hand off to **`start-session`**.
 
 > **🎯 OWNER DEFAULT — MAPS ONLY (directed 2026-07-08):** the owner repurposes pack maps into his
@@ -227,8 +227,8 @@ a **modern** scene carries `environment`/`fog`/`initial`; a **legacy/mid** scene
 
 ## Step 7 — Folder and name
 
-- Create one folder per pack with `create-folder`: **`Tom Cartos — <Module Title>`**, and `move-documents`
-  the new scenes into it.
+- Create one folder per pack with `manage-folders { action: "create", type: "Scene" }`:
+  **`Tom Cartos — <Module Title>`**, and `move-documents` the new scenes into it.
 - Keep the pack's `NN <Map Name> [Variant]` scene names — the leading `NN` drives scene-nav order; land
   variants of one map together (`01 Iris`, `01 Iris (Night)`, `01 Iris (Clean)`).
 
@@ -313,5 +313,5 @@ For each imported map with its own (non-overview) legend key:
   asset path-rewrite math; `upload-asset` does the byte upload + content-type; `create-scene` writes the
   scene + places walls/lights/regions whole + stamps flags; the teleporter remap reconstructs the id maps
   from world state and rewrites every cross-scene teleporter destination; `create-journal`/
-  `add-journal-image` build the journal; `create-folder`/`move-documents` organize. The skill never
+  `add-journal-image` build the journal; `manage-folders`/`move-documents` organize. The skill never
   parses a `.db`/LevelDB file, rewrites a path string, or transcribes a document id by hand.

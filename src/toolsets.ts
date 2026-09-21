@@ -141,15 +141,7 @@ export const TOOLSETS = {
     'relink-asset',
   ],
   /** Folders, moves, bulk deletes, macros. */
-  organization: [
-    'list-folders',
-    'create-folder',
-    'update-folder',
-    'delete-folder',
-    'move-documents',
-    'bulk-delete',
-    'manage-macros',
-  ],
+  organization: ['manage-folders', 'move-documents', 'bulk-delete', 'manage-macros'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type ToolsetName = keyof typeof TOOLSETS;

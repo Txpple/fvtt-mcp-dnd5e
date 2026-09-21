@@ -1,6 +1,6 @@
 /**
  * Unit tests for ActorCreationTools
- * (create-actor-from-compendium, duplicate-actor, delete-actor, delete-folder).
+ * (create-actor-from-compendium, duplicate-actor, delete-actor).
  *
  * Each handler owns three things around the bridge call:
  *   1. zod input validation — required ids/names, non-empty strings, enum
@@ -28,12 +28,7 @@ describe('ActorCreationTools.getToolDefinitions', () => {
       .getToolDefinitions()
       .map(t => t.name)
       .sort();
-    expect(names).toEqual([
-      'create-actor-from-compendium',
-      'delete-actor',
-      'delete-folder',
-      'duplicate-actor',
-    ]);
+    expect(names).toEqual(['create-actor-from-compendium', 'delete-actor', 'duplicate-actor']);
   });
 
   it('every definition has an object inputSchema', () => {
@@ -635,74 +630,5 @@ describe('handleDeleteActor', () => {
   it('rejects missing identifiers entirely', async () => {
     const { tools } = build();
     await expect(tools.handleDeleteActor({})).rejects.toThrow();
-  });
-});
-
-describe('handleDeleteFolder', () => {
-  it('forwards the deleteFolder bridge call with type/deleteContents defaults', async () => {
-    const { tools, calls } = build({
-      success: true,
-      deleted: true,
-      folder: { name: 'Loot', id: 'f1' },
-    });
-    await tools.handleDeleteFolder({ identifier: 'Loot' });
-    expect(calls[0][0]).toBe('deleteFolder');
-    expect(calls[0][1]).toMatchObject({
-      identifier: 'Loot',
-      type: 'Actor',
-      deleteContents: false,
-    });
-  });
-
-  it('formats an empty-folder deletion message', async () => {
-    const { tools } = build({
-      success: true,
-      deleted: true,
-      folder: { name: 'Loot', id: 'f1' },
-    });
-    const out = await tools.handleDeleteFolder({ identifier: 'Loot' });
-    expect(out.message).toBe('🗑️ Deleted folder **Loot** (f1)\n(was empty)');
-  });
-
-  it('reports removed contents when deleteContents was applied', async () => {
-    const { tools, calls } = build({
-      success: true,
-      deleted: true,
-      deletedContents: true,
-      folder: { name: 'Old', id: 'f9' },
-      removedDocuments: 3,
-      removedSubfolders: 1,
-    });
-    const out = await tools.handleDeleteFolder({
-      identifier: 'Old',
-      type: 'JournalEntry',
-      deleteContents: true,
-    });
-    expect(calls[0][1]).toMatchObject({ type: 'JournalEntry', deleteContents: true });
-    expect(out.message).toContain('🗑️ Deleted folder **Old** (f9)');
-    expect(out.message).toContain('⚠️ Also deleted 3 document(s) and 1 subfolder(s) inside it');
-  });
-
-  it('formats a not-found result using the bridge notFound value', async () => {
-    const { tools } = build({ success: false, deleted: false, notFound: 'Ghost Folder' });
-    const out = await tools.handleDeleteFolder({ identifier: 'Ghost Folder' });
-    expect(out.message).toBe('⚠️ Folder not found: Ghost Folder');
-    expect(out.details.deleted).toBe(false);
-  });
-
-  it('falls back to the supplied identifier when notFound is absent', async () => {
-    const { tools } = build({ success: false, deleted: false });
-    const out = await tools.handleDeleteFolder({ identifier: 'Mystery' });
-    expect(out.message).toBe('⚠️ Folder not found: Mystery');
-  });
-
-  it('rejects an empty identifier', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteFolder({ identifier: '' })).rejects.toThrow();
-  });
-
-  it('rejects a missing identifier', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteFolder({})).rejects.toThrow();
   });
 });
