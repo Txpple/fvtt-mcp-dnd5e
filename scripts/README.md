@@ -2,7 +2,7 @@
 
 Every script here reads the family `.env` through `dist/env.js` (`loadEnv`) and targets the host
 `FOUNDRY_HOST` selects, exactly as the server does (`src/hosts/env.ts`): `FOUNDRY_HOST=local` is
-the sandbox, `molten` the owner's prod box, unset = `generic` (whatever `FOUNDRY_URL` names — a
+the sandbox, `molten` a Molten-hosted box, unset = `generic` (whatever `FOUNDRY_URL` names — a
 placeholder is refused before any connect). Build first (`npm run build`): the scripts import the
 built bridge, never the MCP process, so they exercise a fresh `dist/` without a Claude Code
 restart. One world-driver at a time; temp documents are tagged `ZZ-*` and cleaned in `finally`.
@@ -43,12 +43,12 @@ tool proofs:
   code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
   appends one hint per code, a dead URL is `connection`.
 
-## The sandbox toolkit (owner-ops; `docs/local-sandbox.md`)
+## The sandbox toolkit (`docs/local-sandbox.md`, `docs/hosts.md`)
 
 | script | does |
 | --- | --- |
 | `local-foundry` | run the LOCAL install as a headless server: `start` / `stop` / `restart` / `status` (the `local` host's launcher; `FOUNDRY_DATA_DIR`, `FOUNDRY_ADMIN_KEY`; the world id from `FOUNDRY_WORLD_ID` or the one world under `Data/worlds`) |
-| `pull-prod-to-local` | re-image the sandbox from the prod box (a byte copy, prod → local, the only direction content flows) |
+| `pull-prod-to-local` | re-image the sandbox from a hosted world (a byte copy, hosted → local, the only direction content flows; it wakes the source first, even under `--dry-run`) |
 | `deploy-house-module` | copy a built house module into a host's `Data/modules` through its file plane and byte-verify it (`--local` for the sandbox, `--check` to compare only) |
 | `register-module` | install a module on the running server through Foundry's own `/setup` package installer (the box scans `Data/modules` at process start only) |
 | `configure-modules` | enable / disable world modules (`core.moduleConfiguration`) through the bridge |
