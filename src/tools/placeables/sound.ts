@@ -1,17 +1,16 @@
-// AmbientSound CRUD tools — positional scene audio (a crackling hearth, a waterfall, dungeon drips)
+// AmbientSound actions of manage-placeables — positional scene audio (a crackling hearth, a waterfall, dungeon drips)
 // over the page-side Sound descriptor (src/page/placeables/sound.ts). Composes with playlist-builder:
 // a playlist is scene-wide music; an AmbientSound is a POINT emitter with a radius the players walk
 // into. x/y are the emitter CENTER in absolute canvas pixels; radius is grid-distance units (feet).
 
 import { z } from 'zod';
-import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
   formatUpdatePlaceables,
 } from '../../utils/placeable-format.js';
-import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
+import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
 const soundFields = {
   name: z.string().optional().describe('Label shown in the sounds layer (e.g. "Waterfall").'),
@@ -62,7 +61,7 @@ const soundFields = {
 
 const CreateSoundsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  sounds: z
+  items: z
     .array(
       z.object({
         path: z
@@ -79,14 +78,14 @@ const CreateSoundsSchema = z.object({
       })
     )
     .min(1)
-    .describe('One or more positional ambient sounds to place.'),
+    .describe('The positional ambient sounds to place.'),
 });
 
 const ListSoundsSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateSoundSchema = z
   .object({
-    id: z.string().min(1).describe('AmbientSound id (from list-sounds).'),
+    id: z.string().min(1).describe('AmbientSound id (from action list).'),
     x: z.number().optional().describe('New center X in canvas pixels.'),
     y: z.number().optional().describe('New center Y in canvas pixels.'),
     radius: z.number().positive().optional().describe('New audible radius in grid-distance units.'),
@@ -99,70 +98,57 @@ const UpdateSoundSchema = z
 
 const UpdateSoundsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  sounds: z
-    .array(UpdateSoundSchema)
-    .min(1)
-    .describe('The sound patches to apply (each targets one id).'),
+  patches: z.array(UpdateSoundSchema).min(1).describe('One patch per sound; each targets one id.'),
 });
 
 const DeleteSoundsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  soundIds: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('AmbientSound ids to delete (from list-sounds).'),
+  ids: z.array(z.string().min(1)).min(1).describe('AmbientSound ids to delete (from action list).'),
 });
 
-export const soundToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'create-sounds',
+export const soundKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'sounds',
+  actions: [
+    placeableAction({
+      action: 'create',
       description:
         'Place positional ambient sounds from Data-relative audio paths: x / y the center in canvas ' +
         'pixels, radius in grid distance (feet), volume, repeat, walls, easing, a darkness range, ' +
-        'listener effects. A 404 path keeps the path with a warning. Returns the ids. GM-only.',
-      inputSchema: toInputSchema(CreateSoundsSchema),
-    },
-    {
-      name: 'list-sounds',
+        'listener effects. A 404 path keeps the path with a warning.',
+      schema: CreateSoundsSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('createSceneSounds', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'sound');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
         'Every ambient sound on a scene: id, name, center, radius, path, volume, repeat / walls / ' +
         'easing, darkness range, base effect.',
-      inputSchema: toInputSchema(ListSoundsSchema),
-    },
-    {
-      name: 'update-sounds',
-      description:
-        'Edit placed ambient sounds by id; only the fields passed change. Unresolved ids are ' +
-        'reported, never fatal. GM-only.',
-      inputSchema: toInputSchema(UpdateSoundsSchema),
-    },
-    {
-      name: 'delete-sounds',
-      description: 'Delete ambient sounds by id; missing ids are reported, never fatal. GM-only.',
-      inputSchema: toInputSchema(DeleteSoundsSchema),
-    },
+      schema: ListSoundsSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneSounds', parsed);
+        return formatListPlaceableLines(result, 'sound');
+      },
+    }),
+    placeableAction({
+      action: 'update',
+      description: 'Edit placed ambient sounds by id; only the fields passed change.',
+      schema: UpdateSoundsSchema,
+      handler: async ({ sceneIdentifier, patches }) => {
+        const result = await foundry.call('updateSceneSounds', { sceneIdentifier, patches });
+        return formatUpdatePlaceables(result, 'sound');
+      },
+    }),
+    placeableAction({
+      action: 'delete',
+      description: 'Delete ambient sounds by id.',
+      schema: DeleteSoundsSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneSounds', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'sound');
+      },
+    }),
   ],
-  handlers: {
-    'create-sounds': async args => {
-      const { sceneIdentifier, sounds } = CreateSoundsSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneSounds', { sceneIdentifier, items: sounds });
-      return formatCreatePlaceables(result, 'sound');
-    },
-    'list-sounds': async args => {
-      const parsed = ListSoundsSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneSounds', parsed);
-      return formatListPlaceables(result, 'sound');
-    },
-    'update-sounds': async args => {
-      const { sceneIdentifier, sounds } = UpdateSoundsSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneSounds', { sceneIdentifier, patches: sounds });
-      return formatUpdatePlaceables(result, 'sound');
-    },
-    'delete-sounds': async args => {
-      const { sceneIdentifier, soundIds } = DeleteSoundsSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneSounds', { sceneIdentifier, ids: soundIds });
-      return formatDeletePlaceables(result, 'sound');
-    },
-  },
 });

@@ -6,7 +6,7 @@ description: >-
   this scene sound alive / creepy / busy", "sound for the crypt / tavern / forest", "random crows
   and wolf howls", "atmosphere for this map", "day and night sounds", "why is this scene silent", or
   to tune / audit an existing soundscape. NOT for music — that is playlist-builder; a sound from ONE
-  SPOT on the map is an AmbientSound (create-sounds).
+  SPOT on the map is an AmbientSound placeable.
 ---
 
 # Soundscape builder
@@ -31,7 +31,7 @@ Three different audio systems, three owners. Getting this wrong is the most comm
 |---|---|---|
 | Music — a theme, a track, a boss cue, exploration music, a soundboard | **`playlist-builder`** | Playlists stay the music system. Soundscape's design.md lists playlist integration as an explicit **non-goal** — it never touches them. |
 | Ambience: a bed + random one-shots, "make it *sound* like a place" | **this skill** | Scene-global pools with randomized silence. Nothing else does it. |
-| A sound coming from **one spot** on the map — *that* waterfall, *this* hearth, the door at the end of the hall | **`create-sounds`** (AmbientSound placeable) | Soundscape sets are scene-global **by design** ("no positional interval sounds" — non-goal). A point emitter with a radius is a placeable. |
+| A sound coming from **one spot** on the map — *that* waterfall, *this* hearth, the door at the end of the hall | **`manage-placeables`** `{ kind: "sounds", action: "create" }` (AmbientSound placeable) | Soundscape sets are scene-global **by design** ("no positional interval sounds" — non-goal). A point emitter with a radius is a placeable. |
 
 They compose: a crypt can have a Soundscape bed, a positional AmbientSound at the fountain, and a
 Playlist that starts when the fight does. Build each with its own owner.
@@ -343,7 +343,8 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
 ## Boundaries
 
 - **Never music.** No theme, no melody, no boss cue, no soundboard. Hand off to `playlist-builder`.
-- **Never positional.** "The fountain in the courtyard" is `create-sounds`, not a scene-global set.
+- **Never positional.** "The fountain in the courtyard" is `manage-placeables` (`kind: "sounds"`),
+  not a scene-global set.
 - **Look at the scene before choosing** — screenshot/read the map and `list-tokens`. A soundscape
   picked from a scene's *name* is a guess.
 - **Never invent a file path or a template name.** Templates come from `action: "library"`, paths from

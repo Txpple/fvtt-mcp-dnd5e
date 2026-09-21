@@ -331,10 +331,10 @@ try {
   const names = new Set(tools.map(t => t.name));
   assert(names.has('manage-placeables'), 'G — manage-placeables is advertised');
   assert(
-    ['tiles', 'lights', 'walls', 'drawings'].every(k =>
+    ['tiles', 'lights', 'walls', 'drawings', 'sounds'].every(k =>
       ['create', 'list', 'update', 'delete'].every(a => !names.has(`${a}-${k}`))
     ),
-    'G — the 16 per-op tools are gone'
+    'G — the 20 per-op tools are gone'
   );
   const mp = (kind, action, args = {}) =>
     dispatch('manage-placeables', { kind, action, sceneIdentifier: sceneId, ...args });
@@ -349,6 +349,8 @@ try {
         { x: 700, y: 700, shapeType: 'rectangle', width: 120, height: 80, text: 'Trap Room' },
       ],
     },
+    // a 404 path keeps the path with a warning — no upload needed for the round trip
+    sounds: { items: [{ path: 'sounds/ZZ-no-such-file.ogg', x: 300, y: 300, radius: 20 }] },
   };
   for (const [kind, args] of Object.entries(gCreate)) {
     const out = await mp(kind, 'create', args);
@@ -365,6 +367,7 @@ try {
     lights: 'id x y rotation hidden walls vision dim bright color angle animation',
     walls: 'id c move sight light sound dir door ds',
     drawings: 'id x y shapeType width height rotation elevation sort text fillType strokeColor',
+    sounds: 'id x y radius path volume repeat walls easing hidden',
   };
   for (const [kind, columns] of Object.entries(gColumns)) {
     const out = await mp(kind, 'list');
@@ -394,6 +397,7 @@ try {
     lights: { patches: [{ id: gIds.lights, dim: 45 }] },
     walls: { patches: [{ id: gIds.walls, ds: 0 }] },
     drawings: { patches: [{ id: gIds.drawings, text: '' }] },
+    sounds: { patches: [{ id: gIds.sounds, radius: 35 }] },
   };
   for (const [kind, args] of Object.entries(gUpdate)) {
     const out = await mp(kind, 'update', args);
@@ -408,7 +412,7 @@ try {
   for (const [args, want] of [
     [
       { kind: 'roofs', action: 'list' },
-      'kind must be one of "tiles", "lights", "walls", "drawings" (got "roofs")',
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds" (got "roofs")',
     ],
     [
       { kind: 'walls', action: 'roll' },

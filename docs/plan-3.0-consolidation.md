@@ -303,3 +303,11 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   tool is 24.7k chars ≈ 6.9k tokens where a per-op tool was ≈ 1.6k — the union's price in
   Claude Code, paid once per session, against 16 × 45 = 720 name-chars saved on every prompt.
   Next: sounds → notes → tokens → regions into the same tool, then macros.
+- 2026-09-21 — **M8 sounds** into `manage-placeables` (`kind: "sounds"`): 4 tools → 0 new
+  names, the union 24,711 → 30,107 (+5,396) against the four's **5,726** (−5.8%); tools/list
+  204,187, names 132. Re-pointed: playlist-builder (1 body line) and soundscape-builder (2 body
+  lines); both front-matter descriptions named `create-sounds` in a parenthetical and now say
+  "an AmbientSound placeable" — the trigger phrases untouched and the ≤ 8,000 budget kept
+  (7,986). Live: verify-placeables-tooling **69/69** (section G now creates / lists / updates /
+  deletes a sound; a list row renders the `darkness` object as JSON — the dump's shape, left
+  for the page), integration 80 passed / 6 skipped.

@@ -24,18 +24,13 @@ function build(response: any = {}) {
 }
 
 describe('PlaceableTools.getToolDefinitions', () => {
-  it('exposes the COMPLETE placeable library: manage-placeables (4 kinds × 4 actions) + the pre-M8 kinds', () => {
+  it('exposes the COMPLETE placeable library: manage-placeables (5 kinds × 4 actions) + the pre-M8 kinds', () => {
     const { tools } = build();
     const defs = tools.getToolDefinitions();
     const names = defs.map(t => t.name).sort();
     expect(names).toEqual(
       [
         MANAGE_PLACEABLES,
-        // AmbientSound
-        'create-sounds',
-        'list-sounds',
-        'update-sounds',
-        'delete-sounds',
         // Token (place/update bespoke/delete + list)
         'list-tokens',
         'place-tokens',
@@ -57,14 +52,14 @@ describe('PlaceableTools.getToolDefinitions', () => {
       ].sort()
     );
     const union = defs.find(d => d.name === MANAGE_PLACEABLES)!.inputSchema as any;
-    expect(union.properties.kind.enum).toEqual(['tiles', 'lights', 'walls', 'drawings']);
+    expect(union.properties.kind.enum).toEqual(['tiles', 'lights', 'walls', 'drawings', 'sounds']);
     expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
     // the shared target leaf is described once, at the root; the members carry it bare
     expect(union.properties.sceneIdentifier.description).toMatch(/^Scene id or exact name/);
     expect(
       union.anyOf.map((m: any) => `${m.properties.kind.const}/${m.properties.action.const}`)
     ).toEqual(
-      ['tiles', 'lights', 'walls', 'drawings'].flatMap(k =>
+      ['tiles', 'lights', 'walls', 'drawings', 'sounds'].flatMap(k =>
         ['create', 'list', 'update', 'delete'].map(a => `${k}/${a}`)
       )
     );
@@ -247,13 +242,13 @@ describe('manage-placeables — tiles', () => {
   it('refuses an unknown kind / action / argument by name, naming what it takes', async () => {
     const { manage, tools } = build();
     await expect(manage('roofs', 'list')).rejects.toThrow(
-      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings" (got "roofs").'
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds" (got "roofs").'
     );
     await expect(manage('tiles', 'move')).rejects.toThrow(
       'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "tiles" (got "move").'
     );
     await expect(tools.handle(MANAGE_PLACEABLES, { action: 'list' })).rejects.toThrow(
-      'kind must be one of "tiles", "lights", "walls", "drawings" (got nothing)'
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds" (got nothing)'
     );
     // the old per-kind key is an unknown argument now — refused, never silently dropped
     await expect(
@@ -342,18 +337,18 @@ describe('manage-placeables — lights', () => {
   });
 });
 
-describe('sound handlers', () => {
-  it('create-sounds forwards {items} with the radius + effects fields', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — sounds', () => {
+  it('create forwards {items} with the radius + effects fields', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Falls',
       created: 1,
       items: [{ id: 's1', name: 'Waterfall' }],
     });
-    const out = await tools.handle('create-sounds', {
+    const out = await manage('sounds', 'create', {
       sceneIdentifier: 'Falls',
-      sounds: [
+      items: [
         {
           path: 'worlds/w/audio/waterfall.ogg',
           x: 1200,
@@ -373,8 +368,8 @@ describe('sound handlers', () => {
     expect(out).toContain('s1 — Waterfall');
   });
 
-  it('update/delete-sounds forward {patches}/{ids}; create rejects a missing radius', async () => {
-    const { tools, calls } = build({
+  it('update / delete forward {patches} / {ids}; create rejects a missing radius', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Falls',
@@ -382,23 +377,47 @@ describe('sound handlers', () => {
       updated: 1,
       deleted: 1,
     });
-    await tools.handle('update-sounds', {
+    await manage('sounds', 'update', {
       sceneIdentifier: 'Falls',
-      sounds: [{ id: 's1', volume: 0.8, radius: 45 }],
+      patches: [{ id: 's1', volume: 0.8, radius: 45 }],
     });
     expect(calls[0][0]).toBe('updateSceneSounds');
     expect(calls[0][1]).toMatchObject({ patches: [{ id: 's1', volume: 0.8, radius: 45 }] });
 
-    await tools.handle('delete-sounds', { sceneIdentifier: 'Falls', soundIds: ['s1'] });
+    await manage('sounds', 'delete', { sceneIdentifier: 'Falls', ids: ['s1'] });
     expect(calls[1][0]).toBe('deleteSceneSounds');
     expect(calls[1][1]).toMatchObject({ ids: ['s1'] });
 
     await expect(
-      tools.handle('create-sounds', {
+      manage('sounds', 'create', {
         sceneIdentifier: 'Falls',
-        sounds: [{ path: 'a.ogg', x: 0, y: 0 }],
+        items: [{ path: 'a.ogg', x: 0, y: 0 }],
       })
     ).rejects.toThrow();
+  });
+
+  it('list renders the sound columns (a path with a space quoted)', async () => {
+    const { manage } = build({
+      found: true,
+      sceneId: 'sc1',
+      sceneName: 'Falls',
+      items: [
+        {
+          id: 's1',
+          name: 'Waterfall',
+          x: 1200,
+          y: 900,
+          radius: 30,
+          path: 'audio/water fall.ogg',
+          volume: 0.5,
+          repeat: true,
+        },
+      ],
+    });
+    expect(await manage('sounds', 'list', { sceneIdentifier: 'Falls' })).toBe(
+      '1 sound(s) on "Falls" (sc1): id name x y radius path volume repeat\n' +
+        's1 Waterfall 1200 900 30 "audio/water fall.ogg" 0.5 true'
+    );
   });
 });
 

@@ -6,7 +6,7 @@ description: >-
   to "make a playlist", "add background music", "battle music", "a theme for this place",
   "exploration music", "a soundboard of effects", or to attach audio to a scene. NOT for randomized
   one-shots with silence between them or a crossfaded ambient bed — that is soundscape-builder; a
-  sound from one spot on the map is an AmbientSound (create-sounds).
+  sound from one spot on the map is an AmbientSound placeable.
 ---
 
 # Playlist builder
@@ -26,7 +26,7 @@ someone else's job:
   playlist. Soundscape's design.md makes playlist integration an explicit **non-goal** — the two
   systems never touch, and a scene happily runs both.
 - **A sound coming from one SPOT on the map** (that waterfall, this hearth) → an AmbientSound
-  placeable via **`create-sounds`**.
+  placeable via **`manage-placeables`** `{ kind: "sounds", action: "create" }`.
 
 A long looping ambience *track* (a 10-minute Tabletop Audio bed) is still a playlist — that's this
 skill.
