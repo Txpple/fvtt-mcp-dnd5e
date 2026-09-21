@@ -20,7 +20,7 @@ import { soundKindModule } from './sound.js';
 import { drawingKindModule } from './drawing.js';
 import { wallKindModule } from './wall.js';
 import { tokenToolModule } from './token.js';
-import { noteToolModule } from './note.js';
+import { noteKindModule } from './note.js';
 import { regionToolModule } from './region.js';
 
 export const MANAGE_PLACEABLES = 'manage-placeables';
@@ -44,6 +44,7 @@ export class PlaceableTools {
       wallKindModule(foundry),
       drawingKindModule(foundry),
       soundKindModule(foundry),
+      noteKindModule(foundry),
     ];
     this.union = unionTool({
       name: MANAGE_PLACEABLES,
@@ -64,7 +65,7 @@ export class PlaceableTools {
       ),
     });
 
-    this.legacy = [tokenToolModule(foundry), noteToolModule(foundry), regionToolModule(foundry)];
+    this.legacy = [tokenToolModule(foundry), regionToolModule(foundry)];
     // Compose the name->handler map and fail LOUDLY on any def↔handler drift or name collision.
     this.handlers = { [MANAGE_PLACEABLES]: args => this.union.handle(args) };
     for (const m of this.legacy) {

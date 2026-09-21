@@ -333,8 +333,9 @@ try {
   assert(
     ['tiles', 'lights', 'walls', 'drawings', 'sounds'].every(k =>
       ['create', 'list', 'update', 'delete'].every(a => !names.has(`${a}-${k}`))
-    ),
-    'G — the 20 per-op tools are gone'
+    ) &&
+      ['create-scene-notes', 'list-notes', 'update-note', 'delete-note'].every(n => !names.has(n)),
+    'G — the 24 per-op tools are gone'
   );
   const mp = (kind, action, args = {}) =>
     dispatch('manage-placeables', { kind, action, sceneIdentifier: sceneId, ...args });
@@ -351,6 +352,7 @@ try {
     },
     // a 404 path keeps the path with a warning — no upload needed for the round trip
     sounds: { items: [{ path: 'sounds/ZZ-no-such-file.ogg', x: 300, y: 300, radius: 20 }] },
+    notes: { items: [{ journal: fx.journalId, x: 400, y: 400, label: '7 — Vault' }] },
   };
   for (const [kind, args] of Object.entries(gCreate)) {
     const out = await mp(kind, 'create', args);
@@ -368,6 +370,7 @@ try {
     walls: 'id c move sight light sound dir door ds',
     drawings: 'id x y shapeType width height rotation elevation sort text fillType strokeColor',
     sounds: 'id x y radius path volume repeat walls easing hidden',
+    notes: 'id x y text entryId pageId iconSize global',
   };
   for (const [kind, columns] of Object.entries(gColumns)) {
     const out = await mp(kind, 'list');
@@ -398,6 +401,7 @@ try {
     walls: { patches: [{ id: gIds.walls, ds: 0 }] },
     drawings: { patches: [{ id: gIds.drawings, text: '' }] },
     sounds: { patches: [{ id: gIds.sounds, radius: 35 }] },
+    notes: { patches: [{ id: gIds.notes, label: '7 — Antechamber' }] },
   };
   for (const [kind, args] of Object.entries(gUpdate)) {
     const out = await mp(kind, 'update', args);
@@ -412,7 +416,7 @@ try {
   for (const [args, want] of [
     [
       { kind: 'roofs', action: 'list' },
-      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds" (got "roofs")',
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes" (got "roofs")',
     ],
     [
       { kind: 'walls', action: 'roll' },

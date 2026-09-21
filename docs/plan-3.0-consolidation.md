@@ -311,3 +311,13 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   (7,986). Live: verify-placeables-tooling **69/69** (section G now creates / lists / updates /
   deletes a sound; a list row renders the `darkness` object as JSON — the dump's shape, left
   for the page), integration 80 passed / 6 skipped.
+- 2026-09-21 — **M8 notes** into `manage-placeables` (`kind: "notes"`): 4 tools → 0 new names
+  (`create-scene-notes` / `list-notes` / `update-note` / `delete-note`), the union 30,107 →
+  33,397 (+3,290) against the four's **3,406** (−3.4%); tools/list 204,067, names 128. Two shapes
+  made uniform with the other kinds: `update` takes `patches` (the single-target `noteId` form
+  is gone — the pin-nudge loop passes one patch) with the batch formatter's wording ("Updated 0
+  of 1 matched" + the warning where the old tool said "No changes applied"), and `sceneIdentifier`
+  is optional (the active scene) where the three write tools had required it. Re-pointed:
+  tom-cartos-import (steps 4 and 6), plot-drift-check (the pins row); two registry tests that
+  named the old tools now assert the notes kind. Live: verify-placeables-tooling **74/74**,
+  integration 80 passed / 6 skipped.

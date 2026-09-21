@@ -50,7 +50,7 @@ const CALLS = [
   ['manage-placeables', { kind: 'walls', action: 'list' }],
   ['manage-placeables', { kind: 'lights', action: 'list' }],
   ['list-regions', {}],
-  ['list-notes', {}],
+  ['manage-placeables', { kind: 'notes', action: 'list' }],
   ['list-actor-ownership', {}],
   ['list-cards', {}],
   ['list-macros', {}],

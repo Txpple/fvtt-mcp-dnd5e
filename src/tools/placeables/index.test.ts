@@ -24,7 +24,7 @@ function build(response: any = {}) {
 }
 
 describe('PlaceableTools.getToolDefinitions', () => {
-  it('exposes the COMPLETE placeable library: manage-placeables (5 kinds × 4 actions) + the pre-M8 kinds', () => {
+  it('exposes the COMPLETE placeable library: manage-placeables (6 kinds × 4 actions) + the pre-M8 kinds', () => {
     const { tools } = build();
     const defs = tools.getToolDefinitions();
     const names = defs.map(t => t.name).sort();
@@ -36,11 +36,6 @@ describe('PlaceableTools.getToolDefinitions', () => {
         'place-tokens',
         'update-token',
         'delete-tokens',
-        // Note (pins)
-        'create-scene-notes',
-        'list-notes',
-        'update-note',
-        'delete-note',
         // Region + teleporter special ops
         'create-region',
         'list-regions',
@@ -52,14 +47,21 @@ describe('PlaceableTools.getToolDefinitions', () => {
       ].sort()
     );
     const union = defs.find(d => d.name === MANAGE_PLACEABLES)!.inputSchema as any;
-    expect(union.properties.kind.enum).toEqual(['tiles', 'lights', 'walls', 'drawings', 'sounds']);
+    expect(union.properties.kind.enum).toEqual([
+      'tiles',
+      'lights',
+      'walls',
+      'drawings',
+      'sounds',
+      'notes',
+    ]);
     expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
     // the shared target leaf is described once, at the root; the members carry it bare
     expect(union.properties.sceneIdentifier.description).toMatch(/^Scene id or exact name/);
     expect(
       union.anyOf.map((m: any) => `${m.properties.kind.const}/${m.properties.action.const}`)
     ).toEqual(
-      ['tiles', 'lights', 'walls', 'drawings', 'sounds'].flatMap(k =>
+      ['tiles', 'lights', 'walls', 'drawings', 'sounds', 'notes'].flatMap(k =>
         ['create', 'list', 'update', 'delete'].map(a => `${k}/${a}`)
       )
     );
@@ -242,13 +244,13 @@ describe('manage-placeables — tiles', () => {
   it('refuses an unknown kind / action / argument by name, naming what it takes', async () => {
     const { manage, tools } = build();
     await expect(manage('roofs', 'list')).rejects.toThrow(
-      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds" (got "roofs").'
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes" (got "roofs").'
     );
     await expect(manage('tiles', 'move')).rejects.toThrow(
       'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "tiles" (got "move").'
     );
     await expect(tools.handle(MANAGE_PLACEABLES, { action: 'list' })).rejects.toThrow(
-      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds" (got nothing)'
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes" (got nothing)'
     );
     // the old per-kind key is an unknown argument now — refused, never silently dropped
     await expect(
@@ -742,30 +744,30 @@ describe('token handlers', () => {
   });
 });
 
-describe('note handlers', () => {
-  it('create-scene-notes forwards notes as {items} and surfaces ids + labels', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — notes', () => {
+  it('create forwards {items} and surfaces ids + labels', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Iris',
       created: 1,
       items: [{ id: 'note9', text: '1 — Entry' }],
     });
-    const out = await tools.handle('create-scene-notes', {
+    const out = await manage('notes', 'create', {
       sceneIdentifier: 'Iris',
-      notes: [{ journal: 'Temple Keys', x: 1, y: 2, label: '1 — Entry' }],
+      items: [{ journal: 'Temple Keys', x: 1, y: 2, label: '1 — Entry' }],
     });
     expect(calls[0][0]).toBe('createSceneNotes');
-    expect(calls[0][1]).toMatchObject({
+    expect(calls[0][1]).toEqual({
       sceneIdentifier: 'Iris',
-      items: [{ journal: 'Temple Keys', x: 1, y: 2 }],
+      items: [{ journal: 'Temple Keys', x: 1, y: 2, label: '1 — Entry' }],
     });
-    expect(out).toContain('Created 1 map-note pin(s) on "Iris" (sc1)');
+    expect(out).toContain('Created 1 note(s) on "Iris" (sc1)');
     expect(out).toContain('note9 — 1 — Entry');
   });
 
-  it('create-scene-notes surfaces per-note errors, dropped-icon warnings, and a missing scene', async () => {
-    const { tools } = build({
+  it('create surfaces per-note errors, dropped-icon warnings, and a missing scene', async () => {
+    const { manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Iris',
@@ -773,54 +775,79 @@ describe('note handlers', () => {
       errors: ['Note 1: No journal found matching "Missing" (by id or exact name).'],
       warnings: ['Supplied icon "x/nope.webp" was not found on the server — substituted …'],
     });
-    const out = await tools.handle('create-scene-notes', {
+    const out = await manage('notes', 'create', {
       sceneIdentifier: 'Iris',
-      notes: [{ journal: 'Temple Keys', x: 1, y: 2, icon: 'x/nope.webp' }],
+      items: [{ journal: 'Temple Keys', x: 1, y: 2, icon: 'x/nope.webp' }],
     });
     expect(out).toContain('⚠ Note 1: No journal found');
     expect(out).toContain('warning(s):');
 
-    const { tools: t2 } = build({ success: true, created: 0, notFound: 'Ghost' });
+    const { manage: m2 } = build({ success: true, created: 0, notFound: 'Ghost' });
     await expect(
-      t2.handle('create-scene-notes', {
-        sceneIdentifier: 'Ghost',
-        notes: [{ journal: 'X', x: 1, y: 2 }],
-      })
-    ).rejects.toThrow('Scene not found: "Ghost". No map-note pins created.');
+      m2('notes', 'create', { sceneIdentifier: 'Ghost', items: [{ journal: 'X', x: 1, y: 2 }] })
+    ).rejects.toThrow('Scene not found: "Ghost". No notes created.');
   });
 
-  it('update-note wraps the single note into a kernel patch and confirms', async () => {
-    const { tools, calls } = build({
+  it('list renders the pin columns (the label quoted when it has spaces)', async () => {
+    const { manage } = build({
+      found: true,
+      sceneId: 'sc1',
+      sceneName: 'Iris',
+      items: [
+        {
+          id: 'note9',
+          x: 1,
+          y: 2,
+          text: '1 — Entry',
+          entryId: 'j1',
+          pageId: 'p1',
+          iconSize: 40,
+          global: false,
+        },
+      ],
+    });
+    expect(await manage('notes', 'list', { sceneIdentifier: 'Iris' })).toBe(
+      '1 note(s) on "Iris" (sc1): id x y text entryId pageId iconSize global\n' +
+        'note9 1 2 "1 — Entry" j1 p1 40 false'
+    );
+  });
+
+  it('update forwards {patches} and reports matched / updated, not-found, and matched-but-unchanged', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Iris',
       matched: 1,
       updated: 1,
     });
-    const out = await tools.handle('update-note', {
+    const out = await manage('notes', 'update', {
       sceneIdentifier: 'Iris',
-      noteId: 'note9',
-      x: 150,
-      label: '1 — Antechamber',
+      patches: [{ id: 'note9', x: 150, label: '1 — Antechamber' }],
     });
     expect(calls[0][0]).toBe('updateSceneNotes');
     expect(calls[0][1]).toEqual({
       sceneIdentifier: 'Iris',
       patches: [{ id: 'note9', x: 150, label: '1 — Antechamber' }],
     });
-    expect(out).toContain('Updated note note9 on "Iris" (sc1)');
-  });
+    expect(out).toContain('Updated 1 of 1 matched note(s) on "Iris" (sc1)');
 
-  it('update-note distinguishes not-found vs matched-but-unchanged (dropped icon)', async () => {
-    const { tools } = build({ success: true, matched: 0, updated: 0, notFoundIds: ['note9'] });
-    const out = await tools.handle('update-note', {
-      sceneIdentifier: 'Iris',
-      noteId: 'note9',
-      x: 1,
+    const { manage: m2 } = build({
+      success: true,
+      sceneId: 'sc1',
+      sceneName: 'Iris',
+      matched: 0,
+      updated: 0,
+      notFoundIds: ['note9'],
     });
-    expect(out).toBe('Note not found: "note9". Nothing changed.');
+    const out2 = await m2('notes', 'update', {
+      sceneIdentifier: 'Iris',
+      patches: [{ id: 'note9', x: 1 }],
+    });
+    expect(out2).toContain('No notes matched on "Iris" (sc1)');
+    expect(out2).toContain('not found: note9');
 
-    const { tools: t2 } = build({
+    // matched but nothing applied — the only change was a dropped (404) icon
+    const { manage: m3 } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Iris',
@@ -828,43 +855,36 @@ describe('note handlers', () => {
       updated: 0,
       warnings: ['Supplied icon "bad.webp" was not found …'],
     });
-    const out2 = await t2.handle('update-note', {
+    const out3 = await m3('notes', 'update', {
       sceneIdentifier: 'Iris',
-      noteId: 'note9',
-      icon: 'bad.webp',
+      patches: [{ id: 'note9', icon: 'bad.webp' }],
     });
-    expect(out2).toContain('No changes applied to note note9');
-    expect(out2).toContain('warning(s)');
-  });
+    expect(out3).toContain('Updated 0 of 1 matched note(s)');
+    expect(out3).toContain('warning(s)');
 
-  it('update-note rejects when no updatable field is supplied (refine)', async () => {
-    const { tools } = build();
     await expect(
-      tools.handle('update-note', { sceneIdentifier: 'Iris', noteId: 'note9' })
-    ).rejects.toThrow();
+      manage('notes', 'update', { sceneIdentifier: 'Iris', patches: [{ id: 'note9' }] })
+    ).rejects.toThrow('Provide at least one field to change besides id');
   });
 
-  it('delete-note forwards noteIds as {ids} and reports missing ids + missing scene', async () => {
-    const { tools, calls } = build({
+  it('delete forwards {ids} and reports missing ids + missing scene', async () => {
+    const { calls, manage } = build({
       success: true,
       deleted: 1,
       sceneId: 'sc1',
       sceneName: 'Iris',
       notFoundIds: ['ghost'],
     });
-    const out = await tools.handle('delete-note', {
-      sceneIdentifier: 'Iris',
-      noteIds: ['a', 'ghost'],
-    });
+    const out = await manage('notes', 'delete', { sceneIdentifier: 'Iris', ids: ['a', 'ghost'] });
     expect(calls[0][0]).toBe('deleteSceneNotes');
     expect(calls[0][1]).toEqual({ sceneIdentifier: 'Iris', ids: ['a', 'ghost'] });
     expect(out).toContain('Deleted 1 note(s) from "Iris" (sc1)');
     expect(out).toContain('1 id(s) not found: ghost');
 
-    const { tools: t2 } = build({ success: true, deleted: 0, notFound: 'Ghost' });
-    await expect(
-      t2.handle('delete-note', { sceneIdentifier: 'Ghost', noteIds: ['a'] })
-    ).rejects.toThrow('Scene not found: "Ghost". Nothing deleted.');
+    const { manage: m2 } = build({ success: true, deleted: 0, notFound: 'Ghost' });
+    await expect(m2('notes', 'delete', { sceneIdentifier: 'Ghost', ids: ['a'] })).rejects.toThrow(
+      'Scene not found: "Ghost". Nothing deleted.'
+    );
   });
 });
 
