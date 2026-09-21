@@ -105,38 +105,28 @@ export const lightToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-lights',
       description:
-        'Place one or more AMBIENT LIGHTS (torches, braziers, magical glows) on a scene. x/y are ' +
-        'the light CENTER in absolute canvas pixels; dim/bright are radii in grid-distance units ' +
-        '(feet), NOT pixels. Set color, alpha (tint intensity), angle (cone), luminosity, ' +
-        'attenuation (edge softness), an animation (animationType "torch"/"flame"/"pulse" + ' +
-        'speed/intensity for flicker), and a darkness activation range (darknessMin ~0.1 so a torch ' +
-        'only lights once the scene dims). walls confines it, vision lets it grant sight. Per-light ' +
-        'error isolation. Returns created ids. GM-only.',
+        'Place ambient lights: x / y the center in canvas pixels, dim / bright radii in grid ' +
+        'distance (feet), color, angle, luminosity, attenuation, animation, a darkness activation ' +
+        'range, walls, vision. One bad light does not fail the batch. Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateLightsSchema),
     },
     {
       name: 'list-lights',
       description:
-        'List every AmbientLight on a scene — id, center (x/y), rotation, dim/bright radii, color, ' +
-        'cone angle, animation type, hidden, walls/vision. Read-only; the inspect step before ' +
-        'update-lights / delete-lights.',
+        'Every ambient light on a scene: id, center, rotation, dim / bright, color, angle, ' +
+        'animation, hidden, walls / vision.',
       inputSchema: toInputSchema(ListLightsSchema),
     },
     {
       name: 'update-lights',
       description:
-        'Edit one or more placed AMBIENT LIGHTS by id (from list-lights): MOVE via x/y, change ' +
-        'dim/bright radii, color, alpha, angle, luminosity, attenuation, the animation ' +
-        '(animationType/Speed/Intensity — e.g. add torch flicker), the darkness activation range, ' +
-        'walls/vision, hidden. Emission fields nest under config internally — patches only the ' +
-        'fields you pass, so a partial change never wipes the rest. Unresolved ids reported. GM-only.',
+        'Edit placed ambient lights by id; only the fields passed change (a partial config never ' +
+        'wipes the rest). Unresolved ids are reported. GM-only.',
       inputSchema: toInputSchema(UpdateLightsSchema),
     },
     {
       name: 'delete-lights',
-      description:
-        'Delete one or more AmbientLights from a scene by id (from list-lights). Missing ids are ' +
-        'reported, never fatal. GM-only.',
+      description: 'Delete ambient lights by id; missing ids are reported, never fatal. GM-only.',
       inputSchema: toInputSchema(DeleteLightsSchema),
     },
   ],

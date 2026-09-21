@@ -18,32 +18,17 @@ const CreateSceneNotesSchema = z.object({
   notes: z
     .array(
       z.object({
-        journal: z
-          .string()
-          .min(1)
-          .describe('JournalEntry id or exact name the pin links to (strict resolve).'),
-        page: z
-          .string()
-          .optional()
-          .describe('Page id or exact name within that entry to open (strict resolve).'),
+        journal: z.string().min(1).describe('JournalEntry id or exact name the pin opens.'),
+        page: z.string().optional().describe('Page id or exact name within that entry.'),
         x: z.number().describe('Pin X in absolute canvas pixels.'),
         y: z.number().describe('Pin Y in absolute canvas pixels.'),
-        label: z
-          .string()
-          .optional()
-          .describe('Text shown on the pin (e.g. "12 — Throne Room"); defaults to the entry name.'),
-        icon: z
-          .string()
-          .optional()
-          .describe("Data-relative icon image src; omit for Foundry's default note pin."),
+        label: z.string().optional().describe('Pin text (default the entry name).'),
+        icon: z.string().optional().describe('Data-relative icon path (default the note pin).'),
         iconSize: z.number().int().positive().optional().describe('Icon size in px (min 32).'),
         global: z
           .boolean()
           .optional()
-          .describe(
-            'Render the pin through fog/vision occlusion. NOT a permission control — GM-only ' +
-              "secrecy comes from the linked journal's ownership (default 0)."
-          ),
+          .describe("Shown through fog (not a permission: secrecy is the journal's ownership)."),
       })
     )
     .min(1)
@@ -105,37 +90,28 @@ export const noteToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-scene-notes',
       description:
-        'Place map-note PINS on a scene, each linked to a JournalEntry (and optionally a specific ' +
-        'page) — the deterministic half of the legend→GM-room-pins feature. Pass absolute canvas ' +
-        'pixel x/y (see get-scene-dimensions for the padding-aware math), an optional label/icon/size, ' +
-        'and the journal id|name. Per-note error isolation: a pin whose journal does not resolve is ' +
-        "reported and skipped, not fatal. GM-only secrecy is the linked journal's ownership, not the " +
-        'pin; `global` only controls fog occlusion. Returns each created note id (for update-note/' +
-        'delete-note). GM-only.',
+        'Place map-note pins, each linked to a JournalEntry (and optionally a page), at canvas-pixel ' +
+        'x / y with a label / icon / size. A pin whose journal does not resolve is skipped and ' +
+        'reported. Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateSceneNotesSchema),
     },
     {
       name: 'list-notes',
       description:
-        'List every MAP-NOTE PIN on a scene — id, position (x/y), label text, linked journal ' +
-        'entryId/pageId, icon src + size, fog `global`, font. Read-only; the inspect step that feeds ' +
-        'update-note / delete-note (create-scene-notes places them).',
+        'Every map-note pin on a scene: id, x / y, label, entryId / pageId, icon + size, global, ' +
+        'font.',
       inputSchema: toInputSchema(ListNotesSchema),
     },
     {
       name: 'update-note',
       description:
-        'Nudge ONE existing map-note pin by id (the legend→pins review loop): move it (x/y), ' +
-        'relabel it, resize/restyle its icon, toggle fog `global`, or re-point it to a different ' +
-        'journal/page. Patches only the fields you pass; at least one is required. Strict scene + ' +
-        'note-id resolution. GM-only.',
+        'Edit one map-note pin by id: position, label, icon, global, or its journal / page. Only ' +
+        'the fields passed change. GM-only.',
       inputSchema: toInputSchema(UpdateNoteSchema),
     },
     {
       name: 'delete-note',
-      description:
-        'Remove one or more map-note pins from a scene by note id (from create-scene-notes). ' +
-        'Missing ids are reported, never fatal. GM-only.',
+      description: 'Remove map-note pins by id; missing ids are reported, never fatal. GM-only.',
       inputSchema: toInputSchema(DeleteNoteSchema),
     },
   ],

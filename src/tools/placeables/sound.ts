@@ -118,37 +118,28 @@ export const soundToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-sounds',
       description:
-        'Place one or more positional AMBIENT SOUNDS on a scene (a crackling hearth, a waterfall, ' +
-        'dripping cave water) from Data-relative audio paths. x/y are the emitter CENTER in absolute ' +
-        'canvas pixels; radius is in grid-DISTANCE units (feet), NOT pixels. Optionally set volume, ' +
-        'repeat (loop), walls (muffle through walls), easing (fade by distance), a darkness ' +
-        'activation range (night-only sounds), and listener effects (baseEffect/muffledEffect, e.g. ' +
-        '"lowpass"). A 404 audio path keeps the path but warns. Distinct from a scene playlist: this ' +
-        'is a point emitter players walk into. Returns created ids. GM-only.',
+        'Place positional ambient sounds from Data-relative audio paths: x / y the center in canvas ' +
+        'pixels, radius in grid distance (feet), volume, repeat, walls, easing, a darkness range, ' +
+        'listener effects. A 404 path keeps the path with a warning. Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateSoundsSchema),
     },
     {
       name: 'list-sounds',
       description:
-        'List every AmbientSound on a scene — id, name, center (x/y), radius, audio path, volume, ' +
-        'repeat/walls/easing flags, darkness range, base effect. Read-only; the inspect step before ' +
-        'update-sounds / delete-sounds.',
+        'Every ambient sound on a scene: id, name, center, radius, path, volume, repeat / walls / ' +
+        'easing, darkness range, base effect.',
       inputSchema: toInputSchema(ListSoundsSchema),
     },
     {
       name: 'update-sounds',
       description:
-        'Edit one or more placed AMBIENT SOUNDS by id (from list-sounds): MOVE via x/y, resize the ' +
-        'audible radius, swap the track (path), change volume/repeat/walls/easing, the darkness ' +
-        'activation range, or the listener effects. Patches only the fields you pass. Unresolved ids ' +
+        'Edit placed ambient sounds by id; only the fields passed change. Unresolved ids are ' +
         'reported, never fatal. GM-only.',
       inputSchema: toInputSchema(UpdateSoundsSchema),
     },
     {
       name: 'delete-sounds',
-      description:
-        'Delete one or more AmbientSounds from a scene by id (from list-sounds). Missing ids are ' +
-        'reported, never fatal. GM-only.',
+      description: 'Delete ambient sounds by id; missing ids are reported, never fatal. GM-only.',
       inputSchema: toInputSchema(DeleteSoundsSchema),
     },
   ],

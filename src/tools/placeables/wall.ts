@@ -104,13 +104,7 @@ const CreateWallsSchema = z.object({
 
 const ListWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  doorsOnly: z
-    .boolean()
-    .optional()
-    .describe(
-      'Return only DOOR walls (door > 0) — a populated scene carries hundreds of plain walls, and ' +
-        'the usual edit loop is doors. Default false (all walls).'
-    ),
+  doorsOnly: z.boolean().optional().describe('Only door walls (door > 0).'),
 });
 
 const UpdateWallSchema = z
@@ -149,39 +143,29 @@ export const wallToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-walls',
       description:
-        'Create one or more WALL segments on a scene — surgical additions (block a corridor, add a ' +
-        'door/secret door) to walls normally drawn in the app or shipped by a map pack. Each wall is ' +
-        'a segment x0,y0→x1,y1 (or c:[4]) in absolute canvas pixels. Channels: move (0/20), ' +
-        'light/sight/sound (0 none / 10 limited / 20 normal / 30 proximity / 40 distance — omitted ' +
-        'channels default to 20 blocking), dir (one-way), door (1 door / 2 secret) + ds (state) + ' +
-        'doorSound, and proximity thresholds. Per-wall error isolation. Returns created ids. GM-only.',
+        'Create wall segments (x0, y0 → x1, y1 or c:[4], in canvas pixels) with their move / ' +
+        'light / sight / sound channels (omitted = 20, blocking), one-way dir, door kind + state + ' +
+        'sound, proximity thresholds. One bad wall does not fail the batch. Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateWallsSchema),
     },
     {
       name: 'list-walls',
       description:
-        'List walls on a scene — id, segment c:[x0,y0,x1,y1], move/sight/light/sound channels, ' +
-        'one-way dir, door kind + state + sound. A populated scene carries HUNDREDS of walls: pass ' +
-        'doorsOnly:true to get just the doors (the usual edit loop). Read-only; the inspect step ' +
-        'before update-walls / delete-walls.',
+        'Walls on a scene: id, segment c:[x0, y0, x1, y1], the four channels, dir, door kind + ' +
+        'state + sound; doorsOnly for just the doors.',
       inputSchema: toInputSchema(ListWallsSchema),
     },
     {
       name: 'update-walls',
       description:
-        'Edit one or more WALLS by id (from list-walls): flip a door to secret (door:2), open/close/' +
-        'LOCK it (ds: 0/1/2), change what it blocks (move/light/sight/sound: 0 none / 10 limited / ' +
-        '20 normal / 30 proximity / 40 distance), set one-way dir, doorSound, or proximity ' +
-        'thresholds; MOVE by giving the full segment (all of x0,y0,x1,y1 or c:[4] — a wall never ' +
-        'half-moves). Patches only the fields you pass; an off-enum value skips that patch with a ' +
-        'warning. GM-only.',
+        'Edit walls by id: door kind / state / sound, the channels, dir, thresholds, or a move (the ' +
+        'whole segment, never a half). Only the fields passed change; an off-enum value skips that ' +
+        'patch with a warning. GM-only.',
       inputSchema: toInputSchema(UpdateWallsSchema),
     },
     {
       name: 'delete-walls',
-      description:
-        'Delete one or more Walls from a scene by id (from list-walls) — e.g. open up a sealed ' +
-        'passage. Missing ids are reported, never fatal. GM-only.',
+      description: 'Delete walls by id; missing ids are reported, never fatal. GM-only.',
       inputSchema: toInputSchema(DeleteWallsSchema),
     },
   ],

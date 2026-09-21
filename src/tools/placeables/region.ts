@@ -38,28 +38,22 @@ const CreateRegionSchema = z.object({
         visibility: z
           .number()
           .optional()
-          .describe(
-            'Region visibility: 0 layer (GM-only overlay, the default), 1 gamemaster, 2 always.'
-          ),
+          .describe('0 layer (GM overlay, default), 1 gamemaster, 2 always.'),
         shapes: z
           .array(RegionShapeSchema)
           .min(1)
           .describe(
-            'v14 region shapes in canvas px, carried whole — rectangle {type:"rectangle",x,y,width,' +
-              'height,rotation,hole}, ellipse {type:"ellipse",x,y,radiusX,radiusY,rotation,hole}, or ' +
-              'polygon {type:"polygon",points:[x1,y1,...],hole}.'
+            'v14 shapes in canvas px: rectangle {x, y, width, height}, ellipse {x, y, radiusX, ' +
+              'radiusY}, polygon {points}.'
           ),
         behaviors: z
           .array(RegionBehaviorSchema)
           .optional()
-          .describe(
-            'Region behaviors carried whole. A teleportToken here needs system.destinations already an ' +
-              'array of "Scene.<id>.Region.<id>" UUIDs — for a two-NEW-region teleporter use create-teleporter.'
-          ),
+          .describe('Behaviors carried whole; a teleportToken needs system.destinations as uuids.'),
       })
     )
     .min(1)
-    .describe('One or more regions to create.'),
+    .describe('The regions to create.'),
 });
 
 const ListRegionsSchema = z.object({ sceneIdentifier: sceneTarget });
@@ -67,20 +61,11 @@ const ListRegionsSchema = z.object({ sceneIdentifier: sceneTarget });
 const UpdateRegionSchema = z
   .object({
     sceneIdentifier: sceneTarget,
-    regionId: z
-      .string()
-      .min(1)
-      .describe('Region id (from create-region / create-teleporter / list-regions).'),
+    regionId: z.string().min(1).describe('Region id.'),
     name: z.string().optional().describe('New region label.'),
     color: z.string().optional().describe('New region tint hex.'),
-    visibility: z
-      .number()
-      .optional()
-      .describe('New visibility mode (0 layer / 1 gamemaster / 2 always).'),
-    shapes: z
-      .array(RegionShapeSchema)
-      .optional()
-      .describe('Replace the region shapes whole (v14 shapes in canvas px).'),
+    visibility: z.number().optional().describe('0 layer / 1 gamemaster / 2 always.'),
+    shapes: z.array(RegionShapeSchema).optional().describe('Replaces the shapes (v14, canvas px).'),
     rect: z
       .object({
         x: z.number().describe('Rectangle CENTER x in canvas px.'),
@@ -101,8 +86,7 @@ const UpdateRegionSchema = z
       })
       .optional()
       .describe(
-        'Convenience: reshape to ONE grid rectangle centered at (x,y), sized in cells, grid-snapped ' +
-          'by default (the move/resize the review loop wants). Ignored if `shapes` is given.'
+        'Reshape to one grid rectangle centered at (x, y), sized in cells; ignored with shapes.'
       ),
   })
   .refine(
@@ -122,44 +106,27 @@ const DeleteRegionSchema = z.object({
 
 const TeleporterEndpointSchema = z.object({
   sceneIdentifier: sceneTargetRequired,
-  x: z
-    .number()
-    .describe(
-      'Trigger CENTER x in canvas px (see get-scene-dimensions for the padding-aware math).'
-    ),
-  y: z.number().describe('Trigger CENTER y in canvas px.'),
+  x: z.number().describe('Trigger center x in canvas px.'),
+  y: z.number().describe('Trigger center y in canvas px.'),
 });
 
 const CreateTeleporterSchema = z.object({
   from: TeleporterEndpointSchema.describe('The first endpoint.'),
   to: TeleporterEndpointSchema.describe('The second endpoint (may be the same scene).'),
-  twoWay: z
-    .boolean()
-    .default(true)
-    .describe('Wire the return teleporter too (default true). false = one-way from→to.'),
+  twoWay: z.boolean().default(true).describe('false = one-way, from → to.'),
   widthCells: z
     .number()
     .int()
     .positive()
     .default(1)
-    .describe('Trigger width in whole grid cells, applied to both ends. Default 1.'),
-  heightCells: z
-    .number()
-    .int()
-    .positive()
-    .default(1)
-    .describe('Trigger height in whole grid cells. Default 1.'),
-  snapToGrid: z
-    .boolean()
-    .default(true)
-    .describe('Snap each trigger rectangle to the grid cell(s) under its center (default true).'),
+    .describe('Trigger width in grid cells, both ends.'),
+  heightCells: z.number().int().positive().default(1).describe('Trigger height in grid cells.'),
+  snapToGrid: z.boolean().default(true).describe('Snap each trigger to the grid under its center.'),
   confirm: z
     .boolean()
     .default(true)
     .describe(
-      'Ask before moving (default true — the house pattern for transitions): the moving player ' +
-        'gets core v14\'s "Teleport / Do Not Teleport" confirmation dialog (`choice` flag). Pass ' +
-        'false ONLY for trap/plot teleports that should fire silently.'
+      'The moving player gets the Teleport / Do Not Teleport dialog; false fires silently.'
     ),
   fromName: z.string().optional().describe('Name for the from-side region.'),
   toName: z.string().optional().describe('Name for the to-side region.'),
@@ -171,102 +138,69 @@ const AddRegionBehaviorSchema = z.object({
   regionIdentifier: z
     .string()
     .min(1)
-    .describe(
-      'Region id or EXACT region name on that scene (an ambiguous name errors — use the id).'
-    ),
+    .describe('Region id or exact name on that scene (an ambiguous name errors).'),
   type: z
     .string()
     .min(1)
     .describe(
-      'Behavior type key, validated against the live registry — core v14: teleportToken, ' +
-        'executeMacro, executeScript, adjustDarknessLevel, changeLevel, displayScrollingText, ' +
-        'modifyMovementCost, pauseGame, suppressWeather, toggleBehavior, defineSurface; dnd5e 6.0: ' +
-        'dnd5e.applyActiveEffect (an area that applies effects to tokens inside it — lava, a poison ' +
-        'cloud, consecrated ground; use `effects`), dnd5e.difficultTerrain (use `terrainTypes` / ' +
-        '`magical`), dnd5e.rotateArea (a turning platform — use `rotate`).'
+      'Type key, live-validated: core (teleportToken, executeMacro …), ' +
+        'dnd5e.applyActiveEffect / difficultTerrain / rotateArea.'
     ),
-  name: z.string().optional().describe("Behavior label (defaults to the type's standard name)."),
-  disabled: z.boolean().optional().describe('Create the behavior disabled (default false).'),
+  name: z.string().optional().describe("Label (default the type's name)."),
+  disabled: z.boolean().optional().describe('Created disabled.'),
   system: z
     .object({})
     .passthrough()
     .optional()
-    .describe(
-      'Behavior system data carried verbatim (the v14 shape for the type) — e.g. executeMacro ' +
-        '{uuid}, adjustDarknessLevel {mode, modifier}.'
-    ),
+    .describe('System data for the type, verbatim, e.g. executeMacro {uuid}.'),
   // dnd5e 6.0 conveniences — names / words in, uuids / numbers out (resolved on the page)
   effects: z
     .array(z.string().min(1))
     .optional()
     .describe(
-      'dnd5e.applyActiveEffect: the effects applied on entry and removed on exit. Each is a NAME from ' +
-        'the stock dnd5e.effects pack ("Poisoned", "Prone", "Fire Resistance", "Blinded" …) or from ' +
-        'a world item\'s effects, an ActiveEffect uuid, or an Item uuid + "#<effect name>" (a ' +
-        "premium-pack spell's effect). Never an effect on an actor. Resolved and echoed back."
+      'applyActiveEffect: effects applied on entry, removed on exit — stock names, uuids, or ' +
+        '"<Item uuid>#<effect>".'
     ),
   dispositions: z
     .array(z.enum(BEHAVIOR_DISPOSITIONS))
     .optional()
-    .describe(
-      'applyActiveEffect: only tokens with these dispositions are affected (omit = all). ' +
-        'difficultTerrain: these dispositions IGNORE the terrain.'
-    ),
-  sizes: z
-    .array(z.enum(ACTOR_SIZES))
-    .optional()
-    .describe('applyActiveEffect: only creatures of these sizes (omit = all).'),
+    .describe('applyActiveEffect: only these dispositions; difficultTerrain: these ignore it.'),
+  sizes: z.array(z.enum(ACTOR_SIZES)).optional().describe('applyActiveEffect: only these sizes.'),
   creatureTypes: z
     .array(z.enum(CREATURE_TYPE_KEYS))
     .optional()
-    .describe('applyActiveEffect: only these creature types (omit = all).'),
+    .describe('applyActiveEffect: only these creature types.'),
   terrainTypes: z
     .array(z.enum(DIFFICULT_TERRAIN_TYPES))
     .optional()
-    .describe(
-      'difficultTerrain: what kind of terrain it is (a creature may ignore some kinds — e.g. web, ' +
-        'plants, ice). Omit for generic difficult terrain.'
-    ),
-  magical: z
-    .boolean()
-    .optional()
-    .describe(
-      'difficultTerrain: magical terrain (Spike Growth) vs mundane (rubble). Default false.'
-    ),
+    .describe('difficultTerrain: the terrain kinds (omit = generic).'),
+  magical: z.boolean().optional().describe('difficultTerrain: magical (Spike Growth) vs mundane.'),
   rotate: z
     .object({
       positions: z
         .array(z.number().min(-360).max(360))
         .optional()
-        .describe('Stop angles in degrees, e.g. [0, 90, 180, 270] (default [0]).'),
-      tiles: z
-        .array(z.string())
-        .optional()
-        .describe('Tile ids on the scene that turn with the area.'),
+        .describe('Stop angles in degrees (default [0]).'),
+      tiles: z.array(z.string()).optional().describe('Tile ids that turn with the area.'),
       walls: z.array(z.string()).optional().describe('Wall ids that turn with the area.'),
       lights: z.array(z.string()).optional().describe('Light ids that turn with the area.'),
       regions: z.array(z.string()).optional().describe('Other region ids that turn with the area.'),
       sounds: z.array(z.string()).optional().describe('Ambient-sound ids that turn with the area.'),
-      linkWalls: z
-        .boolean()
-        .optional()
-        .describe('Rotate the walls as linked segments (default true).'),
+      linkWalls: z.boolean().optional().describe('Rotate the walls as linked segments.'),
       timeMs: z.number().int().min(0).optional().describe('Animation time in ms (default 1000).'),
       timeMode: z
         .enum(ROTATE_SPEED_MODES)
         .optional()
-        .describe('fixed (default) = timeMs for the whole turn; variable = timeMs per 90°.'),
+        .describe('fixed: timeMs per turn; variable: timeMs per 90°.'),
       direction: z
         .enum(ROTATE_DIRECTIONS)
         .optional()
-        .describe('short (default) / long / cw / ccw — how the area travels to the next stop.'),
+        .describe('How the area travels to the next stop.'),
     })
     .optional()
     .describe(
-      'dnd5e.rotateArea: a turning platform / puzzle room — the listed placeables (ids from ' +
-        'list-tiles / list-walls / list-lights / list-regions / list-sounds, validated to exist on the ' +
-        "scene) rotate together around the region's first shape, stopping at `positions`. A turn is " +
-        'triggered from the region config or a script, not by walking in.'
+      "rotateArea: the listed placeables (validated on the scene) turn around the region's first " +
+        'shape, stopping at positions.'
     ),
   teleportTo: z
     .object({
@@ -274,17 +208,12 @@ const AddRegionBehaviorSchema = z.object({
       regionIdentifier: z
         .string()
         .min(1)
-        .describe(
-          'Destination region id or exact name — the LANDING pad (leave it behavior-less so ' +
-            "arrivals don't bounce straight back)."
-        ),
+        .describe('Destination region id or exact name (the landing pad).'),
     })
     .optional()
     .describe(
-      'teleportToken convenience: resolve this scene+region to the destination UUID and append it ' +
-        'to system.destinations — no hand-built "Scene.<id>.Region.<id>" needed. A teleportToken ' +
-        'with system.choice unset defaults to choice:true (the confirm-before-moving house ' +
-        'pattern); pass system.choice:false explicitly for silent trap/plot teleports.'
+      'teleportToken: the destination, resolved and appended to system.destinations; system.choice ' +
+        'defaults to true.'
     ),
 });
 
@@ -292,10 +221,7 @@ const RemapTeleportersSchema = z.object({
   sourceModule: z
     .string()
     .min(1)
-    .describe(
-      'The module id stamped in flags["tom-cartos-import"].sourceModule on the imported scenes ' +
-        '(e.g. the read-pack module.id). All scenes carrying it are scanned together.'
-    ),
+    .describe('The sourceModule stamped in the import flags; every scene carrying it is scanned.'),
 });
 
 export const regionToolModule: PlaceableModuleFactory = foundry => ({
@@ -303,73 +229,54 @@ export const regionToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-region',
       description:
-        'Create one or more Regions on an EXISTING scene (the general primitive behind create-' +
-        'teleporter). Each region carries its v14 `shapes` whole (rectangle/ellipse/polygon in canvas ' +
-        'px) plus optional color/visibility/behaviors. Behaviors pass through verbatim: a teleportToken ' +
-        'here must already have system.destinations = ["Scene.<id>.Region.<id>"] (use create-teleporter ' +
-        'for the two-new-region convenience, or add-region-behavior to wire one onto an EXISTING ' +
-        'region). Returns the created region ids. GM-only.',
+        'Create regions on a scene from v14 shapes (canvas px), color, visibility and behaviors ' +
+        'passed verbatim (a teleportToken needs its destination uuids; create-teleporter and ' +
+        'add-region-behavior resolve those). Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateRegionSchema),
     },
     {
       name: 'list-regions',
       description:
-        "List every Region on a scene — id, name, each shape's bounds, and any teleporter " +
-        'destinations. Read-only; use it to find region ids for update-region / delete-region.',
+        "Every region on a scene: id, name, each shape's bounds, teleporter destinations.",
       inputSchema: toInputSchema(ListRegionsSchema),
     },
     {
       name: 'update-region',
       description:
-        'Update ONE region by id: rename, recolor, change visibility, replace its `shapes` whole, or ' +
-        'reshape to a single grid rectangle via the `rect` convenience (center px + cells + snap — the ' +
-        "move/resize you'd do reviewing a teleporter). Patches only what you pass; behaviors are left " +
-        'untouched. GM-only.',
+        'Update one region by id: name, color, visibility, shapes, or the rect convenience. ' +
+        'Behaviors are untouched. GM-only.',
       inputSchema: toInputSchema(UpdateRegionSchema),
     },
     {
       name: 'delete-region',
       description:
-        'Delete one or more Regions from a scene by id. Missing ids are reported, never fatal — and ' +
-        'if a surviving teleporter elsewhere still points at a deleted region, that orphan is warned. ' +
-        'GM-only.',
+        'Delete regions by id; missing ids are reported, a teleporter left pointing at a deleted ' +
+        'region is warned. GM-only.',
       inputSchema: toInputSchema(DeleteRegionSchema),
     },
     {
       name: 'create-teleporter',
       description:
-        'Create a two-way (or one-way) region TELEPORTER between two points on existing scenes — the ' +
-        'thing create-scene can only do at import time. Give a CENTER point (canvas px) on each scene ' +
-        '(`from`/`to`, may be the same scene); a rectangle trigger is placed at each (sized in whole ' +
-        'grid cells, grid-snapped by default) and a teleportToken behavior on each points at the OTHER ' +
-        '— so a token that walks onto one is sent to the other. Both regions are created before either ' +
-        'link is wired (the destination-UUID chicken-and-egg). twoWay:false makes it one-directional. ' +
-        'By default the player is ASKED before moving (confirmation dialog — the house pattern for ' +
-        'map transitions); confirm:false makes it fire silently (traps/plot teleports only). ' +
-        'Regions default to GM/Regions-layer visibility (no player-visible overlay). GM-only.',
+        'Create a teleporter between two points (from / to, the same scene allowed): a grid-sized ' +
+        'trigger region at each with a teleportToken behavior pointing at the other; one-way with ' +
+        'twoWay:false, silent with confirm:false. Regions are layer-visible (no player overlay). ' +
+        'GM-only.',
       inputSchema: toInputSchema(CreateTeleporterSchema),
     },
     {
       name: 'add-region-behavior',
       description:
-        'Add ONE behavior to an EXISTING region — the write create-region only offers at creation ' +
-        'time and update-region deliberately never touches. Creates a real RegionBehavior embedded ' +
-        'document (validated against the registered behavior types). For teleporters, pass ' +
-        'teleportTo {sceneIdentifier, regionIdentifier} and the destination UUID is resolved for ' +
-        "you; the landing region's geometry is then sanity-checked and you are WARNED when it " +
-        'contains no grid-snapped token position (the silent teleport no-op: off-grid pads). GM-only.',
+        'Add one behavior to an existing region (the type validated against the registry). For a ' +
+        'teleporter, teleportTo resolves the destination and warns when the landing region holds no ' +
+        'grid-snapped token position. GM-only.',
       inputSchema: toInputSchema(AddRegionBehaviorSchema),
     },
     {
       name: 'remap-teleporters',
       description:
-        'Second pass of a scene-pack import: rewrite cross-scene teleporter destinations after the ' +
-        'scenes + regions have been created. A pack teleporter points at Scene.<id>.Region.<id>, but ' +
-        'the import mints FRESH ids, so every destination is stale until remapped. Pass the import ' +
-        'sourceModule; this reconstructs the old→new scene/region id maps from the provenance flags ' +
-        'the scenes + regions carry and rewrites every teleportToken destination. Idempotent (safe to ' +
-        're-run), and reports destinations that point outside the import (e.g. a variant you skipped) ' +
-        'rather than dropping them silently. Call it ONCE after all chosen scenes are imported. GM-only.',
+        'After a scene-pack import, rewrite every teleportToken destination from the old ids to the ' +
+        'minted ones using the provenance flags of every scene stamped with sourceModule. Idempotent; ' +
+        'destinations outside the import are reported, not dropped. GM-only.',
       inputSchema: toInputSchema(RemapTeleportersSchema),
     },
   ],

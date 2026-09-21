@@ -46,7 +46,6 @@ const BUDGET = {
 const PROSE_DIET_PENDING = new Set<ToolsetName>([
   'items',
   'compendium',
-  'scenes',
   'journals',
   'tables',
   'cards',

@@ -24,9 +24,7 @@ const tileFields = {
     .number()
     .positive()
     .optional()
-    .describe(
-      'Texture scale X — zooms the IMAGE inside the width/height frame (NOT the tile size).'
-    ),
+    .describe('Texture scale X: zooms the image inside the frame (not the tile size).'),
   scaleY: z
     .number()
     .positive()
@@ -41,10 +39,7 @@ const tileFields = {
     .number()
     .int()
     .optional()
-    .describe(
-      'Roof/overhead occlusion mode (TILE_OCCLUSION_MODES): 0 none, 1 fade, 2 surface, 4 radial, ' +
-        '8 vision. Use 1/4 for a roof that fades when a token walks under it.'
-    ),
+    .describe('Overhead occlusion: 0 none, 1 fade, 2 surface, 4 radial, 8 vision.'),
   occlusionAlpha: z
     .number()
     .min(0)
@@ -71,18 +66,15 @@ const CreateTilesSchema = z.object({
           .describe('Data-relative image (or video) path for the tile texture.'),
         x: z
           .number()
-          .describe(
-            "Top-left X in absolute canvas pixels (converted to the v14 doc's center-anchored " +
-              'x/y for you).'
-          ),
-        y: z.number().describe('Top-left Y in absolute canvas pixels (converted likewise).'),
-        width: z.number().positive().describe('Tile width in canvas pixels (its on-map size).'),
-        height: z.number().positive().describe('Tile height in canvas pixels (its on-map size).'),
+          .describe('Top-left X in absolute canvas pixels (the center-anchor conversion is done).'),
+        y: z.number().describe('Top-left Y in absolute canvas pixels.'),
+        width: z.number().positive().describe('On-map width in canvas pixels.'),
+        height: z.number().positive().describe('On-map height in canvas pixels.'),
         ...tileFields,
       })
     )
     .min(1)
-    .describe('One or more tiles (props/roofs/overlays) to place on the scene.'),
+    .describe('The tiles to place.'),
 });
 
 const ListTilesSchema = z.object({ sceneIdentifier: sceneTarget });
@@ -96,16 +88,12 @@ const UpdateTileSchema = z
       .number()
       .positive()
       .optional()
-      .describe(
-        'New width in px (resize; the top-left corner stays fixed unless x is also given).'
-      ),
+      .describe('New width in px; the top-left stays unless x is given.'),
     height: z
       .number()
       .positive()
       .optional()
-      .describe(
-        'New height in px (resize; the top-left corner stays fixed unless y is also given).'
-      ),
+      .describe('New height in px; the top-left stays unless y is given.'),
     src: z.string().min(1).optional().describe('Swap the texture (Data-relative path).'),
     ...tileFields,
   })
@@ -131,42 +119,30 @@ export const tileToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-tiles',
       description:
-        'Place one or more TILES (props, roof/overhead pieces, decals, video overlays) on a scene ' +
-        "from Data-relative image paths. A tile's on-map SIZE is width/height in canvas pixels; " +
-        'x/y are the absolute-canvas-pixel TOP-LEFT (see get-scene-dimensions for padding-aware ' +
-        "cell→px math; the tool converts to v14's center-anchored doc coords — never pre-add " +
-        'width/2 yourself). Optionally set rotation, alpha, elevation, sort, texture tint/fit/scale, ' +
-        'roof occlusion (occlusionMode: 1 fade / 4 radial so it fades when a token walks under), ' +
-        'light/weather restrictions, video loop/autoplay/volume, hidden, locked. Per-tile error ' +
-        'isolation; a 404 texture keeps the path but warns. Returns created ids. GM-only.',
+        'Place tiles (props, roofs, decals, video overlays) from Data-relative paths: x / y the ' +
+        'top-left and width / height the on-map size, all in canvas pixels (the center-anchor ' +
+        'conversion is done). A 404 texture keeps the path with a warning; one bad tile does not ' +
+        'fail the batch. Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateTilesSchema),
     },
     {
       name: 'list-tiles',
       description:
-        'List every Tile on a scene — id, position (x/y = the TOP-LEFT in canvas pixels, converted ' +
-        "from v14's center-anchored doc coords), size (width/height), rotation, elevation, " +
-        'sort, texture src, image scale, hidden/locked. Read-only; the inspect step before ' +
-        'update-tiles / delete-tiles (you need the ids + current values to edit).',
+        'Every tile on a scene: id, top-left x / y, width / height, rotation, elevation, sort, ' +
+        'texture, image scale, hidden / locked.',
       inputSchema: toInputSchema(ListTilesSchema),
     },
     {
       name: 'update-tiles',
       description:
-        "Edit one or more placed TILES by id (from list-tiles). RESIZE via width/height (the tile's " +
-        'on-map size — this is "tile scale"; the top-left corner stays put unless x/y is also ' +
-        'given); MOVE via x/y (the new TOP-LEFT in canvas pixels — center-anchor conversion is ' +
-        'handled for you); also rotation, alpha, elevation, sort, ' +
-        'texture src/tint/fit/scaleX/scaleY (image zoom within the frame), occlusion, light/weather ' +
-        'restrictions, video, hidden, locked. Patches only the fields you pass; unresolved ids are ' +
-        'reported, not fatal. GM-only.',
+        'Edit placed tiles by id: move (x / y, the top-left), resize (width / height), and any ' +
+        'other tile field. Only the fields passed change; unresolved ids are reported, not fatal. ' +
+        'GM-only.',
       inputSchema: toInputSchema(UpdateTilesSchema),
     },
     {
       name: 'delete-tiles',
-      description:
-        'Delete one or more Tiles from a scene by id (from list-tiles). Missing ids are reported, ' +
-        'never fatal. GM-only.',
+      description: 'Delete tiles by id; missing ids are reported, never fatal. GM-only.',
       inputSchema: toInputSchema(DeleteTilesSchema),
     },
   ],

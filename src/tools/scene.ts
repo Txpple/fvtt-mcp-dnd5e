@@ -35,10 +35,7 @@ const PullUsersToSceneSchema = z.object({
   userIdentifiers: z
     .array(z.string().min(1))
     .min(1, 'At least one user identifier is required')
-    .describe(
-      'Users to pull — user ids or exact user names (e.g. ["Tom"]). Look them up with list-users. ' +
-        'Only CONNECTED users can be pulled; offline ones are reported back, not silently dropped.'
-    ),
+    .describe('User ids or exact names; only connected users can be pulled.'),
 });
 
 const SetLandingSceneSchema = z.object({
@@ -48,11 +45,7 @@ const SetLandingSceneSchema = z.object({
   userIdentifiers: z
     .array(z.string().min(1))
     .min(1, 'At least one user identifier is required')
-    .describe(
-      'Users to assign — user ids or exact user names (e.g. ["Tom"]). Look them up with ' +
-        "list-users, which also reports each user's current landingScene. Works on OFFLINE " +
-        'users (that is the point) — nobody has to be connected.'
-    ),
+    .describe('User ids or exact names; offline users included.'),
 });
 
 // --- Scene authoring (create/list/update/delete) ----------------------------------------------
@@ -78,46 +71,29 @@ const sceneCommonFields = {
     .max(1)
     .optional()
     .describe('Grid line opacity 0–1 (e.g. 0.2 for a faint grid).'),
-  tokenVision: z
-    .boolean()
-    .optional()
-    .describe(
-      'Require token line-of-sight to see the scene. Turn OFF for overland/illustration maps.'
-    ),
+  tokenVision: z.boolean().optional().describe('Require token line-of-sight to see the scene.'),
   fogMode: z
     .enum(['disabled', 'individual', 'shared'])
     .optional()
-    .describe('Fog of war: disabled | individual (classic per-player) | shared (party-wide).'),
-  darkness: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe('Darkness/day-night level: 0 = full daylight, 1 = full night.'),
-  globalLight: z
-    .boolean()
-    .optional()
-    .describe('Globally illuminate the whole scene (turn the lights on).'),
+    .describe('Fog of war: individual is per player, shared party-wide.'),
+  darkness: z.number().min(0).max(1).optional().describe('0 = daylight, 1 = night.'),
+  globalLight: z.boolean().optional().describe('Illuminate the whole scene.'),
   weather: z
     .string()
     .optional()
-    .describe('Weather effect key (e.g. rain, snow, fog, leaves, rainStorm, blizzard). "" = none.'),
+    .describe('Weather effect key (rain, snow, fog, leaves, rainStorm, blizzard …); "" = none.'),
   playlist: z
     .string()
     .optional()
-    .describe('Playlist id or exact name to auto-play on scene activation. "" clears it.'),
+    .describe('Playlist id or exact name played on activation; "" clears.'),
   journal: z
     .string()
     .optional()
-    .describe('JournalEntry id or exact name to attach as scene notes. "" clears it.'),
+    .describe('JournalEntry id or exact name as the scene notes; "" clears.'),
   thumb: z
     .string()
     .optional()
-    .describe(
-      'Data-relative path to a pre-rendered navigation thumbnail (e.g. an uploaded ' +
-        '<id>-thumb.webp shipped by a map pack). Foundry may regenerate it on a later in-app edit, ' +
-        'so treat it as a nice-to-have, not load-bearing.'
-    ),
+    .describe('Data-relative path of a pre-rendered nav thumbnail (Foundry may regenerate it).'),
 };
 
 // A wall placeable from a map sidecar JSON. Accepts the LEGACY Foundry shape OR the v14 shape; the
@@ -154,12 +130,8 @@ const SidecarLightSchema = z
       .record(z.string(), z.unknown())
       .optional()
       .describe(
-        "A v10+ light's full `config` object, carried VERBATIM (merged over the flat fields): " +
-          'luminosity, attenuation, coloration, saturation, contrast, shadows, ' +
-          'animation {type,speed,intensity}, darkness {min,max}, plus dim/bright/color/alpha/angle. ' +
-          'PREFER passing this whole — flattening to just dim/bright/color/alpha lets Foundry default ' +
-          'the rest BRIGHTER/harsher (luminosity 0.5, attenuation 0.5, no flicker), which blows out and ' +
-          'over-saturates a torch-lit scene.'
+        "The light's full `config` (luminosity, attenuation, animation, darkness …), verbatim over " +
+          'the flat fields.'
       ),
   })
   .passthrough();
@@ -175,7 +147,7 @@ const RegionSidecarSchema = z
     shapes: z
       .array(z.object({ type: z.string().optional() }).passthrough())
       .optional()
-      .describe('Region shape definitions (polygon/rectangle/ellipse), carried whole.'),
+      .describe('Shapes (polygon / rectangle / ellipse), carried whole.'),
     elevation: z
       .object({
         bottom: z.number().nullable().optional(),
@@ -196,13 +168,12 @@ const RegionSidecarSchema = z
       )
       .optional()
       .describe(
-        'Region behaviors carried whole — incl. teleportToken whose system.destinations[] ' +
-          '(each Scene.<id>.Region.<id>) are rewritten post-import by remap-teleporters.'
+        'Behaviors carried whole; teleportToken destinations are rewritten by remap-teleporters.'
       ),
     _id: z
       .string()
       .optional()
-      .describe('Source region id (stamped as a provenance flag for remap).'),
+      .describe('Source region id, stamped as a provenance flag for the remap.'),
   })
   .passthrough();
 
@@ -236,23 +207,16 @@ const SceneInitialSchema = z
 // or re-flag a scene authored elsewhere (the create⊂update gap these close).
 const sceneMoodFields = {
   environment: SceneEnvironmentSchema.optional().describe(
-    "A v12+ scene's full environment{} mood object, carried whole (darknessLevel, globalLight{...}, " +
-      'cycle, base, dark{hue,luminosity}…). Deep-merged, so a partial mood patch layers onto the scene; ' +
-      'prefer this over the flat darkness/globalLight knobs when importing or re-mooding a pack scene.'
+    'The full environment{} mood (darknessLevel, globalLight, cycle, base, dark …), deep-merged.'
   ),
   fog: SceneFogSchema.optional().describe(
-    "A v12+ scene's full fog{} object (exploration, overlay, colors), carried whole (deep-merged)."
+    'The full fog{} (exploration, overlay, colors), deep-merged.'
   ),
-  initial: SceneInitialSchema.optional().describe(
-    'The saved initial camera view {x,y,scale} to restore on scene load (deep-merged).'
-  ),
+  initial: SceneInitialSchema.optional().describe('The saved camera {x, y, scale}, deep-merged.'),
   flags: z
     .record(z.string(), z.unknown())
     .optional()
-    .describe(
-      'Document flags namespaced by scope — e.g. {"tom-cartos-import":{sourceModule,sourceId}} for ' +
-        'import provenance/dedup. Deep-merged over any existing flags (re-stampable on update).'
-    ),
+    .describe('Document flags by scope, e.g. {"<module>": {sourceId}}; deep-merged.'),
 };
 
 const CreateSceneSchema = z.object({
@@ -261,64 +225,32 @@ const CreateSceneSchema = z.object({
   walls: z
     .array(SidecarWallSchema)
     .optional()
-    .describe(
-      'Inline walls (the sidecar `walls` array). For a file on disk use `placeablesPath` instead — ' +
-        'the arrays are then read whole, server-side. Coordinates are absolute canvas pixels, so ' +
-        'pass the sidecar width/height/gridSize/padding too.'
-    ),
+    .describe('Inline walls in absolute canvas pixels (a file on disk: placeablesPath).'),
   lights: z
     .array(SidecarLightSchema)
     .optional()
-    .describe('Inline ambient lights (the sidecar `lights` array); see `placeablesPath`.'),
+    .describe('Inline ambient lights (a file on disk: placeablesPath).'),
   regions: z
     .array(RegionSidecarSchema)
     .optional()
     .describe(
-      'Regions (v12+ RegionDocument incl. teleporters) to import from a scene-pack payload. Created ' +
-        'after the scene exists; each is stamped with its source id, and cross-scene teleporter ' +
-        'destinations are rewritten afterward by a single remap-teleporters call.'
+      'Regions (teleporters included), each stamped with its source id for remap-teleporters.'
     ),
   placeablesPath: z
     .string()
     .optional()
     .describe(
-      'Server-local path to a JSON with {walls,lights,regions} arrays — a map sidecar (a Foundry ' +
-        'scene export) or the file read-pack writes. Read SERVER-SIDE, whole, and merged with any ' +
-        'inline placeables: hundreds of walls never pass through the agent and no field is lost in a ' +
-        'hand remap.'
+      'Server-local JSON with {walls, lights, regions} (a map sidecar), read whole and merged with ' +
+        'the inline arrays.'
     ),
-  width: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Scene width in pixels (optional — auto-detected from the image when omitted).'),
-  height: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Scene height in pixels (optional — auto-detected from the image when omitted).'),
+  width: z.number().int().positive().optional().describe('Pixels; default from the image.'),
+  height: z.number().int().positive().optional().describe('Pixels; default from the image.'),
   gridSize: z.number().int().positive().optional().describe('Grid size in pixels (default 100).'),
-  gridType: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe('Foundry grid type (0 gridless, 1 square, 2+ hex). Default 1.'),
-  padding: z.number().min(0).max(0.5).optional().describe('Scene padding fraction (optional).'),
+  gridType: z.number().int().min(0).optional().describe('0 gridless, 1 square (default), 2+ hex.'),
+  padding: z.number().min(0).max(0.5).optional().describe('Padding fraction, 0–0.5.'),
   activate: z.boolean().default(false).describe('Activate the scene after creating it.'),
-  folder: z
-    .string()
-    .optional()
-    .describe('Scene folder id or exact name to place the scene in (created if absent).'),
-  navigation: z
-    .boolean()
-    .optional()
-    .describe(
-      'Whether the scene appears in the player navigation bar. Set false for a DM-only scene ' +
-        '(keeps it off the nav bar). Omit for Foundry default.'
-    ),
+  folder: z.string().optional().describe('Scene folder id or exact name (created if absent).'),
+  navigation: z.boolean().optional().describe('Shown in the player navigation bar.'),
   ...sceneMoodFields,
   ...sceneCommonFields,
 });
@@ -335,8 +267,8 @@ const ListScenesSchema = z.object({
 const UpdateSceneSchema = z.object({
   sceneIdentifier: sceneTargetRequired,
   name: z.string().min(1).optional().describe('New scene name.'),
-  navName: z.string().optional().describe('Navigation label shown in the scene nav bar.'),
-  navigation: z.boolean().optional().describe('Whether the scene appears in the navigation bar.'),
+  navName: z.string().optional().describe('Navigation-bar label.'),
+  navigation: z.boolean().optional().describe('Shown in the player navigation bar.'),
   backgroundPath: z
     .string()
     .min(1)
@@ -345,13 +277,8 @@ const UpdateSceneSchema = z.object({
   width: z.number().int().positive().optional().describe('Scene width in pixels.'),
   height: z.number().int().positive().optional().describe('Scene height in pixels.'),
   gridSize: z.number().int().positive().optional().describe('Grid size in pixels.'),
-  gridType: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe('Foundry grid type (0 gridless, 1 square, 2+ hex).'),
-  padding: z.number().min(0).max(0.5).optional().describe('Scene padding fraction (0–0.5).'),
+  gridType: z.number().int().min(0).optional().describe('0 gridless, 1 square, 2+ hex.'),
+  padding: z.number().min(0).max(0.5).optional().describe('Padding fraction, 0–0.5.'),
   ...sceneMoodFields,
   ...sceneCommonFields,
 });
@@ -372,20 +299,12 @@ const ScreenshotSceneSchema = z.object({
   outputPath: z
     .string()
     .optional()
-    .describe('Absolute local path to write the PNG to. Default: a temp file (path returned).'),
-  fit: z
-    .boolean()
-    .default(true)
-    .describe(
-      'Fit the whole scene into the viewport (default). false keeps the saved camera view.'
-    ),
+    .describe('Absolute local path for the PNG; default a temp file (returned).'),
+  fit: z.boolean().default(true).describe('Fit the whole scene; false keeps the saved camera.'),
   mark: z
     .boolean()
     .default(false)
-    .describe(
-      'Draw a transient numbered marker over each map-note pin (QA for legend-pin placement). ' +
-        'No document changes — the overlay is view-only.'
-    ),
+    .describe('Draw a numbered marker over each note pin (view-only overlay).'),
 });
 
 export class SceneTools {
@@ -422,17 +341,11 @@ export class SceneTools {
       {
         name: 'create-scene',
         description:
-          'Create a Foundry Scene from a Data-relative background image path (e.g. an uploaded map). ' +
-          'Width/height auto-detect from the image when omitted. Places it in a `folder` (created if ' +
-          'absent) and sets `navigation` (false = a DM-only scene off the player nav bar) in the same ' +
-          'call. AUTO-GENERATES the navigation thumbnail from the background (Foundry-native) when no ' +
-          'explicit `thumb` is given — no more thumbnail-less scenes. Optionally set grid size/type/' +
-          'distance/units/color/alpha, token vision, fog mode, lighting (darkness, global light, or a ' +
-          'whole environment{}/fog{} mood object + saved camera for pack imports), weather, a linked ' +
-          'playlist/journal, a nav thumbnail, padding, provenance flags, and ' +
-          'activate it. Can also IMPORT the walls + ambient lights (+ regions) of a map sidecar JSON: ' +
-          '`placeablesPath` reads the file server-side, whole; legacy or v14 shapes, normalized to ' +
-          'v14. GM-only.',
+          'Create a Scene from a Data-relative background image: size from the image unless given, ' +
+          'the nav thumbnail generated unless `thumb` is given, grid / vision / fog / lighting / ' +
+          'weather / playlist / journal / folder / navigation / flags in the same call, optionally ' +
+          'activated. Walls, lights and regions import inline or from `placeablesPath` (legacy or ' +
+          'v14 shapes, normalized). GM-only.',
         inputSchema: toInputSchema(CreateSceneSchema),
       },
       {
@@ -446,80 +359,53 @@ export class SceneTools {
       {
         name: 'update-scene',
         description:
-          'Update an existing Scene document — rename, swap its background image (Data-relative path), ' +
-          'toggle navigation, set the navigation label, change dimensions/grid (size/type/distance/' +
-          'units)/padding, token vision, fog mode, lighting (darkness, global light), weather, a nav ' +
-          'thumbnail, or the linked playlist/journal ("" clears a link). Also (parity with create-scene) ' +
-          'deep-merges a full environment{}/fog{} mood object, re-points the saved camera (initial{x,y,' +
-          'scale}), or re-stamps document flags on an existing scene. Scene-document only: never touches ' +
-          'placeables (walls/lights/tokens) and never activates the scene. GM-only.',
+          'Update a Scene document: name, background, navigation, dimensions / grid / padding, vision, ' +
+          'fog, lighting, weather, playlist / journal ("" clears), the environment / fog / camera ' +
+          'objects and flags (deep-merged). Never touches placeables, never activates. GM-only.',
         inputSchema: toInputSchema(UpdateSceneSchema),
       },
       {
         name: 'activate-scene',
         description:
-          'ACTIVATE a scene — the ONE active scene world-wide, where clients land and log in; ' +
-          'the previously active scene is reported back. Already active → a no-op (alreadyActive). ' +
-          "This changes every connected player's screen — to move only SOME players use " +
-          'pull-users-to-scene; update-scene never activates. GM-only.',
+          'Make a scene the one active scene (every connected player lands on it); the previous one ' +
+          'is reported, already active is a no-op. Some players only: pull-users-to-scene. GM-only.',
         inputSchema: toInputSchema(ActivateSceneSchema),
       },
       {
         name: 'pull-users-to-scene',
         description:
-          "Pull specific users' VIEW to a scene WITHOUT changing which scene is active — the " +
-          'party-split path (one player off in a side scene while everyone else stays put). This ' +
-          'is what a cross-scene teleporter does as a side effect of moving a token; here it is ' +
-          'the whole operation, so no token has to move. Viewing needs NO scene ownership — ' +
-          'Scene#view() has no permission gate, which is why players already move between scenes ' +
-          'they do not own. ⚠️ Only CONNECTED users can be pulled: core silently skips offline ' +
-          'ones, so this reports pulled vs offline vs notFound per user instead of a blanket ' +
-          'success. ⚠️ It also cannot pull the BRIDGE user itself — pullUsers rides a socket ' +
-          'emit, which is never echoed back to the sending client (reported as selfSkipped). ' +
-          'Look up names with list-users. GM-only.',
+          "Pull users' view to a scene without activating it (no scene ownership needed). Reports " +
+          'pulled / offline / notFound per user — only connected users move, and the bridge user ' +
+          'itself cannot be pulled (selfSkipped). GM-only.',
         inputSchema: toInputSchema(PullUsersToSceneSchema),
       },
       {
         name: 'set-landing-scene',
         description:
-          'Assign where a user LOGS IN — a per-user landing scene that persists, so a party ' +
-          'split survives a refresh. Core Foundry has no such thing: every user lands on the ' +
-          'one ACTIVE scene, and the User document has no scene field to change that (verified ' +
-          'on v14.364). This writes a durable User FLAG that the house module ' +
-          'fvtt-mod-openserver reads on ready and acts on with Scene#view() — so the module ' +
-          'must be installed and enabled for it to do anything, and this tool WARNS when it ' +
-          'is not, instead of reporting a working assignment. Unlike pull-users-to-scene, ' +
-          'this works on OFFLINE users — that is the whole point. Sticky until cleared: pass ' +
-          'sceneIdentifier "none" to put users back on the active scene. Reports who is ' +
-          'assigned and who still follows the active scene. Needs NO scene ownership. GM-only.',
+          'Set the scene users land on at login (a persistent User flag the openserver companion ' +
+          'module acts on; warns when it is not installed). Works on offline users; "none" clears. ' +
+          'Reports who is assigned and who follows the active scene. GM-only.',
         inputSchema: toInputSchema(SetLandingSceneSchema),
       },
       {
         name: 'delete-scene',
-        description:
-          'Permanently delete one or more Scene documents by exact id or exact name. STRICT ' +
-          'resolution — no fuzzy/substring matching. GM-only.',
+        description: 'Permanently delete scenes by exact id or exact name. GM-only.',
         inputSchema: toInputSchema(DeleteSceneSchema),
       },
       {
         name: 'get-scene-dimensions',
         description:
-          "Read a scene's live PADDED-CANVAS geometry (by id or exact name): total width/height, the " +
-          'background rect within the padding (sceneX/sceneY/sceneWidth/sceneHeight), grid size/distance, ' +
-          "and rows/columns. A scene insets its background by a padding border, so a placeable's canvas " +
-          'pixel is NOT just gridCell×size — use sceneX/sceneY to offset. Feeds the legend→pins cell→px ' +
-          'math. Works on any scene (no need to activate it).',
+          "A scene's padded-canvas geometry: total width / height, the background rect within the " +
+          'padding (sceneX / sceneY / sceneWidth / sceneHeight — a canvas pixel is offset by these, ' +
+          'not gridCell × size), grid size / distance, rows / columns. Any scene, active or not.',
         inputSchema: toInputSchema(GetSceneDimensionsSchema),
       },
       {
         name: 'screenshot-scene',
         description:
-          'Render a scene in the headless bridge and capture a PNG to a local file — visual QA for ' +
-          'imports/maps. Views the scene, waits for the WebGL canvas to draw, fits the whole map ' +
-          'into the viewport (or keeps the saved camera with fit:false), and optionally draws ' +
-          'numbered markers over each map-note pin (mark:true) to check legend-pin placement (a ' +
-          'view-only overlay, no document changes). Returns the file path + scene metadata; ' +
-          'open/read that file to view the image. GM-only.',
+          'Render a scene in the headless bridge to a local PNG: the whole map fitted (or the saved ' +
+          'camera with fit:false), numbered note-pin markers with mark:true. Returns the file path ' +
+          'and scene metadata. GM-only.',
         inputSchema: toInputSchema(ScreenshotSceneSchema),
       },
     ];

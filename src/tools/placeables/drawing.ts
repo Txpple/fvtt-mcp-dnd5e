@@ -116,37 +116,28 @@ export const drawingToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'create-drawings',
       description:
-        'Place one or more DRAWINGS (GM annotation shapes: secret-area boxes, trap outlines, zone ' +
-        'labels) on a scene. x/y are the TOP-LEFT origin in absolute canvas pixels; pick a shapeType ' +
-        '— rectangle/ellipse (width+height), circle (radius), or polygon (flat relative points list). ' +
-        'Style with stroke (width/color/alpha), fill (fillType 1 solid / 2 pattern + fillTexture), ' +
-        'and an optional centered text label (fontSize/textColor). hidden:true keeps it GM-only; ' +
-        'interface:true floats it above fog. The default stroke makes a bare shape visible as an ' +
-        'outline. Per-drawing error isolation. Returns created ids. GM-only.',
+        'Place drawings: x / y the top-left in canvas pixels; shapeType rectangle / ellipse (width + ' +
+        'height), circle (radius) or polygon (relative points); stroke, fill, a text label, hidden, ' +
+        'interface. One bad drawing does not fail the batch. Returns the ids. GM-only.',
       inputSchema: toInputSchema(CreateDrawingsSchema),
     },
     {
       name: 'list-drawings',
       description:
-        'List every Drawing on a scene — id, origin (x/y), shape type + dimensions (width/height/' +
-        'radius/pointCount), rotation, label text, fill type, stroke color, hidden/locked/interface. ' +
-        'Read-only; the inspect step before update-drawings / delete-drawings.',
+        'Every drawing on a scene: id, origin, shape and dimensions, rotation, text, fill, stroke, ' +
+        'hidden / locked / interface.',
       inputSchema: toInputSchema(ListDrawingsSchema),
     },
     {
       name: 'update-drawings',
       description:
-        'Edit one or more placed DRAWINGS by id (from list-drawings): MOVE via x/y, RESIZE via ' +
-        'width/height/radius or replace polygon points, restyle stroke/fill, change or clear the ' +
-        'text label (text:""), toggle hidden/locked/interface. The shape KIND cannot change — delete ' +
-        'and recreate for that. Patches only the fields you pass. GM-only.',
+        'Edit placed drawings by id (text:"" clears the label); the shape kind cannot change. Only ' +
+        'the fields passed change. GM-only.',
       inputSchema: toInputSchema(UpdateDrawingsSchema),
     },
     {
       name: 'delete-drawings',
-      description:
-        'Delete one or more Drawings from a scene by id (from list-drawings). Missing ids are ' +
-        'reported, never fatal. GM-only.',
+      description: 'Delete drawings by id; missing ids are reported, never fatal. GM-only.',
       inputSchema: toInputSchema(DeleteDrawingsSchema),
     },
   ],

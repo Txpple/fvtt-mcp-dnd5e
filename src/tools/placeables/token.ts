@@ -21,21 +21,21 @@ const PlaceTokensSchema = z.object({
   tokens: z
     .array(
       z.object({
-        actor: z.string().min(1).describe('Actor id or EXACT name whose prototype token to place.'),
-        x: z.number().describe('Token X in absolute canvas pixels (top-left of its space).'),
-        y: z.number().describe('Token Y in absolute canvas pixels.'),
-        hidden: z.boolean().optional().describe('Place hidden from players (GM reveal later).'),
+        actor: z.string().min(1).describe('Actor id or exact name (its prototype token).'),
+        x: z.number().describe('Top-left X in absolute canvas pixels.'),
+        y: z.number().describe('Top-left Y in absolute canvas pixels.'),
+        hidden: z.boolean().optional().describe('Hidden from players.'),
         elevation: z.number().optional().describe('Elevation in grid-distance units.'),
         rotation: z.number().optional().describe('Facing in degrees (0–359).'),
-        name: z.string().optional().describe('Nameplate override (default: the prototype name).'),
+        name: z.string().optional().describe('Nameplate (default the prototype name).'),
         disposition: z
           .enum(['friendly', 'neutral', 'hostile', 'secret'])
           .optional()
-          .describe('Override the prototype disposition for THIS placed copy.'),
+          .describe('Overrides the prototype for this copy.'),
       })
     )
     .min(1)
-    .describe('The tokens to place (one per entry — repeat an actor to place several copies).'),
+    .describe('The tokens to place; repeat an actor for several copies.'),
 });
 
 const DeleteTokensSchema = z.object({
@@ -43,7 +43,7 @@ const DeleteTokensSchema = z.object({
   tokenIds: z
     .array(z.string().min(1))
     .min(1)
-    .describe('Placed-token ids to remove (from list-tokens). The sidebar actor is untouched.'),
+    .describe('Placed-token ids; the sidebar actor is untouched.'),
 });
 
 // --- update-token (bespoke — actor→all-copies matching + the lockRotation gotcha) ---
@@ -53,94 +53,57 @@ const UpdateTokenSchema = z
     tokenIds: z
       .array(z.string().min(1))
       .optional()
-      .describe('Placed-token ids to update (from list-tokens). Combined (union) with actorIds.'),
+      .describe('Placed-token ids; a union with actorIds.'),
     actorIds: z
       .array(z.string().min(1))
       .optional()
-      .describe(
-        'Actor id OR exact actor name — updates ALL placed copies of each (e.g. every "Dead Guard" ' +
-          'token on the map). Combined (union) with tokenIds.'
-      ),
-    rotation: z
-      .number()
-      .optional()
-      .describe('Facing in degrees (0–359), applied to every matched token.'),
+      .describe('Actor ids or exact names: every placed copy of each; a union with tokenIds.'),
+    rotation: z.number().optional().describe('Facing in degrees (0–359), for every matched token.'),
     randomizeRotation: z
       .boolean()
       .optional()
-      .describe(
-        'Give each matched token its OWN random angle (0–359) instead of one shared `rotation` — ' +
-          'e.g. to strew corpses naturally. Overrides `rotation` when true.'
-      ),
+      .describe('Each matched token gets its own random angle; overrides rotation.'),
     scale: z
       .number()
       .positive()
       .optional()
-      .describe(
-        'Token ART scale (sets texture.scaleX and scaleY together). 1 = normal, 1.5 = 50% larger.'
-      ),
+      .describe('Token art scale (texture.scaleX / scaleY together): 1 normal, 1.5 = 50% larger.'),
     imagePath: z
       .string()
       .min(1)
       .optional()
       .describe(
-        'RESKIN the placed token(s): new token art (texture.src) — a world-relative path (e.g. ' +
-          '"assets/tokens/morgash.png") or URL; a still IMAGE or an animated VIDEO (.webm/.mp4) both ' +
-          'work on a token. Applied to every matched token; the path is existence-checked first, and ' +
-          'a 404 leaves the current art unchanged (with a warning) instead of breaking it. Changes ' +
-          "ONLY the placed instance(s) — the actor's portrait/prototype art is set-actor-art."
+        'New token art (path or URL; image or video) for the placed copies only; a 404 keeps the ' +
+          'current art with a warning.'
       ),
     elevation: z
       .number()
       .optional()
       .describe(
-        'Token elevation in grid-distance units. With dnd5e falling automation on, an elevation ' +
-          'above the supporting surface marks the actor Falling (6.0.2+: on unviewed scenes too).'
+        'Elevation in grid-distance units (with falling automation on, above the surface = Falling).'
       ),
-    hidden: z
-      .boolean()
-      .optional()
-      .describe('Hide (true) or reveal (false) the token from players.'),
+    hidden: z.boolean().optional().describe('Hidden from players.'),
     lockRotation: z
       .boolean()
       .optional()
-      .describe(
-        'Lock the token art from rotating. NOTE: lockRotation:true HIDES any `rotation` you set, so ' +
-          'when you rotate a locked token and omit this, the tool AUTO-UNLOCKS it (and warns) so the ' +
-          'angle is visible.'
-      ),
-    x: z.number().optional().describe('New token X in absolute canvas pixels.'),
-    y: z.number().optional().describe('New token Y in absolute canvas pixels.'),
-    name: z.string().min(1).optional().describe('Rename the placed token (its nameplate).'),
+      .describe('true hides any rotation; rotating a locked token auto-unlocks it with a warning.'),
+    x: z.number().optional().describe('New X in absolute canvas pixels.'),
+    y: z.number().optional().describe('New Y in absolute canvas pixels.'),
+    name: z.string().min(1).optional().describe('Rename the placed token.'),
     displayName: z
       .enum(['none', 'control', 'owner-hover', 'hover', 'owner', 'always'])
       .optional()
-      .describe(
-        'Nameplate visibility: none | control (only when selected) | owner-hover | hover | ' +
-          'owner (always, to owners) | always (always, to everyone).'
-      ),
+      .describe('Nameplate visibility (control = when selected).'),
     displayBars: z
       .enum(['none', 'control', 'owner-hover', 'hover', 'owner', 'always'])
       .optional()
-      .describe(
-        'Resource (health) bar visibility, same modes as displayName: none | control | ' +
-          'owner-hover | hover | owner | always.'
-      ),
+      .describe('Resource-bar visibility, same modes as displayName.'),
     bar1: z
       .string()
       .optional()
-      .describe('Bar 1 resource attribute path (health bar is "attributes.hp"); "" clears it.'),
-    bar2: z
-      .string()
-      .optional()
-      .describe('Bar 2 resource attribute path (e.g. "attributes.hp"); "" clears it.'),
-    ring: z
-      .boolean()
-      .optional()
-      .describe(
-        'Dynamic token ring: false = plain token (the house default), true = ring on. ' +
-          'Sets ring.enabled on the placed token.'
-      ),
+      .describe('Bar 1 attribute path (the health bar is "attributes.hp"); "" clears.'),
+    bar2: z.string().optional().describe('Bar 2 attribute path; "" clears.'),
+    ring: z.boolean().optional().describe('Dynamic token ring on / off.'),
     hp: z
       .object({
         value: z.number().int().optional().describe('Current hit points.'),
@@ -154,11 +117,8 @@ const UpdateTokenSchema = z
       })
       .optional()
       .describe(
-        "Set THIS placed token's hit points on its own actor — PER-TOKEN, so two copies of the same " +
-          'actor can differ (e.g. a band wounded to different HP). Writes system.attributes.hp.* on the ' +
-          "token's (unlinked) delta, NOT the prototype/statblock — the right home for a token's current " +
-          'HP. For a linked token it writes the shared base actor. Only the sub-fields you pass change; ' +
-          '0 is valid (a downed creature).'
+        "Hit points on the token's own delta (linked: the base actor); only the sub-fields passed " +
+          'change.'
       ),
   })
   .refine(v => (v.tokenIds?.length ?? 0) > 0 || (v.actorIds?.length ?? 0) > 0, {
@@ -193,53 +153,32 @@ export const tokenToolModule: PlaceableModuleFactory = foundry => ({
     {
       name: 'list-tokens',
       description:
-        'List every PLACED TOKEN on a scene (by id or exact name — any scene, not just the active ' +
-        'one) — id, name, position (x/y), size, rotation, elevation, hidden, disposition, actorId, ' +
-        'art src + scale, lockRotation. Read-only; the inspect step that feeds update-token / ' +
-        'delete-tokens. The token ids also work as the actorIdentifier of the actor tools (get-actor, ' +
-        'update-actor, update-actor-item, remove-from-actor, add-item/add-feature, import-item, ' +
-        "manage-activity/-effect, apply-condition) — targeting a token id edits THAT instance's own " +
-        'delta, the way to re-gear/wound ONE placed copy of an unlinked NPC (base-actor edits never ' +
-        'reach tokens already on a scene).',
+        'Every placed token on a scene: id, name, x / y, size, rotation, elevation, hidden, ' +
+        'disposition, actorId, art + scale, lockRotation. A token id is also an actor target for the ' +
+        "actor tools (that token's own delta, not the base actor).",
       inputSchema: toInputSchema(ListTokensSchema),
     },
     {
       name: 'place-tokens',
       description:
-        "Place one or more actors' tokens on a scene (batch encounter prep — e.g. drop the whole " +
-        'hobgoblin band on the bridge). Each entry names an actor (id or EXACT name) + an absolute ' +
-        "canvas-pixel x/y; the token is built from the actor's PROTOTYPE (so the house token " +
-        'defaults — auto-rotate, ring, disposition — carry over), with optional per-copy hidden/' +
-        'elevation/rotation/name/disposition overrides. Repeat an actor for several copies. GM-only.',
+        "Place actors' tokens on a scene from their prototypes, at canvas-pixel x / y, with " +
+        'per-copy hidden / elevation / rotation / name / disposition overrides. GM-only.',
       inputSchema: toInputSchema(PlaceTokensSchema),
     },
     {
       name: 'update-token',
       description:
-        'Edit one or more PLACED tokens on a scene — a token INSTANCE already dropped on the map, NOT ' +
-        "the actor's prototype token (that's update-actor). Resolve the scene by id/exact name " +
-        '(default: the ACTIVE scene), then target tokens by `tokenIds` and/or `actorIds` (an actor id ' +
-        'OR exact name — updates EVERY placed copy of that actor, e.g. all "Dead Guard" corpses). Patch ' +
-        'any of: `rotation` (or `randomizeRotation` for an independent per-token angle), `scale` (token ' +
-        'art size — sets texture.scaleX/scaleY together), `imagePath` (RESKIN the placed instance — ' +
-        'still image or animated video, existence-checked so a 404 never breaks working art), ' +
-        '`elevation`, `hidden`, `lockRotation`, `x`/`y`, ' +
-        '`name`, `displayName` (nameplate visibility), `displayBars` (resource-bar visibility), `bar1`/`bar2` ' +
-        '(which resource each bar tracks — the health bar is bar1 = attributes.hp), `ring` (dynamic token ' +
-        "ring on/off), and `hp` (this token's CURRENT hit points, per-token on its own delta — so two copies " +
-        'of one actor can be wounded differently, which update-actor cannot do) — all matched tokens update in ' +
-        'one batch. GOTCHA handled for you: a token whose actor had ' +
-        'auto-rotate OFF carries lockRotation:true, which HIDES a set rotation — so when you rotate a ' +
-        'locked token the tool auto-unlocks it and warns. Reports matched/updated counts + any ' +
-        'unresolved ids. GM-only.',
+        'Edit placed tokens (not the prototype: update-actor) by tokenIds and/or actorIds (every ' +
+        'placed copy of an actor): rotation, scale, art, elevation, hidden, lockRotation, position, ' +
+        "name, nameplate / bar visibility, bars, ring, and hp on the token's own delta. Reports " +
+        'matched / updated and unresolved ids. GM-only.',
       inputSchema: toInputSchema(UpdateTokenSchema),
     },
     {
       name: 'delete-tokens',
       description:
-        'Remove one or more PLACED tokens from a scene by token id (from list-tokens) — clears the ' +
-        'map instance only; the sidebar actor survives (delete-actor removes that). Missing ids are ' +
-        'reported, never fatal. GM-only.',
+        'Remove placed tokens by id; the sidebar actor survives. Missing ids are reported, never ' +
+        'fatal. GM-only.',
       inputSchema: toInputSchema(DeleteTokensSchema),
     },
   ],
