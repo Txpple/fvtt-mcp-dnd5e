@@ -68,13 +68,10 @@ export const TOOLSETS = {
   ],
   /** Scenes, who-sees-what routing, and every placeable kind. */
   scenes: [
-    'create-scene',
-    'list-scenes',
-    'update-scene',
+    'manage-scenes',
     'activate-scene',
     'pull-users-to-scene',
     'set-landing-scene',
-    'delete-scene',
     'get-scene-dimensions',
     'screenshot-scene',
     'manage-placeables',

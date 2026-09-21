@@ -355,7 +355,7 @@ function targetScene(identifier?: string): any {
     const scene = resolveSceneStrict(identifier);
     if (!scene) {
       throw notFound(
-        `Scene not found: "${identifier}". Use an exact id or name (list-scenes shows both).`
+        `Scene not found: "${identifier}". Use an exact id or name (manage-scenes list shows both).`
       );
     }
     return scene;

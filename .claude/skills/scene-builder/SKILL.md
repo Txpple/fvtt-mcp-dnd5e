@@ -11,12 +11,12 @@ description: >-
 # Scene builder
 
 A judgment layer over the scene tools — it maps "here's a map, make it playable" into the right
-`create-scene` / `update-scene` calls with sensible dnd5e defaults and a couple of confirmable mood
+`manage-scenes` `create` / `update` calls with sensible dnd5e defaults and a couple of confirmable mood
 choices. It adds NO new mechanics; the tools hold all correctness (v14 field paths, fog/grid enum
 mapping, weather validation against the live `CONFIG.weatherEffects`, playlist/journal name→id
 resolution, and **auto-detecting scene dimensions from the image**).
 
-Tools used: `create-scene`, `update-scene`, `list-scenes`, `list-assets`, `upload-asset`,
+Tools used: `manage-scenes` (`create` / `update` / `list`), `list-assets`, `upload-asset`,
 `manage-playlists { action: "list" }`, `manage-journals { action: "list" }` / `search-journals`. To **build** a new playlist or journal to
 attach, hand off to the **`playlist-builder`** / **`journal-builder`** skill — scene-builder wires the
 link onto the scene; those skills author the content.
@@ -83,21 +83,21 @@ Battlemaps often ship a **sidecar JSON next to the image** (`cavern.jpg` → `ca
 packs — with `walls` / `lights` arrays plus scene scalars (`width`, `height`, `grid`, `padding`,
 `gridDistance`, `gridUnits`, `darkness`…). Whenever a local map file is given, check its folder first.
 
-- **Hand the FILE to the tool: `create-scene` with `placeablesPath: "<absolute path>"`.** It reads
+- **Hand the FILE to the tool: `manage-scenes { action: "create" }` with `placeablesPath: "<absolute path>"`.** It reads
   the arrays server-side, whole, and normalizes legacy and v14 shapes itself. Never copy the arrays
   into the call by hand — a hand remap is how walls lose `sight` (every limited/none wall goes
   solid) and lights lose their `config` (torchlight blows out at ≈2× luminosity, no flicker). If the
   tool warns "*N wall(s) declared light/move/sound but no sight*", the file itself is broken — say so.
 - Never use Foundry's native right-click "Import Data" for this shape: v14 dropped the legacy
-  migration and silently zeroes the walls and lights. `create-scene` does the conversion.
+  migration and silently zeroes the walls and lights. `manage-scenes` `create` does the conversion.
 - A **Universal VTT** file (`.uvtt` / `.dd2vtt` / `.df2vtt`, or a JSON with `pixels_per_grid` /
-  `line_of_sight` / `portals`) is a different, grid-unit schema `create-scene` does not convert —
+  `line_of_sight` / `portals`) is a different, grid-unit schema `manage-scenes` `create` does not convert —
   tell the user it isn't supported rather than feed it in. A map MODULE's `packs/*.db` scenes are
   `tom-cartos-import`'s job (`read-pack` writes the placeables file). No sidecar? Skip this step.
 
 ## Step 1 — Dimensions: auto, EXCEPT when a sidecar provides them
 
-**Normally do NOT compute or ask for width/height** — `create-scene` auto-detects the image's pixel
+**Normally do NOT compute or ask for width/height** — `manage-scenes` `create` auto-detects the image's pixel
 size when you omit `width`/`height`. **But when a sidecar goes in via `placeablesPath`, pass the
 sidecar's own `width`, `height`, `gridSize` (its `grid`), `padding`, `gridDistance`, and `gridUnits`
 explicitly** — the tool takes only the placeable arrays from the file. Read just those top-level
@@ -145,7 +145,7 @@ ambiguous duplicate name — pass the id then).
 
 ## Step 5 — Create and report
 
-Make a single `create-scene` call with the assembled params, then report the scene id/name, the
+Make a single `manage-scenes` `create` call with the assembled params, then report the scene id/name, the
 detected dimensions, and what mood/links you set. Offer to **activate** it if the user wants it live
 now (or pass `activate: true` when they've already said so).
 
@@ -153,7 +153,8 @@ Typical call (defaults already cover grid 5ft / vision on / fog individual / day
 what's special):
 
 ```
-create-scene {
+manage-scenes {
+  action: "create",
   name: "Frostspire Pass",
   backgroundPath: "worlds/<world>/assets/maps/frostspire.webp",
   weather: "snow",            // from the map
@@ -167,7 +168,8 @@ With a sidecar (walls + lighting from `map.json`), hand the file over and pass i
 the coordinates line up — report back the wall/light counts the tool placed:
 
 ```
-create-scene {
+manage-scenes {
+  action: "create",
   name: "Eerie Temple",
   backgroundPath: "worlds/<world>/assets/maps/eerie-temple.jpg",
   width: 13050, height: 6450,         // from the sidecar
@@ -180,14 +182,14 @@ create-scene {
 }
 ```
 
-To adjust an existing scene later, use `update-scene` with the same fields (and `""` to clear a
-`playlist`/`journal` link). `update-scene` is document-only — it does **not** add walls/lights, so
-import those at `create-scene` time.
+To adjust an existing scene later, use `manage-scenes { action: "update" }` with the same fields (and `""`
+to clear a `playlist`/`journal` link). `update` is document-only — it does **not** add walls/lights, so
+import those at `create` time.
 
 ## Boundaries
 
 - Never proceed without a background image; offer upload or pick-from-assets instead.
-- Don't hand-compute dimensions — let `create-scene` auto-detect them, **except** when importing a
+- Don't hand-compute dimensions — let `manage-scenes` `create` auto-detect them, **except** when importing a
   sidecar: then pass the sidecar's own width/height/grid/padding so wall/light pixels stay aligned.
 - Always check for a sidecar JSON next to a local map; import it by `placeablesPath`, never by
   copying its arrays. Decline Universal VTT (`.uvtt`/`.dd2vtt`) sidecars cleanly — not yet supported.

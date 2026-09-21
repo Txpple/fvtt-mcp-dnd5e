@@ -42,7 +42,7 @@ Never pick from a name. Find out what the place *is*:
 
 - **`configure-soundscape { action: "list" }`** — what it already has. If the scene is at 4+ sets,
   you are **re-mixing**, not adding (see the budget below).
-- **`get-current-scene`** / **`list-scenes`** — the **darkness level** (`darkness` 0–1; this decides
+- **`get-current-scene`** / **`manage-scenes` `list`** — the **darkness level** (`darkness` 0–1; this decides
   the day/night question), `weather`, and whether it's the active scene.
 - **`screenshot-scene`**, or read the background image directly (its path is `background` on
   `get-current-scene`) — it renders to you. This is the step that actually earns the skill: *look

@@ -498,3 +498,29 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   the two refusals, the page miss, the entry miss, the delete with the not-found tail),
   verify-read-tools 7/7, integration 80 passed / 6 skipped. Next: scenes → actors →
   search-compendium ×4 → the actor projections.
+- 2026-09-21 — **M8 scenes → `manage-scenes`** (`action`: create / list / update / delete): 4
+  tools → 1, the union **10,323** against the four's **11,811** (**−12.6%**) — the biggest win
+  of the diet: create-scene and update-scene had each inlined the same 25 geometry / mood /
+  common leaves (the `environment` / `fog` / `initial` objects among them); they are now the
+  `shared` root leaves described ONCE, with the members advertising them bare (`{type:"object"}`
+  for the mood objects — the root carries the full shape and, being root `properties`, still
+  validates the instance) and create still requiring `backgroundPath`. The view / routing tools
+  (get-current-scene, activate-scene, pull-users-to-scene, set-landing-scene,
+  get-scene-dimensions, screenshot-scene) stay their own. tools/list **202,035**, names 89
+  (6,779 chars). The §3 shapes: list is `N scene(s): id name active width height grid darkness
+  weather tokens walls` (+ `flags` under `flagScope`; width / height are the padded canvas as
+  before); create / update keep their fact reports (dimensions, imported counts, the effective
+  settings — what scene-builder and tom-cartos-import read back), update's miss is `isError`;
+  delete is `deletedLine`. Re-pointed: scene-builder (13 lines incl. two call-shaped snippets),
+  tom-cartos-import (9), plot-drift-check / session-audit / soundscape-builder / playlist-builder
+  (1 each), the artificer's illustration-builder (1, sibling, uncommitted), README (counts + the
+  tool table row), scripts/README, the soundscape page's scene-miss hint, tools-reads.int.test +
+  verify-read-tools, the error-handler test, the toolset tests (they had named create-scene as
+  the out-of-set example), tool-results, the registry tests (92 → 89); skills-matrix 0 / 0.
+  verify-toolsets read the surface from the TOOLSETS table (it had a hard-coded 151 that went
+  stale with the first M8 commit). Live: verify-scene-tools **24/24** (the sidecar import now
+  through the union; the new dispatch section: create with darkness / weather / flags, the list
+  row under a filter with `flags[flagScope]`, rename + darkness with weather cleared, the two
+  refusals, the miss, the delete with the not-found tail), verify-scene-sidecar 13/13,
+  verify-teleporter-scene-fields 13/13, verify-read-tools 7/7, verify-toolsets 10/10,
+  integration 80 passed / 6 skipped. Next: actors → search-compendium ×4 → the actor projections.

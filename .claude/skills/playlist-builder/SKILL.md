@@ -102,7 +102,7 @@ download. When the user needs audio they don't already have, point them here **f
 ## Attaching to a scene (hand off to scene-builder)
 
 A playlist set on a scene's `playlist` link **auto-plays when the scene is ACTIVATED** (not merely
-viewed). So: build the playlist here, then **hand off to `scene-builder`** (or `update-scene`) to set
+viewed). So: build the playlist here, then **hand off to `scene-builder`** (or `manage-scenes` `update`) to set
 the scene's `playlist` to this one. Building the audio is this skill; wiring it onto a scene is the
 scene's job.
 

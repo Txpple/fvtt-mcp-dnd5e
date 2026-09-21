@@ -32,7 +32,7 @@ const bodyNames = new Map();
 const CALLS = [
   ['get-world-info', {}],
   ['get-current-scene', {}],
-  ['list-scenes', {}],
+  ['manage-scenes', { action: 'list' }],
   ['list-actors', {}],
   ['list-actors', { type: 'npc' }],
   ['manage-items', { action: 'list' }],

@@ -38,7 +38,7 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
       'invalid',
       'Scene "Crypt" has no grid; set gridType first',
     ],
-    ['update-scene', 'updateScene', 'invalid', 'background.src must be a Data-relative path'],
+    ['manage-scenes', 'updateScene', 'invalid', 'background.src must be a Data-relative path'],
     [
       'get-actor',
       'getCharacterInfo',

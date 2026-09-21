@@ -116,7 +116,8 @@ describe('tool registry', () => {
     //   remove-from-actor stays (an actor-side op).
     // − 4 (M8): create / update / list / delete-journal + delete-journal-page → manage-journals
     //   (action; list-journals' journalId / pageId modes are its `get`).
-    expect(names.length).toBe(92);
+    // − 3 (M8): create / list / update / delete-scene → manage-scenes (action).
+    expect(names.length).toBe(89);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -545,7 +546,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(92);
+    expect(tools.length).toBe(89);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {
@@ -559,7 +560,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
     expect([...enabledToolsets].sort()).toEqual(['chat', 'combat', 'session']);
     const names = tools.map(t => t.name).sort();
     expect(names).toEqual([...TOOLSETS.session, ...TOOLSETS.chat, ...TOOLSETS.combat].sort());
-    expect(names).not.toContain('create-scene');
+    expect(names).not.toContain('manage-scenes');
     expect(names).toContain('get-world-info');
     // the world-level writes are opt-in like any other family (M7)
     expect(names).not.toContain('configure-dnd5e-settings');
@@ -573,8 +574,8 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
       host,
       toolsets: ['chat'],
     });
-    await expect(dispatch('create-scene', {})).rejects.toThrow(
-      /"create-scene" is in the "scenes" toolset.*FOUNDRY_TOOLSETS=session,chat/
+    await expect(dispatch('manage-scenes', {})).rejects.toThrow(
+      /"manage-scenes" is in the "scenes" toolset.*FOUNDRY_TOOLSETS=session,chat/
     );
     await expect(dispatch('not-a-tool', {})).rejects.toThrow(/Unknown tool/);
   });

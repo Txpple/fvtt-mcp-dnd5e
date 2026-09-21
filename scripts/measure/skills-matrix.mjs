@@ -88,7 +88,7 @@ const candidateRows = uniq(candidates);
 // macros → manage-macros; the folders → manage-folders; the playlists → manage-playlists; the
 // cards → manage-cards; the six table CRUD tools → manage-rolltables, roll-on-table staying; the
 // six item tools → manage-items, remove-from-actor staying; the five generic journal tools →
-// manage-journals).
+// manage-journals; the four scene-document CRUD tools → manage-scenes).
 const FAMILIES = {
   placeables: ['manage-placeables'],
   items: ['manage-items'],
@@ -96,7 +96,7 @@ const FAMILIES = {
   journals: ['manage-journals'],
   actors: ['list-actors', 'get-actor', 'update-actor', 'delete-actor'],
   folders: ['manage-folders'],
-  scenes: ['create-scene', 'list-scenes', 'update-scene', 'delete-scene'],
+  scenes: ['manage-scenes'],
   playlists: ['manage-playlists'],
   cards: ['manage-cards'],
   macros: ['manage-macros'],

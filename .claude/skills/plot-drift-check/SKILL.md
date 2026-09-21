@@ -48,7 +48,7 @@ offending snippet.
 | Roll tables | `manage-rolltables` `list` → `get` on plot-adjacent tables | entry text (the classic straggler — a rename misses table entries) |
 | Actors | `list-actors` for names; `get-actor` on plot-relevant NPCs/PCs | actor names, token names, biographies |
 | Items | `search-actor-contents` / `manage-items` `list` → `get` for plot items | descriptions, unidentified vs true names |
-| Scenes & pins | `list-scenes`, `manage-placeables { kind: "notes", action: "list" }` | scene names, map-pin labels |
+| Scenes & pins | `manage-scenes { action: "list" }`, `manage-placeables { kind: "notes", action: "list" }` | scene names, map-pin labels |
 | Folders & playlists | `manage-folders` / `manage-playlists` `{ action: "list" }` | organizational names that carry old terms |
 | Visibility | journal page ownership from the journal reads | any **secret** term readable on a player-visible page |
 

@@ -7,8 +7,10 @@ import type { FoundryBridge } from '../foundry.js';
 import type { Host } from '../hosts/types.js';
 import { filePlaneFor } from '../hosts/index.js';
 import { Logger } from '../logger.js';
-import { formatDeletionResult } from '../utils/format.js';
+import { FormattedToolError } from '../utils/error-handler.js';
+import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 export interface SceneToolsOptions {
   foundry: FoundryBridge;
@@ -219,9 +221,29 @@ const sceneMoodFields = {
     .describe('Document flags by scope, e.g. {"<module>": {sourceId}}; deep-merged.'),
 };
 
+export const MANAGE_SCENES = 'manage-scenes';
+
+// The geometry / navigation leaves both create and update take. With the mood and common fields
+// they are the union's `shared` root leaves — described ONCE, each member advertising them bare —
+// which is where the scene family's byte win comes from (the two tools had inlined them twice).
+const sceneGeometryFields = {
+  backgroundPath: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Data-relative path to the background/map image (create: required).'),
+  width: z.number().int().positive().optional().describe('Pixels; create default from the image.'),
+  height: z.number().int().positive().optional().describe('Pixels; create default from the image.'),
+  gridSize: z.number().int().positive().optional().describe('Grid size in pixels (default 100).'),
+  gridType: z.number().int().min(0).optional().describe('0 gridless, 1 square (default), 2+ hex.'),
+  padding: z.number().min(0).max(0.5).optional().describe('Padding fraction, 0–0.5.'),
+  navigation: z.boolean().optional().describe('Shown in the player navigation bar.'),
+};
+
+const sceneSharedFields = { ...sceneGeometryFields, ...sceneMoodFields, ...sceneCommonFields };
+
 const CreateSceneSchema = z.object({
   name: z.string().min(1).describe('Scene name.'),
-  backgroundPath: z.string().min(1).describe('Data-relative path to the background/map image.'),
   walls: z
     .array(SidecarWallSchema)
     .optional()
@@ -243,16 +265,10 @@ const CreateSceneSchema = z.object({
       'Server-local JSON with {walls, lights, regions} (a map sidecar), read whole and merged with ' +
         'the inline arrays.'
     ),
-  width: z.number().int().positive().optional().describe('Pixels; default from the image.'),
-  height: z.number().int().positive().optional().describe('Pixels; default from the image.'),
-  gridSize: z.number().int().positive().optional().describe('Grid size in pixels (default 100).'),
-  gridType: z.number().int().min(0).optional().describe('0 gridless, 1 square (default), 2+ hex.'),
-  padding: z.number().min(0).max(0.5).optional().describe('Padding fraction, 0–0.5.'),
   activate: z.boolean().default(false).describe('Activate the scene after creating it.'),
   folder: z.string().optional().describe('Scene folder id or exact name (created if absent).'),
-  navigation: z.boolean().optional().describe('Shown in the player navigation bar.'),
-  ...sceneMoodFields,
-  ...sceneCommonFields,
+  ...sceneSharedFields,
+  backgroundPath: z.string().min(1),
 });
 
 const ListScenesSchema = z.object({
@@ -268,27 +284,26 @@ const UpdateSceneSchema = z.object({
   sceneIdentifier: sceneTargetRequired,
   name: z.string().min(1).optional().describe('New scene name.'),
   navName: z.string().optional().describe('Navigation-bar label.'),
-  navigation: z.boolean().optional().describe('Shown in the player navigation bar.'),
-  backgroundPath: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('Data-relative path to a new background/map image.'),
-  width: z.number().int().positive().optional().describe('Scene width in pixels.'),
-  height: z.number().int().positive().optional().describe('Scene height in pixels.'),
-  gridSize: z.number().int().positive().optional().describe('Grid size in pixels.'),
-  gridType: z.number().int().min(0).optional().describe('0 gridless, 1 square, 2+ hex.'),
-  padding: z.number().min(0).max(0.5).optional().describe('Padding fraction, 0–0.5.'),
-  ...sceneMoodFields,
-  ...sceneCommonFields,
+  ...sceneSharedFields,
 });
 
 const DeleteSceneSchema = z.object({
-  identifiers: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Exact ids (preferred) or exact names of scenes to delete.'),
+  identifiers: z.array(z.string().min(1)).min(1).describe('Exact ids or exact names.'),
 });
+
+/** The list columns (§3: a fixed, documented order); `flags` is appended under `flagScope`. */
+const LIST_COLUMNS = [
+  'id',
+  'name',
+  'active',
+  'width',
+  'height',
+  'grid',
+  'darkness',
+  'weather',
+  'tokens',
+  'walls',
+] as const;
 
 const GetSceneDimensionsSchema = z.object({
   sceneIdentifier: sceneTargetRequired,
@@ -311,11 +326,92 @@ export class SceneTools {
   private foundry: FoundryBridge;
   private logger: Logger;
   private host: Host | undefined;
+  private union: UnionTool;
 
   constructor({ foundry, logger, host }: SceneToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'SceneTools' });
     this.host = host;
+    this.union = unionTool({
+      name: MANAGE_SCENES,
+      description:
+        'Scene documents: create / list / update / delete — never placeables (manage-placeables), ' +
+        'never the active flag (activate-scene). Paths are Data-relative; the mood / camera / flags ' +
+        'objects deep-merge. GM-only writes.',
+      discriminators: ['action'],
+      shared: sceneSharedFields,
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description:
+            'Create a Scene from a background image: size from the image unless given, the nav ' +
+            'thumbnail generated unless thumb is given, optionally activated; walls, lights and ' +
+            'regions import inline or from placeablesPath (legacy or v14 shapes, normalized).',
+          schema: CreateSceneSchema,
+          handler: parsed => this.createScene(parsed),
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description:
+            'Scenes: id, name, active, W × H, grid, darkness 0–1, weather, token / wall counts ' +
+            '(+ flags[flagScope]). Background path: get-current-scene.',
+          schema: ListScenesSchema,
+          handler: async parsed => {
+            const scenes = await this.foundry.call('listScenes', parsed);
+            const records = (Array.isArray(scenes) ? scenes : []).map(s => ({
+              id: s.id,
+              name: s.name,
+              active: s.active ?? false,
+              width: s.width ?? null,
+              height: s.height ?? null,
+              grid: s.grid ?? null,
+              darkness: typeof s.darkness === 'number' ? s.darkness : null,
+              weather: s.weather || null,
+              tokens: s.tokens ?? 0,
+              walls: s.walls ?? 0,
+              ...(parsed.flagScope !== undefined ? { flags: s.flags ?? null } : {}),
+            }));
+            const columns =
+              parsed.flagScope !== undefined ? [...LIST_COLUMNS, 'flags'] : [...LIST_COLUMNS];
+            return listLines(`${records.length} scene(s)`, columns, records);
+          },
+        }),
+        unionMember({
+          select: { action: 'update' },
+          description:
+            'Update a Scene: name, background, navigation, dimensions / grid / padding, vision, fog, ' +
+            'lighting, weather, playlist / journal ("" clears), the mood / camera / flags objects.',
+          schema: UpdateSceneSchema,
+          handler: async parsed => {
+            const result = await this.foundry.call('updateScene', parsed);
+            if (result?.updated === false) {
+              throw new FormattedToolError(
+                `Scene not found: "${result?.notFound ?? parsed.sceneIdentifier}". Nothing changed.`
+              );
+            }
+            return (
+              `Updated scene "${result?.sceneName}" (${result?.sceneId})\n  background: ${result?.background}` +
+              formatSceneSettings(result?.settings) +
+              warningBlock(result?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: 'Permanently delete scenes.',
+          schema: DeleteSceneSchema,
+          handler: async ({ identifiers }) => {
+            const result = await this.foundry.call('deleteScenes', { identifiers });
+            return deletedLine(result, 'scene');
+          },
+        }),
+      ],
+    });
+  }
+
+  /** The scene-document union (registry-facing). */
+  async handleManageScenes(args: unknown): Promise<unknown> {
+    return this.union.handle(args);
   }
 
   /**
@@ -323,6 +419,7 @@ export class SceneTools {
    */
   getToolDefinitions() {
     return [
+      this.union.def,
       {
         name: 'get-current-scene',
         description:
@@ -337,32 +434,6 @@ export class SceneTools {
           'tools have a plane here), user counts, who is online, and the dnd5e automation switches. ' +
           'READ-ONLY — world metadata has no write tool; edit it in the in-app "Edit World" dialog.',
         inputSchema: toInputSchema(GetWorldInfoSchema),
-      },
-      {
-        name: 'create-scene',
-        description:
-          'Create a Scene from a Data-relative background image: size from the image unless given, ' +
-          'the nav thumbnail generated unless `thumb` is given, grid / vision / fog / lighting / ' +
-          'weather / playlist / journal / folder / navigation / flags in the same call, optionally ' +
-          'activated. Walls, lights and regions import inline or from `placeablesPath` (legacy or ' +
-          'v14 shapes, normalized). GM-only.',
-        inputSchema: toInputSchema(CreateSceneSchema),
-      },
-      {
-        name: 'list-scenes',
-        description:
-          'One line per scene: name, id, [active], W×H, grid, darkness 0–1, weather, token/wall ' +
-          'counts (+ flags[flagScope]). Filter by name substring or active only. Background path: ' +
-          'get-current-scene.',
-        inputSchema: toInputSchema(ListScenesSchema),
-      },
-      {
-        name: 'update-scene',
-        description:
-          'Update a Scene document: name, background, navigation, dimensions / grid / padding, vision, ' +
-          'fog, lighting, weather, playlist / journal ("" clears), the environment / fog / camera ' +
-          'objects and flags (deep-merged). Never touches placeables, never activates. GM-only.',
-        inputSchema: toInputSchema(UpdateSceneSchema),
       },
       {
         name: 'activate-scene',
@@ -388,11 +459,6 @@ export class SceneTools {
         inputSchema: toInputSchema(SetLandingSceneSchema),
       },
       {
-        name: 'delete-scene',
-        description: 'Permanently delete scenes by exact id or exact name. GM-only.',
-        inputSchema: toInputSchema(DeleteSceneSchema),
-      },
-      {
         name: 'get-scene-dimensions',
         description:
           "A scene's padded-canvas geometry: total width / height, the background rect within the " +
@@ -411,8 +477,7 @@ export class SceneTools {
     ];
   }
 
-  async handleCreateScene(args: any): Promise<string> {
-    const parsed = CreateSceneSchema.parse(args ?? {});
+  private async createScene(parsed: z.output<typeof CreateSceneSchema>): Promise<string> {
     const callArgs: any = { ...parsed };
     // Pull walls/lights from a read-pack payload file SERVER-SIDE (they never transit the agent).
     if (callArgs.placeablesPath) {
@@ -421,7 +486,7 @@ export class SceneTools {
         payload = JSON.parse(readFileSync(callArgs.placeablesPath, 'utf8'));
       } catch (err) {
         throw new Error(
-          `create-scene: could not read placeablesPath "${callArgs.placeablesPath}": ${(err as Error).message}`
+          `manage-scenes create: could not read placeablesPath "${callArgs.placeablesPath}": ${(err as Error).message}`
         );
       }
       if (Array.isArray(payload?.walls))
@@ -452,7 +517,6 @@ export class SceneTools {
     const placeableErrs = Array.isArray(result?.placeableErrors)
       ? result.placeableErrors.map((e: string) => `\n  ⚠ ${e}`).join('')
       : '';
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
     const folderLine = result?.folderName ? `\n  folder: ${result.folderName}` : '';
     const thumbLine = result?.autoThumbnail ? '\n  thumbnail: auto-generated from background' : '';
     return (
@@ -465,9 +529,7 @@ export class SceneTools {
       teleportHint +
       placeableErrs +
       formatSceneSettings(result?.settings) +
-      (warns.length
-        ? `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`
-        : '')
+      warningBlock(result?.warnings)
     );
   }
 
@@ -503,47 +565,6 @@ export class SceneTools {
       (parsed.mark ? `\n  marked ${meta.noteCount ?? 0} note pin(s)` : '') +
       dims +
       '\n  (open or Read the file to view the image)'
-    );
-  }
-
-  async handleListScenes(args: any): Promise<string> {
-    const parsed = ListScenesSchema.parse(args ?? {});
-    const scenes = (await this.foundry.call('listScenes', parsed)) ?? [];
-    if (!Array.isArray(scenes) || scenes.length === 0) {
-      return 'No scenes found.';
-    }
-    const lines = scenes.map((s: any) => {
-      const dims = s.width && s.height ? `${s.width}×${s.height}` : '?';
-      const facts = [
-        `${dims}px`,
-        `grid ${s.grid}`,
-        `darkness ${typeof s.darkness === 'number' ? s.darkness : '?'}`,
-        s.weather ? `weather ${s.weather}` : null,
-        `${s.tokens ?? 0} token(s)`,
-        `${s.walls ?? 0} wall(s)`,
-      ].filter(Boolean);
-      const flags =
-        parsed.flagScope !== undefined
-          ? `\n      flags[${parsed.flagScope}]: ${s.flags ? JSON.stringify(s.flags) : 'none'}`
-          : '';
-      return `  - "${s.name}" (${s.id})${s.active ? ' [active]' : ''} — ${facts.join(', ')}${flags}`;
-    });
-    return `${scenes.length} scene(s):\n${lines.join('\n')}`;
-  }
-
-  async handleUpdateScene(args: any): Promise<string> {
-    const parsed = UpdateSceneSchema.parse(args ?? {});
-    const result = await this.foundry.call('updateScene', parsed);
-    if (result?.updated === false) {
-      return `Scene not found: "${result?.notFound ?? parsed.sceneIdentifier}". Nothing changed.`;
-    }
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
-    return (
-      `Updated scene "${result?.sceneName}" (${result?.sceneId})\n  background: ${result?.background}` +
-      formatSceneSettings(result?.settings) +
-      (warns.length
-        ? `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`
-        : '')
     );
   }
 
@@ -653,12 +674,6 @@ export class SceneTools {
       (notFound.length ? `\n⚠️ No such user: ${notFound.join(', ')}` : '') +
       (warnings.length ? `\n\n⚠️ ${warnings.map(w => `- ${w}`).join('\n')}` : '')
     );
-  }
-
-  async handleDeleteScene(args: any): Promise<string> {
-    const { identifiers } = DeleteSceneSchema.parse(args ?? {});
-    const result = await this.foundry.call('deleteScenes', { identifiers });
-    return formatDeletionResult(result, 'scene(s)');
   }
 
   async handleGetCurrentScene(args: any): Promise<any> {

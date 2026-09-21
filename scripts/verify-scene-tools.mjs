@@ -1,9 +1,11 @@
-// Live acceptance for the EXPANDED scene tools (create-scene / update-scene new
-// params): exercises grid scale, token vision, fog mode, lighting, weather,
-// auto-dimension, and playlist/journal link resolution end-to-end against the
-// live Molten world via the foundry.call seam. Unit tests mock the seam, so this
-// is the real correctness gate for the new write paths. Scenes are tagged
-// ZZ-MCP-ST and deleted in a finally.
+// Live acceptance for the scene-document tools: the page's createScene / updateScene params
+// (grid scale, token vision, fog mode, lighting, weather, auto-dimension, playlist / journal link
+// resolution) end-to-end via the foundry.call seam, the sidecar import through the tool class,
+// then manage-scenes (action create / list / update / delete — the M8 union, src/tools/scene.ts)
+// through buildToolRegistry().dispatch: the four per-op tools are gone; create reports its facts;
+// list is the §3 line shape (header + one row per scene, + flags under flagScope); update's miss
+// is an error; delete is one line; an unknown action / key is refused by name. Unit tests mock the
+// seam, so this is the real correctness gate. Scenes are tagged ZZ-MCP-ST and deleted in a finally.
 //
 // Build first: npm run build. Run: node scripts/verify-scene-tools.mjs
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +14,7 @@ import { join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { SceneTools } from '../dist/tools/scene.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
@@ -20,7 +23,8 @@ const BG_VECTOR = 'icons/svg/dice-target.svg'; // always present in core Foundry
 const BG_RASTER = 'assets/mcp/mcp-claude.jpg'; // bundled portrait (for auto-dimension)
 
 const env = loadEnv();
-const foundry = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const foundry = new Foundry(cfg);
 
 const results = [];
 const pass = (n, s) => {
@@ -267,7 +271,8 @@ try {
       foundry,
       logger: new Logger({ level: 'error', format: 'simple' }),
     });
-    const text = await tools.handleCreateScene({
+    const text = await tools.handleManageScenes({
+      action: 'create',
       name: `${TAG}-sidecar`,
       backgroundPath: BG_VECTOR,
       width: 1200,
@@ -323,6 +328,96 @@ try {
       : fail('legacy light dim/bright normalized into config', JSON.stringify(legacyLight));
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+
+  // ── manage-scenes through the registry (the M8 union: action create / list / update / delete) ──
+  {
+    const { dispatch, tools } = buildToolRegistry({
+      foundry,
+      logger: new Logger({ level: 'error' }),
+      host: cfg.host,
+    });
+    const names = new Set(tools.map(t => t.name));
+    names.has('manage-scenes') &&
+    ['create-scene', 'list-scenes', 'update-scene', 'delete-scene'].every(n => !names.has(n))
+      ? pass('manage-scenes: advertised; the four per-op tools gone')
+      : fail('manage-scenes: advertised', [...names].filter(n => /scene/.test(n)).join(','));
+    const ms = args => dispatch('manage-scenes', args);
+    const cr = String(
+      await ms({
+        action: 'create',
+        name: `${TAG}-union`,
+        backgroundPath: BG_VECTOR,
+        width: 1000,
+        height: 600,
+        darkness: 0.4,
+        weather: 'snow',
+        flags: { 'zz-mcp-st': { sourceId: 'union-1' } },
+      })
+    );
+    const unionId = /\((\w{16})\)/.exec(cr)?.[1];
+    if (unionId) createdSceneIds.push(unionId);
+    !!unionId &&
+    cr.startsWith(`Created scene "${TAG}-union" (${unionId})\n  background: ${BG_VECTOR}`) &&
+    cr.includes('dimensions: 1000×600px') &&
+    cr.includes('darkness 0.4') &&
+    cr.includes('weather snow')
+      ? pass('manage-scenes create: the report (dimensions, darkness, weather)', cr.split('\n')[0])
+      : fail('manage-scenes create', cr);
+    const lines = String(
+      await ms({ action: 'list', filter: `${TAG}-union`, flagScope: 'zz-mcp-st' })
+    ).split('\n');
+    lines[0] ===
+      '1 scene(s): id name active width height grid darkness weather tokens walls flags' &&
+    // width / height are the PADDED canvas (what the old list printed too): match the shape
+    /^\w{16} ZZ-MCP-ST-union false \d+ \d+ 100 0.4 snow 0 0 \{"sourceId":"union-1"\}$/.test(
+      lines[1] ?? ''
+    )
+      ? pass('manage-scenes list: the header + the row with flags[flagScope]', lines[1])
+      : fail('manage-scenes list', lines.join(' | '));
+    const up = String(
+      await ms({
+        action: 'update',
+        sceneIdentifier: unionId,
+        name: `${TAG}-union-2`,
+        darkness: 0.9,
+        weather: '',
+      })
+    );
+    up.startsWith(`Updated scene "${TAG}-union-2" (${unionId})`) &&
+    up.includes('darkness 0.9') &&
+    !up.includes('weather')
+      ? pass('manage-scenes update: rename + darkness, weather cleared', up.split('\n')[0])
+      : fail('manage-scenes update', up);
+    for (const [args, want] of [
+      [
+        { action: 'activate', sceneIdentifier: unionId },
+        'action must be one of "create", "list", "update", "delete"',
+      ],
+      [
+        { action: 'list', sceneIdentifier: unionId },
+        'unknown argument "sceneIdentifier" — it takes: action, filter, includeActiveOnly, flagScope',
+      ],
+      [
+        { action: 'update', sceneIdentifier: 'ZZ-no-such-scene', darkness: 0.1 },
+        'Scene not found: "ZZ-no-such-scene". Nothing changed.',
+      ],
+    ]) {
+      let msg = '';
+      try {
+        await ms(args);
+      } catch (e) {
+        msg = e?.message ?? String(e);
+      }
+      msg.includes(want)
+        ? pass(`manage-scenes refused by name / a miss is an error: ${want.slice(0, 50)}`)
+        : fail(`manage-scenes refusal: ${want.slice(0, 50)}`, msg.slice(0, 140));
+    }
+    const del = String(await ms({ action: 'delete', identifiers: [unionId, 'ZZ-NOPE-SCENE'] }));
+    del === `Deleted 1 scene(s): "${TAG}-union-2" (${unionId}) (1 not found: ZZ-NOPE-SCENE)`
+      ? pass('manage-scenes delete: one line with the not-found tail', del)
+      : fail('manage-scenes delete', del);
+    createdSceneIds.splice(createdSceneIds.indexOf(unionId), 1);
   }
 } catch (e) {
   fail('SUITE', e?.message || String(e));

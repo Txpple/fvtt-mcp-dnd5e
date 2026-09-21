@@ -124,7 +124,7 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 92 tools (14 named toolsets;
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 89 tools (14 named toolsets;
   `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
   instead of ~57k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
@@ -136,8 +136,9 @@ commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings
 / regions × `action`: create / list / update / delete, plus the region specials) replaces 35 tools
 for fewer advertised bytes than they cost; `manage-macros` (`action`: create / list / delete) the
 three macro tools; `manage-folders`, `manage-playlists`, `manage-cards`, `manage-rolltables`,
-`manage-items` and `manage-journals` (`action`: create / import / list / get / update / delete as
-each family has them) the folder, playlist, cards, roll-table, world-item and journal tools.
+`manage-items`, `manage-journals` and `manage-scenes` (`action`: create / import / list / get /
+update / delete as each family has them) the folder, playlist, cards, roll-table, world-item,
+journal and scene-document tools.
 
 ---
 
@@ -343,7 +344,7 @@ Register the built MCP server in your Claude Code config. Copy
 
 ### Toolsets — advertise less
 
-The full surface is 92 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
+The full surface is 89 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
 schemas eagerly pays that on every registration before the first word (Claude Code defers them and
 only lists names, so it pays far less). A registration that only ever does part of the job can say
 so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
@@ -395,7 +396,7 @@ variable to set if something it needs is missing.
 
 ## Tools
 
-**92 tools total: 82 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
+**89 tools total: 79 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
@@ -439,8 +440,7 @@ WebDAV on Molten, the `Data/` directory on a local install) is the asset file li
 | `find-asset-references` | Find every scene/actor/journal/playlist/… that references an asset path      |
 | `relink-asset`          | Rewrite all references from one asset path to another (`dryRun` supported)   |
 | `manage-playlists`      | `action: "create"` — a Playlist from sound paths (the flagship "upload → playlist" wiring) |
-| `create-scene`          | Create a Scene from a background image path                                  |
-| `update-scene`          | Update a scene's fields, including swapping its background image             |
+| `manage-scenes`         | `create`: a Scene from a background image path; `update`: its fields, incl. the background |
 | `set-actor-art`         | Set an actor's portrait (+ prototype token) from an image path               |
 | `add-journal-image`     | Append an image page to a journal entry                                      |
 

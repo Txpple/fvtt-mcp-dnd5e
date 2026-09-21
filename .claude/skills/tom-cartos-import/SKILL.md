@@ -22,10 +22,10 @@ See [`docs/history/tom-cartos-import-plan.md`](../../../docs/history/tom-cartos-
 
 Tools used: **`read-pack`** (the off-line extractor/detector — owns all the LevelDB/NeDB reading,
 era detection, tile discovery, and asset path-rewrite math), `upload-asset` / **`upload-asset-tree`**
-(Plane B — single file vs whole subtree), `create-scene`, **`manage-placeables` `{ kind: "regions",
+(Plane B — single file vs whole subtree), `manage-scenes`, **`manage-placeables` `{ kind: "regions",
 action: "remap-teleporters" }`** (the second-pass
 teleporter fixer), `manage-journals` / `add-journal-image`, `manage-folders` / `move-documents`,
-`list-scenes`. To boot the world first, hand off to **`start-session`**.
+To boot the world first, hand off to **`start-session`**.
 
 > **🎯 OWNER DEFAULT — MAPS ONLY (directed 2026-07-08):** the owner repurposes pack maps into his
 > own setting (e.g. Ostenwold → Greenrest), so an import delivers **pre-made scenes with their
@@ -34,7 +34,7 @@ teleporter fixer), `manage-journals` / `add-journal-image`, `manage-folders` / `
 > session — the pack's lore/names must not enter the world. Teleporters (when a pack ships
 > regions) and tiles remain in scope; folder/naming follow the owner's campaign convention (his
 > chapter folders, his scene names), not the pack's. **Stamp every imported town/social map with
-> `flags["fvtt-mod-autoexplore"].enabled: true`** (pass it in create-scene's `flags` alongside the
+> `flags["fvtt-mod-autoexplore"].enabled: true`** (pass it in the create action's `flags` alongside the
 > provenance flag) — the house autoexplore module renders the scene born-explored (architecture
 > through fog, tokens still LOS-gated); the GM can untick it per scene in the Custom tab.
 
@@ -109,7 +109,7 @@ tokens. A **Clean** scene is a *different* scene (fewer walls, no lights), not a
 
 ## Step 3 — Skip anything already imported (dedup)
 
-`create-scene` is not idempotent. `list-scenes { flagScope: "tom-cartos-import" }` prints each
+`manage-scenes` `create` is not idempotent. `manage-scenes { action: "list", flagScope: "tom-cartos-import" }` prints each
 scene's stamp; skip any scene whose `flags["tom-cartos-import"].sourceId` equals a survey
 `sceneIndex[].sourceId` you're about to import
 (re-runs and resumes are safe this way). Dedup on the **stamped flag**, never the name — variant names
@@ -185,12 +185,13 @@ For each `journals[]` entry, recreate it so the legend keys travel with the scen
 
 Now page the **full** read (`read-pack` with `destRoot`, default page 10; advance `offset` to
 `nextOffset` until null — see Step 1). For each returned scene whose `sourceId` is in your chosen set
-(Step 2) and not already imported (Step 3), one `create-scene`. Pass the pack's **exact** geometry —
+(Step 2) and not already imported (Step 3), one `manage-scenes` `create`. Pass the pack's **exact** geometry —
 auto-size is disabled when you pass dimensions, and you MUST here, or the canvas-pixel walls/lights
 won't align:
 
 ```
-create-scene {
+manage-scenes {
+  action: "create",
   name: "<NN Map (Variant)>",
   backgroundPath: <scene.background.dataPath>,
   width: <scene.width>, height: <scene.height>,
@@ -214,11 +215,11 @@ a **modern** scene carries `environment`/`fog`/`initial`; a **legacy/mid** scene
 `darkness`/`globalLight`/`tokenVision` and a `null` `thumb` (skip the `thumb` arg). Don't invent values.
 
 - **Placeables go via `placeablesPath`, never inline.** `read-pack` wrote each scene's hundreds of
-  walls/lights **and its regions** to a payload file and gave you the path; `create-scene` reads it
+  walls/lights **and its regions** to a payload file and gave you the path; `manage-scenes` `create` reads it
   server-side and places all three. Passing the arrays inline is infeasible — a single scene's walls
   overflow the tool-response cap, and they'd bloat the agent context. Everything in that file is already
   whole (wall threshold/animation, light config, region shapes/behaviors preserved); never reconstruct
-  them. `create-scene` reports the counts placed (walls/lights/**regions**) and ⚠-warns on dropped
+  them. `manage-scenes` `create` reports the counts placed (walls/lights/**regions**) and ⚠-warns on dropped
   `sight`. When a scene has regions, it prints a hint to run the teleporter remap afterward (Step 8).
 - **Teleporters are created here but not yet linked.** Each scene's teleporter regions ride along in the
   payload, but their destinations still point at the *pack's* scene/region ids — the import mints fresh
@@ -310,7 +311,7 @@ For each imported map with its own (non-overview) legend key:
   import order (all scenes, *then* the single remap); the dedup check; confirming the era is in scope;
   reporting the gaps + unresolved teleporters.
 - **Tools (correctness):** `read-pack` does all extraction, era detection, artifact stripping, and the
-  asset path-rewrite math; `upload-asset` does the byte upload + content-type; `create-scene` writes the
+  asset path-rewrite math; `upload-asset` does the byte upload + content-type; `manage-scenes` `create` writes the
   scene + places walls/lights/regions whole + stamps flags; the teleporter remap reconstructs the id maps
   from world state and rewrites every cross-scene teleporter destination; `manage-journals` `create`/
   `add-journal-image` build the journal; `manage-folders`/`move-documents` organize. The skill never

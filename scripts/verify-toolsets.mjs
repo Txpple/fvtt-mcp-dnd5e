@@ -7,6 +7,11 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { TOOLSETS } from '../dist/toolsets.js';
+
+// The whole surface is every toolset's tools — read from the table, never a number that goes
+// stale as M8 folds families (151 at 2.2.0; 89 after the scene family).
+const SURFACE = Object.values(TOOLSETS).reduce((n, list) => n + list.length, 0);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER = join(__dirname, '..', 'dist', 'index.js');
@@ -81,14 +86,18 @@ const callScene = {
   jsonrpc: '2.0',
   id: 3,
   method: 'tools/call',
-  params: { name: 'create-scene', arguments: { name: 'ZZ-never' } },
+  params: { name: 'manage-scenes', arguments: { action: 'create', name: 'ZZ-never' } },
 };
 
 console.log('[1] FOUNDRY_TOOLSETS unset → the whole surface');
 {
   const { responses } = await rpc({ FOUNDRY_TOOLSETS: '' }, [init, list]);
   const tools = responses.get(2)?.result?.tools ?? [];
-  check(tools.length === 151, `tools/list advertises 151 tools`, `got ${tools.length}`);
+  check(
+    tools.length === SURFACE,
+    `tools/list advertises the whole surface (${SURFACE} tools)`,
+    `got ${tools.length}`
+  );
   const bytes = JSON.stringify(tools).length;
   console.log(`      (tools/list payload: ${bytes} chars ≈ ${Math.round(bytes / 3.6)} tokens)`);
 }
@@ -106,7 +115,7 @@ console.log(
     names.includes('send-chat-message') && names.includes('get-combat-stats'),
     'the selected toolsets are advertised'
   );
-  check(!names.includes('create-scene') && !names.includes('get-actor'), 'the others are not');
+  check(!names.includes('manage-scenes') && !names.includes('get-actor'), 'the others are not');
   const bytes = JSON.stringify(tools).length;
   console.log(
     `      (${tools.length} tools; tools/list payload: ${bytes} chars ≈ ${Math.round(bytes / 3.6)} tokens)`
@@ -114,8 +123,8 @@ console.log(
   const call = responses.get(3)?.result;
   const text = call?.content?.[0]?.text ?? '';
   check(
-    call?.isError === true && /"create-scene" is in the "scenes" toolset/.test(text),
-    'tools/call create-scene → refused by name (no bridge connect)',
+    call?.isError === true && /"manage-scenes" is in the "scenes" toolset/.test(text),
+    'tools/call manage-scenes → refused by name (no bridge connect)',
     text.slice(0, 160)
   );
   check(

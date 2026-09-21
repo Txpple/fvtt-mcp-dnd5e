@@ -47,7 +47,7 @@ their intent; do not stop to litigate it.
 | PC sheets | `get-actor` per PC | AC, HP, saves, **and whether they have Extra Attack yet** |
 | Magic items | `get-actor-entity` on every attuned/equipped magic item | the item's real mechanics |
 | The stash | `get-group` | loot nobody is carrying — that is a finding, not background |
-| The site | `list-scenes` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
+| The site | `manage-scenes { action: "list" }` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
 | The monsters | `get-actor` on the **placed token id** | that instance's delta, not the library actor |
 | Signature abilities | `get-actor-entity` on multiattack + the gimmick | the activity, not the name |
 | Intent | `manage-journals` `list` → `get` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |

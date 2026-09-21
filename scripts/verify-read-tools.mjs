@@ -90,8 +90,8 @@ try {
     o => o != null
   );
   await check(
-    'list-scenes',
-    () => scene.handleListScenes({}),
+    'manage-scenes list',
+    () => scene.handleManageScenes({ action: 'list' }),
     o => typeof o === 'string' || o != null
   );
   await check(
