@@ -72,29 +72,23 @@ export class PlaylistTools {
       {
         name: 'create-playlist',
         description:
-          'Create a Foundry Playlist from a list of Data-relative sound paths (e.g. ones just ' +
-          'returned by upload-asset). Modes: sequential, shuffle, simultaneous, soundboard. GM-only.',
+          'Create a Playlist from Data-relative sound paths; modes sequential / shuffle / ' +
+          'simultaneous / soundboard. GM-only.',
         inputSchema: toInputSchema(CreatePlaylistSchema),
       },
       {
         name: 'list-playlists',
-        description:
-          'List Playlist documents with id, name, mode, track count, and whether each is currently ' +
-          'playing.',
+        description: 'Playlists: id, name, mode, track count, playing.',
         inputSchema: toInputSchema(ListPlaylistsSchema),
       },
       {
         name: 'update-playlist',
-        description:
-          "Update a Playlist's document fields: rename, change playback mode, or set the crossfade " +
-          'duration. Does not add/remove tracks. GM-only.',
+        description: "Update a Playlist's name, mode or crossfade (not its tracks). GM-only.",
         inputSchema: toInputSchema(UpdatePlaylistSchema),
       },
       {
         name: 'delete-playlist',
-        description:
-          'Permanently delete one or more Playlist documents by exact id or exact name. STRICT ' +
-          'resolution — no fuzzy/substring matching. GM-only.',
+        description: 'Permanently delete playlists by exact id or exact name. GM-only.',
         inputSchema: toInputSchema(DeletePlaylistSchema),
       },
     ];

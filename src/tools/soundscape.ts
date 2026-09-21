@@ -30,10 +30,7 @@ export interface SoundscapeToolsOptions {
 const ConfigureSoundscapeSchema = z.object({
   action: z
     .enum(['list', 'library', 'add', 'update', 'remove'])
-    .describe(
-      "list = the scene's sound sets (with what would be playing right now); library = browse the " +
-        'prebaked template catalog; add/update/remove = author them.'
-    ),
+    .describe("list = the scene's sets (and what plays now); library = the template catalog."),
   sceneIdentifier: sceneTarget.describe(
     `${SCENE_TARGET}; omit for the ACTIVE scene. Ignored by "library" (world-wide).`
   ),
@@ -41,9 +38,7 @@ const ConfigureSoundscapeSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Which set to update/remove — its id or exact name (ids come from action "list"; a name that ' +
-        'matches two sets is an error, not a coin flip). On "remove", the literal "all" clears ' +
-        'every set from the scene.'
+      'update / remove: the set id or exact name (ambiguous = an error); remove "all" clears.'
     ),
 
   // --- library browse / add-from-template -------------------------------------------------------
@@ -51,101 +46,65 @@ const ConfigureSoundscapeSchema = z.object({
     .string()
     .optional()
     .describe(
-      'action "add": copy this LIBRARY template (its exact name, from action "library") — files, ' +
-        'play style, and timing all come along. Any other field passed alongside overrides the ' +
-        "template's value. A handful of names exist in BOTH sections, so pair this with `section` " +
-        'when the name is ambiguous. Omit to author a set from explicit `files` instead.'
+      'add: copy this library template by exact name (other fields override it); omit for files.'
     ),
-  query: z
-    .string()
-    .optional()
-    .describe('action "library": match on template name, category, or section (e.g. "tavern").'),
+  query: z.string().optional().describe('library: match on name, category or section.'),
   section: z
     .enum(['Interval Sounds', 'Ambient Loops'])
     .optional()
     .describe(
-      'Restrict to one section. Interval Sounds = randomized one-shots; Ambient Loops = ' +
-        'continuous beds. Filters action "library", and narrows which `template` action "add" ' +
-        'resolves when one name exists in both sections.'
+      'Interval Sounds = randomized one-shots, Ambient Loops = beds; filters library, narrows template.'
     ),
   category: z
     .string()
     .optional()
-    .describe(
-      'Restrict to a category (substring match, e.g. "Forest"). Filters action "library", and ' +
-        'narrows `template` resolution on action "add".'
-    ),
+    .describe('Category substring; filters library, narrows template.'),
   limit: z
     .number()
     .int()
     .min(1)
     .max(200)
     .default(40)
-    .describe('action "library": maximum templates to return (default 40).'),
+    .describe('library: max templates (default 40).'),
   verifyFiles: z
     .boolean()
     .default(false)
-    .describe(
-      'action "list": HEAD-check every pool file and report the missing ones. Off by default ' +
-        'because it costs one request per file — turn it on when a set is silent and you want to know why.'
-    ),
+    .describe('list: HEAD-check every pool file and report the missing (one request per file).'),
 
   // --- set fields (add / update) ----------------------------------------------------------------
-  name: z
-    .string()
-    .optional()
-    .describe('Set name. Required when adding from `files`; optional rename on update.'),
+  name: z.string().optional().describe('Required when adding from files; a rename on update.'),
   files: z
     .array(z.string().min(1))
     .optional()
     .describe(
-      'Data-relative audio paths making up the pool (what upload-asset returns). On UPDATE this ' +
-        'REPLACES the whole pool. A path that does not resolve is kept and warned about, never swapped.'
+      'Data-relative audio paths of the pool (update replaces it); a 404 is kept and warned.'
     ),
   playStyle: z
     .enum(['interval', 'loop'])
     .optional()
     .describe(
-      'interval = a random file, then `interval ± intervalVariation` seconds of silence. ' +
-        'loop = a continuous bed, members overlapped under a crossfade. Default interval.'
+      'interval = one-shots with interval ± intervalVariation s of silence; loop = a crossfaded bed.'
     ),
-  interval: z
-    .number()
-    .optional()
-    .describe('Interval sets: seconds of silence between one-shots (1–3600, default 25).'),
+  interval: z.number().optional().describe('interval: seconds of silence (1–3600, default 25).'),
   intervalVariation: z
     .number()
     .optional()
-    .describe(
-      'Interval sets: ± jitter on the silence, in seconds (default 5). Clamped to never exceed `interval`.'
-    ),
-  crossfade: z
-    .number()
-    .optional()
-    .describe('Loop sets: overlap between members in seconds (0.5–30, default 4).'),
-  volume: z
-    .number()
-    .optional()
-    .describe('Set volume 0–1 (default 0.8), under the Ambient channel.'),
+    .describe('interval: ± seconds of jitter (default 5; clamped to interval).'),
+  crossfade: z.number().optional().describe('loop: overlap in seconds (0.5–30, default 4).'),
+  volume: z.number().optional().describe('0–1 (default 0.8), under the Ambient channel.'),
   volumeVariation: z
     .number()
     .optional()
-    .describe(
-      'Per-play volume jitter 0–1, attenuate-only — never louder than `volume` (default 0).'
-    ),
+    .describe('Per-play volume jitter 0–1, attenuate-only (default 0).'),
   pitchVariation: z
     .number()
     .optional()
-    .describe(
-      'Per-play pitch jitter in OCTAVES, 0–1 (default 0). 0.1 is a subtle, natural wobble.'
-    ),
+    .describe('Per-play pitch jitter in octaves, 0–1 (default 0).'),
   whenToPlay: z
     .enum(['always', 'day', 'night'])
     .optional()
-    .describe(
-      'Darkness gate, re-evaluated live: day = scene darkness < 0.5, night = ≥ 0.5 (default always).'
-    ),
-  active: z.boolean().optional().describe('Whether the set runs at all (default true).'),
+    .describe('Darkness gate: day = darkness < 0.5, night = ≥ 0.5 (default always).'),
+  active: z.boolean().optional().describe('Default true.'),
 });
 
 export class SoundscapeTools {
@@ -162,21 +121,11 @@ export class SoundscapeTools {
       {
         name: 'configure-soundscape',
         description:
-          "Author a scene's atmospheric SOUND SETS — the house module fvtt-mod-soundscape (#6), " +
-          'which does what core Foundry cannot: a POOL of small audio files played at randomized ' +
-          'intervals with silence between (a crow, quiet, a distant dog), or overlapped into a ' +
-          'seamless crossfaded bed. AmbientSound placeables are positional single-file loops and ' +
-          'Playlists have no silence-with-variation, so neither covers this. A scene carries any ' +
-          'number of sets, stacked and independent. Actions: "list" (what the scene has, plus what ' +
-          'would be playing right now and why a set is idle), "library" (browse the prebaked ' +
-          'template catalog by section/category/name), "add" (copy a template by name, or author ' +
-          'one from explicit `files`), "update" (patch one set — named fields only; `files` ' +
-          'replaces the whole pool), "remove" (one set, or "all"). Defaults to the ACTIVE scene ' +
-          "when no sceneIdentifier is given. Out-of-range numbers are CLAMPED to the module's " +
-          'limits and the clamp is reported, not applied silently. Audio paths are HEAD-checked: a ' +
-          '404 is kept and warned about (a track has no sensible substitute). Sets are inert data ' +
-          'without the module, so this WARNS when it is missing or disabled instead of reporting a ' +
-          'working soundscape. GM-only.',
+          "A scene's soundscape sets (the soundscape companion module: pools of audio files played " +
+          'at randomized intervals with silence between, or as a crossfaded bed): list, library, ' +
+          'add (from a template or files), update (named fields; files replaces the pool), remove ' +
+          '(one or "all"). Out-of-range numbers are clamped and reported; a 404 path is kept and ' +
+          'warned; warns when the module is absent. GM-only.',
         inputSchema: toInputSchema(ConfigureSoundscapeSchema),
       },
     ];

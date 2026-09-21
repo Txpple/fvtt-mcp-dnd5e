@@ -43,13 +43,7 @@ const BUDGET = {
  * a family still to be dieted is listed here and its commit removes it, so the set is empty — and
  * this constant gone — when M7 closes. A tool in any other toolset over the budget fails the gate.
  */
-const PROSE_DIET_PENDING = new Set<ToolsetName>([
-  'audio',
-  'chat',
-  'combat',
-  'assets',
-  'organization',
-]);
+const PROSE_DIET_PENDING = new Set<ToolsetName>(['assets', 'organization']);
 
 function surface(toolsets: readonly string[] = []) {
   const host = createHost(resolveHostConfig({}, 'generic'), makeLogger());

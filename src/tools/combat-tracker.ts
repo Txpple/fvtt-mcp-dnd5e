@@ -18,10 +18,7 @@ const ConfigureCombatTrackerSchema = z.object({
   resource: z
     .string()
     .optional()
-    .describe(
-      'Actor system attribute shown beside each combatant in the tracker, e.g. "attributes.hp". ' +
-        'Pass "" to track nothing.'
-    ),
+    .describe('Actor attribute shown beside each combatant ("attributes.hp"); "" = none.'),
   skipDefeated: z
     .boolean()
     .optional()
@@ -36,18 +33,12 @@ const ConfigureCombatTrackerSchema = z.object({
         .string()
         .min(1)
         .optional()
-        .describe(
-          'Animation id, validated against the live registry ' +
-            '(CONFIG.Combat.settings.turnMarkerAnimations — modules can add more). ' +
-            'Core v14 ships "spin", "spinPulse", "pulse".'
-        ),
+        .describe('Animation id, live-validated (core: spin, spinPulse, pulse).'),
       src: z
         .string()
         .optional()
         .describe(
-          'Marker image/video path under Data/, e.g. "worlds/<world>/assets/ui/marker.png". ' +
-            'A path that does not resolve on the server is REJECTED (nothing is written) — ' +
-            'upload-asset first. Pass "" to reset to Foundry\'s stock marker.'
+          'Data-relative image / video path (an unresolvable path is refused); "" = the stock marker.'
         ),
       disposition: z
         .boolean()
@@ -55,7 +46,7 @@ const ConfigureCombatTrackerSchema = z.object({
         .describe("Tint the marker by the combatant's token disposition."),
     })
     .optional()
-    .describe('Turn-marker appearance — the animated ring under the active combatant.'),
+    .describe('The ring under the active combatant.'),
 });
 
 export interface CombatTrackerToolsOptions {
@@ -77,11 +68,9 @@ export class CombatTrackerTools {
       {
         name: 'configure-combat-tracker',
         description:
-          "Read or configure the combat tracker (the world's core.combatTrackerConfig setting): " +
-          'the custom TURN MARKER shown under the active combatant (enabled / animation / image ' +
-          'src / disposition tint), the tracked resource, and skip-defeated. Call with NO ' +
-          'arguments to read the current config and the valid animation ids. Changed fields echo ' +
-          'previous → new; re-applying the current value is a clean no-op. GM-only.',
+          'Read or configure the combat tracker (core.combatTrackerConfig): the turn marker, the ' +
+          'tracked resource, skip-defeated. No arguments reads the config and the valid animation ' +
+          'ids; changes echo previous → new. GM-only.',
         inputSchema: toInputSchema(ConfigureCombatTrackerSchema),
       },
     ];

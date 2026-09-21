@@ -33,20 +33,14 @@ const ImageSchema = z.object({
   path: z
     .string()
     .min(1)
-    .describe(
-      "An absolute LOCAL file path (uploaded through the host's file plane), a Data-relative asset " +
-        'path already in Foundry, or an https:// URL.'
-    ),
-  caption: z.string().optional().describe('Optional caption shown under the image.'),
-  alt: z.string().optional().describe('Optional alt text (defaults to the caption).'),
+    .describe('An absolute local file (uploaded), a Data-relative asset path, or an https URL.'),
+  caption: z.string().optional().describe('Caption under the image.'),
+  alt: z.string().optional().describe('Alt text (default the caption).'),
   embed: z
     .enum(['upload', 'dataUri'])
     .default('upload')
     .describe(
-      'upload (default) = upload a local file to the world through the file plane and link its ' +
-        'public URL (http/Data-relative paths are linked as-is). dataUri = inline the LOCAL file ' +
-        'directly into the message HTML as a base64 data: URI — self-contained, no upload, but it ' +
-        'bloats the message in the world DB, so keep it for small images.'
+      'upload = a local file goes to the world and is linked; dataUri = inlined as base64 (small images).'
     ),
 });
 
@@ -55,55 +49,41 @@ const SendChatMessageSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'Message body as HTML (all formatting is just HTML). Inline rolls like [[/r 1d20+5]] and ' +
-        '@UUID[Type.id]{label} links are enriched on render. Use the images param to attach images ' +
-        'rather than hand-writing <img>.'
+      'HTML; inline rolls ([[/r 1d20+5]]) and @UUID links are enriched. Images: the images param.'
     ),
   visibility: z
     .enum(['public', 'gm', 'blind', 'self'])
     .default('public')
     .describe(
-      'public = everyone; gm = whisper to all GMs; blind = whisper to GMs (mainly meaningful for ' +
-        'rolls — for plain text it behaves like gm but also sets blind); self = only the bridge ' +
-        'user. For "public as a character", use public + speakerActor.'
+      'public = everyone; gm = a whisper to the GMs; blind = gm + the blind flag; self = the bridge user.'
     ),
   speakerActor: z
     .string()
     .optional()
     .describe(
-      'Actor id / exact name / name-substring (or scene token id) to speak AS — the message renders ' +
-        'with that character as speaker (the "public as character" mode).'
+      'Actor id or name (substring ok), or a token id: the message speaks as that character.'
     ),
-  flavor: z
-    .string()
-    .optional()
-    .describe('Optional secondary header line, e.g. "Perception Check".'),
+  flavor: z.string().optional().describe('A secondary header line.'),
   style: z
     .enum(['ooc', 'ic', 'emote', 'other'])
     .optional()
-    .describe('Presentation style (defaults to ic when speakerActor is set, else ooc).'),
+    .describe('Default ic with speakerActor, else ooc.'),
   enrich: z
     .boolean()
     .default(true)
-    .describe('Pre-enrich content (resolve @UUID links and inline rolls) before posting.'),
+    .describe('Resolve @UUID links and inline rolls before posting.'),
   images: z
     .array(ImageSchema)
     .optional()
-    .describe(
-      'Images to embed. Local files are uploaded to the world through the file plane and linked; Data-relative ' +
-        'paths and https URLs are linked directly. PRIVACY: uploaded files are served publicly with ' +
-        'no auth.'
-    ),
+    .describe('Images to embed; an uploaded file is served publicly, without auth.'),
   imageFolder: z
     .string()
     .optional()
-    .describe(
-      'Data-relative folder for uploaded local images (default "worlds/<world>/assets/chat").'
-    ),
+    .describe('Data-relative folder for uploads (default "worlds/<world>/assets/chat").'),
   overwriteImages: z
     .boolean()
     .default(false)
-    .describe('Overwrite an existing uploaded image of the same name instead of refusing.'),
+    .describe('Overwrite an existing upload of the same name.'),
 });
 
 const ListChatMessagesSchema = z.object({
@@ -113,7 +93,7 @@ const ListChatMessagesSchema = z.object({
     .positive()
     .max(500)
     .default(50)
-    .describe('Return the most recent N messages (chronological, newest last).'),
+    .describe('The most recent N (newest last).'),
   sinceTimestamp: z
     .number()
     .int()
@@ -122,36 +102,22 @@ const ListChatMessagesSchema = z.object({
   contentMode: z
     .enum(['html', 'text', 'none'])
     .default('text')
-    .describe(
-      'Return raw content HTML, HTML stripped to text, or omit content (cheap on big logs).'
-    ),
+    .describe('Raw HTML, text, or no content.'),
 });
 
 const DeleteChatMessagesSchema = z
   .object({
-    ids: z
-      .array(z.string().min(1))
-      .optional()
-      .describe('Exact message ids to delete (a single id is just an array of one).'),
+    ids: z.array(z.string().min(1)).optional().describe('Message ids.'),
     beforeTimestamp: z
       .number()
       .int()
       .optional()
-      .describe(
-        'Delete all messages with timestamp (ms epoch) older than this — purge an old log. ' +
-          'Bulk + irreversible, so requires confirm:true.'
-      ),
-    clearAll: z
-      .boolean()
-      .default(false)
-      .describe('Delete EVERY chat message. Requires confirm:true.'),
+      .describe('Every message older than this epoch ms (needs confirm).'),
+    clearAll: z.boolean().default(false).describe('Every message (needs confirm).'),
     confirm: z
       .boolean()
       .default(false)
-      .describe(
-        'Must be true to run a bulk delete (clearAll or beforeTimestamp) — an explicit guard, both are ' +
-          'irreversible. Not needed for a targeted ids delete.'
-      ),
+      .describe('Required by the two bulk modes (irreversible); not by ids.'),
   })
   .refine(a => (a.ids && a.ids.length > 0) || a.beforeTimestamp !== undefined || a.clearAll, {
     message: 'Provide ids, beforeTimestamp, or clearAll.',
@@ -163,31 +129,26 @@ const ExportChatLogSchema = z
       .enum(['markdown', 'html', 'json', 'plaintext'])
       .default('markdown')
       .describe(
-        'Transcript format. markdown/plaintext strip HTML (roll totals kept); html keeps raw ' +
-          'message markup (unstyled, not the rendered card); json is the structured records.'
+        'markdown / plaintext strip HTML (roll totals kept); html is the raw markup; json the records.'
       ),
     localPath: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'Absolute local destination path (parent dirs created). At least one destination required.'
-      ),
+      .describe('Absolute local path (parent directories created).'),
     remotePath: z
       .string()
       .min(1)
       .optional()
       .describe(
-        'Destination relative to the Foundry Data/ root for a copy through the file plane, ' +
-          'e.g. "worlds/your-world/exports/session-3.md". Returns its public URL. (Through the ' +
-          'bridge plane, md / txt / json only — no html.)'
+        'Data-relative path for a copy through the file plane (returns its URL; no html on the bridge plane).'
       ),
     limit: z
       .number()
       .int()
       .positive()
       .optional()
-      .describe('Export only the most recent N messages (omit for the whole log).'),
+      .describe('The most recent N (default the whole log).'),
     sinceTimestamp: z
       .number()
       .int()
@@ -196,7 +157,7 @@ const ExportChatLogSchema = z
     overwrite: z
       .boolean()
       .default(false)
-      .describe('Allow overwriting an existing file at either destination.'),
+      .describe('Overwrite an existing file at either destination.'),
   })
   .refine(a => a.localPath || a.remotePath, {
     message: 'Provide localPath, remotePath, or both.',
@@ -205,39 +166,26 @@ const ExportChatLogSchema = z
 const PostItemCardSchema = z.object({
   actor: actorTarget,
   item: z.string().min(1).describe('Item / feature / spell id or exact name on that actor.'),
-  activity: z
-    .string()
-    .optional()
-    .describe('Optional activity id/name when the item has several (default: the first activity).'),
+  activity: z.string().optional().describe('Activity id or name (default the first).'),
   action: z
     .enum(['use', 'attack', 'damage'])
     .default('use')
     .describe(
-      'use = post the usage card with its buttons (primary path); attack = roll the attack to chat; ' +
-        'damage = roll damage to chat. attack/damage auto-targeting is degraded headless (no targets).'
+      'use = the usage card with its buttons; attack / damage = roll it to chat (no auto-targets headless).'
     ),
-  consume: z
-    .boolean()
-    .default(false)
-    .describe('Spend the item/spell resources (uses/slots). Default false = just post the card.'),
-  critical: z
-    .boolean()
-    .default(false)
-    .describe('For action=damage: roll a critical (best-effort).'),
+  consume: z.boolean().default(false).describe('Spend the uses / slots (default false).'),
+  critical: z.boolean().default(false).describe('damage: roll a critical.'),
 });
 
 const RequestRollSchema = z
   .object({
     kind: z
       .enum(['save', 'check', 'skill'])
-      .describe('save = ability saving throw; check = ability check; skill = skill check.'),
-    ability: z
-      .string()
-      .optional()
-      .describe('Ability key for save/check, e.g. "dex", "wis", "con".'),
-    skill: z.string().optional().describe('Skill key for kind=skill, e.g. "ste", "prc", "ath".'),
-    dc: z.number().int().positive().optional().describe('Target DC shown on the card.'),
-    flavor: z.string().optional().describe('Optional label, e.g. "Trap! Reflexes".'),
+      .describe('save and check take ability; skill takes skill.'),
+    ability: z.string().optional().describe('Ability key ("dex", "wis").'),
+    skill: z.string().optional().describe('Skill key ("ste", "prc").'),
+    dc: z.number().int().positive().optional().describe('DC shown on the card.'),
+    flavor: z.string().optional().describe('A label.'),
     visibility: z
       .enum(['public', 'gm'])
       .default('public')
@@ -273,53 +221,42 @@ export class ChatTools {
       {
         name: 'send-chat-message',
         description:
-          'Post a message to the Foundry chat log as the GM bridge user. Content is HTML. Choose a ' +
-          'visibility mode (public / gm whisper / blind / self) and optionally speak AS a character ' +
-          '(speakerActor). Embed images via the images param (local files upload through the file plane; ' +
-          'Data-relative paths and https URLs link directly — uploaded files are PUBLIC). GM-only.',
+          'Post an HTML message to the chat log as the bridge user, with a visibility, optionally as ' +
+          'a character (speakerActor), with images (an uploaded file is public). GM-only.',
         inputSchema: toInputSchema(SendChatMessageSchema),
       },
       {
         name: 'list-chat-messages',
         description:
-          'List recent chat messages (id, author, time, whisper/blind, content preview). Use to ' +
-          'find ids for delete, verify a post, or preview before export. contentMode:"none" keeps ' +
-          'it cheap on a huge log.',
+          'Recent chat messages: id, author, time, whisper / blind, content (per contentMode).',
         inputSchema: toInputSchema(ListChatMessagesSchema),
       },
       {
         name: 'delete-chat-messages',
         description:
-          'Delete chat messages: by exact id(s) (a single id is an array of one), or all messages ' +
-          'older than a timestamp (beforeTimestamp + confirm:true — handy for the big-log perf drag ' +
-          'on a hosted box), or the entire log (clearAll + confirm:true). Both bulk modes need confirm:true. ' +
-          'IRREVERSIBLE. GM-only.',
+          'Delete chat messages by id, older than a timestamp, or all; the bulk modes need ' +
+          'confirm:true. Irreversible. GM-only.',
         inputSchema: toInputSchema(DeleteChatMessagesSchema),
       },
       {
         name: 'export-chat-log',
         description:
-          'Export the chat transcript to a LOCAL absolute file AND/OR a Data/ path on the host ' +
-          '(through its file plane; returns the public URL). Formats: markdown | html | json | ' +
-          'plaintext. Refuses to overwrite an existing file at either destination unless ' +
-          "overwrite:true. The remote copy needs the host's file plane configured.",
+          'Export the chat transcript (markdown / html / json / plaintext) to a local file and/or a ' +
+          'Data path through the file plane. Refuses an existing file unless overwrite:true.',
         inputSchema: toInputSchema(ExportChatLogSchema),
       },
       {
         name: 'post-item-card',
         description:
-          "Post a rich dnd5e card for an actor's item/feature/spell with WORKING buttons " +
-          '(Attack/Damage/Apply-Effects), or roll an attack/damage to chat. Drives the dnd5e Activity ' +
-          'system — the only way to get interactive buttons without a module. Items with no activity ' +
-          'return a clear reason (use send-chat-message for a plain card). GM-only.',
+          "Post an actor item's dnd5e usage card with its working buttons, or roll its attack / " +
+          'damage to chat; an item with no activity says so. GM-only.',
         inputSchema: toInputSchema(PostItemCardSchema),
       },
       {
         name: 'request-roll',
         description:
-          'Post a click-to-roll request card (saving throw / ability check / skill) that players ' +
-          'click to roll their OWN check — the table-facing "everyone make a DEX save (DC 15)" ' +
-          'prompt. Uses the dnd5e inline roll enricher. GM-only.',
+          'Post a click-to-roll request card (save / check / skill, with a DC) players click to ' +
+          'roll their own. GM-only.',
         inputSchema: toInputSchema(RequestRollSchema),
       },
     ];

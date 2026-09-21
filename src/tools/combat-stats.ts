@@ -26,34 +26,11 @@ const GetCombatStatsSchema = z.object({
   since: z
     .string()
     .optional()
-    .describe(
-      'Only scan messages at/after this moment — an ISO date ("2026-08-27") or epoch-ms. ' +
-        'Omit to scan the whole log (the ledger starts when the stamps do, 2026-08-27; older ' +
-        'messages are counted as legacy and excluded).'
-    ),
-  combat: z
-    .string()
-    .optional()
-    .describe(
-      "Report a single combat by its combat id (the ledger keys buckets by the stamp's " +
-        '"combatId:round:turn"). Also accepts "out-of-combat" for the null bucket. Omit for all.'
-    ),
-  sections: z
-    .array(z.enum(SECTIONS))
-    .optional()
-    .describe(
-      'Which report sections to render (default all): damage, healing, flips, spends, moments ' +
-        '(masteries/holds/saves/concentration counts), bless (buff-die margin flips), flavor ' +
-        '(nat 20s/1s, advantage economy, death saves).'
-    ),
-  actor: z
-    .string()
-    .optional()
-    .describe('Filter report lines to actors whose name contains this (case-insensitive).'),
-  includeLedger: z
-    .boolean()
-    .default(false)
-    .describe('Append the folded ledger as JSON (for charts or downstream analysis).'),
+    .describe('Only messages at or after this ISO date or epoch ms (default: the whole log).'),
+  combat: z.string().optional().describe('One combat id, or "out-of-combat"; default all.'),
+  sections: z.array(z.enum(SECTIONS)).optional().describe('Sections to render (default all).'),
+  actor: z.string().optional().describe('Only actors whose name contains this (case-insensitive).'),
+  includeLedger: z.boolean().default(false).describe('Append the folded ledger as JSON.'),
 });
 
 /* --- the fold (pure, unit-tested) ----------------------------------------------------------- */
@@ -671,13 +648,10 @@ export class CombatStatsTools {
       {
         name: 'get-combat-stats',
         description:
-          "Fold Battle Flow's stat-stamped chat messages into per-combat analytics: damage " +
-          'dealt/taken (with per-round rate), healing + overheal, verdict-flip credits, spend ' +
-          'economy (resource pools AND spell slots), buff-die (Bless) margin flips, and session ' +
-          'flavor (nat 20s/1s, advantage economy, death saves). Read-only scan; reverted ' +
-          'applications are subtracted; unlinked monsters aggregate by archetype. GM-facing — ' +
-          'filter at call time via sections/actor/combat/since. includeLedger:true appends the ' +
-          'folded JSON for charts.',
+          "Fold the Battle Flow companion module's stat-stamped chat messages into per-combat " +
+          'analytics: damage dealt / taken, healing, verdict flips, spends, Bless margins, flavor ' +
+          '(nat 20s / 1s, advantage, death saves). Read-only; reverted applications are subtracted; ' +
+          'unlinked monsters aggregate by archetype.',
         inputSchema: toInputSchema(GetCombatStatsSchema),
       },
     ];
