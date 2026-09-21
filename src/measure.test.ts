@@ -29,10 +29,12 @@ import { ALWAYS_ON } from './toolsets.js';
 const BUDGET = {
   // 283,945 at 2.2.0; +4,379 for the closed top level (`additionalProperties:false` × 151, M2 —
   // the cost the plan accepted for refusing unknown arguments); 205,248 after M7 (the prose diet:
-  // every leaf ≤ 120, every description ≤ 400 — the test below; the M7 target was ≤ 230,000).
-  // M8 (CRUD consolidation) must keep each family's advertised bytes ≤ today's.
-  toolsListChars: 230_000,
-  nameChars: 11_200, // 11,147 at 2.2.0 — M8 (CRUD consolidation) → ≤ 7,000
+  // every leaf ≤ 120, every description ≤ 400 — the test below; the M7 target was ≤ 230,000);
+  // 201,562 after M8 (the CRUD consolidation kept every family ≤ its own before) — the ceiling
+  // lowered to 205,000 so the M8 gain cannot leak back.
+  toolsListChars: 205_000,
+  // 11,147 at 2.2.0; 6,153 after M8 (151 names → 81; the target was ≤ 7,000, now the ceiling)
+  nameChars: 7_000,
   skillDescriptionChars: 8_000, // 15,381 at 2.2.0; 7,998 after M3 (all 17 rewritten, 120/120 trigger phrases kept)
   // the always-on toolset — every registration carries it, however narrow (10,814 as `world`;
   // M7 split it into `session` + the opt-in `settings` and set the ceiling at 2,100)
