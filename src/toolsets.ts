@@ -79,13 +79,6 @@ export const TOOLSETS = {
     'get-scene-dimensions',
     'screenshot-scene',
     'manage-placeables',
-    'create-region',
-    'list-regions',
-    'update-region',
-    'delete-region',
-    'create-teleporter',
-    'add-region-behavior',
-    'remap-teleporters',
   ],
   /** Journals, quests, handouts. */
   journals: [

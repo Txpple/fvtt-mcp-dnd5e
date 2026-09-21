@@ -99,16 +99,6 @@ export function formatListPlaceableLines(r: ListResult, noun: string): string {
   return `${head}: ${columns.join(' ')}\n${rows.join('\n')}`;
 }
 
-/**
- * Pre-M8 list: the structured result straight through (ids + fields as JSON), or a scene miss.
- * The kinds still on their per-op tools (sounds, tokens, notes, regions) keep this until their
- * family commit moves them to the line shape above; it goes with the last of them.
- */
-export function formatListPlaceables(r: ListResult, noun: string): unknown {
-  if (r?.found === false) sceneMiss(r?.notFound ?? '', `No ${noun}s listed.`);
-  return r;
-}
-
 /** One cell of a list line: `-` for a missing value, a bare token where it can be, JSON otherwise. */
 function cell(v: unknown): string {
   if (v === undefined || v === null) return '-';

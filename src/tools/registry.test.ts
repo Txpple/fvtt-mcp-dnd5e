@@ -50,7 +50,7 @@ function draft2020Violations(node: unknown, path: string): string[] {
 }
 
 describe('tool registry', () => {
-  it('advertises 124 uniquely-named tools (matches the documented surface)', () => {
+  it('advertises 117 uniquely-named tools (matches the documented surface)', () => {
     const { tools } = build();
     const names = tools.map(t => t.name);
     expect(new Set(names).size).toBe(names.length); // no duplicate names
@@ -102,9 +102,9 @@ describe('tool registry', () => {
     //   owner's 2026-09-15 decision) + manage-calendar (read / advance / set the in-world date)
     // − 15 (M8, 2026-09-21): the tiles / lights / walls / drawings CRUD (16 tools) became the
     //   kind × action members of ONE tool, manage-placeables (src/tools/_union.ts); the other
-    //   placeable kinds join it in their own family commits — sounds (−4), notes (−4),
-    //   tokens (−4) …
-    expect(names.length).toBe(124);
+    //   placeable kinds joined it in their own family commits — sounds (−4), notes (−4),
+    //   tokens (−4), regions (−7 incl. the teleporter / behavior / remap specials): 35 → 1.
+    expect(names.length).toBe(117);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -123,12 +123,6 @@ describe('tool registry', () => {
     const { tools, handlers } = build();
     expect(tools.map(t => t.name)).toContain('read-pack');
     expect(typeof handlers['read-pack']).toBe('function');
-  });
-
-  it('registers remap-teleporters (the scene-pack teleporter remap pass, tom-cartos-import M3)', () => {
-    const { tools, handlers } = build();
-    expect(tools.map(t => t.name)).toContain('remap-teleporters');
-    expect(typeof handlers['remap-teleporters']).toBe('function');
   });
 
   it('registers the legend→pins pipeline (get-scene-dimensions + the notes kind of manage-placeables, tom-cartos-import M4 / M6)', async () => {
@@ -166,30 +160,51 @@ describe('tool registry', () => {
     expect(typeof handlers['screenshot-scene']).toBe('function');
   });
 
-  it('registers the region/teleporter authoring tools (existing-scene regions)', () => {
-    const { tools, handlers } = build();
-    const names = new Set(tools.map(t => t.name));
-    for (const name of [
+  it('registers the region authoring + the teleporter specials as the regions kind of manage-placeables (tom-cartos-import M3)', async () => {
+    const { tools, dispatch } = build();
+    const union = tools.find(t => t.name === 'manage-placeables')!.inputSchema;
+    const regionActions = union.anyOf
+      .filter((m: any) => m.properties.kind.const === 'regions')
+      .map((m: any) => m.properties.action.const);
+    expect(regionActions).toEqual([
+      'create',
+      'list',
+      'update',
+      'delete',
       'create-teleporter',
-      'create-region',
-      'list-regions',
-      'update-region',
-      'delete-region',
-    ]) {
-      expect(names.has(name)).toBe(true);
-      expect(typeof handlers[name]).toBe('function');
-    }
+      'add-behavior',
+      'remap-teleporters',
+    ]);
+    // a special carries its own target: remap takes sourceModule and nothing else
+    await expect(
+      dispatch('manage-placeables', {
+        kind: 'regions',
+        action: 'remap-teleporters',
+        sceneIdentifier: 'x',
+      })
+    ).rejects.toThrow(
+      'manage-placeables (kind "regions", action "remap-teleporters"): unknown argument "sceneIdentifier" — it takes: kind, action, sourceModule.'
+    );
   });
 
   it('registers the placeable tools over the kernel: manage-placeables (kind × action) + the pre-M8 kinds', () => {
     const { tools, handlers } = build();
     const names = new Set(tools.map(t => t.name));
-    for (const name of ['manage-placeables', 'list-regions']) {
+    for (const name of ['manage-placeables']) {
       expect(names.has(name)).toBe(true);
       expect(typeof handlers[name]).toBe('function');
     }
     // the consolidated kinds no longer advertise a per-op tool
-    for (const kind of ['tiles', 'lights', 'walls', 'drawings', 'sounds', 'notes', 'tokens']) {
+    for (const kind of [
+      'tiles',
+      'lights',
+      'walls',
+      'drawings',
+      'sounds',
+      'notes',
+      'tokens',
+      'regions',
+    ]) {
       for (const verb of ['create', 'list', 'update', 'delete']) {
         expect(names.has(`${verb}-${kind}`), `${verb}-${kind}`).toBe(false);
       }
@@ -204,9 +219,18 @@ describe('tool registry', () => {
       'sounds',
       'notes',
       'tokens',
+      'regions',
     ]);
-    expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
-    expect(union.anyOf).toHaveLength(28);
+    expect(union.properties.action.enum).toEqual([
+      'create',
+      'list',
+      'update',
+      'delete',
+      'create-teleporter',
+      'add-behavior',
+      'remap-teleporters',
+    ]);
+    expect(union.anyOf).toHaveLength(35);
   });
 
   it('registers the journal page-visibility tools + update-folder (dogfood tooling gaps)', () => {
@@ -362,7 +386,7 @@ describe('tool registry', () => {
       'manage-placeables (kind "tiles", action "list"): unknown argument "ids" — it takes: kind, action, sceneIdentifier.'
     );
     await expect(dispatch('manage-placeables', { kind: 'roofs', action: 'list' })).rejects.toThrow(
-      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got "roofs").'
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens", "regions" (got "roofs").'
     );
     await expect(dispatch('manage-placeables', { kind: 'walls' })).rejects.toThrow(
       'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "walls" (got nothing).'
@@ -508,7 +532,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(124);
+    expect(tools.length).toBe(117);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

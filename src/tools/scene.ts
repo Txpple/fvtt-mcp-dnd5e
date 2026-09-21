@@ -168,7 +168,7 @@ const RegionSidecarSchema = z
       )
       .optional()
       .describe(
-        'Behaviors carried whole; teleportToken destinations are rewritten by remap-teleporters.'
+        'Behaviors carried whole; teleportToken destinations are rewritten by the teleporter remap.'
       ),
     _id: z
       .string()
@@ -234,7 +234,7 @@ const CreateSceneSchema = z.object({
     .array(RegionSidecarSchema)
     .optional()
     .describe(
-      'Regions (teleporters included), each stamped with its source id for remap-teleporters.'
+      'Regions (teleporters included), each stamped with its source id for the teleporter remap.'
     ),
   placeablesPath: z
     .string()
@@ -447,7 +447,7 @@ export class SceneTools {
     // Regions can hold cross-scene teleporters whose destinations need a post-import remap pass.
     const teleportHint =
       (result.regionsCreated ?? 0) > 0
-        ? '\n  ↪ regions imported — run remap-teleporters once after all scenes to link teleporters'
+        ? '\n  ↪ regions imported — run manage-placeables (regions, remap-teleporters) once after all scenes to link teleporters'
         : '';
     const placeableErrs = Array.isArray(result?.placeableErrors)
       ? result.placeableErrors.map((e: string) => `\n  ⚠ ${e}`).join('')

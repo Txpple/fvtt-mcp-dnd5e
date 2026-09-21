@@ -337,3 +337,21 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   same report and the old verify never viewed the scene). Live: verify-placeables-tooling
   **78/78**, verify-token-tooling 11/11, verify-token-reskin 10/10, integration 80 passed /
   6 skipped.
+- 2026-09-21 — **M8 regions** into `manage-placeables` (`kind: "regions"`) — the placeables
+  done: **35 tools → 1**. The four CRUD ops plus the three specials as their own actions
+  (`create-teleporter`, `add-behavior`, `remap-teleporters` — regions-only; another kind
+  refuses them by name, and the two that carry their own targets advertise no
+  `sceneIdentifier`), the union 38,362 → 48,359 (+9,997) against the seven's **10,026**
+  (−0.3% — the naive fold was 32 over; two phrases the update member repeated from its leaf
+  paid for it); tools/list 203,763, names 117 (8,747 chars). `update` takes `patches` (the
+  single-target `regionId` form and its shape echo are gone; list reads the shape back);
+  `delete` takes `ids`; the region / scene misses of add-behavior and create-teleporter are
+  `isError` (§3). The legacy per-op module contract and the JSON list pass-through are deleted
+  with the last kind. Re-pointed: scene-builder (8 lines), tom-cartos-import (5), scripts/README
+  (2), create-scene's three prose lines that named `remap-teleporters`; skills-matrix 0 / 0.
+  Live: verify-placeables-tooling **87/87** (G: region create / list / update-by-rect / delete,
+  a same-scene one-way teleporter, a teleportTo behavior resolved onto it, a no-op remap, the
+  region-miss refusal), verify-region-tooling 22/22, verify-region-effects 37/37,
+  verify-teleporter-scene-fields 13/13, integration 80 passed / 6 skipped. What a deferred
+  client now loads on first use of any placeable: 48.4k chars ≈ 13.4k tokens, once per session.
+  Next: macros → folders → playlists → cards → tables → items → journals → scenes → actors.

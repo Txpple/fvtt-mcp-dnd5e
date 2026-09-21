@@ -20,11 +20,11 @@ restart. One world-driver at a time; temp documents are tagged `ZZ-*` and cleane
 | `verify-item-tooling` | the item CRUD family |
 | `verify-actor-tooling` | the actor CRUD family + projections |
 | `verify-pc-build` | `create-pc` / `level-up-pc` / advancement (zero unresolved `@scale`) |
-| `verify-teleporter-scene-fields` | `create-teleporter` / `remap-teleporters` and the scene fields they read |
+| `verify-teleporter-scene-fields` | the teleporter create / remap (`manage-placeables`, kind regions) and the scene fields they read |
 | `verify-placeables-tooling` | the 32 placeable tools on the active scene |
 | `verify-scene-tools` | `create-scene` (sidecar by `placeablesPath`), `update-scene`, the view tools |
 | `verify-cast-activity` | `add-free-cast` and the cast activity |
-| `verify-region-tooling` | `create-region` / `add-region-behavior` / `update-region` |
+| `verify-region-tooling` | the regions kind of `manage-placeables`: create / add-behavior / update |
 
 ## The other tool verifies (≈ 45)
 

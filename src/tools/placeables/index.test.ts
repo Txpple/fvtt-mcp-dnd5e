@@ -24,23 +24,10 @@ function build(response: any = {}) {
 }
 
 describe('PlaceableTools.getToolDefinitions', () => {
-  it('exposes the COMPLETE placeable library: manage-placeables (7 kinds × 4 actions) + the pre-M8 regions', () => {
+  it('exposes the COMPLETE placeable library as ONE tool: 8 kinds × create / list / update / delete + the region specials', () => {
     const { tools } = build();
     const defs = tools.getToolDefinitions();
-    const names = defs.map(t => t.name).sort();
-    expect(names).toEqual(
-      [
-        MANAGE_PLACEABLES,
-        // Region + teleporter special ops
-        'create-region',
-        'list-regions',
-        'update-region',
-        'delete-region',
-        'create-teleporter',
-        'add-region-behavior',
-        'remap-teleporters',
-      ].sort()
-    );
+    expect(defs.map(t => t.name)).toEqual([MANAGE_PLACEABLES]);
     const union = defs.find(d => d.name === MANAGE_PLACEABLES)!.inputSchema as any;
     expect(union.properties.kind.enum).toEqual([
       'tiles',
@@ -50,31 +37,54 @@ describe('PlaceableTools.getToolDefinitions', () => {
       'sounds',
       'notes',
       'tokens',
+      'regions',
     ]);
-    expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
+    expect(union.properties.action.enum).toEqual([
+      'create',
+      'list',
+      'update',
+      'delete',
+      'create-teleporter',
+      'add-behavior',
+      'remap-teleporters',
+    ]);
     // the shared target leaf is described once, at the root; the members carry it bare
     expect(union.properties.sceneIdentifier.description).toMatch(/^Scene id or exact name/);
     expect(
       union.anyOf.map((m: any) => `${m.properties.kind.const}/${m.properties.action.const}`)
-    ).toEqual(
-      ['tiles', 'lights', 'walls', 'drawings', 'sounds', 'notes', 'tokens'].flatMap(k =>
-        ['create', 'list', 'update', 'delete'].map(a => `${k}/${a}`)
-      )
-    );
+    ).toEqual([
+      ...['tiles', 'lights', 'walls', 'drawings', 'sounds', 'notes', 'tokens', 'regions'].flatMap(
+        k => ['create', 'list', 'update', 'delete'].map(a => `${k}/${a}`)
+      ),
+      'regions/create-teleporter',
+      'regions/add-behavior',
+      'regions/remap-teleporters',
+    ]);
     for (const m of union.anyOf) {
       expect(m.description.length).toBeGreaterThan(10);
       expect(m.additionalProperties).toBe(false);
-      expect(m.properties.sceneIdentifier).toEqual({ type: 'string' });
       expect(m.required.slice(0, 2)).toEqual(['kind', 'action']);
+      // the shared leaf, bare, on every member that takes it (the two specials with their own
+      // targets — create-teleporter's endpoints, remap's sourceModule — do not)
+      const special = ['create-teleporter', 'remap-teleporters'].includes(
+        m.properties.action.const
+      );
+      if (special) expect(m.properties.sceneIdentifier).toBeUndefined();
+      else expect(m.properties.sceneIdentifier).toEqual({ type: 'string' });
     }
   });
 
-  it('every definition has an object inputSchema and a dispatchable handler', async () => {
-    const { tools } = build({});
+  it('the one definition has an object inputSchema; handle() routes it and refuses any other name', async () => {
+    const { tools } = build({ found: true, sceneId: 's', sceneName: 'S', items: [] });
     for (const def of tools.getToolDefinitions()) {
       expect((def.inputSchema as any).type).toBe('object');
-      expect(typeof (tools as any).handlers[def.name]).toBe('function');
     }
+    expect(await tools.handle(MANAGE_PLACEABLES, { kind: 'tiles', action: 'list' })).toBe(
+      '0 tile(s) on "S" (s).'
+    );
+    await expect(tools.handle('list-tiles', {})).rejects.toThrow(
+      'Unknown placeable tool: list-tiles'
+    );
   });
 });
 
@@ -240,13 +250,13 @@ describe('manage-placeables — tiles', () => {
   it('refuses an unknown kind / action / argument by name, naming what it takes', async () => {
     const { manage, tools } = build();
     await expect(manage('roofs', 'list')).rejects.toThrow(
-      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got "roofs").'
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens", "regions" (got "roofs").'
     );
     await expect(manage('tiles', 'move')).rejects.toThrow(
       'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "tiles" (got "move").'
     );
     await expect(tools.handle(MANAGE_PLACEABLES, { action: 'list' })).rejects.toThrow(
-      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got nothing)'
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens", "regions" (got nothing)'
     );
     // the old per-kind key is an unknown argument now — refused, never silently dropped
     await expect(
@@ -936,18 +946,18 @@ describe('manage-placeables — notes', () => {
   });
 });
 
-describe('region handlers', () => {
-  it('create-region forwards regions as {items} and lists created ids', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — regions', () => {
+  it('create forwards {items} and lists created ids', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 's1',
       sceneName: 'Cave',
       created: 1,
       items: [{ id: 'r1', name: 'Trap' }],
     });
-    const out = await tools.handle('create-region', {
+    const out = await manage('regions', 'create', {
       sceneIdentifier: 'Cave',
-      regions: [
+      items: [
         { name: 'Trap', shapes: [{ type: 'rectangle', x: 0, y: 0, width: 140, height: 140 }] },
       ],
     });
@@ -957,24 +967,21 @@ describe('region handlers', () => {
     expect(out).toContain('r1 — Trap');
   });
 
-  it('create-region rejects a region with no shapes (schema) and reports a missing scene', async () => {
-    const { tools } = build({ success: true, created: 0, notFound: 'Nowhere' });
+  it('create rejects a region with no shapes (schema) and reports a missing scene', async () => {
+    const { manage } = build({ success: true, created: 0, notFound: 'Nowhere' });
     await expect(
-      tools.handle('create-region', {
-        sceneIdentifier: 'Cave',
-        regions: [{ name: 'X', shapes: [] }],
-      })
+      manage('regions', 'create', { sceneIdentifier: 'Cave', items: [{ name: 'X', shapes: [] }] })
     ).rejects.toThrow();
     await expect(
-      tools.handle('create-region', {
+      manage('regions', 'create', {
         sceneIdentifier: 'Nowhere',
-        regions: [{ shapes: [{ type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }] }],
+        items: [{ shapes: [{ type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }] }],
       })
     ).rejects.toThrow('Scene not found');
   });
 
-  it('update-region wraps the single region into a kernel patch and reports the new shape', async () => {
-    const { tools, calls } = build({
+  it('update forwards {patches} (the rect convenience included) and reports matched / updated', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 's1',
       sceneName: 'Cave',
@@ -989,35 +996,40 @@ describe('region handlers', () => {
         },
       ],
     });
-    const out = await tools.handle('update-region', {
+    const out = await manage('regions', 'update', {
       sceneIdentifier: 'Cave',
-      regionId: 'r1',
-      rect: { x: 910, y: 910, widthCells: 3 },
+      patches: [{ id: 'r1', rect: { x: 910, y: 910, widthCells: 3 } }],
     });
     expect(calls[0][0]).toBe('updateSceneRegions');
     expect(calls[0][1]).toEqual({
       sceneIdentifier: 'Cave',
       patches: [{ id: 'r1', rect: { x: 910, y: 910, widthCells: 3 } }],
     });
-    expect(out).toContain('Updated region r1');
-    expect(out).toContain('420×140px');
+    expect(out).toContain('Updated 1 of 1 matched region(s) on "Cave" (s1)');
   });
 
-  it('update-region reports region-not-found and rejects an empty patch (refine)', async () => {
-    const { tools } = build({ success: true, matched: 0, updated: 0, notFoundIds: ['rZ'] });
-    const out = await tools.handle('update-region', {
-      sceneIdentifier: 'Cave',
-      regionId: 'rZ',
-      name: 'x',
+  it('update reports region-not-found and rejects an empty patch (refine)', async () => {
+    const { manage } = build({
+      success: true,
+      sceneId: 's1',
+      sceneName: 'Cave',
+      matched: 0,
+      updated: 0,
+      notFoundIds: ['rZ'],
     });
-    expect(out).toContain('Region not found');
+    const out = await manage('regions', 'update', {
+      sceneIdentifier: 'Cave',
+      patches: [{ id: 'rZ', name: 'x' }],
+    });
+    expect(out).toContain('No regions matched');
+    expect(out).toContain('not found: rZ');
     await expect(
-      tools.handle('update-region', { sceneIdentifier: 'Cave', regionId: 'r1' })
-    ).rejects.toThrow();
+      manage('regions', 'update', { sceneIdentifier: 'Cave', patches: [{ id: 'r1' }] })
+    ).rejects.toThrow('Provide at least one field to change besides id');
   });
 
-  it('delete-region reports missing ids AND the orphaned-teleporter warning', async () => {
-    const { tools, calls } = build({
+  it('delete reports missing ids AND the orphaned-teleporter warning', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 's1',
       sceneName: 'Cave',
@@ -1027,10 +1039,7 @@ describe('region handlers', () => {
         'teleporter "Teleporter → Cave" on "Bridge" still points at deleted region r1 — …',
       ],
     });
-    const out = await tools.handle('delete-region', {
-      sceneIdentifier: 'Cave',
-      regionIds: ['r1', 'rZ'],
-    });
+    const out = await manage('regions', 'delete', { sceneIdentifier: 'Cave', ids: ['r1', 'rZ'] });
     expect(calls[0][0]).toBe('deleteSceneRegions');
     expect(calls[0][1]).toEqual({ sceneIdentifier: 'Cave', ids: ['r1', 'rZ'] });
     expect(out).toContain('Deleted 1 region');
@@ -1038,28 +1047,54 @@ describe('region handlers', () => {
     expect(out).toContain('still points at deleted region');
   });
 
-  it('list-regions passes the kernel list through and reports a missing scene', async () => {
-    const result = {
+  it('list renders one line per region with the shapes / behaviors as JSON cells, and reports a missing scene', async () => {
+    const { manage } = build({
       found: true,
       sceneId: 's1',
       sceneName: 'Cave',
       count: 1,
-      items: [{ id: 'r1', name: 'Trap', shapes: [], behaviors: [] }],
-    };
-    const { tools } = build(result);
-    const out = await tools.handle('list-regions', { sceneIdentifier: 'Cave' });
-    expect(out).toEqual(result);
-
-    const { tools: t2 } = build({ found: false, notFound: 'Nope' });
-    await expect(t2.handle('list-regions', { sceneIdentifier: 'Nope' })).rejects.toThrow(
+      items: [
+        {
+          id: 'r1',
+          name: 'Trap',
+          shapes: [{ type: 'rectangle', x: 0, y: 0, width: 140, height: 140 }],
+          behaviors: [{ id: 'b1', type: 'teleportToken', destinations: ['Scene.s2.Region.rB'] }],
+        },
+      ],
+    });
+    expect(await manage('regions', 'list', { sceneIdentifier: 'Cave' })).toBe(
+      '1 region(s) on "Cave" (s1): id name shapes behaviors\n' +
+        'r1 Trap [{"type":"rectangle","x":0,"y":0,"width":140,"height":140}] [{"id":"b1","type":"teleportToken","destinations":["Scene.s2.Region.rB"]}]'
+    );
+    const { manage: m2 } = build({ found: false, notFound: 'Nope' });
+    await expect(m2('regions', 'list', { sceneIdentifier: 'Nope' })).rejects.toThrow(
       'Scene not found'
+    );
+  });
+
+  it('the three special actions are regions-only: another kind refuses them by name', async () => {
+    const { manage } = build();
+    await expect(manage('tiles', 'remap-teleporters', { sourceModule: 'x' })).rejects.toThrow(
+      'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "tiles" (got "remap-teleporters").'
+    );
+    await expect(manage('regions', 'roll')).rejects.toThrow(
+      'action must be one of "create", "list", "update", "delete", "create-teleporter", "add-behavior", "remap-teleporters" for kind "regions" (got "roll").'
     );
   });
 });
 
+/** The add-behavior member of the union (its schema is what the old add-region-behavior advertised). */
+function addBehaviorMember(tools: PlaceableTools): any {
+  const def = tools.getToolDefinitions().find(d => d.name === MANAGE_PLACEABLES) as any;
+  return def.inputSchema.anyOf.find(
+    (m: any) =>
+      m.properties.kind.const === 'regions' && m.properties.action.const === 'add-behavior'
+  );
+}
+
 describe('teleporter special ops', () => {
   it('create-teleporter forwards from/to + defaults and reports both regions', async () => {
-    const { tools, calls } = build({
+    const { calls, manage } = build({
       success: true,
       twoWay: true,
       from: {
@@ -1077,7 +1112,7 @@ describe('teleporter special ops', () => {
         behaviors: [{ type: 'teleportToken', destinations: ['Scene.s1.Region.rA'] }],
       },
     });
-    const out = await tools.handle('create-teleporter', {
+    const out = await manage('regions', 'create-teleporter', {
       from: { sceneIdentifier: 'Bridge', x: 100, y: 200 },
       to: { sceneIdentifier: 'Cave', x: 300, y: 400 },
     });
@@ -1094,7 +1129,7 @@ describe('teleporter special ops', () => {
   });
 
   it('create-teleporter reports one-way (no return link) and scene-not-found', async () => {
-    const { tools } = build({
+    const { manage } = build({
       success: true,
       twoWay: false,
       from: {
@@ -1106,7 +1141,7 @@ describe('teleporter special ops', () => {
       },
       to: { sceneId: 's2', sceneName: 'Cave', id: 'rB', name: 'B', behaviors: [] },
     });
-    const out = await tools.handle('create-teleporter', {
+    const out = await manage('regions', 'create-teleporter', {
       from: { sceneIdentifier: 'Bridge', x: 1, y: 2 },
       to: { sceneIdentifier: 'Cave', x: 3, y: 4 },
       twoWay: false,
@@ -1114,16 +1149,17 @@ describe('teleporter special ops', () => {
     expect(out).toContain('one-way teleporter');
     expect(out).toContain('no return link');
 
-    const { tools: t2 } = build({ success: true, notFound: 'Nowhere' });
-    const out2 = await t2.handle('create-teleporter', {
-      from: { sceneIdentifier: 'Nowhere', x: 1, y: 2 },
-      to: { sceneIdentifier: 'Cave', x: 3, y: 4 },
-    });
-    expect(out2).toContain('No teleporter created');
+    const { manage: m2 } = build({ success: true, notFound: 'Nowhere' });
+    await expect(
+      m2('regions', 'create-teleporter', {
+        from: { sceneIdentifier: 'Nowhere', x: 1, y: 2 },
+        to: { sceneIdentifier: 'Cave', x: 3, y: 4 },
+      })
+    ).rejects.toThrow('Scene not found: "Nowhere". No teleporter created.');
   });
 
   it('remap-teleporters forwards sourceModule and summarizes rewritten/unchanged/unresolved', async () => {
-    const { tools, calls } = build({
+    const { calls, manage } = build({
       success: true,
       sourceModule: 'tom-cartos-temple',
       scenesScanned: 3,
@@ -1132,7 +1168,7 @@ describe('teleporter special ops', () => {
       unchanged: 2,
       unresolved: ['01 Iris: Scene.gone.Region.x'],
     });
-    const out = await tools.handle('remap-teleporters', { sourceModule: 'tom-cartos-temple' });
+    const out = await manage('regions', 'remap-teleporters', { sourceModule: 'tom-cartos-temple' });
     expect(calls[0][0]).toBe('remapSceneTeleporters');
     expect(calls[0][1]).toEqual({ sourceModule: 'tom-cartos-temple' });
     expect(out).toContain('Teleporter remap for "tom-cartos-temple"');
@@ -1142,12 +1178,12 @@ describe('teleporter special ops', () => {
   });
 
   it('remap-teleporters rejects an empty sourceModule', async () => {
-    const { tools } = build();
-    await expect(tools.handle('remap-teleporters', { sourceModule: '' })).rejects.toThrow();
+    const { manage } = build();
+    await expect(manage('regions', 'remap-teleporters', { sourceModule: '' })).rejects.toThrow();
   });
 
   it('add-region-behavior forwards to addRegionBehavior and reports behavior + destination + warning', async () => {
-    const { tools, calls } = build({
+    const { calls, manage } = build({
       success: true,
       sceneId: 's1',
       sceneName: 'Basement',
@@ -1156,7 +1192,7 @@ describe('teleporter special ops', () => {
       behavior: { id: 'b1', type: 'teleportToken', destinations: ['Scene.s2.Region.r2'] },
       warnings: ['destination region "Pad" contains NO grid-snapped token position…'],
     });
-    const out = await tools.handle('add-region-behavior', {
+    const out = await manage('regions', 'add-behavior', {
       sceneIdentifier: 'Basement',
       regionIdentifier: 'WP_TRIG',
       type: 'teleportToken',
@@ -1174,35 +1210,37 @@ describe('teleporter special ops', () => {
     expect(out).toContain('⚠ destination region "Pad"');
   });
 
-  it('add-region-behavior reports scene / region not-found without changing anything', async () => {
-    const { tools } = build({ success: true, notFound: 'Nowhere' });
-    const out = await tools.handle('add-region-behavior', {
-      sceneIdentifier: 'Nowhere',
-      regionIdentifier: 'X',
-      type: 'executeMacro',
-    });
-    expect(out).toContain('Scene not found: "Nowhere"');
+  it('add-behavior reports scene / region not-found as errors, changing nothing', async () => {
+    const { manage } = build({ success: true, notFound: 'Nowhere' });
+    await expect(
+      manage('regions', 'add-behavior', {
+        sceneIdentifier: 'Nowhere',
+        regionIdentifier: 'X',
+        type: 'executeMacro',
+      })
+    ).rejects.toThrow('Scene not found: "Nowhere". Nothing changed.');
 
-    const { tools: t2 } = build({ success: true, notFoundRegion: 'X', sceneName: 'Basement' });
-    const out2 = await t2.handle('add-region-behavior', {
-      sceneIdentifier: 'Basement',
-      regionIdentifier: 'X',
-      type: 'executeMacro',
-    });
-    expect(out2).toContain('Region not found: "X" on "Basement"');
+    const { manage: m2 } = build({ success: true, notFoundRegion: 'X', sceneName: 'Basement' });
+    await expect(
+      m2('regions', 'add-behavior', {
+        sceneIdentifier: 'Basement',
+        regionIdentifier: 'X',
+        type: 'executeMacro',
+      })
+    ).rejects.toThrow('Region not found: "X" on "Basement". Nothing changed.');
   });
 
   it('add-region-behavior rejects a missing type', async () => {
-    const { tools } = build();
+    const { manage } = build();
     await expect(
-      tools.handle('add-region-behavior', { sceneIdentifier: 'A', regionIdentifier: 'B' })
+      manage('regions', 'add-behavior', { sceneIdentifier: 'A', regionIdentifier: 'B' })
     ).rejects.toThrow();
   });
 });
 
 describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
   it('advertises effects / dispositions / sizes / creatureTypes / terrainTypes / magical and forwards them', async () => {
-    const { tools, calls } = build({
+    const { tools, calls, manage } = build({
       success: true,
       sceneId: 's1',
       sceneName: 'Crypt',
@@ -1218,16 +1256,13 @@ describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
         },
       ],
     });
-    const def = tools
-      .getToolDefinitions()
-      .find((d: any) => d.name === 'add-region-behavior') as any;
-    const props = def.inputSchema.properties;
+    const props = addBehaviorMember(tools).properties;
     expect(props.effects.items.type).toBe('string');
     expect(props.dispositions.items.enum).toEqual(['hostile', 'neutral', 'friendly']);
     expect(props.terrainTypes.items.enum).toContain('web');
     expect(props.sizes.items.enum).toContain('grg');
     expect(props.creatureTypes.items.enum).toContain('undead');
-    const out = await tools.handle('add-region-behavior', {
+    const out = await manage('regions', 'add-behavior', {
       sceneIdentifier: 'Crypt',
       regionIdentifier: 'Poison Pool',
       type: 'dnd5e.applyActiveEffect',
@@ -1243,9 +1278,9 @@ describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
   });
 
   it('rejects an unknown disposition / terrain type at the contract', async () => {
-    const { tools } = build({ success: true });
+    const { manage } = build({ success: true });
     await expect(
-      tools.handle('add-region-behavior', {
+      manage('regions', 'add-behavior', {
         sceneIdentifier: 'Crypt',
         regionIdentifier: 'X',
         type: 'dnd5e.applyActiveEffect',
@@ -1253,7 +1288,7 @@ describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
       })
     ).rejects.toThrow();
     await expect(
-      tools.handle('add-region-behavior', {
+      manage('regions', 'add-behavior', {
         sceneIdentifier: 'Crypt',
         regionIdentifier: 'X',
         type: 'dnd5e.difficultTerrain',
@@ -1265,7 +1300,7 @@ describe('add-region-behavior — dnd5e 6.0 conveniences', () => {
 
 describe('add-region-behavior — dnd5e.rotateArea conveniences', () => {
   it('advertises `rotate` and forwards it', async () => {
-    const { tools, calls } = build({
+    const { tools, calls, manage } = build({
       success: true,
       sceneId: 's1',
       sceneName: 'Vault',
@@ -1273,13 +1308,10 @@ describe('add-region-behavior — dnd5e.rotateArea conveniences', () => {
       regionName: 'Turntable',
       behavior: { id: 'b1', type: 'dnd5e.rotateArea' },
     });
-    const def = tools
-      .getToolDefinitions()
-      .find((d: any) => d.name === 'add-region-behavior') as any;
-    const rotate = def.inputSchema.properties.rotate.properties;
+    const rotate = addBehaviorMember(tools).properties.rotate.properties;
     expect(rotate.direction.enum).toEqual(['short', 'long', 'cw', 'ccw']);
     expect(rotate.timeMode.enum).toEqual(['fixed', 'variable']);
-    const out = await tools.handle('add-region-behavior', {
+    const out = await manage('regions', 'add-behavior', {
       sceneIdentifier: 'Vault',
       regionIdentifier: 'Turntable',
       type: 'dnd5e.rotateArea',
@@ -1292,7 +1324,7 @@ describe('add-region-behavior — dnd5e.rotateArea conveniences', () => {
     });
     expect(out).toContain('Added dnd5e.rotateArea behavior b1');
     await expect(
-      tools.handle('add-region-behavior', {
+      manage('regions', 'add-behavior', {
         sceneIdentifier: 'Vault',
         regionIdentifier: 'Turntable',
         type: 'dnd5e.rotateArea',

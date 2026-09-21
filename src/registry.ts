@@ -345,18 +345,9 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'get-scene-dimensions': args => sceneTools.handleGetSceneDimensions(args),
     'screenshot-scene': args => sceneTools.handleScreenshotScene(args),
 
-    // Scene placeables — the per-kind CRUD library over the shared kernel
-    // (src/page/_placeables.ts + src/page/placeables/** + src/tools/placeables/**). The
-    // consolidated kinds ride ONE tool, manage-placeables (kind × action; M8); the rest are still
-    // their pre-M8 per-op tools until their family commit.
+    // Scene placeables — every kind, ONE tool (kind × action; M8) over the shared kernel
+    // (src/page/_placeables.ts + src/page/placeables/** + src/tools/placeables/**)
     'manage-placeables': args => placeableTools.handle('manage-placeables', args),
-    'create-region': args => placeableTools.handle('create-region', args),
-    'list-regions': args => placeableTools.handle('list-regions', args),
-    'update-region': args => placeableTools.handle('update-region', args),
-    'delete-region': args => placeableTools.handle('delete-region', args),
-    'create-teleporter': args => placeableTools.handle('create-teleporter', args),
-    'add-region-behavior': args => placeableTools.handle('add-region-behavior', args),
-    'remap-teleporters': args => placeableTools.handle('remap-teleporters', args),
 
     // Playlists
     'create-playlist': args => playlistTools.handleCreatePlaylist(args),

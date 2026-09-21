@@ -5,7 +5,6 @@ import {
   formatCreatePlaceables,
   formatDeletePlaceables,
   formatListPlaceableLines,
-  formatListPlaceables,
   formatUpdatePlaceables,
 } from './placeable-format.js';
 
@@ -38,19 +37,6 @@ describe('formatCreatePlaceables', () => {
   it('throws a curated error on a not-found scene (isError on the wire, never prose)', () => {
     expect(() => formatCreatePlaceables({ notFound: 'Ghost' }, 'light')).toThrow(
       'Scene not found: "Ghost". No lights created.'
-    );
-  });
-});
-
-describe('formatListPlaceables', () => {
-  it('passes a found result through unchanged', () => {
-    const r = { found: true, sceneId: 'sc1', count: 1, items: [{ id: 't' }] };
-    expect(formatListPlaceables(r, 'tile')).toBe(r);
-  });
-
-  it('throws a curated error on a not-found scene', () => {
-    expect(() => formatListPlaceables({ found: false, notFound: 'Ghost' }, 'tile')).toThrow(
-      'Scene not found: "Ghost". No tiles listed.'
     );
   });
 });

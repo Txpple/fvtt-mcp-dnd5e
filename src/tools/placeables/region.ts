@@ -1,9 +1,9 @@
-// Region tools — create/list/update/delete-region over the page-side Region descriptor
-// (src/page/placeables/region.ts), plus the NAMED SPECIAL OPS outside generic CRUD:
-// create-teleporter (two cross-linked regions in one call), add-region-behavior (wire a behavior
-// onto an EXISTING region — the create/update gap), and remap-teleporters (post-import destination
-// repair). update-region stays SINGLE-target by schema; it rides the kernel batch machinery
-// underneath.
+// Region actions of manage-placeables — create / list / update / delete over the page-side Region
+// descriptor (src/page/placeables/region.ts), plus the NAMED SPECIAL ACTIONS outside generic CRUD:
+// create-teleporter (two cross-linked regions in one call), add-behavior (wire a behavior onto an
+// EXISTING region — the create / update gap), and remap-teleporters (post-import destination
+// repair). Like every other kind: update takes one patch per region, delete takes ids, the scene
+// defaults to the active one; the specials carry their own targets.
 
 import { z } from 'zod';
 import { SCENE_TARGET, sceneTargetRequired } from '../_targets.js';
@@ -15,22 +15,23 @@ import {
   ROTATE_DIRECTIONS,
   ROTATE_SPEED_MODES,
 } from '../../utils/dnd5e-canonical.js';
-import { toInputSchema } from '../../utils/schema.js';
+import { FormattedToolError } from '../../utils/error-handler.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
+  formatUpdatePlaceables,
 } from '../../utils/placeable-format.js';
-import { type PlaceableModuleFactory, sceneTarget } from './_module.js';
+import { type PlaceableKindFactory, placeableAction, sceneTarget } from './_module.js';
 
 const RegionShapeSchema = z.object({ type: z.string().optional() }).passthrough();
 const RegionBehaviorSchema = z
   .object({ type: z.string().optional(), system: z.object({}).passthrough().optional() })
   .passthrough();
 
-const CreateRegionSchema = z.object({
+const CreateRegionsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  regions: z
+  items: z
     .array(
       z.object({
         name: z.string().optional().describe('Region label.'),
@@ -60,8 +61,7 @@ const ListRegionsSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateRegionSchema = z
   .object({
-    sceneIdentifier: sceneTarget,
-    regionId: z.string().min(1).describe('Region id.'),
+    id: z.string().min(1).describe('Region id (from action list).'),
     name: z.string().optional().describe('New region label.'),
     color: z.string().optional().describe('New region tint hex.'),
     visibility: z.number().optional().describe('0 layer / 1 gamemaster / 2 always.'),
@@ -89,19 +89,22 @@ const UpdateRegionSchema = z
         'Reshape to one grid rectangle centered at (x, y), sized in cells; ignored with shapes.'
       ),
   })
-  .refine(
-    v =>
-      v.name !== undefined ||
-      v.color !== undefined ||
-      v.visibility !== undefined ||
-      v.shapes !== undefined ||
-      v.rect !== undefined,
-    { message: 'Provide at least one field to update (name, color, visibility, shapes, or rect).' }
-  );
+  .refine(v => Object.keys(v).some(k => k !== 'id' && (v as any)[k] !== undefined), {
+    message:
+      'Provide at least one field to change besides id (name, color, visibility, shapes, rect).',
+  });
 
-const DeleteRegionSchema = z.object({
+const UpdateRegionsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  regionIds: z.array(z.string().min(1)).min(1).describe('Region ids to delete.'),
+  patches: z
+    .array(UpdateRegionSchema)
+    .min(1)
+    .describe('One patch per region; each targets one id.'),
+});
+
+const DeleteRegionsSchema = z.object({
+  sceneIdentifier: sceneTarget,
+  ids: z.array(z.string().min(1)).min(1).describe('Region ids to delete.'),
 });
 
 const TeleporterEndpointSchema = z.object({
@@ -224,151 +227,136 @@ const RemapTeleportersSchema = z.object({
     .describe('The sourceModule stamped in the import flags; every scene carrying it is scanned.'),
 });
 
-export const regionToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'create-region',
+export const regionKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'regions',
+  actions: [
+    placeableAction({
+      action: 'create',
       description:
         'Create regions on a scene from v14 shapes (canvas px), color, visibility and behaviors ' +
         'passed verbatim (a teleportToken needs its destination uuids; create-teleporter and ' +
-        'add-region-behavior resolve those). Returns the ids. GM-only.',
-      inputSchema: toInputSchema(CreateRegionSchema),
-    },
-    {
-      name: 'list-regions',
+        'add-behavior resolve those).',
+      schema: CreateRegionsSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('createSceneRegions', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'region');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
-        "Every region on a scene: id, name, each shape's bounds, teleporter destinations.",
-      inputSchema: toInputSchema(ListRegionsSchema),
-    },
-    {
-      name: 'update-region',
+        "Every region on a scene: id, name, each shape's bounds, its behaviors with any teleporter " +
+        'destinations.',
+      schema: ListRegionsSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneRegions', parsed);
+        return formatListPlaceableLines(result, 'region');
+      },
+    }),
+    placeableAction({
+      action: 'update',
       description:
-        'Update one region by id: name, color, visibility, shapes, or the rect convenience. ' +
-        'Behaviors are untouched. GM-only.',
-      inputSchema: toInputSchema(UpdateRegionSchema),
-    },
-    {
-      name: 'delete-region',
+        'Edit regions by id: name, color, visibility, shapes, or the rect convenience. Behaviors ' +
+        'are untouched.',
+      schema: UpdateRegionsSchema,
+      handler: async ({ sceneIdentifier, patches }) => {
+        const result = await foundry.call('updateSceneRegions', { sceneIdentifier, patches });
+        return formatUpdatePlaceables(result, 'region');
+      },
+    }),
+    placeableAction({
+      action: 'delete',
       description:
-        'Delete regions by id; missing ids are reported, a teleporter left pointing at a deleted ' +
-        'region is warned. GM-only.',
-      inputSchema: toInputSchema(DeleteRegionSchema),
-    },
-    {
-      name: 'create-teleporter',
+        'Delete regions by id; a teleporter left pointing at a deleted region is warned.',
+      schema: DeleteRegionsSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneRegions', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'region');
+      },
+    }),
+    placeableAction({
+      action: 'create-teleporter',
       description:
         'Create a teleporter between two points (from / to, the same scene allowed): a grid-sized ' +
         'trigger region at each with a teleportToken behavior pointing at the other; one-way with ' +
-        'twoWay:false, silent with confirm:false. Regions are layer-visible (no player overlay). ' +
-        'GM-only.',
-      inputSchema: toInputSchema(CreateTeleporterSchema),
-    },
-    {
-      name: 'add-region-behavior',
+        'twoWay:false, silent with confirm:false. Regions are layer-visible (no player overlay).',
+      schema: CreateTeleporterSchema,
+      handler: async parsed => {
+        const result = await foundry.call('createSceneTeleporter', parsed);
+        if (result?.notFound) {
+          throw new FormattedToolError(
+            `Scene not found: "${result.notFound}". No teleporter created.`
+          );
+        }
+        const dest = (r: any) =>
+          r?.behaviors?.find((b: any) => b.destinations?.length)?.destinations?.[0] ?? '(none)';
+        const dir = result?.twoWay ? '⇄' : '→';
+        return (
+          `Created ${result?.twoWay ? 'two-way' : 'one-way'} teleporter:\n` +
+          `  • ${result?.from?.sceneName} region ${result?.from?.id} (${result?.from?.name}) ${dir} ${result?.to?.sceneName}\n` +
+          `      → ${dest(result?.from)}\n` +
+          `  • ${result?.to?.sceneName} region ${result?.to?.id} (${result?.to?.name})` +
+          (result?.twoWay ? `\n      → ${dest(result?.to)}` : ' (no return link)')
+        );
+      },
+    }),
+    placeableAction({
+      action: 'add-behavior',
       description:
         'Add one behavior to an existing region (the type validated against the registry). For a ' +
         'teleporter, teleportTo resolves the destination and warns when the landing region holds no ' +
-        'grid-snapped token position. GM-only.',
-      inputSchema: toInputSchema(AddRegionBehaviorSchema),
-    },
-    {
-      name: 'remap-teleporters',
+        'grid-snapped token position.',
+      schema: AddRegionBehaviorSchema,
+      handler: async parsed => {
+        const result = await foundry.call('addRegionBehavior', parsed);
+        if (result?.notFound) {
+          throw new FormattedToolError(`Scene not found: "${result.notFound}". Nothing changed.`);
+        }
+        if (result?.notFoundRegion) {
+          const where = result?.sceneName ? ` on "${result.sceneName}"` : '';
+          throw new FormattedToolError(
+            `Region not found: "${result.notFoundRegion}"${where}. Nothing changed.`
+          );
+        }
+        const b: any = result?.behavior ?? {};
+        const lines = [
+          `Added ${b.type} behavior ${b.id ?? '(no id)'} to region "${result?.regionName}" ` +
+            `(${result?.regionId}) on "${result?.sceneName}" (${result?.sceneId}).`,
+        ];
+        for (const d of b.destinations ?? []) lines.push(`    → ${d}`);
+        for (const e of (result?.effects ?? []) as any[]) {
+          lines.push(`    ✦ effect "${e.name}" (${e.source}) → ${e.uuid}`);
+        }
+        const warnings: string[] = Array.isArray(result?.warnings) ? result.warnings : [];
+        for (const w of warnings) lines.push(`  ⚠ ${w}`);
+        return lines.join('\n');
+      },
+    }),
+    placeableAction({
+      action: 'remap-teleporters',
       description:
         'After a scene-pack import, rewrite every teleportToken destination from the old ids to the ' +
         'minted ones using the provenance flags of every scene stamped with sourceModule. Idempotent; ' +
-        'destinations outside the import are reported, not dropped. GM-only.',
-      inputSchema: toInputSchema(RemapTeleportersSchema),
-    },
+        'destinations outside the import are reported, not dropped.',
+      schema: RemapTeleportersSchema,
+      handler: async parsed => {
+        const result = await foundry.call('remapSceneTeleporters', parsed);
+        const unresolved: string[] = Array.isArray(result?.unresolved) ? result.unresolved : [];
+        const lines = [
+          `Teleporter remap for "${result?.sourceModule}":`,
+          `  scenes scanned: ${result?.scenesScanned ?? 0}`,
+          `  teleporters rewritten: ${result?.rewritten ?? 0}` +
+            (result?.unchanged ? ` (${result.unchanged} already correct)` : ''),
+        ];
+        if (unresolved.length > 0) {
+          lines.push(
+            `  ⚠ ${unresolved.length} destination(s) point outside this import (not rewritten):`
+          );
+          for (const u of unresolved.slice(0, 20)) lines.push(`      - ${u}`);
+          if (unresolved.length > 20) lines.push(`      …and ${unresolved.length - 20} more`);
+        }
+        return lines.join('\n');
+      },
+    }),
   ],
-  handlers: {
-    'create-region': async args => {
-      const { sceneIdentifier, regions } = CreateRegionSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneRegions', { sceneIdentifier, items: regions });
-      return formatCreatePlaceables(result, 'region');
-    },
-    'list-regions': async args => {
-      const parsed = ListRegionsSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneRegions', parsed);
-      return formatListPlaceables(result, 'region');
-    },
-    'update-region': async args => {
-      const { sceneIdentifier, regionId, ...fields } = UpdateRegionSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneRegions', {
-        sceneIdentifier,
-        patches: [{ id: regionId, ...fields }],
-      });
-      if (result?.notFound) return `Scene not found: "${result.notFound}". Nothing changed.`;
-      if ((result?.matched ?? 0) === 0) {
-        return `Region not found: "${regionId}". Nothing changed.`;
-      }
-      const region: any = result?.items?.[0];
-      const shape = region?.shapes?.[0];
-      const shapeStr = shape
-        ? ` — ${shape.type}${shape.width !== undefined ? ` ${shape.width}×${shape.height}px @ (${shape.x},${shape.y})` : ''}`
-        : '';
-      return `Updated region ${region?.id ?? regionId} on "${result?.sceneName}" (${result?.sceneId})${shapeStr}.`;
-    },
-    'delete-region': async args => {
-      const { sceneIdentifier, regionIds } = DeleteRegionSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneRegions', { sceneIdentifier, ids: regionIds });
-      return formatDeletePlaceables(result, 'region');
-    },
-    'create-teleporter': async args => {
-      const parsed = CreateTeleporterSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneTeleporter', parsed);
-      if (result?.notFound) {
-        return `Scene not found: "${result.notFound}". No teleporter created.`;
-      }
-      const dest = (r: any) =>
-        r?.behaviors?.find((b: any) => b.destinations?.length)?.destinations?.[0] ?? '(none)';
-      const dir = result?.twoWay ? '⇄' : '→';
-      return (
-        `Created ${result?.twoWay ? 'two-way' : 'one-way'} teleporter:\n` +
-        `  • ${result?.from?.sceneName} region ${result?.from?.id} (${result?.from?.name}) ${dir} ${result?.to?.sceneName}\n` +
-        `      → ${dest(result?.from)}\n` +
-        `  • ${result?.to?.sceneName} region ${result?.to?.id} (${result?.to?.name})` +
-        (result?.twoWay ? `\n      → ${dest(result?.to)}` : ' (no return link)')
-      );
-    },
-    'add-region-behavior': async args => {
-      const parsed = AddRegionBehaviorSchema.parse(args ?? {});
-      const result = await foundry.call('addRegionBehavior', parsed);
-      if (result?.notFound) return `Scene not found: "${result.notFound}". Nothing changed.`;
-      if (result?.notFoundRegion) {
-        const where = result?.sceneName ? ` on "${result.sceneName}"` : '';
-        return `Region not found: "${result.notFoundRegion}"${where}. Nothing changed.`;
-      }
-      const b: any = result?.behavior ?? {};
-      const lines = [
-        `Added ${b.type} behavior ${b.id ?? '(no id)'} to region "${result?.regionName}" ` +
-          `(${result?.regionId}) on "${result?.sceneName}" (${result?.sceneId}).`,
-      ];
-      for (const d of b.destinations ?? []) lines.push(`    → ${d}`);
-      for (const e of (result?.effects ?? []) as any[]) {
-        lines.push(`    ✦ effect "${e.name}" (${e.source}) → ${e.uuid}`);
-      }
-      const warnings: string[] = Array.isArray(result?.warnings) ? result.warnings : [];
-      for (const w of warnings) lines.push(`  ⚠ ${w}`);
-      return lines.join('\n');
-    },
-    'remap-teleporters': async args => {
-      const parsed = RemapTeleportersSchema.parse(args ?? {});
-      const result = await foundry.call('remapSceneTeleporters', parsed);
-      const unresolved: string[] = Array.isArray(result?.unresolved) ? result.unresolved : [];
-      const lines = [
-        `Teleporter remap for "${result?.sourceModule}":`,
-        `  scenes scanned: ${result?.scenesScanned ?? 0}`,
-        `  teleporters rewritten: ${result?.rewritten ?? 0}` +
-          (result?.unchanged ? ` (${result.unchanged} already correct)` : ''),
-      ];
-      if (unresolved.length > 0) {
-        lines.push(
-          `  ⚠ ${unresolved.length} destination(s) point outside this import (not rewritten):`
-        );
-        for (const u of unresolved.slice(0, 20)) lines.push(`      - ${u}`);
-        if (unresolved.length > 20) lines.push(`      …and ${unresolved.length - 20} more`);
-      }
-      return lines.join('\n');
-    },
-  },
 });

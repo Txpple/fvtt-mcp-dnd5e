@@ -5,9 +5,6 @@
 // which the facade (index.ts) composes into the single `manage-placeables` union tool (kind ×
 // action; src/tools/_union.ts). Correctness lives in the page-side descriptor
 // (src/page/placeables/<kind>.ts); judgment lives in the skills.
-//
-// `PlaceableToolModule` is the pre-M8 shape (one advertised tool per op, keyed by name) the kinds
-// not yet consolidated still export; it goes when the last of them moves.
 
 import type { z } from 'zod';
 import type { FoundryBridge } from '../../foundry.js';
@@ -39,14 +36,6 @@ export interface PlaceableKindModule {
 }
 
 export type PlaceableKindFactory = (foundry: FoundryBridge) => PlaceableKindModule;
-
-/** Pre-M8: advertised definitions + handlers keyed by tool name (the facade asserts they match). */
-export interface PlaceableToolModule {
-  defs: Array<{ name: string; description: string; inputSchema: unknown }>;
-  handlers: Record<string, (args: any) => Promise<any>>;
-}
-
-export type PlaceableModuleFactory = (foundry: FoundryBridge) => PlaceableToolModule;
 
 /** The one scene-target base every placeable schema composes (src/tools/_targets.ts). */
 export { sceneTarget } from '../_targets.js';

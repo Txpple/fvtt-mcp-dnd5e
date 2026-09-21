@@ -343,8 +343,15 @@ try {
         'place-tokens',
         'update-token',
         'delete-tokens',
+        'create-region',
+        'list-regions',
+        'update-region',
+        'delete-region',
+        'create-teleporter',
+        'add-region-behavior',
+        'remap-teleporters',
       ].every(n => !names.has(n)),
-    'G — the 28 per-op tools are gone'
+    'G — the 35 per-op tools are gone'
   );
   const mp = (kind, action, args = {}) =>
     dispatch('manage-placeables', { kind, action, sceneIdentifier: sceneId, ...args });
@@ -450,11 +457,109 @@ try {
   }
   const tileAfter = String(await mp('tiles', 'list')).split('\n')[1];
   assert(/^\w+ 100 100 250 200 /.test(tileAfter), `G — the tile update landed (${tileAfter})`);
+  // regions: the CRUD round trip + the three specials, all through dispatch
+  {
+    const created = String(
+      await mp('regions', 'create', {
+        items: [
+          {
+            name: 'ZZ Trap',
+            shapes: [{ type: 'rectangle', x: 1000, y: 1000, width: 100, height: 100 }],
+          },
+        ],
+      })
+    );
+    const regionId = /• (\w+)/.exec(created)?.[1];
+    assert(
+      created.startsWith('Created 1 region(s) on') && regionId,
+      `G — create regions: ${created.split('\n')[0]}`
+    );
+    const listed = String(await mp('regions', 'list'));
+    const [head, ...rows] = listed.split('\n');
+    assert(
+      head.startsWith(
+        `${rows.length} region(s) on "${TAG} Scene" (${sceneId}): id name shapes behaviors`
+      ),
+      `G — list regions: header names the columns (${head.slice(0, 80)}…)`
+    );
+    const row = rows.find(r => r.startsWith(`${regionId} `));
+    assert(
+      row?.includes(' "ZZ Trap" ') && row.includes('"type":"rectangle"'),
+      `G — list regions: the region is a row with its shapes as a JSON cell (${row})`
+    );
+    const upd = String(
+      await mp('regions', 'update', {
+        patches: [{ id: regionId, name: 'ZZ Pit', rect: { x: 1050, y: 1050, widthCells: 2 } }],
+      })
+    );
+    assert(upd.startsWith('Updated 1 of 1 matched region(s)'), `G — update regions (rect): ${upd}`);
+    // create-teleporter: same scene, one-way, silent
+    const tp = String(
+      await dispatch('manage-placeables', {
+        kind: 'regions',
+        action: 'create-teleporter',
+        from: { sceneIdentifier: sceneId, x: 300, y: 300 },
+        to: { sceneIdentifier: sceneId, x: 1500, y: 1500 },
+        twoWay: false,
+        confirm: false,
+        fromName: 'ZZ Stairs Down',
+        toName: 'ZZ Stairs Up',
+      })
+    );
+    const tpIds = [...tp.matchAll(/region (\w+) \(/g)].map(m => m[1]);
+    assert(
+      tp.startsWith('Created one-way teleporter:') &&
+        tpIds.length === 2 &&
+        tp.includes('(no return link)'),
+      `G — create-teleporter: ${tp.split('\n')[0]} (${tpIds.join(', ')})`
+    );
+    // add-behavior: a teleportToken on the trap, landing on the stairs-up pad
+    const ab = String(
+      await mp('regions', 'add-behavior', {
+        regionIdentifier: regionId,
+        type: 'teleportToken',
+        teleportTo: { sceneIdentifier: sceneId, regionIdentifier: 'ZZ Stairs Up' },
+      })
+    );
+    assert(
+      ab.startsWith(`Added teleportToken behavior`) &&
+        ab.includes(`to region "ZZ Pit" (${regionId})`) &&
+        ab.includes('→ Scene.'),
+      `G — add-behavior (teleportTo resolved): ${ab.split('\n').slice(0, 2).join(' / ')}`
+    );
+    // remap-teleporters: a sourceModule nothing carries — scans 0, rewrites 0, idempotent
+    const rm = String(
+      await dispatch('manage-placeables', {
+        kind: 'regions',
+        action: 'remap-teleporters',
+        sourceModule: 'zz-no-such-module',
+      })
+    );
+    assert(
+      rm.startsWith('Teleporter remap for "zz-no-such-module":') &&
+        rm.includes('scenes scanned: 0'),
+      `G — remap-teleporters: ${rm.split('\n').join(' / ')}`
+    );
+    // add-behavior refusals: region miss is an error
+    let abMiss = '';
+    try {
+      await mp('regions', 'add-behavior', { regionIdentifier: 'ZZ Nowhere', type: 'executeMacro' });
+    } catch (e) {
+      abMiss = e?.message ?? String(e);
+    }
+    assert(
+      abMiss.includes('Region not found: "ZZ Nowhere"'),
+      `G — add-behavior: a region miss is an error (${abMiss})`
+    );
+    // delete: the trap + both pads; the teleporter pointing at a deleted pad is warned
+    const del = String(await mp('regions', 'delete', { ids: [regionId, ...tpIds] }));
+    assert(del.startsWith('Deleted 3 region(s)'), `G — delete regions: ${del.split('\n')[0]}`);
+  }
   // refusals by name
   for (const [args, want] of [
     [
       { kind: 'roofs', action: 'list' },
-      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got "roofs")',
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens", "regions" (got "roofs")',
     ],
     [
       { kind: 'walls', action: 'roll' },

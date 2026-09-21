@@ -22,7 +22,8 @@ See [`docs/history/tom-cartos-import-plan.md`](../../../docs/history/tom-cartos-
 
 Tools used: **`read-pack`** (the off-line extractor/detector — owns all the LevelDB/NeDB reading,
 era detection, tile discovery, and asset path-rewrite math), `upload-asset` / **`upload-asset-tree`**
-(Plane B — single file vs whole subtree), `create-scene`, **`remap-teleporters`** (the second-pass
+(Plane B — single file vs whole subtree), `create-scene`, **`manage-placeables` `{ kind: "regions",
+action: "remap-teleporters" }`** (the second-pass
 teleporter fixer), `create-journal` / `add-journal-image`, `create-folder` / `move-documents`,
 `list-scenes` / `list-journals`. To boot the world first, hand off to **`start-session`**.
 
@@ -218,7 +219,7 @@ a **modern** scene carries `environment`/`fog`/`initial`; a **legacy/mid** scene
   overflow the tool-response cap, and they'd bloat the agent context. Everything in that file is already
   whole (wall threshold/animation, light config, region shapes/behaviors preserved); never reconstruct
   them. `create-scene` reports the counts placed (walls/lights/**regions**) and ⚠-warns on dropped
-  `sight`. When a scene has regions, it prints a hint to run `remap-teleporters` afterward (Step 8).
+  `sight`. When a scene has regions, it prints a hint to run the teleporter remap afterward (Step 8).
 - **Teleporters are created here but not yet linked.** Each scene's teleporter regions ride along in the
   payload, but their destinations still point at the *pack's* scene/region ids — the import mints fresh
   ids, so the links are stale until the Step-8 remap. Don't try to fix them per-scene; that's a single
@@ -236,7 +237,7 @@ a **modern** scene carries `environment`/`fog`/`initial`; a **legacy/mid** scene
 Once **every** chosen scene is created (so all the new scene + region ids exist), make a single call:
 
 ```
-remap-teleporters { sourceModule: <module.id> }
+manage-placeables { kind: "regions", action: "remap-teleporters", sourceModule: <module.id> }
 ```
 
 This finds all scenes you stamped with that `sourceModule`, reconstructs the old→new scene/region id
@@ -247,7 +248,7 @@ to the right new scene. You do **not** pass or transcribe any ids — the tool r
   newly present.
 - If a teleporter points at a scene you **chose not to import** (e.g. you took the regular variant but a
   stair targets the Night one), it's reported as **unresolved** (left as-is, not dropped). Tell the user;
-  the fix is to import the missing variant and re-run `remap-teleporters`.
+  the fix is to import the missing variant and re-run the remap.
 - Only modern (v12+) packs have regions; if `counts.regions` was 0 across the import, this is a no-op and
   you can skip it.
 
@@ -310,7 +311,7 @@ For each imported map with its own (non-overview) legend key:
   reporting the gaps + unresolved teleporters.
 - **Tools (correctness):** `read-pack` does all extraction, era detection, artifact stripping, and the
   asset path-rewrite math; `upload-asset` does the byte upload + content-type; `create-scene` writes the
-  scene + places walls/lights/regions whole + stamps flags; `remap-teleporters` reconstructs the id maps
+  scene + places walls/lights/regions whole + stamps flags; the teleporter remap reconstructs the id maps
   from world state and rewrites every cross-scene teleporter destination; `create-journal`/
   `add-journal-image` build the journal; `create-folder`/`move-documents` organize. The skill never
   parses a `.db`/LevelDB file, rewrites a path string, or transcribes a document id by hand.
