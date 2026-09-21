@@ -21,10 +21,11 @@ the user approves findings — then fix each with the narrowest tool available.
 
 ## Step 1 — establish canon
 
-1. **Get the current plot document.** Look in the campaign's notes repo first: if the user keeps a
-   per-campaign repo (a campaign pointer memory names it), its `plot/` directory holds the
-   authoritative doc — the newest draft there is canon. Only ask the user for a path if no campaign
-   repo or pointer exists. Read the file itself — never work from a memory summary or condensed
+1. **Get the current plot document.** Look in the campaign repo first
+   ([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)): its `plot/` directory holds the
+   authoritative doc — the newest draft there is canon — and its `campaign.json` names the world
+   it describes (refuse to audit another). Only ask the user for a path if no campaign repo is
+   known. Read the file itself — never work from a memory summary or condensed
    plot reference; the whole point is that summaries and worlds go stale.
 2. **Extract the canon terms**, in four buckets:
    - **Named entities** — NPCs, factions, places, artifacts/relics, deities, quest names.

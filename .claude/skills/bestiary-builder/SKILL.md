@@ -10,8 +10,9 @@ description: >-
 
 # Bestiary builder
 
-The **Bestiary** is one journal — `Bestiary`, in the **Adventure Log** folder — with **one page per
-creature, alphabetical**. Players can open it; it is how they learn what they just fought.
+The **Bestiary** is one journal — `journals.bestiary` in the campaign repo's `campaign.json`
+([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)); the defaults are `Bestiary` in an
+**Adventure Log** folder — with **one page per creature, alphabetical**. Players can open it; it is how they learn what they just fought.
 
 The deterministic half is the bundled script `bestiary-entry.mjs` (next to this file). There is **no
 MCP tool for this**: reading a compendium journal page and setting *entry-level* journal ownership
@@ -31,8 +32,8 @@ The bestiary is the players' trophy shelf and their reference; it must never fro
 - **Prepped for a future session** (the displacer beasts) → add it with **`--gm-only`** if the DM
   wants it staged, and reveal it later with `set-journal-page-visibility`.
 
-If a session recap is the source, work from the campaign repo's `sessions/<date>/recap.md` — it names
-every creature that took a turn.
+If a session recap is the source, work from the campaign repo's `<sessions.dir>/<date>/recap.md` —
+it names every creature that took a turn.
 
 ## Step 1 — Resolve the real creature
 
@@ -85,7 +86,7 @@ does for the server (`FOUNDRY_HOST=local` = the sandbox); the repo's `.env` supp
 | `--art <src[::caption]>` | Data-relative image instead of the MM art; repeatable |
 | `--no-art` | text only |
 | `--gm-only` | page stays GM-only (unrevealed monster) |
-| `--journal` / `--folder` | defaults `Bestiary` / `Adventure Log` |
+| `--journal` / `--folder` | `campaign.json` → `journals.bestiary.name` / `.folder`; defaults `Bestiary` / `Adventure Log` |
 | `--dry-run` | print the resolved HTML, write nothing |
 
 **`--dry-run` first** on anything unfamiliar — it shows exactly which art and which paragraphs

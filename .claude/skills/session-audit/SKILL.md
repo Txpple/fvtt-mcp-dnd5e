@@ -22,21 +22,21 @@ owns the judgment — which axis is off, what the numbers mean, and which change
 read or to a stated formula. An audit that guesses is worse than no audit, because it reads as
 authoritative. Change nothing in the world unless the user says go.
 
-## Step 0 — ultracode, then the brief
+## Step 0 — effort, then the brief
 
 An audit is a wide read: every PC sheet, every placed token, every magic item, the plot doc, the
 session history. At ordinary effort a model samples instead of sweeping, and a sampled audit is the
 dangerous kind — confident, tidy, and blind to the one room that breaks the night.
 
-Ultracode state arrives in a system reminder. If it says **on**, say so in one line and proceed. If
-it says **off** — or nothing says either way — tell the user audits run best with it on and ask
-whether to enable it or go ahead anyway, then honor the answer without arguing it twice. Never
-guess: claiming a mode you cannot actually see is the same failure the rest of this skill exists to
-prevent.
+If the client has a higher-effort or multi-agent mode (Claude Code's ultracode), its state arrives
+in a system reminder. If it says **on**, say so in one line and proceed. If it says **off** — or
+nothing says either way — tell the user audits run best with it on and ask whether to enable it or
+go ahead anyway, then honor the answer without arguing it twice. Never guess: claiming a mode you
+cannot actually see is the same failure the rest of this skill exists to prevent.
 
 Then take the brief. Ask only what you cannot read: which session, which site, the play date, and
 how many hours the table actually has. **Assumptions the user hands you are binding** — "assume
-Morgash takes the maul, Gren the pearl" is an instruction, not a hypothesis. If a stated assumption
+the barbarian takes the maul, the sorcerer the pearl" is an instruction, not a hypothesis. If a stated assumption
 is factually off (they say axe, the sheet says maul), correct it in one line and carry on with
 their intent; do not stop to litigate it.
 
@@ -50,7 +50,7 @@ their intent; do not stop to litigate it.
 | The site | `manage-scenes { action: "list" }` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
 | The monsters | `manage-actors` `get` on the **placed token id** | that instance's delta, not the library actor |
 | Signature abilities | `manage-actors` `get-entity` on multiattack + the gimmick | the activity, not the name |
-| Intent | `manage-journals` `list` → `get` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |
+| Intent | `manage-journals` `list` → `get` (the GM key); the campaign repo's `plot/` and its newest session GM notes ([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)) | what the build was *supposed* to be |
 | The ground | `screenshot-scene` on combat maps only | chokepoints, approach length, sightlines |
 
 Four things about this list are load-bearing:
@@ -137,8 +137,8 @@ minutes back*. A recommendation without a number is an opinion.
 
 Rank by value to the DM, and prefer changes that cost them nothing to apply — deleting tokens, one
 house-rule sentence, one `+2` — over anything that means rebuilding. Where a fix touches sheets,
-offer the no-edit alternative too (a ruling that produces the same effect), because the night is
-Tuesday and the DM may not want to touch the world again.
+offer the no-edit alternative too (a ruling that produces the same effect), because the session
+may be tomorrow and the DM may not want to touch the world again.
 
 Two habits worth keeping: when the fix is "cut bodies", say *which* bodies and why that kind (chaff
 that threatens is worth more than chaff that soaks); and when a fight is long because the boss is a
@@ -146,9 +146,10 @@ health bar rather than a threat, fix the threat, not the health bar.
 
 ## Step 5 — the campaign half
 
-The session audit is worthless if the campaign it sits in is drifting, so audit that too. Read
-`plot/`, the `sessions/*/recap.md` + `gm-notes.md` set, and the newest `party-snapshots/*.md`, and
-work these questions:
+The session audit is worthless if the campaign it sits in is drifting, so audit that too. In the
+campaign repo ([`_shared/campaign-repo.md`](../_shared/campaign-repo.md) — `campaign.json` names
+the party and the directories) read `plot/`, `plans/`, every session's recap + GM notes under
+`sessions/`, and the newest snapshot under `party-snapshots/`, and work these questions:
 
 - **Schedule against plan.** Sessions played versus the plan's own estimate, and what the real
   remaining shape is. A campaign written for six sessions being run in nine is fine; material
@@ -211,9 +212,9 @@ read-only.
 - **Do not rebalance by fiat.** Recommend, price it, let the DM choose. The dungeon is theirs.
 - **Do not rewrite the story.** Pacing and prep-weight notes are in scope; telling the DM their
   plot should be different is not, unless they ask.
-- **Owner-stamped decisions are settled.** `*(locked YYYY-MM-DD, owner)*` in the plot doc and
-  directives in the snapshots are not to be re-proposed — audit around them.
-- **An approved creature change is two writes** (owner rule 2026-08-14). The prototype token and
+- **Locked decisions are settled.** A `*(locked YYYY-MM-DD)*` stamp in the plot doc, and any
+  directive recorded in the campaign repo, is not to be re-proposed — audit around it.
+- **An approved creature change is two writes.** The prototype token and
   every token already on a scene are separate documents, so a one-sided fix leaves the world
   inconsistent in a way that depends on whether the DM drags a fresh token or uses the placed one.
   Update the base actor *and* each placed token (`manage-placeables { kind: "tokens", action:
