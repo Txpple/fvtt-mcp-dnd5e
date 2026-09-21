@@ -125,8 +125,8 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
 - **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 151 tools (14 named toolsets;
-  `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~4k tokens
-  instead of ~79k.
+  `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
+  instead of ~57k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
 
 Parked for **3.0**: folding the 17 `list/create/update/delete-X` families (70 of 151 tools) into
@@ -258,8 +258,9 @@ npm run build                     # tsc → dist/, then esbuild bundles the in-p
 `npm run build` clears `dist/` (`prebuild`), then runs `tsc && node esbuild.page.mjs`: TypeScript
 compiles `src/**` to `dist/`, then esbuild bundles the page-side library (`src/page/**`) into
 `dist/page.bundle.js` for injection. Tests: `npm test` (offline unit suite on vitest; it prints the
-context budgets — `tools/list` bytes, tool-name bytes, skill-description bytes — and fails when one
-climbs past its ceiling in `src/measure.test.ts`). Live integration suites are gated — see
+context budgets — `tools/list` bytes, tool-name bytes, skill-description bytes, the always-on set,
+and the prose budget of every tool: a leaf `.describe()` ≤ 120 chars, a description ≤ 400 — and
+fails when one climbs past its ceiling in `src/measure.test.ts`). Live integration suites are gated — see
 [`vitest.integration.config.ts`](vitest.integration.config.ts) and `npm run test:integration`.
 `npm run measure` prints the same budgets in detail (per tool, per toolset, per skill) from
 `scripts/measure/`; the live per-call result sizes are `FOUNDRY_HOST=local node
@@ -335,7 +336,7 @@ Register the built MCP server in your Claude Code config. Copy
 
 ### Toolsets — advertise less
 
-The full surface is 151 tools, and `tools/list` for it is ~79k tokens. A client that loads MCP
+The full surface is 151 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
 schemas eagerly pays that on every registration before the first word (Claude Code defers them and
 only lists names, so it pays far less). A registration that only ever does part of the job can say
 so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
@@ -356,7 +357,7 @@ so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
 | `organization` | folders, moves, bulk delete, macros |
 
 Unset = everything (the bundled skills need the whole surface). `chat,combat` advertises 12 tools
-at ~4k tokens. A call to a tool outside the enabled set is refused **by name** — which toolset it
+at ~3k tokens. A call to a tool outside the enabled set is refused **by name** — which toolset it
 is in and how to enable it — never as "unknown tool"; a misspelt toolset stops the server at
 startup with the valid names. The table is [`src/toolsets.ts`](src/toolsets.ts).
 
