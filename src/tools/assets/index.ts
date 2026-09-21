@@ -59,128 +59,83 @@ const ListAssetsSchema = z.object({
   remotePath: z
     .string()
     .default('')
-    .describe(
-      'Directory path relative to the Foundry `Data/` root (a leading "Data/" or "/" is ' +
-        'tolerated). Omit or "" for the Data/ root, e.g. "assets" or "worlds/your-world".'
-    ),
+    .describe('Data-relative directory; omit or "" for the Data/ root.'),
 });
 
 const AssetInfoSchema = z.object({
   remotePath: z
     .string()
     .min(1)
-    .describe(
-      'Path relative to the Foundry `Data/` root, e.g. ' +
-        '"worlds/your-world/assets/maps/cavern.webp".'
-    ),
+    .describe('Data-relative path, e.g. "worlds/<world>/assets/maps/cavern.webp".'),
 });
 
 const DownloadAssetSchema = z.object({
-  remotePath: z.string().min(1).describe('Source path relative to the Foundry `Data/` root.'),
-  localPath: z
-    .string()
-    .min(1)
-    .describe('Absolute local destination path. Parent directories are created if missing.'),
+  remotePath: z.string().min(1).describe('Data-relative source path.'),
+  localPath: z.string().min(1).describe('Absolute local path (parent directories created).'),
 });
 
 const UploadAssetSchema = z.object({
-  localPath: z.string().min(1).describe('Absolute path to the local file to upload.'),
+  localPath: z.string().min(1).describe('Absolute local file path.'),
   remotePath: z
     .string()
     .min(1)
-    .describe(
-      'Destination path RELATIVE TO the Foundry `Data/` root, e.g. ' +
-        '"worlds/your-world/assets/maps/cavern.webp". Must be an asset location, never ' +
-        "inside a world's `data/` (LevelDB) directory."
-    ),
-  overwrite: z
-    .boolean()
-    .default(false)
-    .describe('Allow overwriting an existing file at remotePath.'),
+    .describe('Data-relative destination, e.g. "worlds/<world>/assets/maps/cavern.webp".'),
+  overwrite: z.boolean().default(false).describe('Overwrite an existing file.'),
 });
 
 const UploadAssetTreeSchema = z.object({
-  localRoot: z
-    .string()
-    .min(1)
-    .describe('Absolute path to a LOCAL directory; every file under it (recursive) is uploaded.'),
+  localRoot: z.string().min(1).describe('Absolute local directory, uploaded recursively.'),
   remoteRoot: z
     .string()
     .min(1)
     .describe(
-      'Destination directory RELATIVE TO the Foundry `Data/` root, e.g. ' +
-        '"worlds/your-world/assets/tom-cartos/<id>/tiles". Each local file lands at ' +
-        "remoteRoot/<path-relative-to-localRoot>. Never inside a world's `data/` (LevelDB) dir."
+      'Data-relative destination directory; each file lands at remoteRoot/<relative path>.'
     ),
-  overwrite: z
-    .boolean()
-    .default(false)
-    .describe('Overwrite existing files (otherwise an already-present file is skipped).'),
+  overwrite: z.boolean().default(false).describe('Overwrite existing files (default: skipped).'),
   includeExt: z
     .array(z.string())
     .optional()
-    .describe(
-      'Only upload files with these extensions (no dot, case-insensitive), e.g. ' +
-        '["webp","png","jpg"]. Omit to upload every file.'
-    ),
+    .describe('Only these extensions (no dot, case-insensitive), e.g. ["webp", "png"].'),
 });
 
 const CreateAssetFolderSchema = z.object({
-  remotePath: z
-    .string()
-    .min(1)
-    .describe(
-      'Folder path relative to the Foundry `Data/` root, e.g. ' +
-        '"worlds/your-world/assets/audio/tavern".'
-    ),
+  remotePath: z.string().min(1).describe('Data-relative folder path.'),
 });
 
 const DeleteAssetSchema = z.object({
-  remotePath: z.string().min(1).describe('Path relative to the Foundry `Data/` root to delete.'),
+  remotePath: z.string().min(1).describe('Data-relative path.'),
   recursive: z
     .boolean()
     .default(false)
-    .describe('Required to delete a directory (and everything under it).'),
+    .describe('Required for a directory (deleted with everything under it).'),
   force: z
     .boolean()
     .default(false)
-    .describe('Delete even if references exist or the bridge is unavailable to check them.'),
+    .describe('Delete even with references, or when the bridge cannot check them.'),
 });
 
 const MoveAssetSchema = z.object({
   fromPath: z.string().min(1).describe('Current Data-relative path.'),
   toPath: z.string().min(1).describe('New Data-relative path.'),
-  overwrite: z
-    .boolean()
-    .default(false)
-    .describe('Allow overwriting an existing file at the destination.'),
+  overwrite: z.boolean().default(false).describe('Overwrite an existing destination.'),
   relink: z
     .boolean()
     .default(false)
-    .describe('After moving, rewrite all references from the old path to the new one.'),
+    .describe('Rewrite every reference from the old path to the new.'),
   force: z
     .boolean()
     .default(false)
-    .describe('Move even if references exist (without relinking) or the bridge is down.'),
+    .describe('Move even with references (unrelinked), or when the bridge cannot check them.'),
 });
 
 const CopyAssetSchema = z.object({
   fromPath: z.string().min(1).describe('Source Data-relative path.'),
   toPath: z.string().min(1).describe('Destination Data-relative path.'),
-  overwrite: z
-    .boolean()
-    .default(false)
-    .describe('Allow overwriting an existing file at the destination.'),
+  overwrite: z.boolean().default(false).describe('Overwrite an existing destination.'),
 });
 
 const AssetUrlSchema = z.object({
-  remotePath: z
-    .string()
-    .min(1)
-    .describe(
-      'Path relative to the Foundry `Data/` root (a leading "Data/" or "/" is tolerated ' +
-        'and stripped), e.g. "worlds/your-world/assets/maps/cavern.webp".'
-    ),
+  remotePath: z.string().min(1).describe('Data-relative path.'),
 });
 
 /**
@@ -219,98 +174,72 @@ export class AssetFileTools {
       {
         name: 'list-assets',
         description:
-          'Plane B (file channel, read-only). List the immediate contents of a directory under the ' +
-          'Foundry `Data/` root through the file plane (folders + files, with size / type / ' +
-          'public URL). Use to ' +
-          'browse uploaded assets, e.g. `worlds/your-world/assets/audio`. Empty/omitted path lists the ' +
-          '`Data/` root.',
+          'The immediate contents of a Data directory through the file plane: folders and files ' +
+          'with size, type, public URL.',
         inputSchema: toInputSchema(ListAssetsSchema),
       },
       {
         name: 'asset-info',
         description:
-          'Plane B (file channel, read-only). Report whether a single path under the Foundry `Data/` ' +
-          'root exists, and (for files) its size, content-type, last-modified, and public HTTPS URL. ' +
-          'A cheap existence/metadata check before uploading or linking.',
+          'Whether a Data path exists and, for a file, its size, content type, last-modified and ' +
+          'public URL.',
         inputSchema: toInputSchema(AssetInfoSchema),
       },
       {
         name: 'download-asset',
-        description:
-          'Plane B (file channel, read-only). Download a file from under the Foundry `Data/` root ' +
-          '(through the file plane) to a local path on this machine. For grabbing an existing ' +
-          'asset to inspect or re-process.',
+        description: 'Download a Data file to a local path through the file plane.',
         inputSchema: toInputSchema(DownloadAssetSchema),
       },
       {
         name: 'upload-asset',
         description:
-          'Plane B (file channel, write). Upload an ASSET (map/token/audio/handout image) from a ' +
-          'local file to the Foundry data area through the file plane and return its public URL. ' +
-          'Missing parent folders are created automatically. ASSETS ONLY — never world-DB files ' +
-          '(LevelDB writes while the server runs corrupt it; such paths are refused). PRIVACY: ' +
-          'anything under Data/ is served publicly with no auth — do not upload anything sensitive. ' +
-          "Works on every host (Foundry's own FilePicker through the bridge takes media and text " +
-          'formats only; a direct plane takes any file).',
+          'Upload a local file into Data through the file plane (parents created) and return its ' +
+          'public URL — served without auth. A world-DB path is refused; the bridge plane takes media ' +
+          'and text formats only.',
         inputSchema: toInputSchema(UploadAssetSchema),
       },
       {
         name: 'upload-asset-tree',
         description:
-          'Plane B (file channel, write). Recursively upload a LOCAL directory tree of ASSETS to ' +
-          'the Foundry data area through the file plane, preserving the subtree layout (each file → ' +
-          'remoteRoot/<rel>), creating parent folders as needed. Use for BULK imports — a scene ' +
-          "pack's images, a tiles folder — instead of one upload-asset per file. Skips files that " +
-          'already exist unless overwrite:true; optional includeExt filter (e.g. ["webp"]). ASSETS ' +
-          'ONLY — refuses live world-DB paths. Reports uploaded/skipped/error counts. PRIVACY: ' +
-          'anything under Data/ is served publicly with no auth. A direct plane is the fast path for bulk.',
+          'Upload a local directory tree into Data through the file plane, layout preserved, ' +
+          'existing files skipped unless overwrite:true; reports uploaded / skipped / error counts. ' +
+          'A world-DB path is refused; uploads are served without auth.',
         inputSchema: toInputSchema(UploadAssetTreeSchema),
       },
       {
         name: 'create-asset-folder',
         description:
-          'Plane B (file channel, write). Create a folder (and any missing parents) under the ' +
-          'Foundry `Data/` root through the file plane. Idempotent — succeeds if the folder ' +
-          'already exists. Refuses paths inside a live world DB.',
+          'Create a Data folder (and missing parents) through the file plane; idempotent. A ' +
+          'world-DB path is refused.',
         inputSchema: toInputSchema(CreateAssetFolderSchema),
       },
       {
         name: 'delete-asset',
         description:
-          'Plane B (file channel, write). Delete a file under the Foundry `Data/` root through the ' +
-          'file plane. REFERENCE-AWARE: consults find-asset-references first and REFUSES if any scene/' +
-          'actor/journal/playlist still points at it (pass force:true to override). Deleting a directory ' +
-          'requires recursive:true. Refuses live world-DB paths. Needs a direct plane (FOUNDRY_DATA_DIR ' +
-          'or FOUNDRY_WEBDAV_*): FilePicker cannot delete.',
+          'Delete a Data file (a directory with recursive:true); refused while any document ' +
+          'references it unless force:true, and on a world-DB path. Needs a direct plane ' +
+          '(FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_*).',
         inputSchema: toInputSchema(DeleteAssetSchema),
       },
       {
         name: 'move-asset',
         description:
-          'Plane B (file channel, write). Move/rename a file under the Foundry `Data/` root through ' +
-          'the file plane; missing destination parent folders are created automatically. ' +
-          'REFERENCE-AWARE: by default REFUSES with a report if anything references the source ' +
-          '(moving would break those pointers). Pass relink:true to move AND rewrite all references ' +
-          '(old→new), or force:true to move without relinking. Refuses live world-DB paths. Needs a ' +
-          'direct plane (FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_*): FilePicker cannot move.',
+          'Move or rename a Data file (parents created); refused while any document references ' +
+          'the source unless relink:true (references rewritten) or force:true, and on a world-DB ' +
+          'path. Needs a direct plane (FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_*).',
         inputSchema: toInputSchema(MoveAssetSchema),
       },
       {
         name: 'copy-asset',
         description:
-          'Plane B (file channel, write). Copy a file under the Foundry `Data/` root through the ' +
-          'file plane; missing destination parent folders are created automatically. (Copying does not ' +
-          'affect existing references, so no reference check is needed.) Refuses live world-DB ' +
-          'destination paths. A directory copy needs a direct plane.',
+          'Copy a Data file through the file plane (parents created); a world-DB destination is ' +
+          'refused; a directory needs a direct plane.',
         inputSchema: toInputSchema(CopyAssetSchema),
       },
       {
         name: 'asset-url',
         description:
-          'Plane B (file channel). Return the public URL for a file under the Foundry `Data/` ' +
-          'root. Pure mapping (no network): everything under Data/ is served at the server root ' +
-          '(DESIGN §6), e.g. Data/worlds/w/maps/x.jpg → <serverUrl>/worlds/w/maps/x.jpg. Useful for ' +
-          'turning an uploaded/known asset path into a link Foundry or a player can load.',
+          'The public URL of a Data path (a pure mapping: Data/<path> → <serverUrl>/<path>).',
         inputSchema: toInputSchema(AssetUrlSchema),
       },
     ];

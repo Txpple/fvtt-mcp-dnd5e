@@ -31,48 +31,31 @@ const DOC_TYPES = [
 // and getToolDefinitions() advertises toInputSchema(...) of the same schema. Descriptions are
 // copied verbatim from the previous hand-written JSON Schema; only `.describe()` is added.
 const ListFoldersSchema = z.object({
-  type: z
-    .enum(DOC_TYPES)
-    .optional()
-    .describe('Filter to one document type (Actor, Scene, …). Omit for the whole sidebar.'),
+  type: z.enum(DOC_TYPES).optional().describe('One document type; default the whole sidebar.'),
 });
 
 const CreateFolderSchema = z.object({
   name: z.string().min(1).describe('Folder name.'),
-  type: z
-    .enum(DOC_TYPES)
-    .describe('Document type this folder holds (Actor, Item, JournalEntry, …).'),
-  parentFolder: z
-    .string()
-    .optional()
-    .describe('Optional parent folder id or exact name (must be the same type).'),
-  color: z.string().optional().describe('Optional hex color, e.g. "#4a90e2".'),
+  type: z.enum(DOC_TYPES).describe('The document type the folder holds.'),
+  parentFolder: z.string().optional().describe('Parent folder id or exact name (same type).'),
+  color: z.string().optional().describe('Hex color.'),
 });
 
 const UpdateFolderSchema = z
   .object({
-    identifier: z.string().min(1).describe('Folder id or exact name to update.'),
-    type: z
-      .enum(DOC_TYPES)
-      .default('Actor')
-      .describe('Folder document type (needed to resolve by name; default Actor).'),
-    name: z.string().min(1).optional().describe('New folder name (rename).'),
-    color: z.string().optional().describe('New hex color, e.g. "#4a90e2".'),
+    identifier: z.string().min(1).describe('Folder id or exact name.'),
+    type: z.enum(DOC_TYPES).default('Actor').describe('Resolves a name; default Actor.'),
+    name: z.string().min(1).optional().describe('Rename.'),
+    color: z.string().optional().describe('Hex color.'),
     parentFolder: z
       .string()
       .optional()
-      .describe('Reparent under this folder id or exact name (same type). "" = move to root.'),
+      .describe('Reparent under this folder id or exact name (same type); "" = the root.'),
     sort: z
       .number()
       .int()
       .optional()
-      .describe(
-        "The Folder document's sort value. ⚠️ ADVISORY, not a lever: writing it persists and " +
-          'reads back, but the v14 sidebar was observed rendering sibling FOLDERS ALPHABETICALLY ' +
-          'BY NAME regardless of it (verified live 2026-08-12 on Scene folders — 100000/200000/' +
-          '300000 against siblings at 0 did not move them). To control folder ORDER, control the ' +
-          'NAME (this world uses "NN - " prefixes, 99 for undetermined).'
-      ),
+      .describe('Persisted, but the v14 sidebar orders sibling folders by name, not by it.'),
   })
   .refine(
     v =>
@@ -84,30 +67,21 @@ const UpdateFolderSchema = z
   );
 
 const MoveDocumentsSchema = z.object({
-  documentType: z.enum(DOC_TYPES).describe('Type of the documents being moved.'),
-  identifiers: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Exact ids (preferred) or exact names of documents to move.'),
+  documentType: z.enum(DOC_TYPES),
+  identifiers: z.array(z.string().min(1)).min(1).describe('Exact ids or exact names.'),
   targetFolder: z
     .string()
     .optional()
-    .describe('Target folder id or name (created at root if missing). Empty = root.'),
+    .describe('Folder id or name (created at the root if missing); "" = the root.'),
 });
 
 const BulkDeleteSchema = z.object({
-  documentType: z.enum(DOC_TYPES).describe('Type of the documents being deleted.'),
-  identifiers: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Exact ids (preferred) or exact names to delete.'),
+  documentType: z.enum(DOC_TYPES),
+  identifiers: z.array(z.string().min(1)).min(1).describe('Exact ids or exact names.'),
   dryRun: z
     .boolean()
     .default(false)
-    .describe(
-      'Preview only: report exactly which documents WOULD be deleted (and which were not found) ' +
-        'without deleting anything. Run a dry-run first to confirm an irreversible bulk delete.'
-    ),
+    .describe('Report what would be deleted (and what was not found) without deleting.'),
 });
 
 export class OrganizationTools {
@@ -124,47 +98,35 @@ export class OrganizationTools {
       {
         name: 'list-folders',
         description:
-          'Read the sidebar folder TREE — every world folder (or one document type) in tree order ' +
-          'with its id, nesting depth + "/"-joined path, hex color, raw `sort` value, parent, ' +
-          'direct document count, and subfolder count. Siblings are listed ALPHABETICALLY — which ' +
-          'matches how the v14 sidebar actually renders FOLDERS (it ignores `sort` for them), so ' +
-          'this listing order IS the sidebar order. The inspect step the folder tools were ' +
-          'missing: find the ids/names ' +
-          'for update-folder (rename/recolor/reparent), delete-folder, move-documents, and the ' +
-          'folder params on the create tools — without guessing what exists. Read-only.',
+          'The sidebar folder tree (or one document type) in sidebar order (siblings by name): id, ' +
+          'depth, path, color, sort, parent, document and subfolder counts.',
         inputSchema: toInputSchema(ListFoldersSchema),
       },
       {
         name: 'create-folder',
         description:
-          'Create a sidebar Folder for any world document type, optionally nested under a parent ' +
-          'folder of the same type. Use to organize generated content. GM-only.',
+          'Create a sidebar folder, optionally under a parent of the same type. GM-only.',
         inputSchema: toInputSchema(CreateFolderSchema),
       },
       {
         name: 'update-folder',
         description:
-          'Update a sidebar Folder in place — rename it, recolor it, set its raw `sort`, and/or ' +
-          'reparent it (nest under another folder of the same type, or pass parentFolder:"" to ' +
-          'move it to the root). Resolves the folder by exact id or exact name+type. Use this to ' +
-          'RENAME a folder without the move-documents + delete-folder dance. To reposition a ' +
-          'folder, RENAME it — `sort` does not drive folder order in the v14 sidebar. GM-only.',
+          'Rename, recolor, re-sort or reparent a sidebar folder (exact id, or exact name + type). ' +
+          'GM-only.',
         inputSchema: toInputSchema(UpdateFolderSchema),
       },
       {
         name: 'move-documents',
         description:
-          'Move one or more world documents of a single type into a target folder (resolved by id ' +
-          'or name; created at root if absent). Pass an empty targetFolder to move them to the root. ' +
-          'GM-only.',
+          'Move world documents of one type into a folder (created at the root if absent), or to ' +
+          'the root. GM-only.',
         inputSchema: toInputSchema(MoveDocumentsSchema),
       },
       {
         name: 'bulk-delete',
         description:
-          'Permanently delete many world documents of a single type by exact id or exact name. ' +
-          'STRICT resolution — no fuzzy/substring matching. IRREVERSIBLE — pass dryRun:true first to ' +
-          'preview exactly what would be deleted. For folders use delete-folder. GM-only.',
+          'Permanently delete world documents of one type by exact id or exact name; dryRun ' +
+          'previews. Folders: delete-folder. GM-only.',
         inputSchema: toInputSchema(BulkDeleteSchema),
       },
     ];

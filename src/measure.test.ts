@@ -23,27 +23,21 @@ import {
 import { buildToolRegistry } from './registry.js';
 import { ACTOR_TARGET, ACTOR_TARGET_STRICT, ITEM_TARGET, SCENE_TARGET } from './tools/_targets.js';
 import { makeFoundry, makeLogger } from './tools/test-helpers.js';
-import { ALWAYS_ON, type ToolsetName, toolsetOf } from './toolsets.js';
+import { ALWAYS_ON } from './toolsets.js';
 
 /** The ratchets (chars). The comment names the milestone that lowers each one and its target. */
 const BUDGET = {
   // 283,945 at 2.2.0; +4,379 for the closed top level (`additionalProperties:false` × 151, M2 —
-  // the cost the plan accepted for refusing unknown arguments); M7 (prose diet) → ≤ 230,000
-  toolsListChars: 288_200,
+  // the cost the plan accepted for refusing unknown arguments); 205,248 after M7 (the prose diet:
+  // every leaf ≤ 120, every description ≤ 400 — the test below; the M7 target was ≤ 230,000).
+  // M8 (CRUD consolidation) must keep each family's advertised bytes ≤ today's.
+  toolsListChars: 230_000,
   nameChars: 11_200, // 11,147 at 2.2.0 — M8 (CRUD consolidation) → ≤ 7,000
   skillDescriptionChars: 8_000, // 15,381 at 2.2.0; 7,998 after M3 (all 17 rewritten, 120/120 trigger phrases kept)
   // the always-on toolset — every registration carries it, however narrow (10,814 as `world`;
   // M7 split it into `session` + the opt-in `settings` and set the ceiling at 2,100)
   alwaysOnChars: 2_100,
 };
-
-/**
- * M7 — the prose budget (docs/plan-3.0-consolidation.md; src/measure.ts PROSE_BUDGET): every leaf
- * `.describe()` ≤ 120 chars, every tool description ≤ 400. The diet lands one family per commit;
- * a family still to be dieted is listed here and its commit removes it, so the set is empty — and
- * this constant gone — when M7 closes. A tool in any other toolset over the budget fails the gate.
- */
-const PROSE_DIET_PENDING = new Set<ToolsetName>(['assets', 'organization']);
 
 function surface(toolsets: readonly string[] = []) {
   const host = createHost(resolveHostConfig({}, 'generic'), makeLogger());
@@ -60,7 +54,6 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
   const list = decomposeToolsList(tools);
   const alwaysOn = jsonChars(surface([ALWAYS_ON]));
   const offenders = proseOffenders(tools);
-  const setOf = toolsetOf();
   const names = measureNames(tools, DEFAULT_REGISTRATIONS);
   const skills = readSkillDescriptions();
   const skillChars = totalSkillDescriptionChars(skills);
@@ -72,7 +65,7 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
       line(
         'tools/list',
         list.chars,
-        `(${list.count} tools; ≤ ${fmt(BUDGET.toolsListChars)}; M7 → ≤ 230,000)`
+        `(${list.count} tools; ≤ ${fmt(BUDGET.toolsListChars)}; M7 done; M8 keeps each family ≤ today)`
       ),
       line(
         `names ×${DEFAULT_REGISTRATIONS.length}`,
@@ -87,8 +80,7 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
       `  leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description)} · ` +
         `structural ${fmt(list.totals.structural)} · longest leaf ${fmt(list.totals.longestLeafDescription)}`,
       line(`always-on (${ALWAYS_ON})`, alwaysOn, `(≤ ${fmt(BUDGET.alwaysOnChars)})`),
-      `  prose budget: ${offenders.length} tools over (leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}); ` +
-        `families pending: ${[...PROSE_DIET_PENDING].join(', ') || 'none'}`,
+      `  prose budget: ${offenders.length} tools over (leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}; M7 done)`,
     ].join('\n')
   );
 
@@ -110,24 +102,17 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
     expect(alwaysOn).toBeLessThanOrEqual(BUDGET.alwaysOnChars);
   });
 
-  it('every dieted family is within the prose budget (leaf ≤ 120, description ≤ 400)', () => {
-    const over = offenders.filter(o => !PROSE_DIET_PENDING.has(setOf.get(o.name) as ToolsetName));
-    const report = over.map(o => {
+  // M7 — the prose budget (docs/plan-3.0-consolidation.md; src/measure.ts PROSE_BUDGET): every
+  // leaf `.describe()` ≤ 120 chars, every tool description ≤ 400. Field semantics live once, in
+  // the leaf; a description is the contract (inputs, refusals, returns); doctrine is the skills'.
+  it('every tool is within the prose budget (leaf ≤ 120, description ≤ 400)', () => {
+    const report = offenders.map(o => {
       const bits = [];
       if (o.description) bits.push(`description ${o.description}`);
       for (const l of o.leaves) bits.push(`${l.path} ${l.length}`);
       return `${o.name}: ${bits.join(' · ')}`;
     });
     expect(report, report.join('\n')).toEqual([]);
-  });
-
-  it('a family listed as pending is still over budget (else its entry is stale)', () => {
-    const overSets = new Set(offenders.map(o => setOf.get(o.name)));
-    for (const set of PROSE_DIET_PENDING) {
-      expect(overSets.has(set), `${set} is within budget — remove it from PROSE_DIET_PENDING`).toBe(
-        true
-      );
-    }
   });
 
   it('every target leaf advertises the rule its page handler implements (F22)', () => {

@@ -125,23 +125,12 @@ const DeleteActorSchema = z.object({
 });
 
 const DeleteFolderSchema = z.object({
-  identifier: z
-    .string()
-    .min(1, 'Folder identifier cannot be empty')
-    .describe('Exact folder name or ID to delete (e.g., "Foundry MCP Creatures")'),
-  type: z
-    .string()
-    .min(1)
-    .default('Actor')
-    .describe(
-      'Folder document type (default "Actor"). E.g. "Actor", "Item", "JournalEntry", "Scene".'
-    ),
+  identifier: z.string().min(1).describe('Folder id or exact name.'),
+  type: z.string().min(1).default('Actor').describe('Folder document type (default Actor).'),
   deleteContents: z
     .boolean()
     .default(false)
-    .describe(
-      'When true, delete the folder and all documents/subfolders inside it. When false (default), only delete the folder if it is already empty.'
-    ),
+    .describe('Also delete everything inside; default refuses a non-empty folder.'),
 });
 
 export class ActorCreationTools {
@@ -187,10 +176,8 @@ export class ActorCreationTools {
       {
         name: 'delete-folder',
         description:
-          'Permanently delete a folder by exact name or ID. GM-only, IRREVERSIBLE. By default refuses ' +
-          'to delete a folder that still contains documents or subfolders (safe for cleaning up empty ' +
-          'leftover folders). Pass deleteContents:true to delete the folder AND everything inside it. ' +
-          'Defaults to Actor folders; set type for other document folders.',
+          'Permanently delete a folder by exact id or exact name; a non-empty one is refused unless ' +
+          'deleteContents:true. GM-only.',
         inputSchema: toInputSchema(DeleteFolderSchema),
       },
     ];

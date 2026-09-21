@@ -14,56 +14,38 @@ import { toInputSchema } from '../utils/schema.js';
 
 const CreateMacroSchema = z
   .object({
-    name: z
-      .string()
-      .min(1)
-      .describe('Macro name — the hotbar tooltip and its Macro Directory entry.'),
+    name: z.string().min(1).describe('Macro name.'),
     command: z
       .string()
       .min(1)
       .describe(
-        "The macro body: JavaScript for 'script' (run as the clicking user, e.g. " +
-          'dnd5e.documents.macro.rollItem("Graze") rolls that item on their assigned character); ' +
-          "chat text for 'chat' (inline rolls like [[/roll 1d6]] work)."
+        'script: JavaScript, run as the clicking user; chat: the text posted (inline rolls work).'
       ),
-    type: z
-      .enum(['script', 'chat'])
-      .default('script')
-      .describe("'script' (default) executes JavaScript; 'chat' posts its text to the chat log."),
+    type: z.enum(['script', 'chat']).default('script').describe('Default script.'),
     img: z
       .string()
       .min(1)
       .optional()
       .describe(
-        "Icon path or URL for the hotbar button (default: Foundry's stock macro icon; a path that " +
-          'does not resolve is replaced with it, with a warning).'
+        'Icon path or URL; an unresolvable path falls back to the stock icon with a warning.'
       ),
     owner: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'User id or name granted OWNER on the macro. The hotbarUser is always granted OWNER — ' +
-          'pass this only to grant a DIFFERENT user as well.'
-      ),
+      .describe('A further user (id or name) granted OWNER; the hotbarUser always is.'),
     hotbarUser: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'User id or name whose hotbar gets the button (also granted OWNER). Omit to create the ' +
-          'macro unpinned.'
-      ),
+      .describe('User (id or name) whose hotbar gets the button, granted OWNER; omit = unpinned.'),
     hotbarSlot: z
       .number()
       .int()
       .min(1)
       .max(50)
       .optional()
-      .describe(
-        'Hotbar slot 1–50 (page 1 = slots 1–10). Default: the first free slot. An occupied slot ' +
-          'is replaced with a warning.'
-      ),
+      .describe('Slot 1–50 (default the first free; an occupied slot is replaced with a warning).'),
   })
   .refine(o => o.hotbarSlot === undefined || o.hotbarUser !== undefined, {
     message: 'hotbarSlot requires hotbarUser',
@@ -71,11 +53,8 @@ const CreateMacroSchema = z
 
 const ListMacrosSchema = z.object({
   nameFilter: z.string().optional().describe('Case-insensitive substring match on macro name.'),
-  user: z.string().optional().describe("Only macros pinned on this user's hotbar (id or name)."),
-  verbose: z
-    .boolean()
-    .optional()
-    .describe('Add each pin (user + slot) and a command preview; default: a pin count.'),
+  user: z.string().optional().describe("Only macros on this user's hotbar (id or name)."),
+  verbose: z.boolean().optional().describe('Each pin (user + slot) and a command preview.'),
 });
 
 const DeleteMacroSchema = z.object({
@@ -104,25 +83,22 @@ export class MacroTools {
       {
         name: 'create-macro',
         description:
-          'Create a world Macro — a hotbar button (type "script" runs JavaScript as the clicking ' +
-          'user; "chat" posts text). Optionally grant a player OWNER and pin it to their hotbar ' +
-          '(hotbarUser + hotbarSlot) in the same call — how to hand a player a one-click ability. ' +
-          'GM-only.',
+          "Create a world Macro (script or chat), optionally owned by and pinned to a user's " +
+          'hotbar. GM-only.',
         inputSchema: toInputSchema(CreateMacroSchema),
       },
       {
         name: 'list-macros',
         description:
-          'List macros, one line each: name, id, type (script/chat), author, hotbar pin count ' +
-          '(verbose: each pin + a command preview). Filter by name substring or by the user whose ' +
-          'hotbar pins it. The read to run before delete-macro.',
+          'Macros: name, id, type, author, pin count (verbose: each pin and a command preview); ' +
+          'filtered by name substring or pinning user.',
         inputSchema: toInputSchema(ListMacrosSchema),
       },
       {
         name: 'delete-macro',
         description:
-          'Delete world macros by id or exact name, scrubbing any user hotbar slots that pointed ' +
-          'at them so no dead buttons are left behind. GM-only.',
+          'Delete world macros by id or exact name, and the hotbar slots that pointed at them. ' +
+          'GM-only.',
         inputSchema: toInputSchema(DeleteMacroSchema),
       },
     ];

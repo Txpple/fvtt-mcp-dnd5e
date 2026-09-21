@@ -19,18 +19,12 @@ import { toInputSchema } from '../utils/schema.js';
 // Single source of truth for each tool's input contract: the handler parses with these
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
 const FindAssetReferencesSchema = z.object({
-  paths: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe(
-      'One or more Data-relative asset paths to look up, e.g. ' +
-        '["worlds/your-world/assets/maps/cavern.webp"].'
-    ),
+  paths: z.array(z.string().min(1)).min(1).describe('Data-relative asset paths.'),
 });
 
 const RelinkAssetSchema = z.object({
-  oldPath: z.string().min(1).describe('Current Data-relative path being referenced.'),
-  newPath: z.string().min(1).describe('New Data-relative path to point references at.'),
+  oldPath: z.string().min(1).describe('The referenced Data-relative path.'),
+  newPath: z.string().min(1).describe('The new Data-relative path.'),
   dryRun: z.boolean().default(false).describe('Report what would change without writing.'),
 });
 
@@ -91,16 +85,14 @@ export class AssetBridgeTools {
       {
         name: 'find-asset-references',
         description:
-          'Find every world document (scenes, actors, items, journals, playlists, macros, roll ' +
-          'tables) that references an asset path under `Data/` — run BEFORE deleting or moving a ' +
-          'file. Read-only.',
+          'Every world document (scenes, actors, items, journals, playlists, macros, tables) that ' +
+          'references an asset path.',
         inputSchema: toInputSchema(FindAssetReferencesSchema),
       },
       {
         name: 'relink-asset',
         description:
-          'Rewrite every reference from one asset path to another (after a move/rename). dryRun:true ' +
-          'previews the documents that would change. GM-only.',
+          'Rewrite every reference from one asset path to another; dryRun previews. GM-only.',
         inputSchema: toInputSchema(RelinkAssetSchema),
       },
       {
