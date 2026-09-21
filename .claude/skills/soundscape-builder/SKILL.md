@@ -47,7 +47,7 @@ Never pick from a name. Find out what the place *is*:
 - **`screenshot-scene`**, or read the background image directly (its path is `background` on
   `get-current-scene`) — it renders to you. This is the step that actually earns the skill: *look
   at the map.*
-- **`list-tokens`** — what **lives** here. A crypt with five wights in it is not the same soundscape
+- **`manage-placeables { kind: "tokens", action: "list" }`** — what **lives** here. A crypt with five wights in it is not the same soundscape
   as an empty crypt; a market with forty townsfolk needs voices, an abandoned one needs wind.
 - The scene's attached journal / notes, if any — the fiction often names the sound ("water drips
   somewhere below").
@@ -345,7 +345,8 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
 - **Never music.** No theme, no melody, no boss cue, no soundboard. Hand off to `playlist-builder`.
 - **Never positional.** "The fountain in the courtyard" is `manage-placeables` (`kind: "sounds"`),
   not a scene-global set.
-- **Look at the scene before choosing** — screenshot/read the map and `list-tokens`. A soundscape
+- **Look at the scene before choosing** — screenshot/read the map and list its tokens
+  (`manage-placeables { kind: "tokens", action: "list" }`). A soundscape
   picked from a scene's *name* is a guess.
 - **Never invent a file path or a template name.** Templates come from `action: "library"`, paths from
   `list-assets` / `upload-asset`. A path that doesn't resolve is kept and warned about — it is not

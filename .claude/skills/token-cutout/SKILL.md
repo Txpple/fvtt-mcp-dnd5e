@@ -38,7 +38,8 @@ survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade m
    reply. Auto-rotate is NOT part of that — pass `autoRotate: true` yourself, after step 5.
 4. **Prototype vs placed.** Setting the prototype only affects **newly dropped** tokens; the reply
    lists the copies already on a scene that still carry the old art or settings — patch each with
-   `update-token` (`scale`, `ring`, `lockRotation: false`), or have the user delete + re-drop it.
+   `manage-placeables { kind: "tokens", action: "update", ids, scale, ring, lockRotation: false }`, or
+   have the user delete + re-drop it.
 5. **Check which way the art faces before you enable auto-rotate.** Foundry treats the **top** of the
    image as the token's front at rotation 0, so art drawn head-down (or side-on) will move backwards
    once auto-rotate is live. Look at the cutout and say so — the fix is rotating the source PNG, which

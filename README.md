@@ -124,7 +124,7 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 128 tools (14 named toolsets;
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 124 tools (14 named toolsets;
   `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
   instead of ~57k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
@@ -132,8 +132,8 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
 Underway in **3.0** (M8 of `docs/plan-3.0-consolidation.md`): folding the 17
 `list/create/update/delete-X` families into one tool each, selected by `action` (and `kind` for
 the placeables) — the biggest context lever left, and a change to every skill, so one family per
-commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings / sounds / notes ×
-`action`: create / list / update / delete) replaces 24 tools for fewer advertised bytes than they cost.
+commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings / sounds / notes / tokens
+× `action`: create / list / update / delete) replaces 28 tools for fewer advertised bytes than they cost.
 
 ---
 
@@ -339,7 +339,7 @@ Register the built MCP server in your Claude Code config. Copy
 
 ### Toolsets — advertise less
 
-The full surface is 128 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
+The full surface is 124 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
 schemas eagerly pays that on every registration before the first word (Claude Code defers them and
 only lists names, so it pays far less). A registration that only ever does part of the job can say
 so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
@@ -391,7 +391,7 @@ variable to set if something it needs is missing.
 
 ## Tools
 
-**128 tools total: 118 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
+**124 tools total: 114 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,

@@ -54,9 +54,7 @@ const UpdateActorSchema = z.object({
     .string()
     .min(1)
     .optional()
-    .describe(
-      'Prototype nameplate, decoupled from the actor name; placed tokens keep theirs (update-token).'
-    ),
+    .describe('Prototype nameplate, decoupled from the actor name; placed tokens keep theirs.'),
   img: z.string().optional().describe('Portrait image path or URL.'),
   disposition: z
     .enum(['hostile', 'neutral', 'friendly', 'secret'])
@@ -366,7 +364,7 @@ export class DnD5eUpdateActorTool {
           'saves / skills, weapon masteries, HP / AC / initiative, movement, senses, defenses, NPC ' +
           'resources and spellcasting, habitat / treasure, coins. Only the groups passed change; ' +
           '[NPC] fields warn on a PC. Embedded items: update-actor-item / add-feature / ' +
-          'manage-activity; placed tokens: update-token.',
+          'manage-activity; placed tokens: manage-placeables.',
         inputSchema: toInputSchema(UpdateActorSchema),
       },
     ];

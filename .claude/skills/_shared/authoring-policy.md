@@ -76,8 +76,8 @@
       scale to 1 and the ring off along with a changed texture (a book copy's scale 2 / ring on are
       wrong for trimmed art) and reports it; pass `autoRotate: true` once the art's facing is checked.
       Its reply lists the copies already on a scene that still carry the old art or settings —
-      prototype edits never reach placed tokens — patch each with `update-token` (`scale`, `ring`,
-      `lockRotation: false`), or have the user delete and re-drop.
+      prototype edits never reach placed tokens — patch each with `manage-placeables { kind: "tokens",
+      action: "update", ids, scale, ring, lockRotation: false }`, or have the user delete and re-drop.
 
 11. **Run `content-audit` as the finishing check.** Before declaring a build done, scan what you made
     (`actorIdentifiers` for NPCs + their gear, `itemFolders` / `worldItemIds` for loot) with the

@@ -350,10 +350,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // consolidated kinds ride ONE tool, manage-placeables (kind × action; M8); the rest are still
     // their pre-M8 per-op tools until their family commit.
     'manage-placeables': args => placeableTools.handle('manage-placeables', args),
-    'list-tokens': args => placeableTools.handle('list-tokens', args),
-    'place-tokens': args => placeableTools.handle('place-tokens', args),
-    'update-token': args => placeableTools.handle('update-token', args),
-    'delete-tokens': args => placeableTools.handle('delete-tokens', args),
     'create-region': args => placeableTools.handle('create-region', args),
     'list-regions': args => placeableTools.handle('list-regions', args),
     'update-region': args => placeableTools.handle('update-region', args),

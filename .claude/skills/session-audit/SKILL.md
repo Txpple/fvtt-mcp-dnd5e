@@ -47,7 +47,7 @@ their intent; do not stop to litigate it.
 | PC sheets | `get-actor` per PC | AC, HP, saves, **and whether they have Extra Attack yet** |
 | Magic items | `get-actor-entity` on every attuned/equipped magic item | the item's real mechanics |
 | The stash | `get-group` | loot nobody is carrying — that is a finding, not background |
-| The site | `list-scenes` then `list-tokens` per scene | the roster as actually placed |
+| The site | `list-scenes` then `manage-placeables { kind: "tokens", action: "list" }` per scene | the roster as actually placed |
 | The monsters | `get-actor` on the **placed token id** | that instance's delta, not the library actor |
 | Signature abilities | `get-actor-entity` on multiattack + the gimmick | the activity, not the name |
 | Intent | `list-journals` (the GM key), `plot/`, newest `gm-notes.md` | what the build was *supposed* to be |
@@ -58,7 +58,7 @@ Four things about this list are load-bearing:
 - **Extra Attack is the most-missed number in the whole audit.** A level-4 fighter, paladin, or
   ranger has *one* attack. A damage estimate that quietly assumes two is off by more than half, and
   every downstream conclusion inherits the error. Check the class level, every time.
-- **Read the placed token, not the base actor.** `list-tokens` gives ids that `get-actor` accepts,
+- **Read the placed token, not the base actor.** The tokens list gives ids that `get-actor` accepts,
   and an unlinked token carries its own delta — different gear, different HP, sometimes a different
   name. The library actor is not what the players will fight.
 - **Read the item, not its name.** "Ember-Touched Greatsword" is a common item with +1 fire and no
@@ -216,7 +216,8 @@ read-only.
 - **An approved creature change is two writes** (owner rule 2026-08-14). The prototype token and
   every token already on a scene are separate documents, so a one-sided fix leaves the world
   inconsistent in a way that depends on whether the DM drags a fresh token or uses the placed one.
-  Update the base actor *and* each placed token (`update-token`, or the actor tools with the token
+  Update the base actor *and* each placed token (`manage-placeables { kind: "tokens", action:
+  "update" }`, or the actor tools with the token
   id as `actorIdentifier`), and name which tokens you touched. Linked tokens are the exception —
   check linkage first.
 - **Never assert a number you could not read.** Say "unread" and name the substitute you used.

@@ -24,18 +24,13 @@ function build(response: any = {}) {
 }
 
 describe('PlaceableTools.getToolDefinitions', () => {
-  it('exposes the COMPLETE placeable library: manage-placeables (6 kinds × 4 actions) + the pre-M8 kinds', () => {
+  it('exposes the COMPLETE placeable library: manage-placeables (7 kinds × 4 actions) + the pre-M8 regions', () => {
     const { tools } = build();
     const defs = tools.getToolDefinitions();
     const names = defs.map(t => t.name).sort();
     expect(names).toEqual(
       [
         MANAGE_PLACEABLES,
-        // Token (place/update bespoke/delete + list)
-        'list-tokens',
-        'place-tokens',
-        'update-token',
-        'delete-tokens',
         // Region + teleporter special ops
         'create-region',
         'list-regions',
@@ -54,6 +49,7 @@ describe('PlaceableTools.getToolDefinitions', () => {
       'drawings',
       'sounds',
       'notes',
+      'tokens',
     ]);
     expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
     // the shared target leaf is described once, at the root; the members carry it bare
@@ -61,7 +57,7 @@ describe('PlaceableTools.getToolDefinitions', () => {
     expect(
       union.anyOf.map((m: any) => `${m.properties.kind.const}/${m.properties.action.const}`)
     ).toEqual(
-      ['tiles', 'lights', 'walls', 'drawings', 'sounds', 'notes'].flatMap(k =>
+      ['tiles', 'lights', 'walls', 'drawings', 'sounds', 'notes', 'tokens'].flatMap(k =>
         ['create', 'list', 'update', 'delete'].map(a => `${k}/${a}`)
       )
     );
@@ -244,13 +240,13 @@ describe('manage-placeables — tiles', () => {
   it('refuses an unknown kind / action / argument by name, naming what it takes', async () => {
     const { manage, tools } = build();
     await expect(manage('roofs', 'list')).rejects.toThrow(
-      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes" (got "roofs").'
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got "roofs").'
     );
     await expect(manage('tiles', 'move')).rejects.toThrow(
       'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "tiles" (got "move").'
     );
     await expect(tools.handle(MANAGE_PLACEABLES, { action: 'list' })).rejects.toThrow(
-      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes" (got nothing)'
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got nothing)'
     );
     // the old per-kind key is an unknown argument now — refused, never silently dropped
     await expect(
@@ -600,17 +596,42 @@ describe('manage-placeables — walls', () => {
   });
 });
 
-describe('token handlers', () => {
-  it('list-tokens passes the structured result through', async () => {
-    const result = { found: true, sceneId: 'sc1', count: 1, items: [{ id: 'tk1', name: 'Guard' }] };
-    const { tools, calls } = build(result);
-    const out = await tools.handle('list-tokens', { sceneIdentifier: 'Bridge' });
+describe('manage-placeables — tokens', () => {
+  it('list renders the token columns (a token id is an actor target too)', async () => {
+    const { calls, manage } = build({
+      found: true,
+      sceneId: 'sc1',
+      sceneName: 'Bridge',
+      items: [
+        {
+          id: 'tk1',
+          name: 'Guard',
+          x: 100,
+          y: 200,
+          width: 1,
+          height: 1,
+          rotation: 0,
+          elevation: 0,
+          hidden: false,
+          lockRotation: true,
+          disposition: 'hostile',
+          actorId: 'a1',
+          src: 'tokens/guard.webp',
+          scale: 1,
+          sort: 0,
+        },
+      ],
+    });
+    const out = await manage('tokens', 'list', { sceneIdentifier: 'Bridge' });
     expect(calls[0][0]).toBe('listSceneTokens');
-    expect(out).toEqual(result);
+    expect(out).toBe(
+      '1 token(s) on "Bridge" (sc1): id name x y width height rotation elevation hidden lockRotation disposition actorId src scale sort\n' +
+        'tk1 Guard 100 200 1 1 0 0 false true hostile a1 tokens/guard.webp 1 0'
+    );
   });
 
-  it('place-tokens forwards {items} with actor + placement overrides', async () => {
-    const { tools, calls } = build({
+  it('create forwards {items} with actor + placement overrides', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Bridge',
@@ -620,9 +641,9 @@ describe('token handlers', () => {
         { id: 'tk2', name: 'Hobgoblin Warrior' },
       ],
     });
-    const out = await tools.handle('place-tokens', {
+    const out = await manage('tokens', 'create', {
       sceneIdentifier: 'Bridge',
-      tokens: [
+      items: [
         { actor: 'Hobgoblin Captain', x: 1400, y: 980, disposition: 'hostile' },
         { actor: 'Hobgoblin Warrior', x: 1540, y: 980, hidden: true },
       ],
@@ -639,33 +660,29 @@ describe('token handlers', () => {
     expect(out).toContain('Hobgoblin Captain');
   });
 
-  it('place-tokens surfaces an unresolved-actor error from the kernel', async () => {
-    const { tools } = build({
+  it('create surfaces an unresolved-actor error from the kernel and rejects a bad disposition', async () => {
+    const { manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Bridge',
       created: 0,
       errors: ['Token 0: actor not found: "Ghost" (id or exact name)'],
     });
-    const out = await tools.handle('place-tokens', {
+    const out = await manage('tokens', 'create', {
       sceneIdentifier: 'Bridge',
-      tokens: [{ actor: 'Ghost', x: 0, y: 0 }],
+      items: [{ actor: 'Ghost', x: 0, y: 0 }],
     });
     expect(out).toContain('⚠ Token 0: actor not found');
-  });
-
-  it('place-tokens rejects a bad disposition at the schema layer', async () => {
-    const { tools } = build();
     await expect(
-      tools.handle('place-tokens', {
+      manage('tokens', 'create', {
         sceneIdentifier: 'Bridge',
-        tokens: [{ actor: 'A', x: 0, y: 0, disposition: 'buddy' }],
+        items: [{ actor: 'A', x: 0, y: 0, disposition: 'buddy' }],
       })
     ).rejects.toThrow();
   });
 
-  it('update-token forwards targets + patch and formats matched/updated with the unlock warning', async () => {
-    const { tools, calls } = build({
+  it('update forwards targets (ids as tokenIds, actorIds) + the one patch and formats matched/updated with the unlock warning', async () => {
+    const { calls, manage } = build({
       success: true,
       matched: 2,
       updated: 2,
@@ -677,29 +694,34 @@ describe('token handlers', () => {
       ],
       warnings: ['"Dead Guard" (tk1): auto-unlocked rotation (lockRotation was true, …).'],
     });
-    const out = await tools.handle('update-token', {
+    const out = await manage('tokens', 'update', {
       sceneIdentifier: 'Bridge',
       actorIds: ['Dead Guard'],
       randomizeRotation: true,
     });
     expect(calls[0][0]).toBe('updateSceneTokens');
-    expect(calls[0][1]).toMatchObject({ actorIds: ['Dead Guard'], randomizeRotation: true });
+    expect(calls[0][1]).toEqual({
+      sceneIdentifier: 'Bridge',
+      tokenIds: undefined,
+      actorIds: ['Dead Guard'],
+      randomizeRotation: true,
+    });
     expect(out).toContain('Updated 2 of 2 matched token(s) on "Bridge" (sc1)');
     expect(out).toContain('auto-unlocked');
   });
 
-  it('update-token requires a target and a field (refines)', async () => {
-    const { tools } = build();
+  it('update requires a target and a field (refines)', async () => {
+    const { manage } = build();
     await expect(
-      tools.handle('update-token', { sceneIdentifier: 'Bridge', rotation: 90 })
-    ).rejects.toThrow();
+      manage('tokens', 'update', { sceneIdentifier: 'Bridge', rotation: 90 })
+    ).rejects.toThrow('Provide at least one target: ids and/or actorIds.');
     await expect(
-      tools.handle('update-token', { sceneIdentifier: 'Bridge', tokenIds: ['tk1'] })
-    ).rejects.toThrow();
+      manage('tokens', 'update', { sceneIdentifier: 'Bridge', ids: ['tk1'] })
+    ).rejects.toThrow('Provide at least one field to change');
   });
 
-  it('update-token accepts imagePath as the sole change (placed-instance reskin) and echoes the art', async () => {
-    const { tools, calls } = build({
+  it('update accepts imagePath as the sole change (placed-instance reskin) and echoes the art', async () => {
+    const { calls, manage } = build({
       success: true,
       matched: 1,
       updated: 1,
@@ -717,9 +739,9 @@ describe('token handlers', () => {
         },
       ],
     });
-    const out = await tools.handle('update-token', {
+    const out = await manage('tokens', 'update', {
       sceneIdentifier: 'Cave',
-      tokenIds: ['tk1'],
+      ids: ['tk1'],
       imagePath: 'assets/tokens/wisp.webm',
     });
     expect(calls[0][0]).toBe('updateSceneTokens');
@@ -727,19 +749,45 @@ describe('token handlers', () => {
     expect(out).toContain('art assets/tokens/wisp.webm');
   });
 
-  it('delete-tokens forwards tokenIds as {ids}', async () => {
-    const { tools, calls } = build({
+  it('update reports no match with the unresolved targets', async () => {
+    const { manage } = build({
+      success: true,
+      matched: 0,
+      updated: 0,
+      sceneId: 'sc1',
+      sceneName: 'Cave',
+      unmatched: { tokenIds: ['ghost'], actorIds: ['Nobody'] },
+    });
+    expect(
+      await manage('tokens', 'update', {
+        sceneIdentifier: 'Cave',
+        ids: ['ghost'],
+        actorIds: ['Nobody'],
+        hidden: true,
+      })
+    ).toBe('No tokens matched on "Cave" (sc1) — unresolved token ghost; actor Nobody.');
+  });
+
+  it('update reports a scene miss as an error (design.md §3), never a success-shaped string', async () => {
+    const { manage } = build({ success: true, notFound: 'Ghost', matched: 0, updated: 0 });
+    await expect(
+      manage('tokens', 'update', { sceneIdentifier: 'Ghost', ids: ['tk1'], hidden: true })
+    ).rejects.toThrow('Scene not found: "Ghost". Nothing changed.');
+  });
+
+  it('delete forwards {ids}', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Bridge',
       deleted: 3,
     });
-    const out = await tools.handle('delete-tokens', {
+    const out = await manage('tokens', 'delete', {
       sceneIdentifier: 'Bridge',
-      tokenIds: ['a', 'b', 'c'],
+      ids: ['a', 'b', 'c'],
     });
     expect(calls[0][0]).toBe('deleteSceneTokens');
-    expect(calls[0][1]).toMatchObject({ ids: ['a', 'b', 'c'] });
+    expect(calls[0][1]).toEqual({ sceneIdentifier: 'Bridge', ids: ['a', 'b', 'c'] });
     expect(out).toContain('Deleted 3 token(s)');
   });
 });

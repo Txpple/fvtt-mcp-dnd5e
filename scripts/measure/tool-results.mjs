@@ -46,7 +46,7 @@ const CALLS = [
   ['search-compendium-creatures', { name: 'goblin' }],
   ['search-compendium-spells', { name: 'fire' }],
   ['list-chat-messages', { limit: 50 }],
-  ['list-tokens', {}],
+  ['manage-placeables', { kind: 'tokens', action: 'list' }],
   ['manage-placeables', { kind: 'walls', action: 'list' }],
   ['manage-placeables', { kind: 'lights', action: 'list' }],
   ['list-regions', {}],

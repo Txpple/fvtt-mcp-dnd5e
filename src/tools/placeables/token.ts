@@ -1,24 +1,26 @@
-// Placed-token tools — list / place / update / delete a token INSTANCE on a scene.
+// Placed-token actions of manage-placeables — list / create (place) / update / delete a token
+// INSTANCE on a scene.
 //
-// The lifecycle split this module documents: PLACE copies the actor's prototype token onto the map
-// (batch encounter prep — the GM usually just drags); UPDATE is the bespoke actor→all-copies editor
-// with the lockRotation gotcha; DELETE removes the placed instance only (the sidebar actor is
-// delete-actor's job). Page-side correctness lives in src/page/placeables/token.ts.
+// The lifecycle split this module documents: CREATE copies the actor's prototype token onto the
+// map (batch encounter prep — the GM usually just drags); UPDATE is the bespoke actor→all-copies
+// editor (targets are placed-token ids and/or actor ids, ONE patch for every match) with the
+// lockRotation gotcha; DELETE removes the placed instance only (the sidebar actor is delete-actor's
+// job). Page-side correctness lives in src/page/placeables/token.ts.
 
 import { z } from 'zod';
-import { toInputSchema } from '../../utils/schema.js';
+import { FormattedToolError } from '../../utils/error-handler.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
 } from '../../utils/placeable-format.js';
-import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
+import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
 const ListTokensSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const PlaceTokensSchema = z.object({
   sceneIdentifier: sceneTarget,
-  tokens: z
+  items: z
     .array(
       z.object({
         actor: z.string().min(1).describe('Actor id or exact name (its prototype token).'),
@@ -40,24 +42,21 @@ const PlaceTokensSchema = z.object({
 
 const DeleteTokensSchema = z.object({
   sceneIdentifier: sceneTarget,
-  tokenIds: z
+  ids: z
     .array(z.string().min(1))
     .min(1)
     .describe('Placed-token ids; the sidebar actor is untouched.'),
 });
 
-// --- update-token (bespoke — actor→all-copies matching + the lockRotation gotcha) ---
-const UpdateTokenSchema = z
+// --- update (bespoke — actor→all-copies matching + the lockRotation gotcha) ---
+const UpdateTokensSchema = z
   .object({
     sceneIdentifier: sceneTarget,
-    tokenIds: z
-      .array(z.string().min(1))
-      .optional()
-      .describe('Placed-token ids; a union with actorIds.'),
+    ids: z.array(z.string().min(1)).optional().describe('Placed-token ids; a union with actorIds.'),
     actorIds: z
       .array(z.string().min(1))
       .optional()
-      .describe('Actor ids or exact names: every placed copy of each; a union with tokenIds.'),
+      .describe('Actor ids or exact names: every placed copy of each; a union with ids.'),
     rotation: z.number().optional().describe('Facing in degrees (0–359), for every matched token.'),
     randomizeRotation: z
       .boolean()
@@ -121,125 +120,106 @@ const UpdateTokenSchema = z
           'change.'
       ),
   })
-  .refine(v => (v.tokenIds?.length ?? 0) > 0 || (v.actorIds?.length ?? 0) > 0, {
-    message: 'Provide at least one target: tokenIds and/or actorIds.',
+  .refine(v => (v.ids?.length ?? 0) > 0 || (v.actorIds?.length ?? 0) > 0, {
+    message: 'Provide at least one target: ids and/or actorIds.',
   })
   .refine(
     v =>
-      v.rotation !== undefined ||
-      v.randomizeRotation === true ||
-      v.scale !== undefined ||
-      v.imagePath !== undefined ||
-      v.elevation !== undefined ||
-      v.hidden !== undefined ||
-      v.lockRotation !== undefined ||
-      v.x !== undefined ||
-      v.y !== undefined ||
-      v.name !== undefined ||
-      v.displayName !== undefined ||
-      v.displayBars !== undefined ||
-      v.bar1 !== undefined ||
-      v.bar2 !== undefined ||
-      v.ring !== undefined ||
-      v.hp !== undefined,
+      Object.keys(v).some(
+        k => !['sceneIdentifier', 'ids', 'actorIds'].includes(k) && (v as any)[k] !== undefined
+      ),
     {
       message:
         'Provide at least one field to change (rotation, randomizeRotation, scale, imagePath, elevation, hidden, lockRotation, x, y, name, displayName, displayBars, bar1, bar2, ring, or hp).',
     }
   );
 
-export const tokenToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'list-tokens',
+export const tokenKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'tokens',
+  actions: [
+    placeableAction({
+      action: 'create',
+      description:
+        "Place actors' tokens on a scene from their prototypes, at canvas-pixel x / y, with " +
+        'per-copy hidden / elevation / rotation / name / disposition overrides.',
+      schema: PlaceTokensSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('placeSceneTokens', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'token');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
         'Every placed token on a scene: id, name, x / y, size, rotation, elevation, hidden, ' +
         'disposition, actorId, art + scale, lockRotation. A token id is also an actor target for the ' +
         "actor tools (that token's own delta, not the base actor).",
-      inputSchema: toInputSchema(ListTokensSchema),
-    },
-    {
-      name: 'place-tokens',
+      schema: ListTokensSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneTokens', parsed);
+        return formatListPlaceableLines(result, 'token');
+      },
+    }),
+    placeableAction({
+      action: 'update',
       description:
-        "Place actors' tokens on a scene from their prototypes, at canvas-pixel x / y, with " +
-        'per-copy hidden / elevation / rotation / name / disposition overrides. GM-only.',
-      inputSchema: toInputSchema(PlaceTokensSchema),
-    },
-    {
-      name: 'update-token',
-      description:
-        'Edit placed tokens (not the prototype: update-actor) by tokenIds and/or actorIds (every ' +
-        'placed copy of an actor): rotation, scale, art, elevation, hidden, lockRotation, position, ' +
-        "name, nameplate / bar visibility, bars, ring, and hp on the token's own delta. Reports " +
-        'matched / updated and unresolved ids. GM-only.',
-      inputSchema: toInputSchema(UpdateTokenSchema),
-    },
-    {
-      name: 'delete-tokens',
-      description:
-        'Remove placed tokens by id; the sidebar actor survives. Missing ids are reported, never ' +
-        'fatal. GM-only.',
-      inputSchema: toInputSchema(DeleteTokensSchema),
-    },
-  ],
-  handlers: {
-    'list-tokens': async args => {
-      const parsed = ListTokensSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneTokens', parsed);
-      return formatListPlaceables(result, 'token');
-    },
-    'place-tokens': async args => {
-      const { sceneIdentifier, tokens } = PlaceTokensSchema.parse(args ?? {});
-      const result = await foundry.call('placeSceneTokens', { sceneIdentifier, items: tokens });
-      return formatCreatePlaceables(result, 'token');
-    },
-    'update-token': async args => {
-      const parsed = UpdateTokenSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneTokens', parsed);
-      if (result?.notFound) {
-        return `Scene not found: "${result.notFound}". Nothing changed.`;
-      }
-      const um = result?.unmatched ?? {};
-      const umBits = [
-        ...(um.tokenIds?.length ? [`token ${um.tokenIds.join(', ')}`] : []),
-        ...(um.actorIds?.length ? [`actor ${um.actorIds.join(', ')}`] : []),
-      ];
-      if ((result?.matched ?? 0) === 0) {
+        'Edit placed tokens (not the prototype: update-actor) by ids and/or actorIds (every placed ' +
+        'copy of an actor) — ONE patch for every match: rotation, scale, art, elevation, hidden, ' +
+        "lockRotation, position, name, nameplate / bar visibility, bars, ring, hp on the token's " +
+        'own delta. Reports each token as it stands.',
+      schema: UpdateTokensSchema,
+      handler: async parsed => {
+        const { ids, ...rest } = parsed;
+        const result = await foundry.call('updateSceneTokens', { ...rest, tokenIds: ids });
+        if (result?.notFound) {
+          throw new FormattedToolError(`Scene not found: "${result.notFound}". Nothing changed.`);
+        }
+        const um = result?.unmatched ?? {};
+        const umBits = [
+          ...(um.tokenIds?.length ? [`token ${um.tokenIds.join(', ')}`] : []),
+          ...(um.actorIds?.length ? [`actor ${um.actorIds.join(', ')}`] : []),
+        ];
+        if ((result?.matched ?? 0) === 0) {
+          return (
+            `No tokens matched on "${result?.sceneName}" (${result?.sceneId})` +
+            (umBits.length ? ` — unresolved ${umBits.join('; ')}` : '') +
+            '.'
+          );
+        }
+        const rows = Array.isArray(result?.tokens)
+          ? result.tokens
+              .map(
+                (t: any) =>
+                  `\n  • ${t.name} (${t.id}) — rot ${t.rotation}°, scale ${t.scale}, elev ${t.elevation}` +
+                  `${t.hidden ? ', hidden' : ''}, name ${t.displayName}, bars ${t.displayBars}` +
+                  `${t.bar1 ? ` (${t.bar1})` : ''}, ring ${t.ring ? 'on' : 'off'}` +
+                  `${t.hp ? `, hp ${t.hp.value}/${t.hp.max}` : ''}` +
+                  `${t.src ? `, art ${t.src}` : ''}`
+              )
+              .join('')
+          : '';
+        const warns = Array.isArray(result?.warnings) ? result.warnings : [];
+        const warnLine = warns.length
+          ? `\n\n⚠️ ${warns.length} note(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`
+          : '';
+        const umLine = umBits.length ? `\n  (unresolved: ${umBits.join('; ')})` : '';
         return (
-          `No tokens matched on "${result?.sceneName}" (${result?.sceneId})` +
-          (umBits.length ? ` — unresolved ${umBits.join('; ')}` : '') +
-          '.'
+          `Updated ${result?.updated ?? 0} of ${result?.matched ?? 0} matched token(s) on ` +
+          `"${result?.sceneName}" (${result?.sceneId})` +
+          rows +
+          umLine +
+          warnLine
         );
-      }
-      const rows = Array.isArray(result?.tokens)
-        ? result.tokens
-            .map(
-              (t: any) =>
-                `\n  • ${t.name} (${t.id}) — rot ${t.rotation}°, scale ${t.scale}, elev ${t.elevation}` +
-                `${t.hidden ? ', hidden' : ''}, name ${t.displayName}, bars ${t.displayBars}` +
-                `${t.bar1 ? ` (${t.bar1})` : ''}, ring ${t.ring ? 'on' : 'off'}` +
-                `${t.hp ? `, hp ${t.hp.value}/${t.hp.max}` : ''}` +
-                `${t.src ? `, art ${t.src}` : ''}`
-            )
-            .join('')
-        : '';
-      const warns = Array.isArray(result?.warnings) ? result.warnings : [];
-      const warnLine = warns.length
-        ? `\n\n⚠️ ${warns.length} note(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`
-        : '';
-      const umLine = umBits.length ? `\n  (unresolved: ${umBits.join('; ')})` : '';
-      return (
-        `Updated ${result?.updated ?? 0} of ${result?.matched ?? 0} matched token(s) on ` +
-        `"${result?.sceneName}" (${result?.sceneId})` +
-        rows +
-        umLine +
-        warnLine
-      );
-    },
-    'delete-tokens': async args => {
-      const { sceneIdentifier, tokenIds } = DeleteTokensSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneTokens', { sceneIdentifier, ids: tokenIds });
-      return formatDeletePlaceables(result, 'token');
-    },
-  },
+      },
+    }),
+    placeableAction({
+      action: 'delete',
+      description: 'Remove placed tokens by id; the sidebar actor survives.',
+      schema: DeleteTokensSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneTokens', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'token');
+      },
+    }),
+  ],
 });

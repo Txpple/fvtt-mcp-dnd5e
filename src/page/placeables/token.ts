@@ -118,16 +118,28 @@ async function toCreateDoc(input: TokenPlaceInput): Promise<CreateDocResult> {
   return { doc };
 }
 
+/**
+ * The STORED value of a token field Foundry animates. Since v13 a viewed scene's TokenDocument
+ * reports x / y / rotation / elevation as the in-flight animated value (a rotation to 90 reads 54
+ * a few ms after the update lands); `_source` holds what was written — the number a caller set
+ * and will read back once the animation ends. Unviewed scenes (and the unit-test mocks) have no
+ * animation, so the two agree and the fallback is the plain field.
+ */
+function stored<T>(doc: any, key: string): T {
+  const src = doc?._source;
+  return (src && key in src ? src[key] : doc?.[key]) as T;
+}
+
 function dump(doc: any): Record<string, unknown> {
   return {
     id: doc.id,
     name: doc.name,
-    x: doc.x,
-    y: doc.y,
+    x: stored<number>(doc, 'x'),
+    y: stored<number>(doc, 'y'),
     width: doc.width,
     height: doc.height,
-    rotation: doc.rotation,
-    elevation: doc.elevation,
+    rotation: stored<number>(doc, 'rotation'),
+    elevation: stored<number>(doc, 'elevation'),
     hidden: doc.hidden,
     lockRotation: doc.lockRotation,
     disposition: DISPOSITION_NAME[doc.disposition] ?? doc.disposition,
@@ -398,18 +410,20 @@ export async function updateSceneTokens(
 
   if (updates.length > 0) await scene.updateEmbeddedDocuments('Token', updates);
 
+  // The report reads the STORED fields (`stored`): on a viewed scene the update animates and the
+  // document's own x / y / rotation / elevation are mid-flight for a moment after the write.
   const summarize = (t: any) => ({
     id: t.id,
     name: t.name,
     actorId: t.actorId || undefined,
-    rotation: t.rotation,
+    rotation: stored<number>(t, 'rotation'),
     scale: t.texture?.scaleX,
     src: t.texture?.src,
-    elevation: t.elevation,
+    elevation: stored<number>(t, 'elevation'),
     hidden: t.hidden,
     lockRotation: t.lockRotation,
-    x: t.x,
-    y: t.y,
+    x: stored<number>(t, 'x'),
+    y: stored<number>(t, 'y'),
     displayName: DISPLAY_MODE_NAME[t.displayName] ?? t.displayName,
     displayBars: DISPLAY_MODE_NAME[t.displayBars] ?? t.displayBars,
     bar1: t.bar1?.attribute ?? null,

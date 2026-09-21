@@ -179,7 +179,7 @@ export class AssetBridgeTools {
     const placed =
       Array.isArray(result.placedTokens) && result.placedTokens.length
         ? `\n\n⚠️ ${stale} placed token(s) still carry the old art/settings — ` +
-          'update-token each or delete + re-drop:\n' +
+          'manage-placeables (kind tokens, action update) each or delete + re-drop:\n' +
           result.placedTokens
             .map(t => `- ${t.scene} · ${t.name} (${t.tokenId}): ${t.stale.join(', ')}`)
             .join('\n') +

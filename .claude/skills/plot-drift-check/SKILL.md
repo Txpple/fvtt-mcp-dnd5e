@@ -97,8 +97,9 @@ pass that ends "0 hits remain" is the exit criterion.
 
 - **Never edit compendium sources** — world documents only.
 - **Placed NPC tokens are snapshots**: a base-actor fix does NOT reach tokens already on scenes.
-  If a renamed NPC has placed tokens, check them (`list-tokens`) and fix per-instance (token id as
-  `actorIdentifier`, or `update-token` for the nameplate).
+  If a renamed NPC has placed tokens, check them (`manage-placeables { kind: "tokens", action: "list" }`)
+  and fix per-instance (token id as `actorIdentifier`, or `manage-placeables { kind: "tokens",
+  action: "update", ids, name }` for the nameplate).
 - Don't touch player-authored text (PC bios the player wrote) without flagging it explicitly.
 - Don't "fix" the *deliberate? confirm* bucket without an answer.
 - If the doc and the user disagree mid-run, stop — the doc is the north star only after the user

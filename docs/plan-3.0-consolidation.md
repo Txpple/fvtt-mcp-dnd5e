@@ -321,3 +321,19 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   tom-cartos-import (steps 4 and 6), plot-drift-check (the pins row); two registry tests that
   named the old tools now assert the notes kind. Live: verify-placeables-tooling **74/74**,
   integration 80 passed / 6 skipped.
+- 2026-09-21 — **M8 tokens** into `manage-placeables` (`kind: "tokens"`): 4 tools → 0 new names
+  (`list-tokens` / `place-tokens` / `update-token` / `delete-tokens`), the union 33,397 → 38,362
+  (+4,965) against the four's **5,225** (−5.0%); tools/list 203,793, names 124 (9,270 chars).
+  `place` is `action: "create"` (`items`); `update` keeps its bespoke shape — targets `ids`
+  and/or `actorIds` (every placed copy), ONE patch for every match, the per-token report — with
+  its scene miss now `isError` (§3; it had been a prose string); `delete` takes `ids`.
+  Re-pointed: plot-drift-check, session-audit (3 lines), soundscape-builder (2), token-cutout,
+  `_shared/authoring-policy.md`, and the two tool descriptions that routed to `update-token` by
+  name (update-actor, set-actor-art's stale-copies report). **Found live, fixed on the page:**
+  section G views the fixture scene (the tile-bounds check), so a token update ANIMATES and the
+  v13+ TokenDocument reports x / y / rotation / elevation mid-flight for a moment (a rotation to
+  90 read 54 a few ms after the write) — the update report and the list dump now read `_source`
+  for the animated fields (`stored()` in `src/page/placeables/token.ts`; the old tool had the
+  same report and the old verify never viewed the scene). Live: verify-placeables-tooling
+  **78/78**, verify-token-tooling 11/11, verify-token-reskin 10/10, integration 80 passed /
+  6 skipped.

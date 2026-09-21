@@ -334,8 +334,17 @@ try {
     ['tiles', 'lights', 'walls', 'drawings', 'sounds'].every(k =>
       ['create', 'list', 'update', 'delete'].every(a => !names.has(`${a}-${k}`))
     ) &&
-      ['create-scene-notes', 'list-notes', 'update-note', 'delete-note'].every(n => !names.has(n)),
-    'G — the 24 per-op tools are gone'
+      [
+        'create-scene-notes',
+        'list-notes',
+        'update-note',
+        'delete-note',
+        'list-tokens',
+        'place-tokens',
+        'update-token',
+        'delete-tokens',
+      ].every(n => !names.has(n)),
+    'G — the 28 per-op tools are gone'
   );
   const mp = (kind, action, args = {}) =>
     dispatch('manage-placeables', { kind, action, sceneIdentifier: sceneId, ...args });
@@ -372,6 +381,35 @@ try {
     sounds: 'id x y radius path volume repeat walls easing hidden',
     notes: 'id x y text entryId pageId iconSize global',
   };
+  // tokens: the fixture token from F (a placed actor) — list, then the actor→all-copies update
+  {
+    const out = String(await mp('tokens', 'list'));
+    const [head, ...rows] = out.split('\n');
+    assert(
+      head.startsWith(
+        `${rows.length} token(s) on "${TAG} Scene" (${sceneId}): id name x y width height rotation elevation hidden lockRotation disposition actorId src scale sort`
+      ),
+      `G — list tokens: header names the columns (${head.slice(0, 80)}…)`
+    );
+    assert(
+      rows.some(r => r.startsWith(`${fx.tokenId} `)),
+      'G — list tokens: the placed token is a row'
+    );
+    const upd = String(
+      await mp('tokens', 'update', { ids: [fx.tokenId], hidden: true, rotation: 90 })
+    );
+    assert(
+      upd.startsWith('Updated 1 of 1 matched token(s)') &&
+        upd.includes('rot 90°') &&
+        upd.includes('hidden'),
+      `G — update tokens by id: ${upd.split('\n')[0]} / ${upd.split('\n')[1]}`
+    );
+    const none = String(await mp('tokens', 'update', { ids: ['ZZghost0000000'], hidden: false }));
+    assert(
+      none.includes('No tokens matched') && none.includes('unresolved token ZZghost0000000'),
+      `G — update tokens: no match names the unresolved id (${none})`
+    );
+  }
   for (const [kind, columns] of Object.entries(gColumns)) {
     const out = await mp(kind, 'list');
     const [head, ...rows] = String(out).split('\n');
@@ -416,7 +454,7 @@ try {
   for (const [args, want] of [
     [
       { kind: 'roofs', action: 'list' },
-      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes" (got "roofs")',
+      'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens" (got "roofs")',
     ],
     [
       { kind: 'walls', action: 'roll' },

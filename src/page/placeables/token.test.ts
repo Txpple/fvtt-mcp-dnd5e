@@ -42,6 +42,31 @@ describe('tokenDescriptor.dump', () => {
     });
   });
 
+  it('reads the STORED x / y / rotation / elevation on a viewed scene (the document animates them)', () => {
+    // v13+: after an update lands, a viewed scene's TokenDocument reports the in-flight animated
+    // value for a moment; `_source` is what was written. Found live (verify-placeables G).
+    const doc = {
+      id: 'tk1',
+      x: 112.5,
+      y: 100,
+      rotation: 53.964,
+      elevation: 2.2,
+      _source: { x: 300, y: 400, rotation: 90, elevation: 10 },
+      texture: {},
+    };
+    expect(tokenDescriptor.dump(doc)).toMatchObject({
+      x: 300,
+      y: 400,
+      rotation: 90,
+      elevation: 10,
+    });
+    // no _source (an unviewed scene, a mock): the plain fields
+    expect(tokenDescriptor.dump({ id: 'a', x: 1, rotation: 2, texture: {} })).toMatchObject({
+      x: 1,
+      rotation: 2,
+    });
+  });
+
   it('passes an unknown disposition through unchanged and nulls a missing actorId', () => {
     const out = tokenDescriptor.dump({ id: 'x', disposition: 7, actorId: '', texture: {} });
     expect(out.disposition).toBe(7);
