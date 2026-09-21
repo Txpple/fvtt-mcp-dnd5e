@@ -18,9 +18,9 @@ of cards. As with every authoring skill: **you decide; the tool does.**
 
 - **You (this skill) decide the deck's CONTENTS** — which cards, each card's name, its face text (the
   outcome/effect/flavor), and which art it uses. That judgment IS the job.
-- **The tool only STRUCTURES** — `create-cards` renders your cards into the v14 Cards/Card shape (one
-  face per card: `{ name, text?, img? }`); `import-cards` instantiates a core preset deck. Neither
-  invents a card.
+- **The tool only STRUCTURES** — `manage-cards` `create` renders your cards into the v14 Cards/Card
+  shape (one face per card: `{ name, text?, img? }`); `import` instantiates a core preset deck.
+  Neither invents a card.
 
 ## Authoring policy — what compendium-first means HERE
 
@@ -28,7 +28,7 @@ Read [`_shared/authoring-policy.md`](../_shared/authoring-policy.md). The big cl
 
 - **Cards have NO premium-book compendium** (the MM/PHB/DMG ship no card decks). So **compendium-first
   is N/A** — decks are **asset-driven, like scenes**: the card **art** is an uploaded image asset, and
-  the face **text** is yours to write. There is no "copy the book deck" path; `import-cards` only
+  the face **text** is yours to write. There is no "copy the book deck" path; `manage-cards` `import` only
   instantiates Foundry's built-in **preset** decks (a standard 52-card deck).
 - **Don't fabricate canon.** A famous deck's contents ARE canonical — the **Deck of Many Things** card
   list and its effects come from the DMG; transcribe them, don't invent new cards or outcomes. If the
@@ -37,12 +37,12 @@ Read [`_shared/authoring-policy.md`](../_shared/authoring-policy.md). The big cl
 
 ## Tools
 
-- **`create-cards`** — the structuring creator (your main tool). `{ name, type?, description?,
-  folderName?, cards?: [{ name, text?, img? }] }`. Builds a stack with one face per card.
-- **`import-cards`** — instantiate a core **preset** deck (`{ preset, name?, folderName? }`), e.g.
+- **`manage-cards { action: "create" }`** — the structuring creator (your main tool). `{ name, type?,
+  description?, folderName?, cards?: [{ name, text?, img? }] }`. Builds a stack with one face per card.
+- **`{ action: "import" }`** — instantiate a core **preset** deck (`{ preset, name?, folderName? }`), e.g.
   `pokerDark` / `pokerLight` (a standard 52-card deck). The ready-made-deck path.
-- **`list-cards`** — list stacks + ids (deck/hand/pile, card count).
-- **`delete-cards`** — remove stacks by exact id/name (strict).
+- **`{ action: "list" }`** — one line per stack: id, name, type (deck/hand/pile), card count.
+- **`{ action: "delete" }`** — remove stacks by exact id/name (strict).
 
 ## The card model
 
@@ -75,7 +75,8 @@ For authoring you almost always build a **deck**.
 - **Tarokka / fortune deck** — a themed `deck`; each card a name + meaning (`text`) + art.
 - **Encounter / event / fate deck** — a `deck` where each card is an event you author (`text`), drawn
   to drive a scene. Card art optional.
-- **Standard playing-card deck** — don't hand-build 52 cards; **`import-cards` `preset:"pokerDark"`**.
+- **Standard playing-card deck** — don't hand-build 52 cards; **`manage-cards` `{ action: "import",
+  preset: "pokerDark" }`**.
 
 ## Art is an asset (no compendium)
 
@@ -86,7 +87,7 @@ text-only deck (cards still work, they just show text, not a picture).
 ## Scope boundary — creation only
 
 Build decks. **Dealing, drawing, shuffling, and passing cards in play are out of scope** — this
-project authors content and does not run the table; `create-cards` / `import-cards` set up the stack.
+project authors content and does not run the table; `manage-cards` `create` / `import` set up the stack.
 
 ## Don't
 

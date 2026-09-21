@@ -365,11 +365,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'get-rolltable': args => tableTools.handleGetRollTable(args),
     'delete-rolltable': args => tableTools.handleDeleteRollTable(args),
 
-    // Cards
-    'create-cards': args => cardsTools.handleCreateCards(args),
-    'import-cards': args => cardsTools.handleImportCards(args),
-    'list-cards': args => cardsTools.handleListCards(args),
-    'delete-cards': args => cardsTools.handleDeleteCards(args),
+    // Cards — ONE tool (action; M8)
+    'manage-cards': args => cardsTools.handle('manage-cards', args),
 
     // Chat log
     'send-chat-message': args => chatTools.handleSendChatMessage(args),

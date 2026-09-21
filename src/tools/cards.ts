@@ -1,23 +1,25 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import { formatDeletionResult } from '../utils/format.js';
-import { toInputSchema } from '../utils/schema.js';
+import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 /**
- * Cards tools — create / list / delete. Net-new document type for adventure
- * creation (decks, hands, piles — e.g. a deck of many things, tarokka, custom
- * encounter decks). Runs over the bridge against live Foundry documents, so the
- * world must be loaded and the headless Foundry client connected. GM-only for writes.
+ * Cards tools — Cards stacks (decks, hands, piles — a deck of many things, tarokka, custom
+ * encounter decks) as ONE tool: `manage-cards`, selected by `action` (create / import / list /
+ * delete; src/tools/_union.ts — M8 of the 3.0 plan). Runs over the bridge against live Foundry
+ * documents (page/collections.ts). GM-only for writes.
  */
 
-// Single source of truth for each tool's input contract: the handler parses with these
-// schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
+export const MANAGE_CARDS = 'manage-cards';
+
+// Single source of truth for each action's input contract: the member parses with these schemas
+// and the advertised JSON Schema is derived from the same zod.
 const CreateCardsSchema = z.object({
-  name: z.string().min(1).describe('Cards stack name.'),
-  type: z.enum(['deck', 'hand', 'pile']).optional().describe('Stack type (default "deck").'),
+  name: z.string().min(1).describe('Stack name.'),
+  type: z.enum(['deck', 'hand', 'pile']).optional().describe('Default deck.'),
   description: z.string().optional(),
-  folderName: z.string().optional().describe('Folder (created if absent).'),
+  folderName: z.string().optional(),
   cards: z
     .array(
       z.object({
@@ -39,15 +41,15 @@ const ListCardsSchema = z.object({});
 const ImportCardsSchema = z.object({
   preset: z.string().min(1).describe('Core preset deck key ("pokerDark" / "pokerLight").'),
   name: z.string().min(1).optional().describe('Name for the stack.'),
-  folderName: z.string().optional().describe('Folder (created if absent).'),
+  folderName: z.string().optional(),
 });
 
 const DeleteCardsSchema = z.object({
-  identifiers: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Exact ids (preferred) or exact names of Cards stacks to delete.'),
+  identifiers: z.array(z.string().min(1)).min(1).describe('Exact ids or exact names.'),
 });
+
+/** The list columns (§3: a fixed, documented order). */
+const LIST_COLUMNS = ['id', 'name', 'type', 'cards'] as const;
 
 export interface CardsToolsOptions {
   foundry: FoundryBridge;
@@ -55,75 +57,76 @@ export interface CardsToolsOptions {
 }
 
 export class CardsTools {
-  private foundry: FoundryBridge;
   private logger: Logger;
+  private union: UnionTool;
 
   constructor({ foundry, logger }: CardsToolsOptions) {
-    this.foundry = foundry;
     this.logger = logger.child({ component: 'CardsTools' });
+    this.union = unionTool({
+      name: MANAGE_CARDS,
+      description: 'Cards stacks by exact id or name: create / import / list / delete. GM-only.',
+      discriminators: ['action'],
+      shared: { folderName: z.string().describe('Folder (created if absent).') },
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description: 'Create a stack with its cards.',
+          schema: CreateCardsSchema,
+          handler: async parsed => {
+            const r = await foundry.call('createCards', parsed);
+            return (
+              `Created ${r?.type} "${r?.cardsName}" (${r?.cardsId}) with ${r?.cardCount} card(s)` +
+              warningBlock(r?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'import' },
+          description: 'Create a stack from a core preset deck.',
+          schema: ImportCardsSchema,
+          handler: async parsed => {
+            const r = await foundry.call('importCardsPreset', parsed);
+            return (
+              `Imported ${r?.type} "${r?.cardsName}" (${r?.cardsId}) from preset "${r?.preset}": ` +
+              `${r?.cardCount} card(s)`
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description: 'Stacks: id, name, type, card count.',
+          schema: ListCardsSchema,
+          handler: async () => {
+            const stacks = await foundry.call('listCards');
+            const records = (Array.isArray(stacks) ? stacks : []).map(c => ({
+              id: c.id,
+              name: c.name,
+              type: c.type,
+              cards: c.cardCount,
+            }));
+            return listLines(`${records.length} stack(s)`, LIST_COLUMNS, records);
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: 'Permanently delete stacks.',
+          schema: DeleteCardsSchema,
+          handler: async ({ identifiers }) => {
+            const r = await foundry.call('deleteCards', { identifiers });
+            return deletedLine(r, 'stack');
+          },
+        }),
+      ],
+    });
   }
 
   getToolDefinitions() {
-    return [
-      {
-        name: 'create-cards',
-        description:
-          'Create a Cards stack (deck, hand or pile) with its cards (name, face text and/or image, a ' +
-          'GM note). GM-only.',
-        inputSchema: toInputSchema(CreateCardsSchema),
-      },
-      {
-        name: 'import-cards',
-        description: 'Create a stack from a core preset deck (a standard 52-card deck). GM-only.',
-        inputSchema: toInputSchema(ImportCardsSchema),
-      },
-      {
-        name: 'list-cards',
-        description: 'List Cards stacks with id, name, type (deck/hand/pile), and card count.',
-        inputSchema: toInputSchema(ListCardsSchema),
-      },
-      {
-        name: 'delete-cards',
-        description: 'Permanently delete Cards stacks by exact id or exact name. GM-only.',
-        inputSchema: toInputSchema(DeleteCardsSchema),
-      },
-    ];
+    return [this.union.def];
   }
 
-  async handleCreateCards(args: any): Promise<string> {
-    const parsed = CreateCardsSchema.parse(args ?? {});
-    const result = await this.foundry.call('createCards', parsed);
-    let out =
-      `Created ${result?.type} "${result?.cardsName}" (${result?.cardsId}) with ` +
-      `${result?.cardCount} card(s).`;
-    const warns = Array.isArray(result?.warnings) ? result.warnings : [];
-    if (warns.length) {
-      out += `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`;
-    }
-    return out;
-  }
-
-  async handleImportCards(args: any): Promise<string> {
-    const parsed = ImportCardsSchema.parse(args ?? {});
-    const result = await this.foundry.call('importCardsPreset', parsed);
-    return (
-      `Imported ${result?.type} "${result?.cardsName}" (${result?.cardsId}) from preset ` +
-      `"${result?.preset}" — ${result?.cardCount} card(s).`
-    );
-  }
-
-  async handleListCards(_args: any): Promise<string> {
-    const stacks = (await this.foundry.call('listCards')) ?? [];
-    if (!Array.isArray(stacks) || stacks.length === 0) return 'No card stacks found.';
-    const lines = stacks.map(
-      (c: any) => `  - "${c.name}" (${c.id}) — ${c.type}, ${c.cardCount} card(s)`
-    );
-    return `Card stacks (${stacks.length}):\n${lines.join('\n')}`;
-  }
-
-  async handleDeleteCards(args: any): Promise<string> {
-    const { identifiers } = DeleteCardsSchema.parse(args ?? {});
-    const result = await this.foundry.call('deleteCards', { identifiers });
-    return formatDeletionResult(result, 'card stack(s)');
+  /** Route one cards tool call to its member (registry-facing). */
+  async handle(name: string, args: unknown): Promise<unknown> {
+    if (name !== MANAGE_CARDS) throw new Error(`Unknown cards tool: ${name}`);
+    return this.union.handle(args);
   }
 }

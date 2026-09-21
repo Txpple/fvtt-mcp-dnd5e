@@ -52,7 +52,7 @@ const CALLS = [
   ['manage-placeables', { kind: 'regions', action: 'list' }],
   ['manage-placeables', { kind: 'notes', action: 'list' }],
   ['list-actor-ownership', {}],
-  ['list-cards', {}],
+  ['manage-cards', { action: 'list' }],
   ['manage-macros', { action: 'list' }],
 ];
 

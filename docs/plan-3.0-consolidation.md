@@ -417,3 +417,16 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   soundboard, the list row, rename + re-mode + fade read back, the two refusals, the miss, the
   delete with the not-found tail), verify-read-tools 7/7, integration 80 passed / 6 skipped.
   Next: cards → tables → items → journals → scenes → actors.
+- 2026-09-21 — **M8 cards → `manage-cards`** (`action`: create / import / list / delete): 4 tools
+  → 1, the union **2,007** against the four's **2,009** (−0.1%; the naive fold was 2,132, +6.1%).
+  `folderName` (create + import) is the `shared` root leaf; the rest was prose that restated
+  its own leaves (the create description listing the card fields, the import description saying
+  "a standard 52-card deck" beside the preset leaf's keys, "Stack type (default "deck")" beside
+  the enum). tools/list 203,661, names 106 (7,980 chars). The §3 shapes: list is `N stack(s): id
+  name type cards`; create / import are one line; delete is `deletedLine`. Re-pointed:
+  cards-builder (6 lines), README (counts + the CRUD parenthetical), tool-results, the registry
+  tests (109 → 106); skills-matrix 0 / 0; siblings 0. Decision #20: the four kept as actions.
+  Live: verify-cards-tooling **15/15** (the dispatch section: a pile with one card, the poker
+  preset import, the list header + both rows, the two refusals by name, the delete with the
+  not-found tail), integration 80 passed / 6 skipped. Next: tables → items → journals → scenes
+  → actors.

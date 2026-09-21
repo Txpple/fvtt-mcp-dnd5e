@@ -1,202 +1,154 @@
 /**
- * Unit tests for CardsTools (create-cards, list-cards, delete-cards).
- *
- * Covers the two things these handlers own before the bridge is reached:
- *   1. zod input validation — required fields, enum membership, non-empty
- *      strings/arrays are enforced (bad input throws, never hits the bridge).
- *   2. response formatting — the human-readable string built from the bridge
- *      result.
+ * Unit tests for CardsTools — manage-cards (the M8 union: action create / import / list / delete).
+ * Covers the two things the handlers own before the bridge is reached: zod validation (required
+ * fields, enum membership, non-empty strings/arrays; the member selected by `action` and its
+ * refusals by name) and the §3 shapes (the list lines, the one-line confirmations).
  */
 
 import { describe, it, expect } from 'vitest';
-import { CardsTools } from './cards.js';
+import { CardsTools, MANAGE_CARDS } from './cards.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
   const tools = new CardsTools({ foundry, logger: makeLogger() });
-  return { tools, calls, foundry };
+  const run = (args: unknown) => tools.handle(MANAGE_CARDS, args);
+  return { tools, calls, run };
 }
 
-describe('CardsTools.getToolDefinitions', () => {
-  it('exposes exactly the four cards tools', () => {
-    const { tools } = build();
-    const names = tools
-      .getToolDefinitions()
-      .map(t => t.name)
-      .sort();
-    expect(names).toEqual(['create-cards', 'delete-cards', 'import-cards', 'list-cards']);
+describe('manage-cards (the M8 union: action create / import / list / delete)', () => {
+  it('advertises one tool: the action enum, the shared folderName leaf, closed members', () => {
+    const [def] = build().tools.getToolDefinitions();
+    expect(def!.name).toBe(MANAGE_CARDS);
+    const schema = def!.inputSchema as any;
+    expect(schema.properties.action.enum).toEqual(['create', 'import', 'list', 'delete']);
+    expect(schema.properties.folderName.description).toBe('Folder (created if absent).');
+    const byAction = Object.fromEntries(
+      schema.anyOf.map((m: any) => [m.properties.action.const, m])
+    );
+    for (const m of schema.anyOf) expect(m.additionalProperties).toBe(false);
+    expect(byAction.create.properties.folderName).toEqual({ type: 'string' });
+    expect(byAction.import.properties.folderName).toEqual({ type: 'string' });
+    expect(byAction.import.required).toEqual(['action', 'preset']);
   });
 
-  it('every definition has an object inputSchema', () => {
-    const { tools } = build();
-    for (const def of tools.getToolDefinitions()) {
-      expect(def.inputSchema.type).toBe('object');
-    }
+  it('refuses an unknown action and an unknown key by name against the selected member', async () => {
+    const { run } = build();
+    await expect(run({ action: 'draw' })).rejects.toThrow(
+      'manage-cards: action must be one of "create", "import", "list", "delete" (got "draw").'
+    );
+    await expect(run({ action: 'import', preset: 'pokerDark', type: 'hand' })).rejects.toThrow(
+      'manage-cards (action "import"): unknown argument "type" — it takes: action, preset, name, folderName.'
+    );
   });
 });
 
-describe('handleCreateCards', () => {
-  it('forwards a valid request and formats the result', async () => {
-    const { tools, calls } = build({
+describe('manage-cards create', () => {
+  it('forwards a valid request and confirms on one line', async () => {
+    const { calls, run } = build({
       type: 'deck',
       cardsName: 'Tarokka',
       cardsId: 'c1',
       cardCount: 54,
     });
-    const out = await tools.handleCreateCards({ name: 'Tarokka', type: 'deck' });
-    expect(calls[0][0]).toBe('createCards');
-    expect(calls[0][1]).toMatchObject({ name: 'Tarokka', type: 'deck' });
-    expect(out).toBe('Created deck "Tarokka" (c1) with 54 card(s).');
+    const out = await run({ action: 'create', name: 'Tarokka', type: 'deck' });
+    expect(calls[0]![0]).toBe('createCards');
+    expect(calls[0]![1]).toMatchObject({ name: 'Tarokka', type: 'deck' });
+    expect(out).toBe('Created deck "Tarokka" (c1) with 54 card(s)');
   });
 
-  it('passes optional description, folderName and cards (text + img) through', async () => {
-    const { tools, calls } = build({
+  it('passes description, folderName and cards (text + img) through; appends the warnings', async () => {
+    const { calls, run } = build({
       type: 'pile',
       cardsName: 'Loot',
       cardsId: 'x',
       cardCount: 1,
+      warnings: ['cards/gem.png did not resolve (404).'],
     });
-    await tools.handleCreateCards({
+    const out = await run({
+      action: 'create',
       name: 'Loot',
       type: 'pile',
-      description: 'a pile',
+      description: 'Treasure',
       folderName: 'Decks',
-      cards: [{ name: 'The Sun', text: '<p>Gain a Wondrous item.</p>', img: 'path/sun.webp' }],
+      cards: [{ name: 'Gem', text: '<p>A ruby.</p>', img: 'cards/gem.png' }],
     });
-    expect(calls[0][1]).toMatchObject({
-      description: 'a pile',
+    expect(calls[0]![1]).toMatchObject({
+      description: 'Treasure',
       folderName: 'Decks',
-      cards: [{ name: 'The Sun', text: '<p>Gain a Wondrous item.</p>', img: 'path/sun.webp' }],
+      cards: [{ name: 'Gem', text: '<p>A ruby.</p>', img: 'cards/gem.png' }],
     });
-  });
-
-  it('rejects an empty name', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateCards({ name: '', type: 'deck' })).rejects.toThrow();
-  });
-
-  it('rejects a missing name', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateCards({ type: 'deck' })).rejects.toThrow();
-  });
-
-  it('surfaces page-side warnings about a card face img that 404s', async () => {
-    const { tools } = build({
-      type: 'deck',
-      cardsName: 'Tarokka',
-      cardsId: 'c1',
-      cardCount: 1,
-      warnings: [
-        'Supplied img "art/nope.webp" was not found on the server — the document was created',
-      ],
-    });
-    const out = await tools.handleCreateCards({
-      name: 'Tarokka',
-      cards: [{ name: 'The Sun', img: 'art/nope.webp' }],
-    });
-    expect(out).toContain('not found on the server');
-    expect(out).toContain('1 warning(s)');
-  });
-
-  it('rejects an invalid stack type', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateCards({ name: 'X', type: 'spread' })).rejects.toThrow();
-  });
-
-  it('rejects a card with an empty name', async () => {
-    const { tools } = build();
-    await expect(tools.handleCreateCards({ name: 'X', cards: [{ name: '' }] })).rejects.toThrow();
-  });
-});
-
-describe('handleImportCards', () => {
-  it('forwards a valid preset import and formats the result', async () => {
-    const { tools, calls } = build({
-      type: 'deck',
-      cardsName: 'Poker Deck',
-      cardsId: 'p1',
-      cardCount: 52,
-      preset: 'pokerDark',
-    });
-    const out = await tools.handleImportCards({ preset: 'pokerDark', folderName: 'Decks' });
-    expect(calls[0][0]).toBe('importCardsPreset');
-    expect(calls[0][1]).toMatchObject({ preset: 'pokerDark', folderName: 'Decks' });
-    expect(out).toBe('Imported deck "Poker Deck" (p1) from preset "pokerDark" — 52 card(s).');
-  });
-
-  it('rejects a missing preset', async () => {
-    const { tools } = build();
-    await expect(tools.handleImportCards({ folderName: 'Decks' })).rejects.toThrow();
-  });
-});
-
-describe('handleListCards', () => {
-  it('formats a populated list', async () => {
-    const { tools, calls } = build([
-      { name: 'Tarokka', id: 'c1', type: 'deck', cardCount: 54 },
-      { name: 'Hand', id: 'h1', type: 'hand', cardCount: 5 },
-    ]);
-    const out = await tools.handleListCards({});
-    expect(calls[0][0]).toBe('listCards');
     expect(out).toBe(
-      'Card stacks (2):\n' +
-        '  - "Tarokka" (c1) — deck, 54 card(s)\n' +
-        '  - "Hand" (h1) — hand, 5 card(s)'
+      'Created pile "Loot" (x) with 1 card(s)\n\n⚠️ 1 warning(s):\n- cards/gem.png did not resolve (404).'
     );
   });
 
-  it('reports when no stacks exist', async () => {
-    const { tools } = build([]);
-    const out = await tools.handleListCards({});
-    expect(out).toBe('No card stacks found.');
-  });
-
-  it('reports when the bridge returns null', async () => {
-    const { tools } = build(null);
-    const out = await tools.handleListCards({});
-    expect(out).toBe('No card stacks found.');
+  it('rejects an empty name, an unknown type, and a card without a name', async () => {
+    const { run } = build();
+    await expect(run({ action: 'create', name: '' })).rejects.toThrow();
+    await expect(run({ action: 'create', name: 'X', type: 'stack' })).rejects.toThrow();
+    await expect(
+      run({ action: 'create', name: 'X', cards: [{ text: 'no name' }] })
+    ).rejects.toThrow();
   });
 });
 
-describe('handleDeleteCards', () => {
-  it('forwards a valid delete and lists the removed stacks', async () => {
-    const { tools, calls } = build({
-      deletedCount: 2,
-      deleted: [
-        { name: 'Tarokka', id: 'c1' },
-        { name: 'Hand', id: 'h1' },
-      ],
-      notFound: [],
+describe('manage-cards import', () => {
+  it('forwards the preset and confirms on one line', async () => {
+    const { calls, run } = build({
+      type: 'deck',
+      cardsName: 'Poker',
+      cardsId: 'p1',
+      preset: 'pokerDark',
+      cardCount: 52,
     });
-    const out = await tools.handleDeleteCards({ identifiers: ['c1', 'h1'] });
-    expect(calls[0][0]).toBe('deleteCards');
-    expect(calls[0][1]).toEqual({ identifiers: ['c1', 'h1'] });
-    expect(out).toBe('Deleted 2 card stack(s):\n  - "Tarokka" (c1)\n  - "Hand" (h1)');
+    const out = await run({ action: 'import', preset: 'pokerDark', name: 'Poker' });
+    expect(calls[0]![0]).toBe('importCardsPreset');
+    expect(calls[0]![1]).toMatchObject({ preset: 'pokerDark', name: 'Poker' });
+    expect(out).toBe('Imported deck "Poker" (p1) from preset "pokerDark": 52 card(s)');
   });
 
-  it('appends a not-found list when ids do not resolve', async () => {
-    const { tools } = build({
-      deletedCount: 0,
-      deleted: [],
+  it('rejects a missing preset', async () => {
+    const { run } = build();
+    await expect(run({ action: 'import', name: 'X' })).rejects.toThrow();
+  });
+});
+
+describe('manage-cards list (the §3 line shape)', () => {
+  it('one line per stack under the column header', async () => {
+    const { calls, run } = build([
+      { id: 'c1', name: 'Deck of Many Things', type: 'deck', cardCount: 22 },
+      { id: 'c2', name: 'Discard', type: 'pile', cardCount: 0 },
+    ]);
+    const out = await run({ action: 'list' });
+    expect(calls[0]![0]).toBe('listCards');
+    expect(out).toBe(
+      '2 stack(s): id name type cards\nc1 "Deck of Many Things" deck 22\nc2 Discard pile 0'
+    );
+  });
+
+  it('an empty world (or a non-array result) is the header alone', async () => {
+    expect(await build([]).run({ action: 'list' })).toBe('0 stack(s).');
+    expect(await build(null).run({ action: 'list' })).toBe('0 stack(s).');
+  });
+});
+
+describe('manage-cards delete', () => {
+  it('forwards deleteCards and confirms the deletions with the not-found tail', async () => {
+    const { calls, run } = build({
+      deletedCount: 1,
+      deleted: [{ id: 'c1', name: 'Tarokka' }],
       notFound: ['ghost'],
     });
-    const out = await tools.handleDeleteCards({ identifiers: ['ghost'] });
-    expect(out).toContain('not found: ghost');
+    const out = await run({ action: 'delete', identifiers: ['c1', 'ghost'] });
+    expect(calls[0]![0]).toBe('deleteCards');
+    expect(calls[0]![1]).toEqual({ identifiers: ['c1', 'ghost'] });
+    expect(out).toBe('Deleted 1 stack(s): "Tarokka" (c1) (1 not found: ghost)');
   });
 
-  it('rejects a missing identifiers array', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteCards({})).rejects.toThrow();
-  });
-
-  it('rejects an empty identifiers array', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteCards({ identifiers: [] })).rejects.toThrow();
-  });
-
-  it('rejects an identifier that is an empty string', async () => {
-    const { tools } = build();
-    await expect(tools.handleDeleteCards({ identifiers: [''] })).rejects.toThrow();
+  it('rejects an empty identifiers array and an empty-string identifier', async () => {
+    const { run } = build();
+    await expect(run({ action: 'delete', identifiers: [] })).rejects.toThrow();
+    await expect(run({ action: 'delete', identifiers: [''] })).rejects.toThrow();
   });
 });

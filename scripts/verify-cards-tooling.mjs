@@ -1,18 +1,25 @@
-// Live verification for Phase 3.2 — Cards: themed-deck creation (face text + art) + preset import.
+// Live verification — Cards: themed-deck creation (face text + art) + preset import through the
+// foundry.call seam, then manage-cards (action create / import / list / delete — the M8 union,
+// src/tools/cards.ts) through buildToolRegistry().dispatch.
 //
-// Drives a real headless Foundry session through the foundry.call seam (exercises the freshly-built
-// dist/page.bundle.js WITHOUT a Claude Code restart). Against the live `sandbox` world it proves:
-//   * create-cards builds a deck whose cards carry a v14 face — if the face shape { name, text, img }
+// Drives a real headless Foundry session (exercises the freshly-built dist/page.bundle.js WITHOUT
+// a Claude Code restart). Against the live sandbox world it proves:
+//   * createCards builds a deck whose cards carry a v14 face — if the face shape { name, text, img }
 //     were wrong, CardsClass.create would reject the embedded card on validation, so a clean create
 //     with text+img cards proves the shape is accepted;
-//   * import-cards instantiates a core PRESET deck headlessly (the poker preset loads a 52-card deck),
-//     confirming the preset fetch + create path works;
-//   * GUARD: an unknown preset key is refused.
+//   * importCardsPreset instantiates a core PRESET deck headlessly (the poker preset loads a 52-card
+//     deck), confirming the preset fetch + create path works;
+//   * GUARD: an unknown preset key is refused;
+//   * through dispatch: the four per-op tools are gone; create / import / delete answer one-line
+//     confirmations; list is the §3 line shape (header + one row per stack); an unknown action / key
+//     is refused by name.
 // Everything created is cleaned up.
 //
 // Build first: npm run build. Run: node scripts/verify-cards-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const env = loadEnv();
@@ -46,7 +53,8 @@ async function expectThrow(label, fn, re) {
   }
 }
 
-const f = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const f = new Foundry(cfg);
 
 const createdCardIds = [];
 try {
@@ -55,7 +63,7 @@ try {
   console.log('[verify-cards] connected — exercising Cards tooling\n');
 
   // --- 1. create-cards: a themed deck with face text (+ one with art) ---
-  console.log('# create-cards: themed deck with face text + art');
+  console.log('# createCards: themed deck with face text + art');
   const deck = await f.call('createCards', {
     name: `${TAG} Mini Deck of Many Things`,
     type: 'deck',
@@ -97,10 +105,83 @@ try {
   // --- GUARD: unknown preset refused ---
   console.log('\n# guards');
   await expectThrow(
-    'import-cards(unknown preset -> refused)',
+    'importCardsPreset(unknown preset -> refused)',
     () => f.call('importCardsPreset', { preset: 'notARealPreset' }),
     /Unknown card preset/
   );
+
+  // --- manage-cards through the registry (the M8 union: action create / import / list / delete)
+  console.log('\n# manage-cards (action) through dispatch');
+  const { dispatch, tools } = buildToolRegistry({
+    foundry: f,
+    logger: new Logger({ level: 'error' }),
+    host: cfg.host,
+  });
+  const names = new Set(tools.map(t => t.name));
+  assert(
+    names.has('manage-cards') &&
+      ['create-cards', 'import-cards', 'list-cards', 'delete-cards'].every(n => !names.has(n)),
+    'manage-cards is advertised, the four per-op tools are gone'
+  );
+  const mc = args => dispatch('manage-cards', args);
+  const cr = String(
+    await mc({
+      action: 'create',
+      name: `${TAG} Union Deck`,
+      type: 'pile',
+      cards: [{ name: 'Omen', text: '<p>A raven.</p>' }],
+    })
+  );
+  const crId = /\((\w+)\)/.exec(cr)?.[1];
+  if (crId) createdCardIds.push(crId);
+  assert(
+    !!crId && cr === `Created pile "${TAG} Union Deck" (${crId}) with 1 card(s)`,
+    `create: the one-line confirmation (${cr})`
+  );
+  const im = String(
+    await mc({ action: 'import', preset: 'pokerLight', name: `${TAG} Union Poker` })
+  );
+  const imId = /\((\w+)\)/.exec(im)?.[1];
+  if (imId) createdCardIds.push(imId);
+  assert(
+    !!imId &&
+      im === `Imported deck "${TAG} Union Poker" (${imId}) from preset "pokerLight": 52 card(s)`,
+    `import: the one-line confirmation (${im})`
+  );
+  const lines = String(await mc({ action: 'list' })).split('\n');
+  assert(
+    /^\d+ stack\(s\): id name type cards$/.test(lines[0] ?? ''),
+    `list: the header + the columns (${lines[0]})`
+  );
+  assert(
+    lines.includes(`${crId} "${TAG} Union Deck" pile 1`) &&
+      lines.includes(`${imId} "${TAG} Union Poker" deck 52`),
+    'list rows: id, quoted name, type, card count for both stacks'
+  );
+  for (const [args, want] of [
+    [{ action: 'draw' }, 'action must be one of "create", "import", "list", "delete"'],
+    [
+      { action: 'import', preset: 'pokerDark', type: 'hand' },
+      'unknown argument "type" — it takes: action, preset, name, folderName',
+    ],
+  ]) {
+    let msg = '';
+    try {
+      await mc(args);
+    } catch (e) {
+      msg = e?.message ?? String(e);
+    }
+    assert(msg.includes(want), `refused by name: ${want.slice(0, 60)}`);
+  }
+  const del = String(await mc({ action: 'delete', identifiers: [crId, imId, 'ZZ-NOPE-CARDS'] }));
+  assert(
+    del ===
+      `Deleted 2 stack(s): "${TAG} Union Deck" (${crId}), "${TAG} Union Poker" (${imId}) ` +
+        '(1 not found: ZZ-NOPE-CARDS)',
+    `delete: the one-line confirmation with the not-found tail (${del})`
+  );
+  createdCardIds.splice(createdCardIds.indexOf(crId), 1);
+  createdCardIds.splice(createdCardIds.indexOf(imId), 1);
 } catch (e) {
   fails++;
   console.log(`\n[verify-cards] FATAL: ${e?.message || String(e)}`);
