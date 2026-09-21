@@ -1,7 +1,7 @@
 /**
  * The context budgets — printed on every `npm test`, and ratcheted.
  *
- * Every 3.0 milestone (docs/plan-3.0-consolidation.md) is defined by these numbers: what an eager
+ * Every 3.0 milestone (docs/history/plan-3.0-consolidation.md) is defined by these numbers: what an eager
  * client loads (`tools/list`), what every Claude Code prompt carries (the tool names, the skill
  * descriptions). The ceilings below are today's measurements rounded up; a milestone that lands
  * its diet lowers its ceiling in the same commit, so the number can never quietly climb back.
@@ -51,7 +51,7 @@ const fmt = (n: number) => n.toLocaleString('en-US');
 const line = (label: string, chars: number, detail: string) =>
   `  ${label.padEnd(20)} ${fmt(chars).padStart(8)} chars ≈ ${fmt(approxTokens(chars)).padStart(6)} tokens  ${detail}`;
 
-describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
+describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
   const tools = surface();
   const list = decomposeToolsList(tools);
   const alwaysOn = jsonChars(surface([ALWAYS_ON]));
@@ -104,7 +104,7 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
     expect(alwaysOn).toBeLessThanOrEqual(BUDGET.alwaysOnChars);
   });
 
-  // M7 — the prose budget (docs/plan-3.0-consolidation.md; src/measure.ts PROSE_BUDGET): every
+  // M7 — the prose budget (docs/history/plan-3.0-consolidation.md; src/measure.ts PROSE_BUDGET): every
   // leaf `.describe()` ≤ 120 chars, every tool description ≤ 400. Field semantics live once, in
   // the leaf; a description is the contract (inputs, refusals, returns); doctrine is the skills'.
   it('every tool is within the prose budget (leaf ≤ 120, description ≤ 400)', () => {

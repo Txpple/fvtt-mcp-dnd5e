@@ -3,15 +3,16 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased — 3.0 (the dnd5e MCP: cheaper in context, official 6.x, hosts as endpoints)
+## 3.0.0 — 2026-09-21 — the dnd5e MCP: cheaper in context, official 6.x, hosts as endpoints
 
-Tracked in [`docs/plan-3.0-consolidation.md`](docs/plan-3.0-consolidation.md); measured in
-[`docs/history/architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md). The last feature
-line — after it the project is in maintenance (compatibility events, bug fixes, premium books).
+Tracked in [`docs/history/plan-3.0-consolidation.md`](docs/history/plan-3.0-consolidation.md);
+measured in [`docs/history/architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md).
+The last feature line — after it the project is in maintenance (compatibility events, bug fixes,
+premium books).
 
 - **Context.** `tools/list` 283,948 → 201,562 chars; the two-registration name list 11,147 →
   6,153 chars (151 tools → 81); skill descriptions 15,382 → 7,986 chars; the 24-call result
-  baseline 154,534 → 101,203 chars with 0 capped and 0 errors. Every tool's prose is contract-only
+  baseline 154,534 → 73,492 chars with 0 capped and 0 errors. Every tool's prose is contract-only
   (a leaf ≤ 120 chars, a description ≤ 400) and `npm test` ratchets the budgets.
 - **The families.** The 17 `list/create/update/delete-X` families are one tool each, selected by
   `action` (and `kind` for `manage-placeables`): `manage-actors` (with `get-entity` / `export`),
@@ -43,6 +44,35 @@ line — after it the project is in maintenance (compatibility events, bug fixes
   faithfully by default (maps-only and the born-explored stamp are options).
 - **Docs.** README rewritten as a plain-English project page; `CONTRIBUTING.md` (the house rules,
   tracked); `docs/hosts.md`, `docs/contracts.md`; the done trackers under `docs/history/`.
+- **Upgrading a world to this line.** Foundry to ≥ 14.367 **first** (dnd5e 6.x declares that
+  minimum; 14.368 verified), then dnd5e to 6.x (6.0.3 verified) with its migration run to
+  completion before the bridge joins; the order, the back-out and the mirrored-sandbox rehearsal
+  are in [`docs/hosts.md`](docs/hosts.md#bringing-a-world-up-to-the-30-line). 1.5.2 remains the
+  last release for dnd5e 5.3.x.
+
+**Verified** (2026-09-21, the local sandbox: Foundry 14.368, dnd5e 6.0.3, one world-driver at a
+time — the gate is [`docs/RELEASE.md`](docs/RELEASE.md)):
+
+- offline: biome · `tsc --noEmit` · vitest **98 files, 1,799 tests** (3 skipped) · build (page
+  bundle 530.1 kB) · knip — green on `main`;
+- the release set, **12 / 12 scripts, 490 / 490** assertions, every one cleaning its `ZZ-*`
+  documents and restoring `worldTime`: effects-6 51 · region-effects 37 · activities-6 37 ·
+  settings-calendar 52 · item-tooling 24 · actor-tooling 48 · pc-build 70 ·
+  teleporter-scene-fields 13 · placeables-tooling 87 · scene-tools 24 · cast-activity 25 ·
+  region-tooling 22;
+- the live integration suite, **7 suites ran, 80 passed / 6 skipped** (the same six conditional
+  skips as every milestone since M4) in 154 s;
+- the MCP smoke on the sandbox registration: `get-world-info` reports host / bridge role /
+  library; a Fighter 3 / Rogue 1 built in one `create-pc` call (`success`, HP 35, 40
+  advancements, **0 unresolved `@scale`**); a bad subclass uuid answers `success:false` +
+  `errors[1]` with **no actor persisted**;
+- the numbers (`npm test`, `npm run measure`, the live `tool-results`): `tools/list` **201,562**
+  chars ≈ 55,989 tokens for 81 tools (leaf prose 76,976 · descriptions 24,993 · structural
+  81,951; longest leaf 120; 0 over budget); names ×2 **6,153** ≈ 1,709 tokens (3,117 + 3,036 per
+  registration); skill descriptions **7,986** (17 skills); always-on `session` **1,578**; the
+  24-call live baseline **73,492** chars ≈ 20,414 tokens, 0 truncated, 0 errors;
+  `search-compendium` 20 s after connect **353 ms**; the seam 156 handlers, 0 `any` / 0
+  `unknown`; skills-matrix 0 unresolved / 0 stale.
 
 ## 2.2.0 — 2026-09-20 — a Foundry MCP first, hosts as options
 

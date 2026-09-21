@@ -1,9 +1,11 @@
 # Contributing — the house rules
 
-Read [`design.md`](design.md) (binding) before changing tool behaviour; while the 3.0 line is open,
-[`docs/plan-3.0-consolidation.md`](docs/plan-3.0-consolidation.md) is the tracker and
-[`docs/history/architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md)
-its measured basis.
+Read [`design.md`](design.md) (binding) before changing tool behaviour. The project is in
+maintenance since 3.0.0 (2026-09-21): a change is a compatibility event, a bug fix, or a premium
+book brought into scope (design.md §1, §9) — there is no open tracker. The closed ones, with the
+numbers every gate below still ratchets against, are under [`docs/history/`](docs/history/README.md)
+([`plan-3.0-consolidation.md`](docs/history/plan-3.0-consolidation.md) and its measured basis,
+[`architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md)).
 [`docs/RELEASE.md`](docs/RELEASE.md) is the release gate. A gitignored `LOCAL.md` holds the real
 per-instance values (hosts, worlds, registration names) — nothing in a tracked file names them.
 
@@ -95,8 +97,8 @@ offline gate alone:
    a real MCP `get-world-info` on the sandbox registration.
 4. Targeted live verify scripts for every noted item, then the release set (the list is in
    [`docs/RELEASE.md`](docs/RELEASE.md)) and `FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration`.
-5. Update the version pins (README, `LOCAL.md`, the tracker) and record what the release changed
-   for us in the commit message.
+5. Update the version pins (README, `LOCAL.md`, design.md §8, `CHANGELOG.md`) and record what the
+   release changed for us in the commit message.
 
 The 2.x / 3.x tools refuse a pre-6.0 dnd5e world; 1.x is the line for dnd5e 5.3.x.
 

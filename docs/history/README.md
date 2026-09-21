@@ -3,7 +3,7 @@
 These documents are kept for their rationale and their verification records. They describe the
 project **as it was when they were written**, not as it is; several pre-date the decisions of
 2026-09-20 (Phase 2 removed; 3.0 the last feature line; user-facing repo — see
-[`design.md`](../../design.md) §1 and [`docs/plan-3.0-consolidation.md`](../plan-3.0-consolidation.md)).
+[`design.md`](../../design.md) §1 and [`plan-3.0-consolidation.md`](plan-3.0-consolidation.md)).
 Their "Phase 2" and "session assistance" references are historical. Do not act on them without
 checking the current design.
 
@@ -18,4 +18,5 @@ checking the current design.
 | [`plan-2.1-dnd5e-6-features.md`](plan-2.1-dnd5e-6-features.md) | 2.1 — tools for what dnd5e 6.0 introduced; the 14.368 and 6.0.3 compatibility passes | 2026-09-20 |
 | [`plan-2.2-hosts.md`](plan-2.2-hosts.md) | 2.2 — the host seam, toolsets, the rename to `fvtt-mcp-dnd5e` | 2026-09-20 |
 | [`architecture-review-2026-09.md`](architecture-review-2026-09.md) | the 2026-09 multi-agent review that measured 3.0's baselines (findings F1–F50; its evidence under [`review-2026-09/`](review-2026-09/README.md)) | 2026-09-20 |
+| [`plan-3.0-consolidation.md`](plan-3.0-consolidation.md) | 3.0 — the last feature line: the results / prose / name diets (`tools/list` 283,948 → 201,562; 151 tools → 81), the `FOUNDRY_*` contract with `generic` as the default host, the client library and the error contract, owner content out; M0–M10 with every milestone's numbers; shipped as 3.0.0 | 2026-09-21 |
 | `spikes/` | the one-off probes that established the data-model facts the tools were written against | — |

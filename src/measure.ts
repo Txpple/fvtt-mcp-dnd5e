@@ -1,5 +1,5 @@
 /**
- * The context budgets, measured (docs/plan-3.0-consolidation.md — every 3.0 milestone is defined
+ * The context budgets, measured (docs/history/plan-3.0-consolidation.md — every 3.0 milestone is defined
  * by these numbers). What an MCP client pays for this server, in chars of JSON as the transport
  * sends it:
  *

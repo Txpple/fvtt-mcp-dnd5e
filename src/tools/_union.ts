@@ -1,5 +1,5 @@
 // The union tool — one advertised tool per CRUD family, built from the family's per-op zod schemas
-// (M8 of docs/plan-3.0-consolidation.md; decision #1: the lossless b2 union, member descriptions
+// (M8 of docs/history/plan-3.0-consolidation.md; decision #1: the lossless b2 union, member descriptions
 // kept, measured in docs/history/architecture-review-2026-09.md §4).
 //
 // The advertised shape is a top-level `type:"object"` (the SDK's ToolSchema requires it) whose

@@ -19,9 +19,10 @@ art-bearing, sourced from the premium books; and it records what happened at the
 It is user-facing: anyone can clone it and point it at their own world.
 
 **It does not run the game.** There is no live in-session assistant in this project — no event
-feed, no interjecting during play — by decision (owner, 2026-09-20). **3.0 is the last feature
-line** (`docs/plan-3.0-consolidation.md`); after it the project is in maintenance: Foundry / dnd5e
-compatibility events, bug fixes, premium books brought into scope. There is no roadmap beyond it.
+feed, no interjecting during play — by decision (owner, 2026-09-20). **3.0 was the last feature
+line** (shipped 2026-09-21; `docs/history/plan-3.0-consolidation.md`); the project is in
+maintenance: Foundry / dnd5e compatibility events, bug fixes, premium books brought into scope.
+There is no roadmap beyond it.
 
 **Where it stands today.** The content-creation building blocks are built — and, crucially, they
 *compose*. The same skills that make one scene or one NPC now assemble a **complete, table-ready
@@ -144,7 +145,8 @@ This is the architectural backbone that makes principle #1 real.
   confirmation plus warnings. **A miss is an error** (`isError`), never a prose "not found" inside
   a success-shaped result. An unknown argument is refused by name, never stripped. A result over
   the response cap is cut at record boundaries with a `truncation` stamp, never mid-record.
-  (Decision #10 of the 3.0 plan; the line format lands per family as each is consolidated.)
+  (Decision #10 of the 3.0 plan, `docs/history/plan-3.0-consolidation.md`; the line format
+  landed family by family in its M8.)
 - **An error is the page's own words, plus a code.** A page handler refuses a call with a coded
   `PageError` (`not-found` / `ambiguous` / `invalid` / `permission` / `unsupported` /
   `rolled-back`; `src/page/errors.ts`); the code rides in the Error's `name` — the one field that
@@ -178,15 +180,15 @@ This is the architectural backbone that makes principle #1 real.
 | **Platform** | **Hosts** — one seam for where Foundry runs (`molten` / `local` / `generic`), the file plane per host | ✅ done 2.2 (§2.6; `docs/history/plan-2.2-hosts.md`) |
 | | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | ✅ done 2.2 |
 | | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | ✅ done 2.2 |
-| | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/plan-3.0-consolidation.md` M1) |
-| | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `op`, every skill re-pointed in the same commit), owner content out, the user-facing docs | 🔨 active (`docs/plan-3.0-consolidation.md`; measured in `docs/history/architecture-review-2026-09.md`) |
+| | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/history/plan-3.0-consolidation.md` M1) |
+| | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `action`, every skill re-pointed in the same commit), owner content out, the user-facing docs | ✅ done 3.0.0, 2026-09-21 (`docs/history/plan-3.0-consolidation.md`; measured in `docs/history/architecture-review-2026-09.md`; `tools/list` 283,948 → 201,562, names ×2 11,147 → 6,153, 151 tools → 81) |
 
-Legend: ✅ done · 🔨 active (the 3.0 line — the last one).
+Legend: ✅ done. There is no active line.
 
 Every content building block is built, and they compose into **end-to-end adventures** (§1, §5) —
-from "here's a map, make me a module" to "here's my module, put it in the VTT." What remains is
-3.0: make it cheap in context, make it the dnd5e MCP for anyone, and stop. After 3.0 the §4 table
-only ever gains compatibility notes and premium books.
+from "here's a map, make me a module" to "here's my module, put it in the VTT." 3.0 made it cheap
+in context and the dnd5e MCP for anyone, and stopped: from here the §4 table only ever gains
+compatibility notes and premium books.
 
 ---
 
