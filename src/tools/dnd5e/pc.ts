@@ -37,9 +37,8 @@ const ChoiceDataSchema = z.object({
     .array(z.string())
     .optional()
     .describe(
-      'Trait keys: skills:<acr|ani|arc|ath|dec|his|ins|itm|inv|med|nat|prc|prf|per|rel|slt|ste|sur>, ' +
-        'languages:standard:<id>, tool:<group>:<id>, weapon:mar:<id>… A wildcard option ' +
-        '(languages:standard:*, tool:game:*) takes one concrete key in its pattern.'
+      'Trait keys (skills:prc, languages:standard:<id>, tool:<group>:<id>); a wildcard option ' +
+        'takes one concrete key.'
     ),
   selected: z.array(z.string()).optional(),
   uuid: z.string().optional(),
@@ -52,9 +51,12 @@ const CreatePcSchema = z.object({
   background: z.string().optional(),
   // FINAL ability scores — the skill owns point-buy / array / ASI math (design.md §2.1). Omit to
   // leave the dnd5e defaults (10s).
-  abilities: AbilitiesSchema.optional(),
+  abilities: AbilitiesSchema.optional().describe('Final scores (point-buy / array / ASI applied).'),
   // level → advancement-id → choice data.
-  choices: z.record(z.string(), z.record(z.string(), ChoiceDataSchema)).optional(),
+  choices: z
+    .record(z.string(), z.record(z.string(), ChoiceDataSchema))
+    .optional()
+    .describe('level → advancement id → pick, as needsChoices lists them.'),
   // Caster spell picks by NAME (slots auto-derive from the class; this imports chosen spells).
   spells: z
     .object({
@@ -63,18 +65,14 @@ const CreatePcSchema = z.object({
       alwaysPrepared: z
         .boolean()
         .optional()
-        .describe(
-          'Import every listed spell as ALWAYS PREPARED (prepared:2, no toggle) — the known-caster ' +
-            "rule (sorcerer/bard/ranger/warlock); which classes get it is the skill's call."
-        ),
+        .describe('Import the listed spells as always prepared (prepared:2, no toggle).'),
     })
     .optional(),
   defaultArt: z
     .boolean()
     .default(true)
     .describe(
-      "Portrait + token from the PRIMARY class's PHB pregen (a fixed class → art map). false when " +
-        'the player brings an image.'
+      "Portrait + token from the primary class's PHB pregen; false when the player brings art."
     ),
   // Character level 1..20. HP/subclass/spell-slots scale with it; subclass is granted at level 3.
   // For a multiclass PC this is the PRIMARY class's level (see `multiclass`).
@@ -85,18 +83,22 @@ const CreatePcSchema = z.object({
   multiclass: z
     .array(
       z.object({
-        className: z.string().min(1, 'multiclass className cannot be empty'),
+        className: z.string().min(1),
         levels: z.number().int().min(1).max(19),
       })
     )
-    .optional(),
+    .optional()
+    .describe('Extra classes built in the same call; total level ≤ 20.'),
   // HP per level past the first: 'avg' (2024 fixed average, default) or 'max'. L1 is always max.
-  hpMode: z.enum(['avg', 'max']).default('avg'),
+  hpMode: z.enum(['avg', 'max']).default('avg').describe('HP per level after the first.'),
   sourceRules: z.enum(['2014', '2024']).default('2024'),
   folder: z.string().optional(),
   // When required picks are missing, the tool returns needsChoices WITHOUT persisting (no litter).
   // Set true to build anyway with only the forced defaults for the unsupplied picks.
-  acceptDefaults: z.boolean().default(false),
+  acceptDefaults: z
+    .boolean()
+    .default(false)
+    .describe('Build with the forced defaults instead of stopping on needsChoices.'),
 });
 
 const InspectPcAdvancementSchema = z
@@ -153,43 +155,27 @@ const CreatePcFromPrefabSchema = z
   });
 
 const CREATE_PC_DESCRIPTION =
-  'Build a player character (type:character) headlessly from premium class + species + background by ' +
-  'NAME, running real dnd5e advancement so @scale.* (rage damage, sneak attack, breath weapon, …) ' +
-  'resolves natively — unlike an NPC. Premium books only, never the SRD (design.md §2.3); a missing ' +
-  'class/species/background is an error, not invented. The SKILL owns the math: pass FINAL ability ' +
-  'scores (point-buy/array/ASI applied) and the player CHOICES in `choices` (level → advancement-id ' +
-  '→ {chosen|selected|uuid}). Call with no/partial choices first for a `needsChoices[]` dry-run ' +
-  '(legal options per choice, incl. the subclasses at level 3 — NOTHING is created); fill and re-call. ' +
-  'Levels 1-20: HP/features/subclass/spell-slots scale with `level` (`hpMode` avg|max). Multiclass ' +
-  'in ONE call via `multiclass:[{className,levels}]` (className/level is the primary; each extra class ' +
-  'gets the 2024 proficiency subset; total ≤ 20). Slots auto-derive; `spells.cantrips`/`.prepared` ' +
-  "(names) add chosen spells. Default art = the class's PHB pregen. Adds no gear or ASI-feats (the " +
-  'skill does, via import-item/add-feature). A required advancement that FAILS → NOT persisted, ' +
-  'success:false + errors[]. Returns ' +
-  '{success, actor{…,art}, applied[], needsChoices[], unresolvedScale[], errors[], warnings[]}.';
+  'Build a PC (type:character) from class + species + background by name through dnd5e ' +
+  'advancement. Missing choices → a needsChoices[] dry run, nothing created (unless ' +
+  'acceptDefaults). `level` 1–20, `multiclass` in one call, `spells` by name. A failed required ' +
+  'advancement persists nothing. Premium packs only. Returns {success, actor, applied, ' +
+  'needsChoices, unresolvedScale, errors, warnings}.';
 
 const INSPECT_PC_ADVANCEMENT_DESCRIPTION =
-  'Read-only: report the player CHOICE points a premium class exposes up to a level — each ' +
-  "advancement's id, type (Trait/ItemChoice/Subclass), how many to pick, and the legal options — so " +
-  "the skill can ask the DM and fill create-pc's `choices` map without inventing anything. Resolve by " +
-  'className OR classUuid (exactly one); premium books only, never the SRD. Touches no actor.';
+  'Read-only: the choice points a class exposes up to a level — each advancement id, type ' +
+  '(Trait / ItemChoice / Subclass), count and legal options, the shape create-pc `choices` ' +
+  'takes. className or classUuid, exactly one. Premium packs only.';
 
 const CREATE_PC_FROM_PREFAB_DESCRIPTION =
-  'Create a player character by COPYING a premium-book PREGEN (the PHB class pregens Barbarian…Wizard ' +
-  'in dnd-players-handbook.actors: a ready level-1 build with gear/feats/art) instead of running ' +
-  'advancement; filed under the PC folder. Source by `prefab` NAME (e.g. "Fighter") OR packId+actorId; ' +
-  'premium books only, never the SRD (design.md §2.3). `abilities` (final scores) and update-actor-shaped ' +
-  '`modifications` apply to the COPY only. @scale resolves natively. Owner: set-actor-ownership. ' +
-  'Returns {success, from, actor, modificationsApplied, unresolvedScale, warnings}.';
+  'Create a PC by copying a PHB class pregen (`prefab` name, or packId + actorId) into the PC ' +
+  'folder; `abilities` and update-actor-shaped `modifications` apply to the copy. Premium packs ' +
+  'only. Returns {success, from, actor, modificationsApplied, unresolvedScale, warnings}.';
 
 const LEVEL_UP_PC_DESCRIPTION =
-  "Add ONE level to an existing PC (type:character) and apply that level's advancement IN PLACE. A " +
-  'class the PC has → a level-up; one it lacks → a MULTICLASS add (the 2024 proficiency SUBSET). ' +
-  "HP/features/subclass (the class's level 3)/spell-slots scale; @scale stays native. Like create-pc: " +
-  'no/partial choices → a `needsChoices[]` dry-run (actor untouched); fill `choices` and re-call. ' +
-  'ASI bumps and ASI-tier feats are NOT applied here (update-actor / add-feature). A required ' +
-  'advancement that FAILS → rolled back, success:false + errors[]. Returns {success, actor (incl. ' +
-  'classLevel + classes[]), applied[], needsChoices[], unresolvedScale[], errors[], warnings[]}.';
+  'Add one level to a PC in place: a class it has levels up, one it lacks is a multiclass add ' +
+  '(2024 proficiency subset). Missing choices → a needsChoices[] dry run, actor untouched. ASI ' +
+  'bumps and feats are not applied (update-actor / add-feature). A failed required advancement is ' +
+  'rolled back. Returns {success, actor, applied, needsChoices, unresolvedScale, errors, warnings}.';
 
 // ---------------------------------------------------------------------------
 // Options interface

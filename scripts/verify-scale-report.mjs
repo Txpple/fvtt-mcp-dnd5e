@@ -77,7 +77,7 @@ try {
   let scaleFeat = null; // { pack, name }
   for (const q of QUERIES) {
     const hits = await f.call('searchCompendium', { query: q });
-    for (const h of (Array.isArray(hits) ? hits : []).filter(x => x.type === 'feat')) {
+    for (const h of (hits?.results ?? []).filter(x => x.type === 'feat')) {
       const full = await f.call('getCompendiumDocumentFull', { packId: h.pack, documentId: h.id });
       if (hasScale(full?.fullData ?? full?.system ?? {})) {
         scaleFeat = { pack: h.pack, name: h.name };
@@ -91,7 +91,7 @@ try {
 
   // --- 2. Host NPC: copy the first MM creature (a realistic prefab base) ------
   const creatures = await f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 });
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound}
   if (!cHit?.pack) throw new Error('could not resolve a source creature');
   const aOut = await f.call('createActorFromCompendium', {
     packId: cHit.pack,

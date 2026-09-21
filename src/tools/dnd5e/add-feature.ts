@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACTOR_TARGET, actorTarget } from '../_targets.js';
+import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -194,40 +194,28 @@ export const AddFeatureSchema = z.object({
       'spells',
       'homebrew-spell',
     ])
-    .describe(
-      'Mode selector — determines which parameters are used and which Foundry handler is called.'
-    ),
+    .describe('Which leaves apply is tagged on each.'),
 
   // ── Common ────────────────────────────────────────────────────────
-  actorIdentifier: actorTarget.describe(`${ACTOR_TARGET} Required for every featureType.`),
+  actorIdentifier: actorTarget,
   featureName: z
     .string()
     .optional()
-    .describe(
-      'Name for the new feature/item — must be unique on the actor. ' +
-        'Required for: passive, save, attack, attack-with-save, aura.'
-    ),
+    .describe('[passive, save, attack, attack-with-save, aura] Required; unique on the actor.'),
   description: z
     .string()
     .default('')
-    .describe(
-      'HTML description of the feature (optional). Used by: passive, save, attack, attack-with-save, aura.'
-    ),
+    .describe('[passive, save, attack, attack-with-save, aura] HTML.'),
   img: z
     .string()
     .optional()
     .describe(
-      'Icon path for the authored feature. OMIT and a real, kind-appropriate icon is auto-filled ' +
-        '(no blank star). Set it to the img of the compendium feature you are emulating ' +
-        '(search-compendium-* → copy its img) for an exact match. Used by: passive, save, attack, ' +
-        'attack-with-save, aura, homebrew-spell.'
+      '[all but spellcasting, spells] Icon path; omitted, a kind-appropriate icon is auto-filled.'
     ),
   activationType: z
     .enum(ACTIVATION_ENUM)
     .default('action')
-    .describe(
-      'Action economy type. Used by: save, attack, attack-with-save, aura. Default: "action".'
-    ),
+    .describe('[save, attack, attack-with-save, aura] Action economy.'),
 
   // ── Damage ────────────────────────────────────────────────────────
   damageParts: z
@@ -235,170 +223,100 @@ export const AddFeatureSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Damage components. ' +
-        'For attack: first entry is base weapon die, extra entries stack on top. ' +
-        'For save and aura: all damage dealt on trigger. ' +
-        'For attack-with-save: the attack roll damage (on hit). ' +
-        'Required for: save, attack, attack-with-save, aura.'
+      '[save, attack, attack-with-save, aura] Required; attack: the first part is the base die; ' +
+        'attack-with-save: on hit.'
     ),
 
   // ── Save parameters ───────────────────────────────────────────────
-  saveAbility: z
-    .enum(ABILITY_ENUM)
-    .optional()
-    .describe('Ability used for the saving throw. Required for: save, attack-with-save.'),
-  saveDC: z
-    .number()
-    .min(1)
-    .max(30)
-    .optional()
-    .describe('Saving throw DC (1–30). Required for: save, attack-with-save.'),
-  halfOnSave: z
-    .boolean()
-    .default(true)
-    .describe(
-      'Whether the target takes half damage on a successful save. Used by: save. Default: true.'
-    ),
+  saveAbility: z.enum(ABILITY_ENUM).optional().describe('[save, attack-with-save] Required.'),
+  saveDC: z.number().min(1).max(30).optional().describe('[save, attack-with-save] Required.'),
+  halfOnSave: z.boolean().default(true).describe('[save] Half damage on a success (default true).'),
   saveDamageParts: z
     .array(damagePart)
     .min(1)
     .optional()
-    .describe(
-      'Damage dealt by the save effect on a failed save (independent of attack damage). ' +
-        'Required for: attack-with-save.'
-    ),
+    .describe('[attack-with-save] Required: the failed-save damage, separate from the hit.'),
   saveOnSave: z
     .enum(SAVE_ON_SAVE_ENUM)
     .default('none')
-    .describe(
-      '"none" — no damage on a successful save (default). ' +
-        '"half" — half save damage on a successful save. Used by: attack-with-save.'
-    ),
+    .describe('[attack-with-save] Save damage on a success (default none).'),
 
   // ── Area parameters ───────────────────────────────────────────────
   areaType: z
     .enum([...AREA_SHAPE_ENUM, ''])
     .default('')
     .describe(
-      'Area-of-effect template shape. ' +
-        'For save: optional (omit or use "" for no template); if set, areaSize is required. ' +
-        'For aura: required — use "emanation" or "sphere" for radial auras.'
+      '[save: optional ("" = none); aura: required] Template shape; set, areaSize is required.'
     ),
   areaSize: z
     .number()
     .gt(0)
     .optional()
-    .describe(
-      'Template size in areaUnits (e.g. 30 for a 30 ft cone). Must be > 0. ' +
-        'Required for: aura. Required for save when areaType is set.'
-    ),
-  areaUnits: z
-    .enum(AREA_UNITS_ENUM)
-    .default('ft')
-    .describe('Units for areaSize. Used by: save, aura. Default: "ft".'),
+    .describe('[aura; save with areaType] Required; in areaUnits.'),
+  areaUnits: z.enum(AREA_UNITS_ENUM).default('ft').describe('[save, aura]'),
   affectsType: z
     .enum(AFFECTS_ENUM)
     .default('creature')
-    .describe('What the area targets. Used by: save, aura. Default: "creature".'),
+    .describe('[save, aura] What the area targets.'),
 
   // ── Attack parameters ─────────────────────────────────────────────
-  attackType: z
-    .enum(ATTACK_TYPE_ENUM)
-    .optional()
-    .describe(
-      '"melee" for reach-based attacks; "ranged" for bow/thrown attacks. ' +
-        'Required for: attack, attack-with-save.'
-    ),
+  attackType: z.enum(ATTACK_TYPE_ENUM).optional().describe('[attack, attack-with-save] Required.'),
   weaponClass: z
     .enum(WEAPON_CLASS_ENUM)
     .default('natural')
-    .describe(
-      'Weapon category. Use "natural" for monster attacks (claws, bite, touch). ' +
-        'Used by: attack, attack-with-save. Default: "natural".'
-    ),
+    .describe('[attack, attack-with-save] natural = a monster attack.'),
   abilityModifier: z
     .enum(ABILITY_ENUM)
     .optional()
     .describe(
-      'Ability used for to-hit and damage rolls. ' +
-        'Omit to use default: STR for melee, DEX for ranged. ' +
-        'Used by: attack, attack-with-save.'
+      '[attack, attack-with-save] To-hit and damage ability; default STR melee, DEX ranged.'
     ),
   attackBonus: z
     .number()
     .min(0)
     .max(10)
     .default(0)
-    .describe(
-      'Flat bonus to the attack roll only, not damage (e.g. 1 for +1 to hit). ' +
-        'Used by: attack, attack-with-save. Default: 0.'
-    ),
+    .describe('[attack, attack-with-save] Flat to-hit bonus (not damage).'),
   proficient: z
     .boolean()
     .default(true)
-    .describe(
-      'Whether the actor is proficient with this weapon (adds proficiency bonus to to-hit). ' +
-        'Used by: attack, attack-with-save. Default: true.'
-    ),
-  equipped: z
-    .boolean()
-    .default(true)
-    .describe(
-      'Whether the weapon is equipped and available for attack rolls. ' +
-        'Used by: attack, attack-with-save. Default: true.'
-    ),
+    .describe('[attack, attack-with-save] Adds the proficiency bonus to hit.'),
+  equipped: z.boolean().default(true).describe('[attack, attack-with-save]'),
   reachFt: z
     .number()
     .min(5)
     .default(5)
-    .describe('Melee reach in feet. Used by: attack, attack-with-save (melee only). Default: 5.'),
+    .describe('[attack, attack-with-save; melee] Reach in feet.'),
   rangeFt: z
     .number()
     .min(1)
     .optional()
-    .describe(
-      'Normal range in feet. Used by: attack, attack-with-save. ' +
-        'Required when attackType is "ranged".'
-    ),
+    .describe('[attack, attack-with-save; ranged] Required: normal range in feet.'),
   longRangeFt: z
     .number()
     .min(1)
     .optional()
-    .describe(
-      'Long range in feet — attacks beyond rangeFt up to this distance are at disadvantage. ' +
-        'Must be greater than rangeFt. Used by: attack, attack-with-save (ranged only).'
-    ),
+    .describe('[attack, attack-with-save; ranged] Long (disadvantage) range in feet, > rangeFt.'),
   properties: z
     .array(z.string())
     .default([])
-    .describe(
-      'Weapon property codes (e.g. ["fin", "lgt"]). ' +
-        'Canonical dnd5e codes: ada, amm, fin, fir, foc, hvy, lgt, lod, mgc, rch, rel, ret, sil, spc, thr, two, ver. ' +
-        'Used by: attack, attack-with-save. Default: [].'
-    ),
+    .describe('[attack, attack-with-save] dnd5e weapon property codes, e.g. ["fin", "lgt"].'),
 
   // ── Spellcasting parameters ───────────────────────────────────────
   spellcastingClass: z
     .enum(SPELLCASTING_CLASS_ENUM)
     .optional()
-    .describe(
-      'The spellcasting class — determines slot table and default casting ability. ' +
-        'Warlock uses Pact Magic. Required for: spellcasting.'
-    ),
+    .describe('[spellcasting] Required; sets the slot table and default ability (warlock = pact).'),
   spellcastingLevel: z
     .number()
     .min(1)
     .max(20)
     .optional()
-    .describe(
-      'Class level (1–20). Determines how many slots the actor receives. Required for: spellcasting.'
-    ),
+    .describe('[spellcasting] Required: the class level (slots follow).'),
   spellcastingAbility: z
     .enum(ABILITY_ENUM)
     .optional()
-    .describe(
-      'Override the casting ability. Omit to use the class default. ' + 'Used by: spellcasting.'
-    ),
+    .describe('[spellcasting] Casting ability override.'),
 
   // ── Spells parameters ─────────────────────────────────────────────
   spellNames: z
@@ -406,31 +324,18 @@ export const AddFeatureSchema = z.object({
     .min(1)
     .max(50)
     .optional()
-    .describe(
-      'English spell names to import (exact match, case-insensitive). Max 50 per call. ' +
-        'Required for: spells.'
-    ),
+    .describe('[spells] Required: spell names (exact, case-insensitive), max 50.'),
   compendiumPacks: z
     .array(z.string().min(1))
     .default([...DEFAULT_SPELL_PACKS])
-    .describe(
-      'Premium-book pack IDs to search, in priority order (first match wins). ' +
-        `Default: ${JSON.stringify([...DEFAULT_SPELL_PACKS])} (PHB). SOURCE ONLY from the premium ` +
-        'MM/PHB/DMG books — NEVER the dnd5e.* SRD packs (design.md §2.3). Used by: spells.'
-    ),
+    .describe('[spells] Packs to search in order (first match wins); an SRD pack is refused.'),
 
   // ── Feat widening (passive) ───────────────────────────────────────
   featType: z
     .string()
     .optional()
-    .describe(
-      'Feat category for the feat document type.value (e.g. "monster", "class", "feat", "background"). ' +
-        'Used by: passive. Default: "monster".'
-    ),
-  requirements: z
-    .string()
-    .optional()
-    .describe('Free-text prerequisite/requirements line on the feat. Used by: passive.'),
+    .describe('[passive] Feat category (monster, class, feat, background); default monster.'),
+  requirements: z.string().optional().describe('[passive] Prerequisites line.'),
 
   // ── Homebrew spell parameters ─────────────────────────────────────
   spellLevel: z
@@ -439,59 +344,36 @@ export const AddFeatureSchema = z.object({
     .min(0)
     .max(9)
     .optional()
-    .describe('Spell level 0–9 (0 = cantrip). Required for: homebrew-spell.'),
-  spellSchool: z
-    .enum(SPELL_SCHOOL_ENUM)
-    .optional()
-    .describe('School: abj/con/div/enc/evo/ill/nec/trs. Used by: homebrew-spell.'),
+    .describe('[homebrew-spell] Required; 0 = cantrip.'),
+  spellSchool: z.enum(SPELL_SCHOOL_ENUM).optional().describe('[homebrew-spell] School.'),
   spellMethod: z
     .enum(SPELL_METHOD_ENUM)
     .default('spell')
-    .describe(
-      'Casting method. "innate"/"atwill" for monster innate casting; "spell" for prepared/known. ' +
-        'Used by: homebrew-spell.'
-    ),
+    .describe('[homebrew-spell] innate / atwill for monster casting; spell for prepared / known.'),
   spellPrepared: z
     .number()
     .int()
     .min(0)
     .max(2)
     .default(0)
-    .describe(
-      'Preparation state: 0 unprepared, 1 prepared, 2 always prepared. Used by: homebrew-spell.'
-    ),
-  spellComponents: z
-    .array(z.enum(SPELL_COMPONENT_ENUM))
-    .default([])
-    .describe('Components/properties. Used by: homebrew-spell.'),
-  spellMaterials: z
-    .string()
-    .optional()
-    .describe(
-      'Material component text (when components include "material"). Used by: homebrew-spell.'
-    ),
-  spellRange: z
-    .number()
-    .optional()
-    .describe('Numeric range (with spellRangeUnits). Used by: homebrew-spell.'),
+    .describe('[homebrew-spell] 0 unprepared, 1 prepared, 2 always prepared.'),
+  spellComponents: z.array(z.enum(SPELL_COMPONENT_ENUM)).default([]).describe('[homebrew-spell]'),
+  spellMaterials: z.string().optional().describe('[homebrew-spell] Material component text.'),
+  spellRange: z.number().optional().describe('[homebrew-spell] With spellRangeUnits.'),
   spellRangeUnits: z
     .enum(SPELL_RANGE_UNITS_ENUM)
     .optional()
-    .describe('Range units. Use "self"/"touch" without spellRange. Used by: homebrew-spell.'),
-  spellDuration: z
-    .number()
-    .optional()
-    .describe('Numeric duration (with spellDurationUnits). Used by: homebrew-spell.'),
+    .describe('[homebrew-spell] self / touch take no spellRange.'),
+  spellDuration: z.number().optional().describe('[homebrew-spell] With spellDurationUnits.'),
   spellDurationUnits: z
     .string()
     .optional()
-    .describe('Duration units (e.g. "inst", "minute", "hour", "round"). Used by: homebrew-spell.'),
+    .describe('[homebrew-spell] inst / round / minute / hour …'),
   spellActivity: z
     .enum(SPELL_ACTIVITY_ENUM)
     .optional()
     .describe(
-      'Optional single activity giving the spell mechanics. Pair with damageParts (attack/damage/save), ' +
-        'attackType (attack), saveAbility+saveDC+saveOnSave (save), or healAmount (heal). Used by: homebrew-spell.'
+      '[homebrew-spell] One activity: with damageParts / attackType / the save fields / healAmount.'
     ),
   healAmount: z
     .object({
@@ -500,25 +382,21 @@ export const AddFeatureSchema = z.object({
       type: z.enum(HEAL_TYPE_ENUM).optional(),
     })
     .optional()
-    .describe('Healing dice for a heal activity. Used by: homebrew-spell (spellActivity "heal").'),
+    .describe('[homebrew-spell; heal] Healing dice.'),
 
   // ── Source metadata ───────────────────────────────────────────────
   sourceRules: z
     .enum(SOURCE_RULES_ENUM)
     .default('2024')
-    .describe(
-      'Rules edition. Used by: passive, attack, attack-with-save, aura, spellcasting, homebrew-spell. Default: "2024" (pass "2014" for legacy content).'
-    ),
+    .describe('[all but spells] Rules edition.'),
   sourceBook: z
     .string()
     .default('')
-    .describe(
-      'Source book abbreviation (e.g. "MM\'14"). Used by: passive, attack, attack-with-save, aura.'
-    ),
+    .describe('[passive, save, attack, attack-with-save, aura] Source book abbreviation.'),
   sourcePage: z
     .string()
     .default('')
-    .describe('Page number in the source book. Used by: passive, attack, attack-with-save, aura.'),
+    .describe('[passive, save, attack, attack-with-save, aura] Source page.'),
 });
 
 // ---------------------------------------------------------------------------

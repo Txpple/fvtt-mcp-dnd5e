@@ -55,69 +55,42 @@ const UpdateActorSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Prototype-token nameplate, decoupled from the actor name — e.g. actor "Morgash the Gravemaker" ' +
-        'whose dropped tokens read just "Morgash". A plain `name` rename keeps the two in lockstep; ' +
-        'pass tokenName (alone or alongside name) to make them differ. Placed tokens keep their own ' +
-        'name — retitle those with update-token.'
+      'Prototype nameplate, decoupled from the actor name; placed tokens keep theirs (update-token).'
     ),
   img: z.string().optional().describe('Portrait image path or URL.'),
   disposition: z
     .enum(['hostile', 'neutral', 'friendly', 'secret'])
     .optional()
-    .describe(
-      "Prototype-token disposition (friend vs foe). Set 'friendly' to mark an NPC an ally (e.g. a " +
-        "freed captive), 'hostile' for an enemy, 'neutral' for a bystander."
-    ),
+    .describe('Prototype-token disposition.'),
   tokenAutoRotate: z
     .boolean()
     .optional()
-    .describe(
-      'Prototype-token auto-rotation: true = the token turns to face its movement ' +
-        '(lockRotation off — the house default; new creations already get it), false = fixed facing.'
-    ),
+    .describe('true = faces its movement (lockRotation off, the default); false = fixed facing.'),
   tokenRing: z
     .boolean()
     .optional()
-    .describe(
-      'Prototype-token dynamic ring: false = plain token (the house default; new creations ' +
-        'already get it), true = re-enable the ring (its colors/subject config is preserved).'
-    ),
+    .describe('Prototype dynamic ring (default off; true keeps the ring config).'),
   tokenScale: z
     .number()
     .positive()
     .optional()
     .describe(
-      'Prototype-token art scale — the "Scale (Ratio)" slider on the token Appearance tab ' +
-        '(sets texture.scaleX and scaleY together). 1 = normal, 1.5 = 50% larger, 2 = double. ' +
-        "Scales only the art within the token's grid footprint; it does NOT change the token's " +
-        'size (grid spaces).'
+      'Prototype art scale (texture.scaleX/Y): 1 normal, 2 double; the grid footprint is unchanged.'
     ),
   tokenRotation: z
     .number()
     .optional()
-    .describe(
-      'Prototype-token facing in degrees (0–359) — the default angle a dropped token faces. Same ' +
-        'behavior as update-token for placed tokens: a lock-rotation prototype (tokenAutoRotate ' +
-        'false) HIDES the angle, so setting a rotation without also setting tokenAutoRotate ' +
-        'AUTO-UNLOCKS rotation (and warns) so the facing shows. (elevation / hidden / x / y are ' +
-        'PLACEMENT-only — a prototype has no such fields; set those on a dropped token with update-token.)'
-    ),
+    .describe('Prototype facing, 0–359°; auto-unlocks rotation (tokenAutoRotate) with a warning.'),
   tokenDisplayName: z
     .enum(['none', 'control', 'owner-hover', 'hover', 'owner', 'always'])
     .optional()
     .describe(
-      'Prototype-token NAMEPLATE visibility — the default for tokens dragged from this actor: ' +
-        'none (never) · control (only when selected) · owner-hover · hover (anyone hovering) · ' +
-        'owner (always, to owners) · always (always, to everyone). Same modes as update-token for ' +
-        'placed tokens; set "none" for window-dressing NPCs that should show no name.'
+      'Prototype nameplate visibility: none · control (selected) · owner-hover · hover · owner · always.'
     ),
   tokenDisplayBars: z
     .enum(['none', 'control', 'owner-hover', 'hover', 'owner', 'always'])
     .optional()
-    .describe(
-      'Prototype-token RESOURCE-BAR (HP) visibility — the default for dropped tokens, same modes as ' +
-        'tokenDisplayName. Set "none" to hide the health bar on background / window-dressing NPCs.'
-    ),
+    .describe('Prototype HP-bar visibility, same modes as tokenDisplayName.'),
 
   // details (most NPC-only)
   size: z
@@ -133,9 +106,7 @@ const UpdateActorSchema = z.object({
   creatureType: z
     .string()
     .optional()
-    .describe(
-      '[NPC] Creature type: aberration, beast, celestial, construct, dragon, elemental, fey, fiend, giant, humanoid, monstrosity, ooze, plant, undead.'
-    ),
+    .describe('[NPC] Creature type key (humanoid, undead, fiend, …).'),
   creatureSubtype: z
     .string()
     .optional()
@@ -170,9 +141,7 @@ const UpdateActorSchema = z.object({
   savingThrows: z
     .array(ABILITY)
     .optional()
-    .describe(
-      'Replace the proficient saving throws: the listed abilities become proficient, all others non-proficient.'
-    ),
+    .describe('Replaces the proficient saving throws with the listed abilities.'),
   skills: z
     .array(
       z.object({
@@ -195,18 +164,11 @@ const UpdateActorSchema = z.object({
       values: z
         .array(z.string())
         .default([])
-        .describe(
-          'Base weapon KINDS ("greatsword", "longbow", "handcrossbow", ...) — NOT mastery names: ' +
-            'each weapon carries its own mastery property (vex/topple/graze/...), the actor just ' +
-            'unlocks it per kind.'
-        ),
+        .describe('Base weapon kinds ("greatsword", "longbow"), not mastery names.'),
     })
     .optional()
     .describe(
-      '[PC] 2024 Weapon Mastery selections — the kinds of weapons whose mastery property the ' +
-        'character can use (system.traits.weaponProf.mastery). Swappable on a Long Rest per the ' +
-        "class feature; the count allowed is the class's business (fighter 3, paladin/ranger 2 at " +
-        'low levels) — the tool does not enforce it.'
+      '[PC] 2024 Weapon Mastery kinds (system.traits.weaponProf.mastery); the count is not enforced.'
     ),
 
   // vitals
@@ -228,26 +190,19 @@ const UpdateActorSchema = z.object({
         .min(0)
         .nullable()
         .optional()
-        .describe(
-          'FIXED AC that replaces every calculation (a stat block "AC 17"; armor/shield ' +
-            'no longer matter). null clears it so the calculations apply again.'
-        ),
+        .describe('Fixed AC replacing every calculation; null clears it.'),
       natural: z
         .number()
         .int()
         .min(0)
         .optional()
-        .describe(
-          'Natural armor: AC = this value (+ shield, bonuses, cover). Sets calcs to ["natural"] ' +
-            'and clears any override.'
-        ),
+        .describe('Natural armor value; sets calcs to ["natural"] and clears any override.'),
       calcs: z
         .array(z.string())
         .optional()
         .describe(
-          'Base calculations the actor QUALIFIES for — the sheet uses the best: unarmored (10 + DEX), ' +
-            'armored (worn armor), mage, draconic, unarmoredMonk, unarmoredBarb, unarmoredBard, ' +
-            'natural. Replaces the list; default is ["unarmored","armored"].'
+          'Calculations the sheet may use (best wins): unarmored, armored, mage, draconic, ' +
+            'unarmoredMonk / Barb / Bard, natural.'
         ),
       formulas: z
         .array(
@@ -260,23 +215,19 @@ const UpdateActorSchema = z.object({
         )
         .optional()
         .describe(
-          'Custom AC formulas, e.g. [{formula:"13 + @abilities.dex.mod", label:"Mage Armor"}]; ' +
-            'armored/shielded = only qualifies when (not) wearing armor / a shield. Replaces the list.'
+          'Custom formulas, e.g. {formula:"13 + @abilities.dex.mod", label:"Mage Armor"}; ' +
+            'armored / shielded gate them.'
         ),
       calc: z
         .string()
         .optional()
-        .describe(
-          'DEPRECATED dnd5e 5.x alias, still translated: "flat" (+flat → override), "natural" ' +
-            '(+flat), "default" (reset calcs), "custom" (+formula), or a calcs key. Prefer the fields above.'
-        ),
+        .describe('DEPRECATED 5.x alias: flat / natural / default / custom, or a calcs key.'),
       flat: z.number().int().optional().describe('DEPRECATED 5.x alias — see calc.'),
       formula: z.string().optional().describe('DEPRECATED 5.x alias — see calc.'),
     })
     .optional()
     .describe(
-      'Armor class (dnd5e 6.0 model): override = fixed AC; natural = natural armor; calcs / ' +
-        'formulas = what the sheet may calculate from.'
+      'Armor class: override (fixed), natural, or calcs / formulas the sheet computes from.'
     ),
   initiative: z
     .object({
@@ -299,9 +250,7 @@ const UpdateActorSchema = z.object({
       hover: z.boolean().optional(),
     })
     .optional()
-    .describe(
-      'Movement speeds (in the given units, default feet). Stored under movement.speeds.*.'
-    ),
+    .describe('Movement speeds (units default feet).'),
   senses: z
     .object({
       darkvision: z.number().min(0).optional(),
@@ -341,9 +290,7 @@ const UpdateActorSchema = z.object({
   lair: z
     .object({ initiative: z.number().int().optional() })
     .optional()
-    .describe(
-      '[NPC] Lair actions — sets the lair initiative count (marks the creature as having a lair).'
-    ),
+    .describe('[NPC] Lair initiative count (marks the creature as having a lair).'),
 
   // spellcasting (NPC)
   spellcasting: z
@@ -355,24 +302,17 @@ const UpdateActorSchema = z.object({
         .max(20)
         .optional()
         .describe(
-          'Caster level — the NPC sheet\'s "Spellcasting Level" (system.attributes.spell.level). ' +
-            'This is what DERIVES the spell-slot pools: leave it 0 and the sheet shows slots as "4/0" ' +
-            'and a long rest restores them to nothing. 0 = not a slot caster (the 2024-MM default, ' +
-            'where monsters use 1/Day free casts instead of slots — see add-free-cast).'
+          'Caster level (attributes.spell.level), which derives the slot pools; 0 = no slots ' +
+            '(see add-free-cast).'
         ),
       ability: z
         .union([ABILITY, z.literal('')])
         .optional()
-        .describe(
-          'Casting ability (system.attributes.spellcasting) — drives spell save DC (8 + prof + mod) ' +
-            'and spell attack bonus. "" clears it. A caster left unset computes off a +0 modifier, ' +
-            'so an INT 16 mage reads DC 10 instead of DC 13 until this is set.'
-        ),
+        .describe('Casting ability (drives save DC and attack bonus); "" clears. Unset = +0.'),
     })
     .optional()
     .describe(
-      '[NPC] Spellcasting configuration — caster level and/or casting ability. PCs derive both from ' +
-        'their class advancement, so this group is skipped with a warning on a player character.'
+      '[NPC] Caster level and/or casting ability (a PC derives both; skipped with a warning).'
     ),
 
   // 2024 fields (NPC)
@@ -380,7 +320,7 @@ const UpdateActorSchema = z.object({
     .array(z.object({ type: z.string(), subtype: z.string().optional() }))
     .optional()
     .describe(
-      '[NPC, 2024] Habitats (replace the whole list), e.g. [{type:"forest"},{type:"planar",subtype:"nine hells"}].'
+      '[NPC, 2024] Habitats, e.g. [{type:"forest"}, {type:"planar", subtype:"nine hells"}]; replaces.'
     ),
   treasure: setField('[NPC, 2024] Treasure themes (any, arcana, individual, ...).', false),
 
@@ -391,7 +331,7 @@ const UpdateActorSchema = z.object({
         .enum(['set', 'add'])
         .default('set')
         .describe(
-          'set (default) overwrites each listed coin; add adjusts by the amount (negatives spend, clamped at 0).'
+          'set (default) overwrites each listed coin; add adjusts (negatives spend, floor 0).'
         ),
       pp: z.number().int().optional().describe('Platinum pieces.'),
       gp: z.number().int().optional().describe('Gold pieces.'),
@@ -422,29 +362,11 @@ export class DnD5eUpdateActorTool {
       {
         name: 'update-actor',
         description:
-          "[D&D 5e only] Edit an EXISTING actor's own stat-block fields. Supply only the groups you want to change:\n" +
-          '• identity + prototype token — name, tokenName (prototype nameplate ≠ actor name), img, ' +
-          'disposition (friend/foe), tokenAutoRotate ' +
-          '(face movement / lockRotation), tokenRing (dynamic ring), tokenScale (art size), ' +
-          'tokenRotation (facing), tokenDisplayName / tokenDisplayBars (nameplate / HP-bar ' +
-          'visibility) — the PROTOTYPE-token editor. (elevation / hidden / x / y are ' +
-          'placement-only: edit those on a dropped token with update-token)\n' +
-          '• details — size, cr*, creatureType*, creatureSubtype*, swarmSize*, alignment, biography, source\n' +
-          '• abilities — abilities.{str..cha}, savingThrows (replace), skills (merge; proficiency none/proficient/expert)\n' +
-          '• weaponMasteries [PC] — {mode: replace|add|remove, values: ["greatsword", ...]} — 2024 Weapon ' +
-          'Mastery weapon KINDS (base weapon ids, not mastery names)\n' +
-          '• vitals — hp, ac, initiative\n' +
-          '• movement, senses\n' +
-          '• defenses — damageImmunities / damageResistances / damageVulnerabilities / conditionImmunities / languages ' +
-          '(each {mode: replace|add|remove, values, custom?}), telepathy\n' +
-          '• resources* — legendaryActions, legendaryResistances, lair\n' +
-          '• spellcasting* — {level, ability}: caster level (the sheet\'s "Spellcasting Level", which ' +
-          'DERIVES the slot pools) + casting ability (which drives save DC / attack bonus)\n' +
-          '• 2024* — habitat, treasure\n' +
-          '• currency — coins {mode: set|add, pp, gp, ep, sp, cp} (carried money)\n\n' +
-          'Fields marked * are NPC-only (skipped with a warning on player characters). This authors the ' +
-          'stat block; it does NOT edit embedded items (use update-actor-item / add-feature / manage-activity) ' +
-          'or run combat. Use list-actors or get-actor to find the actorIdentifier.',
+          "[D&D 5e] Edit an actor's own sheet: identity + prototype token, details, abilities / " +
+          'saves / skills, weapon masteries, HP / AC / initiative, movement, senses, defenses, NPC ' +
+          'resources and spellcasting, habitat / treasure, coins. Only the groups passed change; ' +
+          '[NPC] fields warn on a PC. Embedded items: update-actor-item / add-feature / ' +
+          'manage-activity; placed tokens: update-token.',
         inputSchema: toInputSchema(UpdateActorSchema),
       },
     ];

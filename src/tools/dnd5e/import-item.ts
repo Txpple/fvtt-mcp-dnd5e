@@ -22,43 +22,28 @@ const ImportItemSchema = z.object({
     .string()
     .min(1, 'packId cannot be empty')
     .describe(
-      'Compendium pack id holding the item (e.g. "dnd-players-handbook.equipment", ' +
-        '"dnd-dungeon-masters-guide.equipment"). Premium MM/PHB/DMG books ONLY — never the dnd5e.* SRD (design.md §2.3). Find it with list-compendium-packs / search-compendium.'
+      'Compendium pack id, e.g. "dnd-players-handbook.equipment"; an SRD pack (dnd5e.*) is refused.'
     ),
   itemId: z
     .string()
     .min(1, 'itemId cannot be empty')
-    .describe('Entry id within the pack (from search-compendium / get-compendium-entry results).'),
+    .describe('Entry id within the pack (from search-compendium).'),
   actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world Item.`),
-  name: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('Rename the copy (e.g. when adapting a base item into a custom magic item).'),
-  quantity: z.number().int().min(0).optional().describe('Override the stack count on the copy.'),
-  equipped: z
-    .boolean()
-    .optional()
-    .describe('Set equipped state on the copy (equippable items only; ignored otherwise).'),
-  identified: z
-    .boolean()
-    .optional()
-    .describe('Set identified state (false = mystery/unidentified loot).'),
+  name: z.string().min(1).optional().describe('Rename the copy.'),
+  quantity: z.number().int().min(0).optional().describe('Stack count on the copy.'),
+  equipped: z.boolean().optional().describe('Equipped state (equippable items only).'),
+  identified: z.boolean().optional().describe('false = unidentified loot.'),
   container: z
     .string()
     .optional()
-    .describe('Id or name of an EXISTING container on the same target to nest the copy inside.'),
-  folder: z
-    .string()
-    .optional()
-    .describe('When copying to the world (no actorIdentifier), place the item in this folder.'),
+    .describe('An existing container on the same target (id or name) to nest inside.'),
+  folder: z.string().optional().describe('World Item: its folder.'),
   lootCopy: z
     .boolean()
     .optional()
     .describe(
-      '[actor target] Also mint a matching WORLD Item (same art + stats) so the party can loot this ' +
-        'gear afterward (rule 9). DEFAULT ON for magic items (rarity set or "mgc"); pass false to ' +
-        'suppress, or true to force a loot copy of a mundane item too. Ignored for a world-item target.'
+      '[actor] Also mint a world Item as loot: default on for magic items (rarity or "mgc"); ' +
+        'true forces, false suppresses.'
     ),
   lootCopyFolder: z
     .string()
@@ -85,18 +70,10 @@ export class DnD5eImportItemTool {
       {
         name: 'import-item',
         description:
-          '[D&D 5e only] COPY an existing item from a compendium pack onto an actor (or into the world ' +
-          'Items sidebar), keeping its artwork, full system data, and activities. PREFER THIS over ' +
-          'add-item for any real piece of gear — a plain greatsword, a Potion of Healing, a +1 shield, ' +
-          'a magic weapon: copying brings the correct PHB/DMG 2024 stats AND the graphic, where ' +
-          'authoring from scratch does not.\n\n' +
-          'WORKFLOW: 1) find the item with search-compendium (prefer the 2024 packs: ' +
-          '"dnd-players-handbook.equipment", "dnd-dungeon-masters-guide.equipment" — premium books ONLY, never the dnd5e.* SRD); ' +
-          '2) import-item with its packId + itemId; 3) for a CUSTOM item, copy the closest base then ' +
-          'refine it with update-actor-item / manage-activity / manage-effect and rename via `name`.\n\n' +
-          'Optional on-copy tweaks: name (rename), quantity, equipped, identified, container (nest in a ' +
-          'bag/chest), folder (world target only). Target an actor with actorIdentifier, or omit it to ' +
-          'build a reusable world Item. Use add-item only for genuine homebrew with no compendium base.',
+          '[D&D 5e] Copy a compendium item (packId + itemId, from search-compendium) onto an actor or ' +
+          'into the world Items sidebar with its art, system data and activities; name / quantity / ' +
+          'equipped / identified / container are applied to the copy. Premium packs only: an SRD ' +
+          'pack is refused.',
         inputSchema: toInputSchema(ImportItemSchema),
       },
     ];

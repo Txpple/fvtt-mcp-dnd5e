@@ -47,7 +47,7 @@ try {
   console.log(`[verify-tier2] connected (Tier-1 weapon floor = ${FLOOR_WEAPON})\n`);
 
   const creatures = await f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 });
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound}
   const aOut = await f.call('createActorFromCompendium', {
     packId: cHit.pack,
     itemId: cHit.id,

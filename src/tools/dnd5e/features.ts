@@ -16,21 +16,13 @@ export const AddFeaturesFromCompendiumSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .max(50)
-    .describe(
-      'English feature names to import (exact match, case-insensitive). Maximum 50 per call.'
-    ),
+    .describe('Feature names (exact, case-insensitive), max 50.'),
   compendiumPacks: z
     .array(z.string().min(1))
     .default([...DEFAULT_FEATURE_PACKS])
     .describe(
-      'Premium-book pack IDs to search, in priority order (first match wins). ' +
-        `Defaults to ${JSON.stringify([...DEFAULT_FEATURE_PACKS])} — MM monster ` +
-        'features, then PHB class features (the classes pack also holds the individual feature feats). ' +
-        'SOURCE ONLY from the premium MM/PHB/DMG books — NEVER the dnd5e.* SRD packs (design.md §2.3). ' +
-        'CAVEAT: a class/racial feature copied onto an NPC may carry an unresolved @scale.* damage/' +
-        'uses formula (its ScaleValue comes from the PC class/species advancement, absent on an NPC). ' +
-        'This tool now REPORTS those tokens as a fact — each added feature lists its unresolvedScale ' +
-        '[{path, formula}] — so you can set an explicit die; it does not pick the value for you.'
+      'Packs to search in order (first match wins; default MM features, then PHB classes); an SRD ' +
+        'pack is refused.'
     ),
 });
 

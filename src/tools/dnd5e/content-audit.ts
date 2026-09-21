@@ -21,13 +21,8 @@ const ContentAuditSchema = z.object({
   itemFolders: z
     .array(z.string().min(1))
     .optional()
-    .describe(
-      'World-Item folders to audit (name or id) — e.g. the loot/treasure folder you created.'
-    ),
-  worldItemIds: z
-    .array(z.string().min(1))
-    .optional()
-    .describe('Specific world Items to audit, by id.'),
+    .describe('World-Item folders to audit (name or id).'),
+  worldItemIds: z.array(z.string().min(1)).optional().describe('World Items to audit, by id.'),
 });
 
 export interface DnD5eContentAuditToolOptions {
@@ -49,21 +44,10 @@ export class DnD5eContentAuditTool {
       {
         name: 'content-audit',
         description:
-          '[D&D 5e only] Finishing check for authored content — scan documents for the five strict ' +
-          'authoring-quality rules and report violations to fix (read-only; never mutates):\n' +
-          '• rule 8 — placeholder icons (icons/svg/...) on an actor, item, or authored feature.\n' +
-          '• rule 7 — GM-fudge / pretend-reskin language in a description or biography ("treat its X ' +
-          'as Y", "reflavor", "deals necrotic in place of bludgeoning", "pretend", "is really <type>").\n' +
-          '• rule 9 — a magic item on an NPC with no matching world-Item loot twin.\n' +
-          '• rule 12 — a GM-note / spoiler leaked into a PLAYER-VISIBLE item description ("GM:" asides, ' +
-          '"the DM", "fill in the …", "ready-made hook", "to suit your table"). Item descriptions only — ' +
-          'an NPC biography is GM-facing, so it is not scanned for this.\n\n' +
-          'RUN THIS before declaring a build done. Target what you built: actorIdentifiers (NPCs, with ' +
-          'their gear/features), itemFolders (your loot folder), and/or worldItemIds. With NO target it ' +
-          'runs a full sweep of every NPC + every world Item. Fix each finding (set a real icon via ' +
-          'update-actor-item/update-item/set-actor-art; replace fudge with real mechanics; mint the ' +
-          'missing loot copy; rewrite the item description to innocuous in-world flavor and move the GM ' +
-          'note to a GM-only journal) then re-run until clean.',
+          '[D&D 5e] Read-only scan of authored content for the authoring-policy rules: placeholder ' +
+          'icons (rule 8), GM-fudge / reskin language (7), a magic NPC item with no loot twin (9), a ' +
+          'GM note or spoiler in a player-visible item description (12; biographies are not scanned). ' +
+          'No target = every NPC and every world Item.',
         inputSchema: toInputSchema(ContentAuditSchema),
       },
     ];

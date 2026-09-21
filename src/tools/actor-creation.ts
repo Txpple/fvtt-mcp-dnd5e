@@ -21,77 +21,48 @@ export interface ActorCreationToolsOptions {
 const CreateActorFromCompendiumSchema = z.object({
   packId: z
     .string()
-    .min(1, 'Pack ID cannot be empty')
+    .min(1)
     .describe(
-      'ID of the premium-book pack containing the creature (e.g., "dnd-monster-manual.actors"). ' +
-        'Premium MM/PHB/DMG only — never the dnd5e.* SRD (design.md §2.3).'
+      'Compendium pack id, e.g. "dnd-monster-manual.actors"; an SRD pack (dnd5e.*) is refused.'
     ),
-  itemId: z
-    .string()
-    .min(1, 'Item ID cannot be empty')
-    .describe(
-      'ID of the specific creature entry within the pack (get this from search-compendium results)'
-    ),
-  names: z
-    .array(z.string().min(1))
-    .min(1, 'At least one name is required')
-    .describe('Custom names for the created actors (e.g., ["Flameheart", "Sneak", "Peek"])'),
+  itemId: z.string().min(1).describe('Entry id within the pack (from search-compendium).'),
+  names: z.array(z.string().min(1)).min(1).describe('Names for the new actors, one each.'),
   quantity: z
     .number()
     .min(1)
     .max(10)
     .optional()
-    .describe('Number of actors to create (default: based on names array length)'),
+    .describe('Copies to create (default names.length).'),
   folder: z
     .string()
     .min(1)
     .optional()
     .describe(
-      'Actor folder to file the created copies under — a folder id or exact name (created if ' +
-        'absent), so the actor lands in its folder in ONE call instead of create + move-documents. ' +
-        'Omit for the default "Foundry MCP Creatures" folder.'
+      'Actor folder id or exact name (created if absent); default "Foundry MCP Creatures".'
     ),
-  addToScene: z
-    .boolean()
-    .default(false)
-    .describe('Whether to add created actors to the current scene as tokens'),
+  addToScene: z.boolean().default(false).describe('Also place tokens on the active scene.'),
   placement: z
     .object({
-      type: z
-        .enum(['random', 'grid', 'center', 'coordinates'])
-        .default('grid')
-        .describe('Placement strategy'),
+      type: z.enum(['random', 'grid', 'center', 'coordinates']).default('grid'),
       coordinates: z
-        .array(
-          z.object({
-            x: z.number().describe('X coordinate in pixels'),
-            y: z.number().describe('Y coordinate in pixels'),
-          })
-        )
+        .array(z.object({ x: z.number(), y: z.number() }))
         .optional()
-        .describe('Specific coordinates for each token (required when type is "coordinates")'),
+        .describe('One {x, y} in pixels per token (type "coordinates").'),
     })
     .optional()
-    .describe('Token placement options (only used when addToScene is true)'),
+    .describe('Token placement when addToScene is true.'),
   disposition: z
     .enum(['friendly', 'neutral', 'hostile', 'secret'])
     .optional()
     .describe(
-      'Prototype-token disposition for the created copies — YOUR judgment call (shared ' +
-        "authoring-policy house token rules): 'neutral' for civilians/townsfolk/bystanders, " +
-        "'friendly' for allies, 'hostile' for enemies. Omit to default by source type (copied PC " +
-        'pregen → friendly, copied monster → hostile).'
+      'Prototype-token disposition. Default by source: a PC pregen → friendly, else hostile.'
     ),
   modifications: z
     .record(z.string(), z.any())
     .optional()
     .describe(
-      'PREFAB-AS-BASE bridge: stat edits to layer onto the instantiated WORLD COPY — copy a ' +
-        'close-matching Monster Manual creature, then customize it in one call (the §6 step-2 path). ' +
-        'Same shape as update-actor, e.g. {cr, hp:{value,max,formula}, ac:{override} or ac:{natural}, ' +
-        'abilities:{str,…}, skills:[{skill,proficiency}], damageResistances:{values}, biography, ' +
-        'currency:{mode,gp,…}}. Applied to the copy ONLY — the source compendium entry is never ' +
-        'modified. Use names[] for the name, not this. Applies to every copy when quantity > 1.'
+      'update-actor-shaped edits applied to every copy (never the source): cr, hp, ac, abilities, ' +
+        'skills, defenses …'
     ),
 });
 
@@ -110,43 +81,28 @@ const DuplicateActorSchema = z
     newNames: z
       .array(z.string().min(1))
       .optional()
-      .describe(
-        'Names for the copies, aligned by index with actorIdentifiers. Entries the array does ' +
-          'not cover fall back to the source name + suffix. Omit to name every copy that way.'
-      ),
+      .describe('Copy names by index; the rest get source name + suffix.'),
     suffix: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        "Appended to each SOURCE name to build a copy's name when newNames does not supply one " +
-          '(e.g. " (Sim)" → "Gren (Sim)"). Default: " (Copy)".'
-      ),
+      .describe('Appended to the source name when newNames has no entry (default " (Copy)").'),
     folder: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'Actor folder to file ALL the copies under — a folder id or exact name (created if ' +
-          'absent), same contract as create-actor-from-compendium. Omit to file each copy ' +
-          "beside its source (the source actor's own folder)."
-      ),
+      .describe('Actor folder id or exact name (created if absent); default: beside the source.'),
     owner: z
       .string()
       .min(1)
       .optional()
       .describe(
-        'User who should own the copies — a user id or exact/partial user name. When set, each ' +
-          "copy's ownership becomes exactly {default: NONE, this user: ownershipLevel}. Omit to " +
-          "copy the source actor's ownership unchanged."
+        'User id or name (substring ok) who owns the copies: {default NONE, this user: ownershipLevel}.'
       ),
     ownershipLevel: z
       .enum(['OWNER', 'OBSERVER', 'LIMITED'])
       .default('OWNER')
-      .describe(
-        'Permission level the `owner` user gets on each copy (default OWNER — full control, the ' +
-          'sandbox use case). Only meaningful together with owner.'
-      ),
+      .describe('Level for `owner` (default OWNER).'),
   })
   .superRefine((v, ctx) => {
     if (v.newNames && v.newNames.length > v.actorIdentifiers.length) {
@@ -164,7 +120,7 @@ const DeleteActorSchema = z.object({
     .boolean()
     .default(true)
     .describe(
-      'When true (default), also delete a bridge-created folder left completely empty by this deletion. Only ever removes mcp-generated, empty folders — never a user folder or one with remaining contents.'
+      'Also delete a bridge-created folder this leaves empty (default true); never a user folder.'
     ),
 });
 
@@ -205,41 +161,27 @@ export class ActorCreationTools {
       {
         name: 'create-actor-from-compendium',
         description:
-          'Copy one or more actors from a premium-book compendium pack — the DEFAULT, preferred path ' +
-          'for official content (e.g. pull the Owlbear from the Monster Manual). Find the entry with ' +
-          'search-compendium / get-compendium-entry, then pass its packId + itemId plus names[] for ' +
-          'the new actors. PREFAB-AS-BASE (the §6 step-2 bridge): to make a CUSTOM creature, copy the ' +
-          'closest Monster Manual match and pass `modifications` (update-actor-shaped stat edits — ' +
-          'cr/hp/ac/abilities/skills/defenses/biography/currency) to layer onto the world copy in the ' +
-          'SAME call; the edits land on the copy only, never the source entry. Pass `folder` (id or ' +
-          'exact name, created if absent) to file the copies directly — no move-documents follow-up. ' +
-          'For a fully hand-authored NPC with no compendium base, use author-npc (last resort).',
+          'Copy one or more actors from a compendium entry (packId + itemId, from search-compendium) ' +
+          'under names[]. `modifications` (update-actor-shaped: cr / hp / ac / abilities / skills / ' +
+          'defenses / biography / currency) are applied to each world copy, never the source; ' +
+          '`folder` files them. Premium packs only: an SRD pack is refused.',
         inputSchema: toInputSchema(CreateActorFromCompendiumSchema),
       },
       {
         name: 'duplicate-actor',
         description:
-          'Clone one or more existing WORLD actors as full copies — the whole sheet travels ' +
-          '(system data, embedded items, spells, effects, prototype token), so every copy stays ' +
-          'fully rollable. THE sandbox path: clone PCs as "(Sim)" copies (suffix: " (Sim)") so a ' +
-          'player can re-run a battle without touching the real sheets. Resolution is STRICT ' +
-          '(exact id or exact name — look up with list-actors first); a missing source is ' +
-          'reported per-actor, never fatal to the batch. Name the copies with newNames[] ' +
-          '(index-aligned) or a suffix on every source name (default " (Copy)"). Pass folder ' +
-          '(id or exact name, created if absent) to file the copies together — omit to file ' +
-          'each beside its source. Pass owner (user id or exact/partial name; + ownershipLevel, ' +
-          "default OWNER) to set each copy's ownership to exactly {default: NONE, that user: " +
-          "level} — omit to copy the source's ownership unchanged. GM-only.",
+          'Clone world actors as full copies (system, items, effects, prototype token). Names: ' +
+          'newNames[] by index, else source name + suffix (default " (Copy)"). folder files them ' +
+          'together (default: beside the source). owner (+ ownershipLevel) sets each copy to ' +
+          '{default NONE, that user}; omitted, the source ownership is copied. A missing source is ' +
+          'reported, not fatal. GM-only.',
         inputSchema: toInputSchema(DuplicateActorSchema),
       },
       {
         name: 'delete-actor',
         description:
-          'Permanently delete one or more world actors (NPCs/characters) by exact name or ID. ' +
-          'IRREVERSIBLE — Foundry has no undo for document deletion; the actor is removed from the world directory. ' +
-          'GM-only. Resolution is STRICT (exact id or exact name — no fuzzy matching), so look up the precise ' +
-          'name/ID with list-actors first. If the deletion empties a folder the bridge itself created (e.g. ' +
-          '"Foundry MCP Creatures"), that folder is auto-removed unless removeEmptyFolder is false.',
+          'Permanently delete world actors (no undo). A bridge-created folder left empty is removed ' +
+          'too unless removeEmptyFolder:false. GM-only.',
         inputSchema: toInputSchema(DeleteActorSchema),
       },
       {

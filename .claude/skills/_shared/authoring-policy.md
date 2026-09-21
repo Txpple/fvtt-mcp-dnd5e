@@ -82,14 +82,20 @@
 11. **Run `content-audit` as the finishing check.** Before declaring a build done, scan what you made
     (`actorIdentifiers` for NPCs + their gear, `itemFolders` / `worldItemIds` for loot) with the
     read-only `content-audit` tool. It flags any placeholder icon (rule 8), GM-fudge / pretend-reskin
-    language (rule 7), and magic NPC item with no loot twin (rule 9). Fix each finding and re-run until
-    it reports clean — these rules are enforced at the tool floor, and this is the belt-and-suspenders
-    check that nothing slipped through a hand edit.
+    language (rule 7), a magic NPC item with no loot twin (rule 9), and a GM note / spoiler in a
+    player-visible **item description** (rule 12 — `"GM:"` asides, "the DM", "fill in the …",
+    "ready-made hook", "to suit your table"; an NPC biography is GM-facing and is not scanned). Fix
+    each finding — a real icon via `update-actor-item` / `update-item` / `set-actor-art`; real
+    mechanics in place of fudge; the missing loot copy minted; the item description rewritten to
+    innocuous in-world flavour with the GM note moved to a GM-only journal — and re-run until it
+    reports clean. These rules are enforced at the tool floor; this is the belt-and-suspenders check
+    that nothing slipped through a hand edit.
 
-12. **Descriptions are PLAYER-FACING and un-audited — keep them in-world and innocuous; secrets go in a
-    GM-only journal.** An item's `system.description` (and any player-visible page/handout) can be read
-    by a player the moment they see the thing, and `content-audit` does **not** scan description prose —
-    so a leak here is silent. **Never** put GM-only content in a description: no `GM:` asides, no plot
+12. **Descriptions are PLAYER-FACING — keep them in-world and innocuous; secrets go in a GM-only
+    journal.** An item's `system.description` (and any player-visible page/handout) can be read by a
+    player the moment they see the thing. `content-audit` catches the obvious tells in an item
+    description (rule 11), nothing subtler and nothing in a journal page — so treat the audit as a
+    backstop, not the guard. **Never** put GM-only content in a description: no `GM:` asides, no plot
     reveals or spoilers, no meta-instructions to the DM (*"fill in the name"*, *"a ready-made hook"*), no
     naming of the twist / answer / hidden loot. Write **only what the fiction shows in-world**, and keep
     it innocuous — assume a player reads it first. Anything the GM needs (the hook, the secret, the

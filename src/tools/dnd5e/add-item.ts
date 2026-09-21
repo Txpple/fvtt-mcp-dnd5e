@@ -43,27 +43,20 @@ const AddItemSchema = z.object({
   itemType: z
     .enum(['weapon', 'armor', 'shield', 'wondrous', 'consumable', 'tool', 'loot', 'container'])
     .describe(
-      'Kind of physical item. weapon; armor/shield/wondrous (all dnd5e "equipment"); consumable ' +
-        '(potion/scroll/ammo/…); tool; loot (gems/trade goods/junk); container (bag/chest).'
+      'armor / shield / wondrous are dnd5e "equipment"; loot is gems / trade goods / junk.'
     ),
 
   // ── Target ────────────────────────────────────────────────────────
   actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world Item.`),
-  folder: z
-    .string()
-    .optional()
-    .describe(
-      'When creating a world Item (no actorIdentifier), place it in this folder (created if absent).'
-    ),
+  folder: z.string().optional().describe('World Item: its folder (created if absent).'),
 
   // ── Loot twin (rule 9 — NPC magic gear is lootable) ───────────────
   lootCopy: z
     .boolean()
     .optional()
     .describe(
-      '[actor target] Also mint a matching WORLD Item (same stats + icon) so the party can loot this ' +
-        'gear after the fight. DEFAULT ON for magic items (rarity set, "mgc", or a +N); pass false to ' +
-        'suppress, or true to force a loot copy of a mundane item too. Ignored for a world-item target.'
+      '[actor] Also mint a world Item as loot: default on for magic items (rarity, "mgc", a +N); ' +
+        'true forces, false suppresses.'
     ),
   lootCopyFolder: z
     .string()
@@ -75,11 +68,7 @@ const AddItemSchema = z.object({
   img: z
     .string()
     .optional()
-    .describe(
-      'Icon path (e.g. "icons/weapons/swords/sword-runed.webp"). A path that does NOT resolve on the ' +
-        'server is auto-replaced with a real icon (rule 8) and reported as a warning — omit img to ' +
-        'auto-fill, or copy a verified path from a compendium item rather than guessing.'
-    ),
+    .describe('Icon path; omitted or unresolvable, a real icon is auto-filled (with a warning).'),
   description: z.string().default('').describe('HTML description.'),
 
   // ── Cross-cutting physical fields (PhysicalItemTemplate) ──────────
@@ -101,54 +90,33 @@ const AddItemSchema = z.object({
   rarity: z
     .union([RARITY, z.array(RARITY)])
     .optional()
-    .describe(
-      'Magic-item rarity ("" = mundane) — or a LIST for a "Rarity Varies" item (dnd5e 6.0 ' +
-        '`system.rarities`, e.g. ["uncommon", "rare"] for a Potion of Healing line). Written natively.'
-    ),
-  identified: z
-    .boolean()
-    .optional()
-    .describe('Whether the item is identified (default true). Set false for mystery loot.'),
+    .describe('Rarity ("" = mundane), or a list for a "Rarity Varies" item (system.rarities).'),
+  identified: z.boolean().optional().describe('Default true.'),
   container: z
     .string()
     .optional()
-    .describe(
-      'Id or name of an EXISTING container item on the same target to place this item inside.'
-    ),
+    .describe('An existing container item on the same target (id or name) to nest inside.'),
 
   // ── Equippable + magical (weapon/equipment/consumable/tool) ───────
-  equipped: z
-    .boolean()
-    .optional()
-    .describe('Whether worn/wielded (default true for an NPC). Set false for stowed loot.'),
-  attunement: ATTUNEMENT.optional().describe(
-    'Attunement requirement: "" none, required, or optional.'
-  ),
-  attuned: z.boolean().optional().describe('Whether this item is currently attuned by its owner.'),
-  magical: z
-    .boolean()
-    .optional()
-    .describe(
-      'Flag the item as magical (adds the "mgc" property). Implied when magicalBonus is set.'
-    ),
+  equipped: z.boolean().optional().describe('Worn / wielded (default true on an NPC).'),
+  attunement: ATTUNEMENT.optional().describe('"" none, required, or optional.'),
+  attuned: z.boolean().optional().describe('Currently attuned by its owner.'),
+  magical: z.boolean().optional().describe('Adds the "mgc" property; implied by magicalBonus.'),
   magicalBonus: z
     .number()
     .int()
     .optional()
-    .describe('Numeric +N magic bonus (to attack & damage for weapons, to AC for armor).'),
+    .describe('The +N (attack and damage on a weapon, AC on armor).'),
   properties: z
     .array(z.string())
     .default([])
-    .describe(
-      'Property codes Set (e.g. ["fin","lgt"]). Weapon codes: ada,amm,fin,fir,foc,hvy,lgt,lod,mgc,' +
-        'rch,rel,ret,sil,spc,thr,two,ver. "mgc" marks magical.'
-    ),
+    .describe('dnd5e property codes, e.g. ["fin", "lgt"]; "mgc" marks magical.'),
 
   // ── Weapon ────────────────────────────────────────────────────────
   weaponClass: z
     .enum(['natural', 'simpleM', 'martialM', 'simpleR', 'martialR'])
     .optional()
-    .describe('[weapon] Category. "natural" for monster attacks. Default "natural".'),
+    .describe('[weapon] Default natural (monster attacks).'),
   baseItem: z
     .string()
     .optional()
@@ -163,8 +131,7 @@ const AddItemSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      '[weapon] Attach a rollable attack activity built from damage + attackType (default: true when ' +
-        'damage is given). Set false for a weapon that is pure loot with no attack.'
+      '[weapon] Build an attack activity from damage + attackType (default: true when damage is given).'
     ),
   attackType: z
     .enum(['melee', 'ranged'])
@@ -193,9 +160,7 @@ const AddItemSchema = z.object({
   sourceRules: z
     .enum(['2014', '2024'])
     .default('2024')
-    .describe(
-      '[weapon] Rules edition for the attack activity. Default "2024" (pass "2014" for legacy).'
-    ),
+    .describe('[weapon] Rules edition of the attack activity.'),
 
   // ── Armor / shield ────────────────────────────────────────────────
   armorType: z
@@ -222,16 +187,11 @@ const AddItemSchema = z.object({
   equipmentType: z
     .string()
     .optional()
-    .describe(
-      '[wondrous] Equipment subtype (clothing/trinket/ring/rod/wand/…). Default "trinket".'
-    ),
+    .describe('[wondrous] Equipment subtype (clothing / ring / rod / wand …). Default trinket.'),
   wireAc: z
     .boolean()
     .default(false)
-    .describe(
-      '[body armor, actor target only] Also switch the actor to default (armor-derived) AC so worn ' +
-        'armor changes AC. Ignored for shields (their +2 always applies) and for world items.'
-    ),
+    .describe('[body armor on an actor] Also switch the actor to armor-derived AC.'),
 
   // ── Consumable ────────────────────────────────────────────────────
   consumableType: z
@@ -257,7 +217,7 @@ const AddItemSchema = z.object({
   ammoReplace: z
     .boolean()
     .optional()
-    .describe('[consumable ammo] If true, ammo damage replaces the weapon base instead of adding.'),
+    .describe('[ammo] Damage replaces the weapon base instead of adding.'),
 
   // ── Tool ──────────────────────────────────────────────────────────
   toolType: z.string().optional().describe('[tool] Category key (art/game/music/…).'),
@@ -310,32 +270,11 @@ export class DnD5eAddItemTool {
       {
         name: 'add-item',
         description:
-          '[D&D 5e only] Create a structured physical item (loot/gear) on an actor or in the world ' +
-          'Items sidebar. Pick itemType, then supply only the fields you need — sensible defaults fill ' +
-          'the rest:\n\n' +
-          '• weapon — to-hit weapon. damage (base die), weaponClass, attackType, reach/range, ' +
-          'magicalBonus, properties. Builds a rollable attack activity by default (withAttack).\n' +
-          '• armor / shield — armorValue, dex, strength; magicalBonus = +N AC. Pass wireAc (BODY ARMOR ' +
-          'only) to make the actor derive AC from the worn armor; a shield needs no wireAc (its +2 ' +
-          'applies under any AC calc).\n' +
-          '• wondrous — rings/cloaks/etc. (equipmentType); use magical:true + attunement (a wondrous ' +
-          'item has no numeric +N field — model a bonus with manage-effect).\n' +
-          '• consumable — potion/scroll/ammo/wand. consumableType, uses {max, recovery, autoDestroy}. ' +
-          'Ammo can carry damage + ammoReplace + magicalBonus.\n' +
-          '• tool — toolType, ability, proficient, toolBonus.\n' +
-          '• loot — gems/art/trade goods (lootType, price). NOT equippable/attunable.\n' +
-          '• container — bag/chest with capacity and an inner currency pile. Place items inside any ' +
-          'container with the `container` param (id or name).\n\n' +
-          'Cross-cutting: price, weight, quantity, rarity, identified, equipped, attunement (""/' +
-          'required/optional) + attuned, magicalBonus (the +N), properties (incl. "mgc"). Setting ' +
-          'magicalBonus/magical adds the mgc flag; the numeric +N is stored for weapons, body armor, ' +
-          'and magic ammo (wondrous/potion have no +N field). Unlike add-feature, add-item does NOT ' +
-          'reject a duplicate name — intentional, so you can author stacks/copies; de-dupe yourself if ' +
-          'you need uniqueness.\n\n' +
-          'Target: actorIdentifier embeds on that actor; omit it to create a reusable world Item ' +
-          '(optionally in folder). This authors documents — it does NOT roll, equip-in-combat, or spend ' +
-          'charges. For features/attacks-as-abilities use add-feature; for free-form system data use ' +
-          'create-item / add-feature. To COPY a real item from a compendium (keeps art + stats), prefer import-item.',
+          '[D&D 5e] Author a physical item (weapon, armor / shield, wondrous, consumable, tool, loot, ' +
+          'container) on an actor or as a world Item; the leaves are tagged by itemType and the rest ' +
+          'default. magicalBonus / magical add "mgc" (the +N lands on weapons, body armor and magic ' +
+          'ammo; wondrous / potion have none). A duplicate name is not refused. Copying a compendium ' +
+          'item is import-item.',
         inputSchema: toInputSchema(AddItemSchema),
       },
     ];

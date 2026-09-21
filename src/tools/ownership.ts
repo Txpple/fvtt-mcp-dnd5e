@@ -27,33 +27,26 @@ const ownershipLevelSchema = z.enum(['NONE', 'LIMITED', 'OBSERVER', 'OWNER', 'IN
 // Single source of truth for each tool's input contract: the handler parses with these
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
 const SetActorOwnershipSchema = z.object({
-  actorIdentifier: actorTarget.describe(`${ACTOR_TARGET} Or a bulk phrase (description).`),
+  actorIdentifier: actorTarget.describe(`${ACTOR_TARGET} Or a bulk phrase.`),
   playerIdentifier: z
     .string()
-    .describe(
-      'Player name, character name, or "party" for all connected players. Supports partial matching.'
-    ),
+    .describe('Player or character name (substring ok), or "party" for every connected player.'),
   permissionLevel: ownershipLevelSchema.describe(
-    "Permission level to assign: LIMITED (basic view), OBSERVER (full view, no control), OWNER (full control), NONE (explicitly DENY — stores a level-0 entry that overrides the actor's default, so it revokes access the player would otherwise inherit), INHERIT (remove the player's entry entirely so the actor's default ownership applies again)"
+    "NONE stores a level-0 deny that overrides the actor's default; INHERIT removes the entry."
   ),
   confirmBulkOperation: z
     .boolean()
     .default(false)
-    .describe('Required confirmation for bulk operations affecting multiple actors/players'),
+    .describe('Required when several actors or players are affected.'),
 });
 
 const ListActorOwnershipSchema = z.object({
-  actorIdentifier: actorTarget
-    .optional()
-    .describe(`${ACTOR_TARGET} Omit or "all" for every actor.`),
-  playerIdentifier: z
-    .string()
-    .optional()
-    .describe('Optional: specific player name to check ownership for'),
+  actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit/"all": every actor.`),
+  playerIdentifier: z.string().optional().describe('One player, by name.'),
   verbose: z
     .boolean()
     .optional()
-    .describe('Per-player matrix (effective level + source) for every actor asked; narrow first.'),
+    .describe('The per-player matrix (effective level + source) for every actor asked.'),
 });
 
 export class OwnershipTools {
@@ -73,13 +66,18 @@ export class OwnershipTools {
       {
         name: 'set-actor-ownership',
         description:
-          'Set ownership permissions for actors. Use permissionLevel OWNER/OBSERVER/LIMITED to grant access, NONE to explicitly deny it (a stored level-0 entry that OVERRIDES the actor\'s default ownership), or INHERIT to remove the player\'s entry so the actor\'s default applies again. On an actor whose default is permissive (e.g. a shared party stash defaulting to OWNER), NONE revokes access the player would otherwise inherit and INHERIT is what restores it. Supports individual assignments like "Make John the owner of Aragorn" and bulk operations like "Give the party observer access to all friendly NPCs".',
+          "Set a player's permission on an actor. NONE is a stored deny that overrides a permissive " +
+          'default; INHERIT removes the entry so the default applies. actorIdentifier also takes the ' +
+          'bulk phrases "all friendly NPCs" / "party characters", playerIdentifier "party" — bulk ' +
+          'writes need confirmBulkOperation.',
         inputSchema: toInputSchema(SetActorOwnershipSchema),
       },
       {
         name: 'list-actor-ownership',
         description:
-          'List actor ownership: a row per actor with explicit entries or a non-NONE default — {id, name, default, explicit: {<player>: <level>}}. A player absent from explicit inherits default; an explicit NONE is a stored deny. Trivial actors (default NONE, no entries) are counted, not listed; name one to see it. verbose: the per-player matrix.',
+          'Actor ownership, one row per actor with explicit entries or a non-NONE default: {id, name, ' +
+          'default, explicit: {<player>: <level>}} (an explicit NONE is a stored deny). Trivial ' +
+          'actors are counted, not listed, unless named.',
         inputSchema: toInputSchema(ListActorOwnershipSchema),
       },
     ];

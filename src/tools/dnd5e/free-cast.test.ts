@@ -59,7 +59,7 @@ describe('add-free-cast tool definition', () => {
     ]);
     // The native shape: repertoire + Additional Spells, never a tracker feat / on-spell forward.
     expect(def.description).toContain('Additional Spells');
-    expect(def.description).toContain('ALWAYS-PREPARED');
+    expect(def.description).toContain('always prepared');
   });
 });
 

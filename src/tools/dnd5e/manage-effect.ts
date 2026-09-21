@@ -32,28 +32,20 @@ import { toInputSchema } from '../../utils/schema.js';
 const filter = z
   .union([z.string(), z.record(z.string(), z.any()), z.array(z.record(z.string(), z.any()))])
   .describe(
-    'A Filter: {k: "<roll-data path>", v: <value>, o?: "<comparison>"} (exact when o is omitted; ' +
-      'comparisons: in has hasany hasall contains icontains startswith endswith empty gt gte lt lte ' +
-      'subsetof), an operator {o: "AND"|"OR"|"NAND"|"NOR"|"XOR", v: [filters]} / {o: "NOT", v: filter}, ' +
-      'or a bare array (AND). Examples: {k:"statuses.bloodied", v:1} · {k:"item.properties", o:"has", ' +
-      'v:"thr"} · {k:"roll.ability", v:"str"} (roll.* keys only on a CHANGE).'
+    'Filter: {k, v, o?} (o = a comparison; exact if omitted), {o: "AND"|"OR"|"NOT"…, v: [filters]}, ' +
+      'or a bare array (AND).'
   );
 
 const change = z.object({
   key: z
     .string()
     .min(1)
-    .describe(
-      'Data path to modify, e.g. "system.attributes.ac.bonus" or "system.traits.dr.value" — OR, for a ' +
-        `dnd5e.* rules type, a roll CATEGORY: ${RULE_KEYS.join(' | ')} (damage/healing take dnd5e.bonus only).`
-    ),
+    .describe(`Data path, or (dnd5e.* type) a roll category: ${RULE_KEYS.join(' | ')}.`),
   value: z
     .string()
     .describe(
-      'The change value (stored as a string; e.g. "2", "fire"). Rules: dnd5e.bonus = "1d4" / "2" / "@prof" / ' +
-        `"1d4[fire]"; dnd5e.advantage = ${ADVANTAGE_VALUES.join(' ')} (+1 add advantage, -1 add ` +
-        'disadvantage, =+1/=-1 force, >=0 ignore disadvantage, <=0 ignore advantage); dnd5e.minimum / ' +
-        'maximum = a deterministic formula ("10", "@prof") — the d20 floor / ceiling.'
+      `String. dnd5e.bonus "1d4" / "@prof" / "1d4[fire]"; dnd5e.advantage ${ADVANTAGE_VALUES.join(' ')}; ` +
+        'minimum / maximum a formula.'
     ),
   type: z
     .enum([
@@ -68,82 +60,52 @@ const change = z.object({
     ])
     .default('add')
     .describe(
-      'How the value is applied. Core (CONST.ACTIVE_EFFECT_CHANGE_TYPES): add / subtract / multiply / ' +
-        'override / upgrade / downgrade / custom on a data path. dnd5e 6.0 RULES (evaluated at roll ' +
-        'time, key = a roll category): dnd5e.advantage, dnd5e.bonus, dnd5e.minimum, dnd5e.maximum. ' +
-        'Default "add".'
+      'Core types write a data path at data prep; dnd5e.* rules types act on a roll category at ' +
+        'roll time.'
     ),
   phase: z
     .enum(['initial', 'final'])
     .optional()
-    .describe(
-      'When the change applies during data preparation: "initial" (the default, before derived data) ' +
-        'or "final" (after).'
-    ),
+    .describe('Data-preparation phase: initial (default, before derived data) or final.'),
   conditions: filter
     .optional()
     .describe(
-      'Per-change Filter — this change applies only while it holds. roll.* keys work ONLY on a ' +
-        'RULES-type change (dnd5e.advantage / bonus / minimum / maximum), the only changes evaluated ' +
-        'at roll time: roll.ability, roll.skill, roll.type, roll.attack.type / .mode / ' +
-        '.classification, roll.damage.type, roll.proficient, roll.tool …, e.g. ' +
-        '{k:"roll.attack.type", v:"ranged"}; there item.* is the item being ROLLED and ' +
-        'sourceItem.* the item carrying the effect (dnd5e 6.0.2). A core-type change is evaluated ' +
-        'at data preparation, where there is no roll data.'
+      'Per-change Filter; roll.* keys (roll.ability, roll.skill, roll.attack.type, roll.damage.type …) ' +
+        'only on a rules type.'
     ),
   replacement: z
     .enum(EFFECT_REPLACEMENTS)
     .optional()
     .describe(
-      'Substitute @attribute strings in the value with static data from the ORIGIN actor (the one ' +
-        'applying the effect) or the TARGET actor, instead of evaluating them live. Omit = evaluate live.'
+      'Resolve @attribute in the value from the origin or target actor statically, not live.'
     ),
-  priority: z
-    .number()
-    .optional()
-    .describe('Application order (lower first). Omit for the default.'),
+  priority: z.number().optional().describe('Application order (lower first).'),
 });
 
 const ManageEffectSchema = z.object({
-  action: z
-    .enum(['create', 'edit', 'delete', 'list'])
-    .describe('create a new effect, edit/delete one by effectId, or list effects.'),
+  action: z.enum(['create', 'edit', 'delete', 'list']).describe('edit / delete take effectId.'),
   actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Owns the effects / the item.`),
   itemIdentifier: itemTarget
     .optional()
     .describe(`${ITEM_TARGET}; on the actor, else a world item. Omit: the actor itself.`),
-  effectId: z
-    .string()
-    .optional()
-    .describe('Effect id — required for edit/delete. Get it from action "list".'),
+  effectId: z.string().optional().describe('Required for edit / delete (from "list").'),
 
   // create/edit
   name: z.string().optional().describe('Effect name. Required (create); optional rename (edit).'),
-  changes: z
-    .array(change)
-    .optional()
-    .describe('The effect changes. On edit this REPLACES the whole changes list.'),
+  changes: z.array(change).optional().describe('The changes; replaces the list on edit.'),
   conditions: filter
     .nullable()
     .optional()
     .describe(
-      'Effect-level Filter — the WHOLE effect is suppressed while it is false, e.g. ' +
-        '{k:"statuses.bloodied", v:1} ("while Bloodied") or, on an enchantment, ' +
-        '{o:"OR", v:[{k:"item.type.value", o:"in", v:["simpleR","martialR"]}, {k:"item.properties", ' +
-        'o:"has", v:"thr"}]}. roll.* keys are NOT available here (use a change condition). On edit, ' +
-        'pass null / {} to clear.'
+      'Effect-level Filter; the whole effect is suppressed while false (no roll.* keys). Edit: null ' +
+        'clears.'
     ),
-  magical: z
-    .boolean()
-    .optional()
-    .describe('dnd5e 6.0: mark the effect as magical (e.g. a magic-item or spell effect).'),
+  magical: z.boolean().optional().describe('Mark the effect magical.'),
   disabled: z.boolean().optional().describe('Whether the effect is disabled (inactive).'),
   transfer: z
     .boolean()
     .optional()
-    .describe(
-      'Item effects: whether the effect transfers to the owning actor. Default true for items.'
-    ),
+    .describe('Item effects: transfers to the owning actor (default true).'),
   statuses: z
     .array(z.string())
     .optional()
@@ -155,20 +117,14 @@ const ManageEffectSchema = z.object({
       units: z
         .enum(['seconds', 'minutes', 'hours', 'days', 'months', 'years', 'rounds', 'turns'])
         .optional()
-        .describe(
-          'Foundry v14 duration units (CONST.ACTIVE_EFFECT_DURATION_UNITS; rounds/turns count in combat).'
-        ),
+        .describe('rounds / turns count in combat.'),
       expiry: z
         .enum(EXPIRY_EVENTS)
         .nullable()
         .optional()
         .describe(
-          'When the effect lapses. Core combat events (combatStart roundStart turnStart combatEnd ' +
-            'roundEnd turnEnd): with NO value the effect expires at the FIRST matching event; with a ' +
-            'value+units, at the first matching event after the value elapses. The dnd5e events are ' +
-            'duration-less and take no value: shortRest / longRest, and the source/target turn ' +
-            'pseudo-expiries: "until the end of the target\'s next turn" = targetEnd, "until the start ' +
-            'of your next turn" = sourceStart. Omit for the default; null clears.'
+          'When it lapses: a combat event (the first one, or after value + units), a rest, or ' +
+            'targetEnd / sourceStart; null clears.'
         ),
       // 5.x aliases, translated to value + units
       rounds: z
@@ -188,15 +144,14 @@ const ManageEffectSchema = z.object({
         .describe('DEPRECATED 5.x alias for value + units "seconds".'),
     })
     .optional()
-    .describe('Effect duration ({value, units, expiry?}); omit for a permanent/passive effect.'),
+    .describe('Omit for a permanent effect.'),
 
   // edit escape hatch
   patch: z
     .record(z.string(), z.any())
     .optional()
     .describe(
-      'Edit: extra dot-paths relative to the effect, e.g. {"duration.value": 10, "duration.units": ' +
-        '"rounds"} or {"tint": "#ff0000"}. Changes live at "system.changes".'
+      'Edit: dot-paths relative to the effect, e.g. {"tint": "#ff0000"}; changes live at system.changes.'
     ),
 });
 
@@ -219,19 +174,11 @@ export class DnD5eManageEffectTool {
       {
         name: 'manage-effect',
         description:
-          '[D&D 5e] Create / edit / delete / list ActiveEffects on an actor or an item. Effects carry ' +
-          '`changes` ({key, value, type}) that modify the target — e.g. +1 AC ' +
-          '({key:"system.attributes.ac.bonus", value:"1", type:"add"}) or resist fire — or, with a ' +
-          'dnd5e 6.0 RULES type, modify a ROLL: type "dnd5e.advantage" | "dnd5e.bonus" | ' +
-          '"dnd5e.minimum" | "dnd5e.maximum" on key "attack" | "check" | "d20" | "save" (damage / ' +
-          'healing: bonus only), e.g. +1d4 on History checks = {key:"check", value:"1d4", ' +
-          'type:"dnd5e.bonus", conditions:{k:"roll.skill", v:"his"}}, disadvantage on STR d20 tests = ' +
-          '{key:"d20", value:"-1", type:"dnd5e.advantage", conditions:{k:"roll.ability", v:"str"}}. ' +
-          '6.0 `conditions` (a Filter) gate the whole effect ("while Bloodied") or one change; ' +
-          '`duration.expiry` takes the combat / rest / source-target turn events. Target the actor ' +
-          '(actorIdentifier), an embedded item (actorIdentifier + itemIdentifier), or a world item ' +
-          '(itemIdentifier alone). action="list" finds effectIds (and reads conditions + rules back). ' +
-          'Item effects transfer to the owning actor by default. Authoring only.',
+          '[D&D 5e] Create / edit / delete / list ActiveEffects on an actor, an embedded item ' +
+          '(actorIdentifier + itemIdentifier) or a world item (itemIdentifier alone). `changes` are ' +
+          '{key, value, type}: a data path with a core type, or a roll category with a dnd5e 6.0 ' +
+          'rules type. `conditions` (a Filter) gate the effect or one change; `duration.expiry` ' +
+          'takes combat, rest and turn events. Authoring only.',
         inputSchema: toInputSchema(ManageEffectSchema),
       },
     ];

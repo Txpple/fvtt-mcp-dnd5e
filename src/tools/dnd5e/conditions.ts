@@ -17,25 +17,17 @@ const ApplyConditionSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .describe(
-      'Condition ids to toggle: blinded, charmed, deafened, frightened, grappled, incapacitated, ' +
-        'invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion, ' +
-        'and the other dnd5e conditionTypes/statusEffects (coverHalf, coverThreeQuarters, ' +
-        'coverTotal, concentrating, heavilyEncumbered, ...). Matched case-insensitively.'
+      'dnd5e condition / status ids (blinded, prone, exhaustion, coverHalf, concentrating …), ' +
+        'case-insensitive.'
     ),
-  active: z
-    .boolean()
-    .default(true)
-    .describe('true applies the conditions (default); false removes them.'),
+  active: z.boolean().default(true).describe('false removes them.'),
   exhaustionLevel: z
     .number()
     .int()
     .min(0)
     .max(6)
     .optional()
-    .describe(
-      'Exhaustion level 1-6 (0 removes it). Only affects the "exhaustion" condition, and only ' +
-        'when applying — with active=false the condition is removed regardless of this value.'
-    ),
+    .describe('Exhaustion level 1–6 when applying (0 removes).'),
 });
 
 export interface DnD5eConditionToolOptions {
@@ -57,11 +49,8 @@ export class DnD5eConditionTool {
       {
         name: 'apply-condition',
         description:
-          '[D&D 5e only] Apply or remove one or more conditions on an actor (blinded, frightened, ' +
-          'grappled, poisoned, prone, restrained, stunned, unconscious, exhaustion, ...). Set active=false ' +
-          'to remove. Exhaustion is leveled — pass exhaustionLevel (1-6; 0 removes). This authors ' +
-          'condition state on a creature; it is NOT a combat-automation loop (no duration countdown / ' +
-          'save-ends handling). Use list-actors or get-actor to find the actorIdentifier.',
+          '[D&D 5e] Apply or remove conditions on an actor (exhaustion by level). Sets state only; no ' +
+          'duration countdown.',
         inputSchema: toInputSchema(ApplyConditionSchema),
       },
     ];

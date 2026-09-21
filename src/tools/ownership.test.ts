@@ -57,9 +57,9 @@ describe('OwnershipTools.getToolDefinitions', () => {
     const def = tools.getToolDefinitions().find(t => t.name === 'set-actor-ownership')!;
     const levelDoc = (def.inputSchema.properties as any).permissionLevel.description as string;
     // NONE must NOT read as "remove it" — that's INHERIT's job.
-    expect(levelDoc).toMatch(/NONE \(explicitly DENY/);
-    expect(levelDoc).toMatch(/INHERIT \(remove the player's entry/);
-    expect(def.description).toMatch(/INHERIT/);
+    expect(levelDoc).toMatch(/NONE stores a level-0 deny/);
+    expect(levelDoc).toMatch(/INHERIT removes the entry/);
+    expect(def.description).toMatch(/INHERIT removes the entry/);
   });
 });
 

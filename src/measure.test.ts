@@ -44,7 +44,6 @@ const BUDGET = {
  * this constant gone — when M7 closes. A tool in any other toolset over the budget fails the gate.
  */
 const PROSE_DIET_PENDING = new Set<ToolsetName>([
-  'actors',
   'items',
   'compendium',
   'scenes',

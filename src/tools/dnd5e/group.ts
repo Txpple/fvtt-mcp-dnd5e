@@ -30,32 +30,19 @@ const CreateGroupSchema = z.object({
     .array(z.string().min(1))
     .default([])
     .describe(
-      'World actors to enroll (name or id; partial name match supported). FAIL-CLOSED: a member ' +
-        'that does not resolve, or is itself a group, rejects the whole create — nothing is made.'
+      'World actors to enroll (id or name, substring ok); one that fails resolves refuses the create.'
     ),
-  description: z
-    .string()
-    .optional()
-    .describe('Full description (HTML allowed) shown on the group sheet.'),
+  description: z.string().optional().describe('Description (HTML).'),
   summary: z.string().optional().describe('One-line summary shown in group embeds.'),
   img: z
     .string()
     .optional()
-    .describe(
-      'Portrait image path under Data/ or URL. A path that does not resolve on the server is ' +
-        'dropped (dnd5e stamps its default group art) with a warning.'
-    ),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Actor-sidebar folder to file the group under (created if missing).'),
+    .describe('Portrait path or URL; an unresolvable path is dropped with a warning.'),
+  folderName: z.string().optional().describe('Actor folder (created if missing).'),
   defaultOwnership: z
     .enum(['none', 'limited', 'observer', 'owner'])
     .optional()
-    .describe(
-      "The document's DEFAULT ownership — what every player gets. 'owner' is the shared party " +
-        'stash: all players can open it and move items. Per-user grants: set-actor-ownership.'
-    ),
+    .describe('Default ownership, what every player gets (owner = a shared stash).'),
   currency: z
     .object({
       pp: CoinSchema.optional(),
@@ -65,14 +52,8 @@ const CreateGroupSchema = z.object({
       cp: CoinSchema.optional(),
     })
     .optional()
-    .describe('Starting shared coin (whole non-negative amounts per denomination).'),
-  makePrimaryParty: z
-    .boolean()
-    .default(false)
-    .describe(
-      "Also point the world's dnd5e primaryParty setting at this new group (the party shown " +
-        'in the players sidebar; XP awards and party overviews target it).'
-    ),
+    .describe('Starting shared coin.'),
+  makePrimaryParty: z.boolean().default(false).describe("Also make it the world's primary party."),
 });
 
 const ManageGroupMembersSchema = z
@@ -81,14 +62,11 @@ const ManageGroupMembersSchema = z
     add: z
       .array(z.string().min(1))
       .default([])
-      .describe('World actors to enroll (name or id). Already-members are skipped and reported.'),
+      .describe('World actors to enroll (id or name); members already are skipped.'),
     remove: z
       .array(z.string().min(1))
       .default([])
-      .describe(
-        'Members to remove (name or id — a raw member id also works when the underlying actor ' +
-          'was deleted). Non-members are skipped and reported.'
-      ),
+      .describe('Members to remove (id or name; a raw member id works for a deleted actor).'),
   })
   .refine(a => a.add.length > 0 || a.remove.length > 0, {
     message: 'pass at least one actor in add or remove',
@@ -130,36 +108,30 @@ export class DnD5eGroupTools {
       {
         name: 'create-group',
         description:
-          'Create a dnd5e GROUP actor (type:group) — the shared party stash / travel group. ' +
-          'Enrolls world actors as members, can grant every player default ownership ' +
-          "(defaultOwnership:'owner' = the classic shared stash), seed shared coin, and " +
-          "optionally crown it the world's PRIMARY PARTY. Member resolution is fail-closed: " +
-          'one bad name and nothing is created. Stock the inventory afterwards with ' +
-          'add-item / import-item against the group.',
+          'Create a dnd5e group actor (type:group) with members, default ownership, shared coin, ' +
+          'optionally as the primary party. One unresolved member refuses the whole create. Its ' +
+          'inventory: add-item / import-item.',
         inputSchema: toInputSchema(CreateGroupSchema),
       },
       {
         name: 'manage-group-members',
         description:
-          'Add and/or remove members on an existing dnd5e group actor. Uses the system ' +
-          'addMember/removeMember API; every requested actor gets a reported outcome ' +
-          '(added / removed / skipped with reason) and the final roster is echoed back.',
+          'Add and/or remove members of a group actor; each actor gets an outcome (added / removed / ' +
+          'skipped with reason) and the roster is echoed.',
         inputSchema: toInputSchema(ManageGroupMembersSchema),
       },
       {
         name: 'get-group',
         description:
-          'Read a dnd5e group actor the group-shaped way: member roster (with dangling ids ' +
-          'flagged), shared currency, shared inventory, ownership (default + per-user), and ' +
-          'whether it is the primary party. Use this instead of get-actor for type:group.',
+          'A group actor: members (dangling ids flagged), shared currency and inventory, ownership, ' +
+          'whether it is the primary party.',
         inputSchema: toInputSchema(GetGroupSchema),
       },
       {
         name: 'set-primary-party',
         description:
-          "Read or change the world's dnd5e PRIMARY PARTY (the group shown in the players " +
-          'sidebar; XP awards and party overviews target it). No arguments → report the ' +
-          'current primary party. groupIdentifier → point it at that group. clear:true → unset.',
+          "Read or change the world's primary party: no arguments reports it, groupIdentifier sets " +
+          'it, clear:true unsets it.',
         inputSchema: toInputSchema(SetPrimaryPartySchema),
       },
     ];

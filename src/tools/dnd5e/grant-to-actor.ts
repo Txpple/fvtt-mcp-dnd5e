@@ -28,39 +28,26 @@ const AddFeatureWrapperSchema = z.object({
   mode: z
     .enum(['compendium-features', 'feature', 'items'])
     .describe(
-      "Which granting path to use. 'compendium-features' (preferred) imports named features from a " +
-        "pack; 'feature' authors one from scratch; 'items' attaches world items."
+      'compendium-features imports by name (compendiumFeatures); feature authors one (feature); ' +
+        'items attaches raw items.'
     ),
   feature: AddFeatureSchema.omit({ actorIdentifier: true })
     .optional()
-    .describe(
-      "Parameters when mode='feature' — author a feature/attack/spellcasting/spells. Select " +
-        'feature.featureType; actorIdentifier is taken from the top level.'
-    ),
+    .describe("mode 'feature': the authored feature, by featureType."),
   compendiumFeatures: AddFeaturesFromCompendiumSchema.omit({ actorIdentifier: true })
     .optional()
-    .describe(
-      "Parameters when mode='compendium-features' — import named features from a compendium pack. " +
-        'actorIdentifier is taken from the top level.'
-    ),
-  items: AddToActorItemsSchema.optional().describe(
-    "World items to attach when mode='items'. Each needs a name and a valid dnd5e item type (e.g. " +
-      "'weapon', 'equipment', 'consumable', 'feat'); pass system-specific data via system."
-  ),
+    .describe("mode 'compendium-features': the names and packs."),
+  items: AddToActorItemsSchema.optional().describe("mode 'items': raw items (name, type, system)."),
 });
 
 export function buildAddFeatureTool() {
   return {
     name: 'add-feature',
     description:
-      'Add a feature/spell/ability to an existing actor (NPC or PC). Set mode:\n' +
-      "• 'compendium-features' — import named class/monster features from an official compendium " +
-      '(PREFERRED for official content, e.g. Pack Tactics, Multiattack, Spellcasting). Params under compendiumFeatures.\n' +
-      "• 'feature' — author a feature/attack/spellcasting setup/spells from scratch (use only when not " +
-      'available in a compendium). Params under feature (select feature.featureType).\n' +
-      "• 'items' — attach world items by raw data. For real GEAR prefer import-item (copy from a " +
-      'compendium, keeps art+stats) or add-item (author); use this mode only for free-form item data. Params under items[].\n' +
-      'actorIdentifier (exact name or ID) is always required — find it with list-actors / get-actor.',
+      'Add a feature, attack, spellcasting setup or spells to an actor. mode compendium-features ' +
+      'imports named features from a pack (a copied feature reports any unresolved @scale formula); ' +
+      'feature authors one by featureType (a duplicate name is refused); items attaches raw item ' +
+      'data. Gear: import-item / add-item.',
     inputSchema: toInputSchema(AddFeatureWrapperSchema),
   };
 }

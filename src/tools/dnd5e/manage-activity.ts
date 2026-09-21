@@ -40,35 +40,23 @@ const damagePart = z.object({
 });
 
 const ManageActivitySchema = z.object({
-  action: z
-    .enum(['add', 'edit', 'remove', 'list'])
-    .describe(
-      'add a new activity, edit/remove an existing one (by activityId), or list activities.'
-    ),
+  action: z.enum(['add', 'edit', 'remove', 'list']).describe('edit / remove take activityId.'),
   itemIdentifier: itemTarget.describe(`${ITEM_TARGET}; on the actor, else a world item.`),
   actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world item.`),
   activityId: z
     .string()
     .optional()
-    .describe(
-      'Activity id — required for edit/remove. Get it from action "list" or get-actor-entity.'
-    ),
+    .describe('Required for edit / remove (from "list" or get-actor-entity).'),
 
   // add — activity definition
   type: z
     .enum(['attack', 'damage', 'save', 'heal', 'check', 'utility', 'cast', 'teleport', 'transform'])
     .optional()
     .describe(
-      'Activity type. Required for add. "utility" = descriptive action (e.g. Multiattack). ' +
-        '"cast" = link & cast a real compendium spell (e.g. a wand/staff) — see spellUuid. ' +
-        'dnd5e 6.0: "teleport" moves the target up to teleportDistance (Misty Step); "transform" ' +
-        'changes the actor into another creature or one of its own forms (Wild Shape, Polymorph, a ' +
-        "lycanthrope's Shape-Shift) — see transformMode / profiles / forms."
+      'Required for add. utility = descriptive (Multiattack); cast links a spell (spellUuid); ' +
+        'teleport / transform: own fields.'
     ),
-  name: z
-    .string()
-    .optional()
-    .describe('Activity name (e.g. "Multiattack"). Used by add and edit (rename).'),
+  name: z.string().optional().describe('Activity name (add; edit renames).'),
   activationType: z
     .enum(['action', 'bonus', 'reaction', 'legendary', 'lair', 'special'])
     .optional()
@@ -86,8 +74,7 @@ const ManageActivitySchema = z.object({
     .max(20)
     .optional()
     .describe(
-      'Attack activity: flat to-hit bonus. Cast activity: pins a FIXED spell-attack ' +
-        'bonus (else the cast defers the attack to the casting actor).'
+      "Attack: flat to-hit bonus. Cast: pins a fixed spell-attack bonus (else the caster's)."
     ),
   ability: ABILITY.optional().describe('Attack ability override (attack activity).'),
   includeBase: z
@@ -102,10 +89,7 @@ const ManageActivitySchema = z.object({
     .min(1)
     .max(30)
     .optional()
-    .describe(
-      'Save activity: the DC. Cast activity: pins a FIXED save DC for the linked spell ' +
-        '(else the cast defers the DC to the casting actor).'
-    ),
+    .describe("Save: the DC. Cast: pins a fixed DC for the linked spell (else the caster's)."),
   onSave: z
     .enum(['half', 'none'])
     .optional()
@@ -132,11 +116,8 @@ const ManageActivitySchema = z.object({
     .string()
     .optional()
     .describe(
-      'Cast activity (REQUIRED): the Compendium uuid of the spell to LINK, e.g. ' +
-        '"Compendium.dnd-players-handbook.spells.Item.phbsplFireball00". The activity CASTS this ' +
-        'spell — its measured template (fireball sphere, lightning line…), save/attack, and effects ' +
-        'come for free. The spell must be a real premium-book spell (off-book/SRD is refused — if it ' +
-        'is not in the books, STOP and ASK; do not hand-roll a fake save/damage activity).'
+      'Cast (required): compendium uuid of the spell to link ("Compendium.<pack>.Item.<id>"); a ' +
+        'non-premium spell is refused.'
     ),
   castLevel: z
     .number()
@@ -151,27 +132,21 @@ const ManageActivitySchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Cast activity: uses per cast. On an item with its own uses pool (a wand) this many charges ' +
-        'are consumed FROM that pool per cast; on an item WITHOUT one (e.g. a feature) a pool of ' +
-        'this size is created ON the activity (recovering per recoveryPeriod), one use per cast. ' +
-        'Omit for an at-will cast.'
+      "Cast: uses per cast, from the item's own pool (a wand), else a pool this size on the " +
+        'activity. Omit = at-will.'
     ),
   recoveryPeriod: z
     .enum(['lr', 'sr', 'day', 'dawn', 'dusk'])
     .optional()
-    .describe(
-      'Cast activity with charges on a poolless item: when the activity-side pool recovers. ' +
-        'Default "lr" (long rest).'
-    ),
+    .describe('Cast: when the activity-side pool recovers (default lr).'),
 
   // teleport (dnd5e 6.0)
   teleportDistance: z
     .union([z.number().min(0), z.string()])
     .optional()
     .describe(
-      'Teleport activity: how far the target may be moved, in feet (a number or a deterministic ' +
-        'formula like "@prof * 10"). Omit for ANY distance. Targets default to self — pass `affects` ' +
-        '({type: "willing", count: 1}) for "you and one willing creature".'
+      'Teleport: max feet (number or formula "@prof * 10"); omit = any. Targets default to self ' +
+        '(see affects).'
     ),
 
   // transform (dnd5e 6.0)
@@ -179,32 +154,23 @@ const ManageActivitySchema = z.object({
     .enum(TRANSFORM_MODES)
     .optional()
     .describe(
-      'Transform activity: "cr" (default) = pick any creature up to a CR (Wild Shape, Polymorph — ' +
-        'profiles carry the max CR + size / type / movement filters); "direct" = a fixed list of ' +
-        'creatures (profiles carry an `actor`); "form" = Select Form — the forms are EFFECTS on the item ' +
-        "(a lycanthrope's Humanoid / Hybrid / Beast forms, Disguise Self) named in `forms`."
+      'cr (default): creatures up to a CR; direct: the listed creatures (both via profiles); ' +
+        'form: effects on the item (forms).'
     ),
   transformPreset: z
     .enum(TRANSFORM_PRESETS)
     .optional()
     .describe(
-      'Transform activity (cr / direct): the transformation settings preset — wildshape (keep mental ' +
-        'stats, merge features), polymorph (full replacement), polymorphSelf (appearance only).'
+      'cr / direct: wildshape (keep mental, merge features), polymorph (full replacement), ' +
+        'polymorphSelf (appearance).'
     ),
-  formless: z
-    .boolean()
-    .optional()
-    .describe('Transform activity (form mode): may the actor revert to "no form" from the prompt.'),
+  formless: z.boolean().optional().describe('form mode: the prompt may revert to no form.'),
   transformSettings: z
     .object({
       keep: z
         .array(z.enum(TRANSFORM_KEEP_KEYS))
         .optional()
-        .describe(
-          'What the transformed actor KEEPS of its original self: physical / mental (ability scores), ' +
-            'saves, skills, gearProf, languages, class, feats, items, spells, bio, type, hp, tempHP, ' +
-            'resistances, vision, self (appearance only).'
-        ),
+        .describe('What the transformed actor keeps of its original self.'),
       merge: z
         .array(z.enum(TRANSFORM_MERGE_KEYS))
         .optional()
@@ -212,10 +178,7 @@ const ManageActivitySchema = z.object({
       effects: z
         .array(z.enum(TRANSFORM_EFFECT_KEYS))
         .optional()
-        .describe(
-          "Which of the original's active effects carry over: all, origin (from the transforming item), " +
-            'otherOrigin, background, class, feat, equipment, spell.'
-        ),
+        .describe("Which of the original's effects carry over."),
       minimumAC: z.string().optional().describe('Deterministic formula floor for the new AC.'),
       tempFormula: z
         .string()
@@ -231,12 +194,7 @@ const ManageActivitySchema = z.object({
         .describe('Spell lists the form keeps (e.g. "subclass:moon").'),
     })
     .optional()
-    .describe(
-      'Transform activity (cr / direct): CUSTOM transformation settings instead of the bare preset ' +
-        '(sets customize). Start from a preset and override — e.g. Wild Shape that also keeps ' +
-        'resistances: transformPreset "wildshape" + {keep: ["bio","class","feats","hp","languages",' +
-        '"mental","tempHP","type","resistances"]}. Not available in form mode.'
-    ),
+    .describe('cr / direct: custom settings over the preset (sets customize); not in form mode.'),
   profiles: z
     .array(
       z.object({
@@ -248,9 +206,7 @@ const ManageActivitySchema = z.object({
         actor: z
           .string()
           .optional()
-          .describe(
-            'direct mode: the creature — an exact Monster Manual name ("Giant Wolf Spider") or an Actor uuid.'
-          ),
+          .describe('direct mode: an exact compendium actor name or an Actor uuid.'),
         sizes: z.array(z.enum(ACTOR_SIZES)).optional().describe('cr mode: allowed sizes.'),
         creatureTypes: z
           .array(z.enum(CREATURE_TYPE_KEYS))
@@ -259,33 +215,26 @@ const ManageActivitySchema = z.object({
         restrictMovement: z
           .array(z.enum(MOVEMENT_TYPES))
           .optional()
-          .describe(
-            'cr mode: creatures WITH these movement types are excluded (e.g. ["fly"], ["swim"]).'
-          ),
+          .describe('cr mode: creatures with these movement types are excluded.'),
         level: z
           .object({
             min: z.number().int().min(0).optional(),
             max: z.number().int().min(0).optional(),
           })
           .optional()
-          .describe(
-            'Only offered when the transform level (class level via the identifier, else character level) is within [min, max].'
-          ),
+          .describe('Offered only when the class (else character) level is within [min, max].'),
       })
     )
     .optional()
     .describe(
-      'Transform activity (cr / direct modes): the profiles offered. Wild Shape 2024 = cr profiles ' +
-        '[{cr: 0.25, creatureTypes: ["beast"], restrictMovement: ["fly", "swim"], level: {max: 3}}, ' +
-        '{cr: 0.5, creatureTypes: ["beast"], restrictMovement: ["fly"], level: {min: 4, max: 7}}, …].'
+      'cr / direct: the profiles offered, e.g. {cr: 0.25, creatureTypes: ["beast"], level: ' +
+        '{max: 3}}.'
     ),
   forms: z
     .array(z.string().min(1))
     .optional()
     .describe(
-      'Transform activity (form mode): the names of effects ON THIS ITEM, one per form — author them ' +
-        'first with manage-effect (actorIdentifier + itemIdentifier), e.g. ["Humanoid Form", "Hybrid ' +
-        'Form", "Tiger Form"]. Each form\'s changes ARE the transformation.'
+      'form mode: names of effects on this item, one per form (manage-effect authors them).'
     ),
 
   // duration (add + edit) — dnd5e 6.0: the effects an activity applies inherit it, incl. expiry
@@ -299,27 +248,22 @@ const ManageActivitySchema = z.object({
         .enum(ACTIVITY_DURATION_UNITS)
         .optional()
         .describe(
-          'Time period: inst (instantaneous) · spec (special) · turn round minute hour day week month ' +
-            'year (scalar — give value) · disp / dstr (until dispelled / dispelled or triggered) · perm.'
+          'inst · spec · a scalar unit (turn … year; give value) · disp / dstr (until dispelled) · perm.'
         ),
       expiry: z
         .enum(EXPIRY_EVENTS)
         .nullable()
         .optional()
         .describe(
-          'When the effects this activity applies lapse: core combat events (turnStart / turnEnd / ' +
-            'roundEnd …, need a scalar duration too), shortRest / longRest, or the source/target turn ' +
-            'pseudo-expiries — "until the end of the target\'s next turn" = targetEnd, "until the start ' +
-            'of your next turn" = sourceStart. null clears.'
+          'When applied effects lapse: a combat event (with a scalar duration), a rest, or ' +
+            'targetEnd / sourceStart; null clears.'
         ),
       concentration: z.boolean().optional().describe('Requires concentration.'),
     })
     .optional()
     .describe(
-      "Duration OVERRIDE for the activity (sets duration.override so it beats the item's). dnd5e 6.0: " +
-        'the effects this activity applies (see `appliesEffects`) INHERIT this duration, including ' +
-        '`expiry` — they carry no duration of their own. E.g. {value: 1, units: "minute"} for a ' +
-        '1-minute effect, or {expiry: "targetEnd"} for "until the end of the target\'s next turn".'
+      "Duration override (beats the item's); the effects this activity applies inherit it, expiry " +
+        'included.'
     ),
 
   // applied effects (add + edit) — dnd5e 6.0 activity.effects[] (AppliedEffectField)
@@ -330,17 +274,13 @@ const ManageActivitySchema = z.object({
           .string()
           .min(1)
           .describe(
-            'The effect: a NAME of an effect ON THIS ITEM (author it with manage-effect first — it ' +
-              'persists by id), a stock dnd5e.effects name ("Poisoned", "Restrained", "Prone"), an ' +
-              'ActiveEffect uuid, an Item uuid + "#<effect name>" (a premium-pack spell\'s effect), ' +
-              'or "<world item>#<effect>". Resolved and echoed back.'
+            'An effect on this item by name, a stock dnd5e.effects name ("Poisoned"), an effect ' +
+              'uuid, or "<Item uuid>#<effect>".'
           ),
         onSave: z
           .boolean()
           .optional()
-          .describe(
-            'SAVE activities only: does the effect still apply on a SUCCESSFUL save? Default false.'
-          ),
+          .describe('Save activities: still applied on a successful save (default false).'),
         level: z
           .object({
             min: z.number().int().min(0).optional(),
@@ -352,11 +292,8 @@ const ManageActivitySchema = z.object({
     )
     .optional()
     .describe(
-      'dnd5e 6.0: the ActiveEffects this activity APPLIES to its targets (activity.effects[]). The ' +
-        'effects inherit the activity `duration` (including its `expiry`) — do not give them one of ' +
-        'their own. E.g. a save activity that poisons on a failed save: appliesEffects ' +
-        '[{ref: "Poisoned", onSave: false}] + duration {value: 1, units: "minute"}. On edit this ' +
-        'REPLACES the list. Not for a transform activity — its effects[] ARE its `forms`.'
+      'Effects applied to the targets; they inherit duration / expiry. Replaces the list on edit; ' +
+        'not for transform.'
     ),
 
   // area (add + edit) — a measured template + who it affects; behaviors ride on the template
@@ -386,18 +323,14 @@ const ManageActivitySchema = z.object({
     })
     .optional()
     .describe(
-      'Area template the activity places (sets target.override). Required for any `behaviors` — ' +
-        'e.g. Web = {type: "cube", size: 20}, Spike Growth = {type: "sphere", size: 20}.'
+      'Area template (target.override), required for behaviors; e.g. {type: "cube", size: 20}.'
     ),
   affects: z
     .object({
       type: z
         .enum(TARGET_AFFECTS_TYPES)
         .optional()
-        .describe(
-          'Who the activity affects: creature (default for areas) / ally / enemy / … — ' +
-            'applyActiveEffect / difficultTerrain behaviors honour ally / enemy as a disposition filter.'
-        ),
+        .describe('Who is affected (creature is the area default); behaviors honour ally / enemy.'),
       count: z.union([z.number().int().min(1), z.string()]).optional(),
       choice: z.boolean().optional().describe('The user picks which targets inside the area.'),
     })
@@ -409,8 +342,8 @@ const ManageActivitySchema = z.object({
         type: z
           .enum(ACTIVITY_BEHAVIOR_TYPES)
           .describe(
-            'applyActiveEffect — the area applies `effects` to tokens inside it (and removes them on ' +
-              'exit); difficultTerrain — the area is difficult terrain while the template stands.'
+            'applyActiveEffect applies `effects` inside the area (removed on exit); difficultTerrain ' +
+              'while the template stands.'
           ),
         name: z.string().optional().describe('Behavior label.'),
         level: z
@@ -424,9 +357,8 @@ const ManageActivitySchema = z.object({
           .array(z.string().min(1))
           .optional()
           .describe(
-            'applyActiveEffect (required): effect NAMES from the stock dnd5e.effects pack ("Restrained", ' +
-              '"Poisoned", "Prone" …) or a world item\'s effects, ActiveEffect uuids, or an Item uuid + ' +
-              '"#<effect name>" (a premium-pack spell\'s effect). Resolved and echoed back.'
+            'applyActiveEffect (required): stock dnd5e.effects names ("Restrained"), ActiveEffect ' +
+              'uuids, or "<Item uuid>#<effect>".'
           ),
         sizes: z
           .array(z.enum(ACTOR_SIZES))
@@ -439,25 +371,18 @@ const ManageActivitySchema = z.object({
         terrainTypes: z
           .array(z.enum(DIFFICULT_TERRAIN_TYPES))
           .optional()
-          .describe(
-            'difficultTerrain: the terrain kind(s) — web, plants, ice, mud … (some creatures ignore some).'
-          ),
+          .describe('difficultTerrain: the terrain kinds.'),
       })
     )
     .optional()
-    .describe(
-      'dnd5e 6.0 area behaviors carried by the template (needs `template`). On edit this REPLACES the ' +
-        'list. E.g. an authored Web: type "save", template {type:"cube", size:20}, behaviors ' +
-        '[{type:"applyActiveEffect", effects:["Restrained"]}, {type:"difficultTerrain", terrainTypes:["web"]}].'
-    ),
+    .describe('Area behaviors on the template (needs `template`); replaces the list on edit.'),
 
   // edit
   patch: z
     .record(z.string(), z.any())
     .optional()
     .describe(
-      'Edit: dot-paths RELATIVE to the activity root, e.g. {"attack.bonus":"3"}, ' +
-        '{"save.dc.formula":"16"}, {"damage.onSave":"half"}.'
+      'Edit: dot-paths relative to the activity, e.g. {"attack.bonus":"3"}, {"damage.onSave":"half"}.'
     ),
 });
 
@@ -512,19 +437,11 @@ export class DnD5eManageActivityTool {
       {
         name: 'manage-activity',
         description:
-          '[D&D 5e only] Add / edit / remove / list Activities on an item — the rollable things ' +
-          '(attack, damage, save, heal, check, utility, cast). Target an item on an actor (set ' +
-          'actorIdentifier) or a world item (omit it). This authors actions like a Multiattack ' +
-          '(action="add", type="utility", name="Multiattack"), a heal, an ability-check, a ' +
-          'saving-throw activity, OR a spell-casting item (action="add", type="cast", spellUuid=…, ' +
-          'charges=…, saveDC/attackBonus=… to pin a fixed challenge) — the cast LINKS a real ' +
-          'compendium spell so its measured template + save/attack fire for free. `appliesEffects` ' +
-          'puts real ActiveEffects on the targets (dnd5e 6.0) — e.g. [{ref:"Poisoned", onSave:false}] ' +
-          'on a save activity; they inherit the activity `duration`/`expiry`. Use action="list" ' +
-          '(or get-actor-entity) to find activityIds, then edit/remove by id. EDIT changes only name, ' +
-          'duration, template, affects, behaviors and appliesEffects — every other field goes through ' +
-          '`patch` (dot-paths relative to the activity, e.g. {"attack.bonus":"3"}) or a remove + add. ' +
-          'Authoring only — it does not run combat.',
+          '[D&D 5e] Add / edit / remove / list the activities on an item (embedded on an actor, or ' +
+          'a world item). A cast activity links a compendium spell (template, save / attack, ' +
+          'effects). `appliesEffects` puts ActiveEffects on the targets; they inherit the activity ' +
+          'duration / expiry. edit writes name, duration, template, affects, behaviors, ' +
+          'appliesEffects and `patch`; anything else is remove + add.',
         inputSchema: toInputSchema(ManageActivitySchema),
       },
     ];

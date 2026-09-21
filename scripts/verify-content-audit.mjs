@@ -43,7 +43,7 @@ try {
   console.log('[verify-audit] connected\n');
 
   const creatures = await f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 });
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound}
   if (!cHit?.pack) throw new Error('could not resolve a source creature');
   const aOut = await f.call('createActorFromCompendium', {
     packId: cHit.pack,

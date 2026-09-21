@@ -57,7 +57,7 @@ try {
 
   // --- fixture: copy an MM creature into a USER-NAMED folder --------------------------------
   const creatures = await f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 });
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound}
   if (!cHit?.pack) throw new Error('could not resolve a source creature');
   const npcOut = await f.call('createActorFromCompendium', {
     packId: cHit.pack,

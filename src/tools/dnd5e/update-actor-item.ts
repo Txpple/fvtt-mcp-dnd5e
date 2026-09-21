@@ -16,28 +16,20 @@ import { toInputSchema } from '../../utils/schema.js';
 const UpdateActorItemSchema = z.object({
   actorIdentifier: actorTarget,
   itemIdentifier: itemTarget,
-  type: z
-    .string()
-    .optional()
-    .describe('Optional item type to disambiguate the lookup (e.g. "weapon", "feat", "spell").'),
+  type: z.string().optional().describe('Item type to disambiguate ("weapon", "feat", "spell").'),
   name: z.string().min(1).optional().describe('Rename the item.'),
   img: z.string().optional().describe('Item image path or URL.'),
   patch: z
     .record(z.string(), z.any())
     .optional()
     .describe(
-      'Map of Foundry dot-path -> value, applied as-is. Examples: ' +
-        '{"system.damage.base.number": 3}, {"system.damage.base.types": ["fire"]} (arrays REPLACE ' +
-        'whole), {"system.activities.<id>.attack.bonus": "2"}, {"system.equipped": true}, ' +
-        '{"system.description.value": "<p>...</p>"}.'
+      'Dot-path → value, applied as-is (arrays replace whole), e.g. ' +
+        '{"system.activities.<id>.attack.bonus": "2"}.'
     ),
   deletePaths: z
     .array(z.string().min(1))
     .optional()
-    .describe(
-      'Dot-paths to delete from the item, e.g. "system.activities.<id>" to remove an activity. ' +
-        'Converted to the Foundry "-=" deletion form for you.'
-    ),
+    .describe('Dot-paths to delete, e.g. "system.activities.<id>" (the "-=" form is applied).'),
 });
 
 export interface DnD5eUpdateActorItemToolOptions {
@@ -59,12 +51,9 @@ export class DnD5eUpdateActorItemTool {
       {
         name: 'update-actor-item',
         description:
-          '[D&D 5e] Edit an item embedded on an actor (weapon / feature / spell / equipment). ' +
-          'Apply a dot-path `patch` (values applied as-is; arrays/Sets replace whole) and/or ' +
-          '`deletePaths` (remove keys, e.g. an activity by id), and/or change name/img. This is the ' +
-          'low-level item editor — to add/edit/remove activities (attacks, saves, heals, etc.) prefer ' +
-          'manage-activity, which knows the shapes. Use get-actor or get-actor-entity to find the item ' +
-          'and the exact paths/ids to change.',
+          '[D&D 5e] Edit an item embedded on an actor: name, img, a dot-path `patch`, `deletePaths`. ' +
+          'Activities have their own editor (manage-activity); the paths and ids come from ' +
+          'get-actor-entity.',
         inputSchema: toInputSchema(UpdateActorItemSchema),
       },
     ];

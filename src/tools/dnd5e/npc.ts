@@ -83,20 +83,24 @@ const AuthorNpcSchema = z
       'grg',
     ]),
     alignment: z.string().default(''),
-    cr: z.union([
-      z
-        .string()
-        .regex(
-          /^\d+(\/[248])?$/,
-          'CR must be a whole number or fraction string (e.g. "0", "1/4", "1/2", "5")'
-        ),
-      z.number().finite().min(0),
-    ]),
+    cr: z
+      .union([
+        z
+          .string()
+          .regex(
+            /^\d+(\/[248])?$/,
+            'CR must be a whole number or fraction string (e.g. "0", "1/4", "1/2", "5")'
+          ),
+        z.number().finite().min(0),
+      ])
+      .describe('A number or a fraction string ("1/4").'),
     // HP
     hpAverage: z.number().int().min(1),
-    hpFormula: z.string().min(1, 'hpFormula cannot be empty'),
+    hpFormula: z.string().min(1).describe('Hit dice, e.g. "5d8+10".'),
     // AC
-    acMode: z.enum(['default', 'flat']),
+    acMode: z
+      .enum(['default', 'flat'])
+      .describe('default = computed from armor and DEX; flat = the fixed acValue.'),
     acValue: z.number().int().min(0).max(30).optional(),
     // Abilities
     abilities: z.object({
@@ -164,7 +168,10 @@ const AuthorNpcSchema = z
     sourceRules: z.enum(['2014', '2024']).default('2024'),
     // Token disposition — YOU (the skill) decide friend vs foe. Defaults to hostile (an authored NPC
     // is usually an enemy); set 'friendly' for allies/townsfolk/captives, 'neutral' for bystanders.
-    disposition: z.enum(['hostile', 'neutral', 'friendly', 'secret']).optional(),
+    disposition: z
+      .enum(['hostile', 'neutral', 'friendly', 'secret'])
+      .optional()
+      .describe('Prototype-token disposition (default hostile).'),
   })
   .superRefine((data, ctx) => {
     if (data.acMode === 'flat' && data.acValue === undefined) {
@@ -177,19 +184,10 @@ const AuthorNpcSchema = z
   });
 
 const AUTHOR_NPC_DESCRIPTION =
-  'Author a custom NPC (type:npc) from a hand-written stat block — the LAST-RESORT path in the §6 ' +
-  'ladder, used ONLY when nothing in the premium MM/PHB/DMG books is a workable base. Prefer ' +
-  'create-actor-from-compendium (copy a real Monster Manual creature, optionally with prefab-as-base ' +
-  'modifications); if the books are missing what you need, tell the user and ask before authoring ' +
-  "rather than inventing content. Prefer the 2024 ruleset (sourceRules:'2024'). Required: name, " +
-  'creatureType (humanoid/undead/beast/dragon/fiend/…), size (tiny…gargantuan), cr (number or ' +
-  "fraction string like '1/4'), abilities {str,dex,con,int,wis,cha}, hpAverage, hpFormula (e.g. " +
-  "'5d8+10'), acMode ('default'|'flat'; acValue required if 'flat'). Optional: alignment, " +
-  'savingThrows[], skills[{skill,proficiency}], walk/fly/swim/climb/burrowSpeed, ' +
-  'darkvision/blindsight/tremorsense/truesight, damage immunities/resistances/vulnerabilities[], ' +
-  'conditionImmunities[], languages[], biography, sourceBook/sourcePage/sourceRules, disposition ' +
-  "('hostile' default | 'friendly' for allies/townsfolk | 'neutral' | 'secret'). Add features, " +
-  'attacks, and spells afterward with add-feature; copy gear from a compendium with import-item.';
+  'Author an NPC (type:npc) from a stat block: identity, CR, HP, AC (acMode flat needs acValue), ' +
+  'abilities, saves, skills, speeds, senses, damage and condition traits, languages, biography, ' +
+  'source. An off-canon damage type or condition warns, never refuses. Features, attacks and ' +
+  'spells: add-feature; gear: import-item.';
 
 // ---------------------------------------------------------------------------
 // Options interface

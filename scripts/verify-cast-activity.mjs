@@ -68,7 +68,7 @@ try {
 
   // --- Base item: a real weapon (carries a base Attack activity) copied to the world ---
   const weapons = await f.call('searchCompendiumFaceted', { documentType: 'weapon', limit: 12 });
-  const list = Array.isArray(weapons) ? weapons : [];
+  const list = weapons?.results ?? []; // M2: one search shape {results, totalFound}
   const wHit = list.find(w => /quarterstaff|staff|mace|club/i.test(w.name)) || list[0];
   assert(Boolean(wHit?.pack && wHit?.id), `found a base weapon: ${wHit?.name} (${wHit?.pack})`);
   if (!wHit?.pack) throw new Error('could not resolve a base weapon hit');

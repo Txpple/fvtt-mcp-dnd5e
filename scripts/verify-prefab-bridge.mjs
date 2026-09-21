@@ -43,7 +43,7 @@ try {
 
   // --- Pick an MM creature + record the SOURCE cr BEFORE we copy ---
   const creatures = await f.call('searchCompendiumFaceted', { documentType: 'creature', limit: 1 });
-  const cHit = (Array.isArray(creatures) ? creatures : [])[0];
+  const cHit = (creatures?.results ?? [])[0]; // M2: one search shape {results, totalFound}
   if (!cHit?.pack) throw new Error('could not resolve a source creature');
   const srcBefore = await f.call('getCompendiumDocumentFull', {
     packId: cHit.pack,

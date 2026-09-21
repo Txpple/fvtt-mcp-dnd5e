@@ -25,23 +25,17 @@ const GetActorEntitySchema = z.object({
   characterIdentifier: actorTarget,
   entityIdentifier: z
     .string()
-    .min(1, 'Entity identifier cannot be empty')
-    .describe('Entity name or ID (can be item ID, action name, spell name, or effect name)'),
+    .min(1)
+    .describe('Item id, or the name of an item, action, spell or effect.'),
 });
 
 const ExportActorSchema = z.object({
   identifier: actorTarget,
   localPath: z
     .string()
-    .min(1, 'localPath cannot be empty')
-    .describe(
-      'Absolute local destination path for the JSON file (parent dirs created), e.g. ' +
-        '"D:\\\\campaign\\\\party-snapshots\\\\2026-08-25\\\\Gren.json".'
-    ),
-  overwrite: z
-    .boolean()
-    .default(false)
-    .describe('Allow overwriting an existing file at localPath.'),
+    .min(1)
+    .describe('Absolute local path for the JSON file; parent directories are created.'),
+  overwrite: z.boolean().default(false).describe('Overwrite an existing file.'),
 });
 
 const ListActorsSchema = z.object({
@@ -55,21 +49,19 @@ const SearchActorContentsSchema = z.object({
     .string()
     .optional()
     .describe(
-      'Text to search for in item names and descriptions (case-insensitive). Leave empty to return all items of specified type.'
+      'Case-insensitive text in item names and descriptions; empty = every item of the type.'
     ),
   type: z
     .string()
     .optional()
     .describe(
-      'Filter by item type: "spell", "weapon", "armor", "equipment", "consumable", "feat", "feature", "action", "effect", or system-specific types. Leave empty to search all types.'
+      'Item type: spell, weapon, armor, equipment, consumable, feat, feature, action, effect, or a system type.'
     ),
   category: z
     .string()
     .optional()
-    .describe(
-      'Additional category filter. For spells: "cantrip", "prepared", "innate", "focus". For items: "equipped", "carried", "invested".'
-    ),
-  limit: z.number().optional().describe('Maximum number of results to return (default: 20)'),
+    .describe('Spells: cantrip / prepared / innate / focus. Items: equipped / carried / invested.'),
+  limit: z.number().optional().describe('Max results (default 20).'),
 });
 
 export interface ActorToolsOptions {
@@ -95,24 +87,25 @@ export class ActorTools {
       {
         name: 'get-actor',
         description:
-          'Retrieve D&D 5e character information optimized for minimal token usage. Returns: full stats (abilities, skills, saves, AC, HP, 2024 weapon-mastery kinds), action names, active effects/conditions (name only), and ALL items with minimal metadata (name, type, equipped status, attunement, weapon mastery property) without descriptions. Perfect for checking equipment or identifying what to investigate further. Use get-actor-entity to fetch full details for specific items, spells, or effects.',
+          'Compact sheet read: abilities, skills, saves, AC, HP, weapon-mastery kinds, action names, ' +
+          'effects and conditions by name, every item with name / type / equipped / attunement / ' +
+          'mastery (no descriptions). One item, spell or effect in full: get-actor-entity.',
         inputSchema: toInputSchema(GetActorSchema),
       },
       {
         name: 'get-actor-entity',
         description:
-          'Retrieve full details for a specific entity from a character. Works for items (feats, equipment, spells), actions (strikes, special abilities), or effects/conditions. Returns complete description, all system data, and (for items) module flags — the read path for flag forensics like item-piles transfer residue. Use this after get-actor when you need detailed information about a specific entity.',
+          'One item, action, spell or effect on an actor, in full: description, system data, module ' +
+          'flags.',
         inputSchema: toInputSchema(GetActorEntitySchema),
       },
       {
         name: 'export-actor',
         description:
-          'Write ONE actor to a LOCAL file as a full-fidelity native Foundry JSON export — the ' +
-          'complete document source (system, every embedded item with its uses/charges and flags, ' +
-          'effects, prototype token, ownership), stamped with the exportSource envelope so the file ' +
-          "round-trips through the sheet's Import Data button. THE character backup/restore path " +
-          '(get-actor is a lossy summary view). Accepts a placed token id to capture an unlinked ' +
-          'token instance. Refuses to overwrite an existing file unless overwrite:true.',
+          'Write one actor to a local JSON file as a full-fidelity Foundry export: system, embedded ' +
+          'items with uses and flags, effects, prototype token, ownership, the exportSource envelope ' +
+          "(round-trips through the sheet's Import Data). Refuses an existing file unless " +
+          'overwrite:true.',
         inputSchema: toInputSchema(ExportActorSchema),
       },
       {
@@ -123,7 +116,8 @@ export class ActorTools {
       {
         name: 'search-actor-contents',
         description:
-          "Search within a character's items, spells, actions, and effects. More token-efficient than get-actor when you need specific items. Supports text search (name/description) and type filtering. Returns matching items with full details including targeting info for spells. Use this to find specific spells, equipment, feats, or abilities without loading the entire character.",
+          "Search an actor's items, spells, actions and effects by text and type; matches come back " +
+          'in full (spell targeting included).',
         inputSchema: toInputSchema(SearchActorContentsSchema),
       },
     ];

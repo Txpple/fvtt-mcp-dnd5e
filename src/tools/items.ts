@@ -115,13 +115,10 @@ const RemoveFromActorSchema = z
 export const AddToActorItemsSchema = z
   .array(
     z.object({
-      name: z.string().min(1, 'Item name cannot be empty').describe('Display name of the item'),
-      type: z
-        .string()
-        .min(1, 'Item type cannot be empty')
-        .describe('dnd5e item type (weapon, equipment, …)'),
-      img: z.string().optional().describe('Optional icon path'),
-      system: z.record(z.string(), z.any()).optional(),
+      name: z.string().min(1),
+      type: z.string().min(1).describe('dnd5e item type (weapon, equipment, …).'),
+      img: z.string().optional().describe('Icon path.'),
+      system: z.record(z.string(), z.any()).optional().describe('System data, as-is.'),
     })
   )
   .min(1, 'At least one item is required');

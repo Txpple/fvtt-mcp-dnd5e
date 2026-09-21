@@ -22,32 +22,23 @@ const AddFreeCastSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'The spell to grant a free cast of — an embedded spell on the actor (name or id), or a ' +
-        'premium compendium uuid ("Compendium.dnd-players-handbook.spells.Item.…") to also ADD it ' +
-        'to the repertoire (always prepared) when the actor lacks it.'
+      'An embedded spell (name or id), or a premium compendium uuid to add it (always prepared) ' +
+        'when the actor lacks it.'
     ),
   grantedBy: z
     .string()
     .min(1)
-    .describe(
-      'The granting feature ITEM on the actor (name or id) — e.g. "Magic Initiate", "Favored ' +
-        'Enemy", a lineage feature. The cast activity lands ON this item and the Additional Spells ' +
-        'entry is titled "<Spell> - <feature name>".'
-    ),
+    .describe('The granting feature on the actor (name or id); the cast activity lands on it.'),
   uses: z
     .union([z.number().int().positive(), z.string().min(1)])
     .optional()
     .describe(
-      'Free casts per recovery period. A number, or a formula string like ' +
-        '"@scale.ranger.favored-enemy" for level-scaled pools. Default 1.'
+      'Casts per recovery period: a number or a formula ("@scale.ranger.favored-enemy"). Default 1.'
     ),
   recoveryPeriod: z
     .enum(['lr', 'sr', 'day', 'dawn', 'dusk'])
     .optional()
-    .describe(
-      'When the free casts come back: "lr" long rest (default — the 2024 wording for feat-granted ' +
-        'casts), "sr" short rest, "day", "dawn", or "dusk".'
-    ),
+    .describe('When the casts recover (default lr).'),
 });
 
 export interface DnD5eFreeCastToolOptions {
@@ -69,15 +60,11 @@ export class DnD5eFreeCastTool {
       {
         name: 'add-free-cast',
         description:
-          '[D&D 5e] Grant "cast without a spell slot, N per rest" the native 2024 way — Magic ' +
-          'Initiate, Favored Enemy, lineage grants. TWO sheet entries result: the spell stays in ' +
-          'the repertoire as a normal ALWAYS-PREPARED spell (castable with slots; imported from ' +
-          'the compendium if missing), and a cast activity ON the granting feature projects a ' +
-          '"<Spell> - <Feature>" entry into the sheet\'s native "Additional Spells" spellbook ' +
-          'section with its own tracked pool (default 1/long rest) — no slot, no use-dialog. Also ' +
-          'MIGRATES the old shape (on-spell use pool + forward activity) off the spell, and dedupes ' +
-          "dnd5e's cached spellbook copies. Idempotent. NEVER track a free cast as a separate " +
-          'tracker feat or as a forward on the spell.',
+          '[D&D 5e] Grant a feature-based free cast (Magic Initiate, Favored Enemy, a lineage): the ' +
+          'spell stays in the repertoire always prepared (imported if missing) and a cast activity on ' +
+          'the granting feature projects a "<Spell> - <Feature>" entry with its own pool into the ' +
+          "sheet's Additional Spells. Migrates the old on-spell pool shape and dedupes cached " +
+          'copies. Idempotent.',
         inputSchema: toInputSchema(AddFreeCastSchema),
       },
     ];

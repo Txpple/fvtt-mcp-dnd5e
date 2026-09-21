@@ -40,33 +40,25 @@ const SetActorArtSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'Data-relative path to the PORTRAIT (a STILL image). Also the token texture unless ' +
-        'tokenImagePath is given.'
+      'Data-relative path of the portrait (a still image); the token texture too unless tokenImagePath.'
     ),
   tokenImagePath: z
     .string()
     .optional()
     .describe(
-      'Data-relative path for the prototype TOKEN texture — may be a VIDEO (.webm/.mp4/.m4v/.ogg). ' +
-        'Defaults to imagePath.'
+      'Data-relative path of the prototype token texture (video allowed); default imagePath.'
     ),
-  applyToToken: z
-    .boolean()
-    .default(true)
-    .describe('Also set the prototype token texture (default true).'),
+  applyToToken: z.boolean().default(true).describe('Also set the prototype token texture.'),
   normalizePrototype: z
     .boolean()
     .default(true)
     .describe(
-      'When the token texture changes, reset the inherited texture scale to 1 and turn the dynamic ' +
-        'ring off (a 2024-book copy ships scale 2 + ring on). false keeps them.'
+      'On a token texture change, reset the texture scale to 1 and turn the dynamic ring off.'
     ),
   autoRotate: z
     .boolean()
     .optional()
-    .describe(
-      'Set lockRotation (true = the token turns to face its movement). Check the art faces up first.'
-    ),
+    .describe('true = the token turns to face its movement (lockRotation off).'),
 });
 
 const AddJournalImageSchema = z.object({
@@ -114,9 +106,9 @@ export class AssetBridgeTools {
       {
         name: 'set-actor-art',
         description:
-          "Set an actor's portrait and, by default, its prototype token art from a Data-relative " +
-          'path; a changed token texture also gets its inherited scale/ring normalized. Lists placed ' +
-          'tokens still carrying the old art (prototype edits never reach them). GM-only.',
+          "Set an actor's portrait and, by default, its prototype token art; a changed token texture " +
+          'is normalized (scale 1, ring off). Reports placed tokens still carrying the old art. ' +
+          'GM-only.',
         inputSchema: toInputSchema(SetActorArtSchema),
       },
       {
