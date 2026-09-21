@@ -88,7 +88,7 @@ refuses the remote copy, fall back to local-only and say so. Formats: `markdown`
 
 ## Chat hygiene
 
-Long chat logs are a known Molten performance drag. To prune:
+A long chat log slows every client's load (the whole log ships at join). To prune:
 1. `list-chat-messages` (use `contentMode: "none"` on a big log) to preview.
 2. `delete-chat-messages { beforeTimestamp: <ms epoch> }` to purge old noise, or `{ ids: [...] }` for
    specific messages (a single id is just an array of one).

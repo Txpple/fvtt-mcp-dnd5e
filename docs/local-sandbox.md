@@ -137,8 +137,8 @@ still works as an alias.)
 
 | Registration (user scope, `~/.claude.json`) | `env` | Targets |
 | --- | --- | --- |
-| `foundry-molten5e` | `FOUNDRY_HOST=molten` | prod (Molten) — `FOUNDRY_URL` or the 2.x `MOLTEN_SERVER_URL` alias |
-| `foundry-local5e` | `FOUNDRY_HOST=local` | the sandbox — `FOUNDRY_URL` defaults to `http://localhost:30000` |
+| `foundry` | `FOUNDRY_URL=…` (+ `FOUNDRY_HOST=molten` on Molten) | your world — the 2.x `MOLTEN_SERVER_URL` alias still works under `molten` |
+| `foundry-sandbox` | `FOUNDRY_HOST=local` | the sandbox — `FOUNDRY_URL` defaults to `http://localhost:30000` |
 
 Both read the same `FOUNDRY_*` names; under `local` the 2.x `LOCAL_*` names (`LOCAL_SERVER_URL`,
 `LOCAL_ADMIN_KEY`, `LOCAL_WORLD_ID`, `LOCAL_FOUNDRY_USER` / `_PASSWORD`, `LOCAL_FOUNDRY_DATA`) are
@@ -185,7 +185,7 @@ node scripts/deploy-house-module.mjs fvtt-mod-battleflow --local
 
 `--local` writes the module's served files straight into the sandbox's `Data/modules/` (same
 byte read-back proof as the prod path) and never touches Molten. The loop is: edit the module →
-`--local` → reload the local world → drive assertions through the `foundry-local5e` tools or a
+`--local` → reload the local world → drive assertions through the sandbox registration's tools or a
 `scripts/verify-*.mjs` run pointed at the sandbox → only when it's green, deploy for real.
 
 Two things to remember:
