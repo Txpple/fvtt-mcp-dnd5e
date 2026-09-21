@@ -17,20 +17,12 @@ const ListUsersSchema = z.object({});
 
 const UpdateUserSchema = z
   .object({
-    user: z
-      .string()
-      .min(1)
-      .describe(
-        'User id or exact name to update (case-insensitive name match allowed). No default — ' +
-          'account edits are always explicit.'
-      ),
+    user: z.string().min(1).describe('User id or exact name (case-insensitive). No default.'),
     role: z
       .enum(['none', 'player', 'trusted', 'assistant', 'gamemaster'])
       .optional()
       .describe(
-        "Permission role: 'none' (banned) | 'player' | 'trusted' (trusted player) | 'assistant' " +
-          "(assistant GM) | 'gamemaster'. Guarded: the bridge user's own role and the world's last " +
-          'gamemaster cannot be demoted.'
+        'Permission role (none = banned). The bridge user and the last gamemaster cannot be demoted.'
       ),
     name: z.string().min(1).optional().describe('Rename the user account (their login name).'),
     color: z
@@ -58,14 +50,9 @@ const SetUserAvatarSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'Avatar image: a Data-relative asset path (e.g. "assets/mcp/mcp-claude.jpg"), an https URL, or ' +
-        'a Foundry built-in icon path. Upload local files first with upload-asset, then pass the ' +
-        'returned path/URL here.'
+      'Data-relative asset path (upload-asset returns one), an https URL, or a Foundry icon path.'
     ),
-  user: z
-    .string()
-    .optional()
-    .describe('User id or exact name to update. Default: the bridge user that posts (MCP-Claude).'),
+  user: z.string().optional().describe('User id or exact name; default the bridge user.'),
 });
 
 export interface UserToolsOptions {
@@ -87,28 +74,22 @@ export class UserTools {
       {
         name: 'list-users',
         description:
-          'List every user account in the world: id, name, role (player/trusted/assistant/' +
-          'gamemaster), whether they are currently connected, player color, pronouns, avatar, ' +
-          'their assigned character, and their LANDING SCENE if one is set (where they come up at ' +
-          'login — shown only when assigned, since an unassigned user just follows the active ' +
-          'scene). The read to run before update-user and set-landing-scene.',
+          'Every user account: id, name, role, connected, color, pronouns, avatar, assigned ' +
+          'character, landing scene (only when set; an unassigned user follows the active scene).',
         inputSchema: toInputSchema(ListUsersSchema),
       },
       {
         name: 'update-user',
         description:
-          'Update a Foundry user account: permission role (e.g. demote a trusted player to player), ' +
-          'login name, player color, pronouns, or assigned character. GM admin — guarded so the ' +
-          "bridge user's own role and the world's last gamemaster cannot be demoted.",
+          'Update a user account: role, login name, color, pronouns, assigned character. GM-only; ' +
+          'the bridge user and the last gamemaster cannot be demoted.',
         inputSchema: toInputSchema(UpdateUserSchema),
       },
       {
         name: 'set-user-avatar',
         description:
-          "Set a Foundry user's avatar — the portrait shown next to that user's chat messages. " +
-          "Defaults to the bridge user (MCP-Claude), so this is how you give the MCP's own chat posts " +
-          'a portrait instead of the default mystery-man. Pass a Data-relative path or https URL ' +
-          '(upload local files with upload-asset first). GM-only.',
+          "Set a user's avatar (the portrait beside their chat messages). Defaults to the bridge " +
+          'user. GM-only.',
         inputSchema: toInputSchema(SetUserAvatarSchema),
       },
     ];

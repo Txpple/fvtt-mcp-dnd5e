@@ -8,7 +8,16 @@
 //
 // Offline (builds the registry from dist/; run `npm run build` first).
 import { writeFileSync } from 'node:fs';
-import { approxTokens, argValue, buildRegistry, decomposeToolsList, fmt, pct } from './lib.mjs';
+import {
+  PROSE_BUDGET,
+  approxTokens,
+  argValue,
+  buildRegistry,
+  decomposeToolsList,
+  fmt,
+  pct,
+  proseOffenders,
+} from './lib.mjs';
 
 const top = Number(argValue('--top', '15'));
 const jsonOut = argValue('--json');
@@ -60,12 +69,20 @@ console.log(
   `median tool: ${sizes[Math.floor(sizes.length / 2)]}, mean: ${Math.round(all / list.count)}, p90: ${sizes[Math.floor(sizes.length * 0.9)]}`
 );
 
-// The M7 prose budget, as it stands today.
-const overLeaf = list.tools.filter(r => r.longestLeafDescription > 120);
-const overDesc = list.tools.filter(r => r.description > 400);
+// The M7 prose budget (src/measure.test.ts enforces it): who is over, and by how much.
+const offenders = proseOffenders(tools);
+const overLeaf = offenders.filter(o => o.leaves.length);
+const overDesc = offenders.filter(o => o.description);
 console.log(
-  `\nprose budget (M7): ${overLeaf.length} tools with a leaf > 120 chars; ${overDesc.length} descriptions > 400 chars`
+  `\nprose budget (M7: leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}): ` +
+    `${overLeaf.length} tools with a leaf over; ${overDesc.length} descriptions over`
 );
+for (const o of offenders) {
+  const bits = [];
+  if (o.description) bits.push(`description ${o.description}`);
+  for (const l of o.leaves) bits.push(`${l.path} ${l.length}`);
+  console.log(`  ${o.name}: ${bits.join(' · ')}`);
+}
 
 if (jsonOut) {
   writeFileSync(jsonOut, JSON.stringify(list, null, 1));

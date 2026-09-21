@@ -82,7 +82,7 @@ export interface ToolRegistryDeps {
   logger: Logger;
   /** Where Foundry runs (src/hosts): the file plane for the asset + chat tools, the host block in get-world-info. */
   host: Host;
-  /** Toolset names to advertise (FOUNDRY_TOOLSETS). Empty/omitted = all; `world` is always on. */
+  /** Toolset names to advertise (FOUNDRY_TOOLSETS). Empty/omitted = all; `session` is always on. */
   toolsets?: readonly string[];
 }
 

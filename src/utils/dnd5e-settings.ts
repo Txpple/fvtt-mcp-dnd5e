@@ -156,7 +156,7 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     label: 'Piety score (optional rule)',
     kind: 'boolean',
     setting: 'pietyScore',
-    hint: 'Adds the Piety score to character sheets (default false; registered config:false — this tool is the lever).',
+    hint: 'Adds the Piety score to character sheets (default false; hidden from the settings menu).',
   },
   // --- bastions (a DataModel setting: bastionConfiguration) ---
   {
@@ -192,7 +192,7 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     omitWhenChoice: 'auto',
     setting: 'calendarConfig',
     path: 'dailyRecovery',
-    hint: 'auto = the system default (calendar when the calendar is enabled, else manual) · calendar (uses recover on time advance) · manual ("New Day" in rest dialogs).',
+    hint: 'auto (default: calendar when enabled, else manual) · calendar (on time advance) · manual ("New Day" in rest dialogs).',
   },
   {
     key: 'calendar',
@@ -201,7 +201,7 @@ export const DND5E_SETTINGS: readonly Dnd5eSettingSpec[] = [
     liveChoices: 'calendars',
     setting: 'calendar',
     requiresReload: true,
-    hint: 'gregorian (default) · greyhawk · harptos (Forgotten Realms) · khorvaire (Eberron); modules may add more.',
+    hint: 'gregorian (default) · greyhawk · harptos · khorvaire, or a module calendar (validated live).',
   },
   // --- client-scoped: reported only ---
   {

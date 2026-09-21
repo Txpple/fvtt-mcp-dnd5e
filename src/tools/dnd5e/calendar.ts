@@ -62,15 +62,11 @@ export class DnD5eCalendarTool {
       {
         name: 'manage-calendar',
         description:
-          '[D&D 5e] The in-world date and time (dnd5e 6.0 calendar on Foundry v14 game.time). ' +
-          'action "read" (default) reports the calendar in use, whether it is enabled, and the current ' +
-          'date / time (year as displayed, month name + number, day, weekday, hour, minute, plus the ' +
-          'system\'s own formatted / approximate strings). "advance" moves time by rounds / minutes / ' +
-          'hours / days / seconds (negative rewinds) — this is what triggers dawn / dusk / day recovery ' +
-          'and bastion turns when the calendar is enabled. "set" jumps to a date (year / month by ' +
-          'number or name / day) and/or a time of day (hour / minute); omitted parts keep their value. ' +
-          'Writes report before → after. Enable the calendar / pick one with configure-dnd5e-settings. ' +
-          'GM-only writes.',
+          '[D&D 5e] The in-world date and time (the dnd5e 6.0 calendar). "read" (default): the ' +
+          'calendar, whether enabled, the current date / time. "advance": rounds / minutes / hours / ' +
+          'days / seconds (negative rewinds); drives dawn / dusk / day recovery and bastion turns ' +
+          'when the calendar is enabled. "set": a date and/or time of day; omitted parts keep their ' +
+          'value. Writes report before → after. GM-only.',
         inputSchema: toInputSchema(ManageCalendarSchema),
       },
     ];

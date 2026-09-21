@@ -164,6 +164,69 @@ export function decomposeToolsList(tools: AdvertisedTool[]): ToolsListBytes {
 }
 
 // ---------------------------------------------------------------------------
+// The prose budget (M7) — every leaf `.describe()` and every tool description has a ceiling
+// ---------------------------------------------------------------------------
+
+/** The M7 ceilings, in chars of the raw string (not JSON-escaped). */
+export const PROSE_BUDGET = { leaf: 120, description: 400 } as const;
+
+export interface ProseOffender {
+  name: string;
+  /** The description's length when it is over budget, else 0. */
+  description: number;
+  /** Every leaf over budget: its property path inside the schema and its length. */
+  leaves: Array<{ path: string; length: number }>;
+}
+
+function walkLeaves(
+  node: unknown,
+  path: string,
+  limit: number,
+  out: Array<{ path: string; length: number }>
+): void {
+  if (Array.isArray(node)) {
+    node.forEach((child, i) => {
+      walkLeaves(child, `${path}[${i}]`, limit, out);
+    });
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key === 'description' && typeof value === 'string') {
+      if (value.length > limit) out.push({ path: path || '.', length: value.length });
+    } else if (value && typeof value === 'object') {
+      // `properties` is a container, not a path segment: report `.walls.items.id`, not
+      // `.properties.walls.items.properties.id`.
+      walkLeaves(value, key === 'properties' ? path : `${path}.${key}`, limit, out);
+    }
+  }
+}
+
+/**
+ * The tools over the prose budget: a description longer than `budget.description`, or any leaf
+ * `"description"` in the schema longer than `budget.leaf`. Empty when every tool is within it.
+ */
+export function proseOffenders(
+  tools: AdvertisedTool[],
+  budget: { leaf: number; description: number } = PROSE_BUDGET
+): ProseOffender[] {
+  const out: ProseOffender[] = [];
+  for (const tool of tools) {
+    const leaves: ProseOffender['leaves'] = [];
+    walkLeaves(tool.inputSchema, '', budget.leaf, leaves);
+    const description = (tool.description ?? '').length;
+    if (leaves.length || description > budget.description) {
+      out.push({
+        name: tool.name,
+        description: description > budget.description ? description : 0,
+        leaves,
+      });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Tool names — the per-prompt cost in Claude Code
 // ---------------------------------------------------------------------------
 

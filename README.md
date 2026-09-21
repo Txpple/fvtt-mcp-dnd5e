@@ -124,8 +124,8 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 151 tools (13 named toolsets;
-  `world` always on); an out-of-set call is refused by name. `chat,combat` is 16 tools at ~6k tokens
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 151 tools (14 named toolsets;
+  `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~4k tokens
   instead of ~79k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
 
@@ -346,7 +346,8 @@ so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
 
 | Toolset | What it holds |
 | --- | --- |
-| `world` | `get-world-info`, `get-current-scene`, `disconnect-bridge`, users, dnd5e settings, calendar — **always on** |
+| `session` | `get-world-info`, `get-current-scene`, `disconnect-bridge`, `list-users` — **always on** |
+| `settings` | `update-user`, `set-user-avatar`, the dnd5e automation switches, the calendar |
 | `actors` | NPCs and PCs: sheets, effects, activities, inventory, groups, art, ownership |
 | `items` · `compendium` · `journals` · `tables` · `cards` · `audio` | the document families |
 | `scenes` | scenes, who-sees-what routing, every placeable kind |
@@ -354,8 +355,8 @@ so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
 | `assets` | the Plane-B file tools + reference integrity |
 | `organization` | folders, moves, bulk delete, macros |
 
-Unset = everything (the bundled skills need the whole surface). `chat,combat` advertises 16 tools
-at ~6k tokens. A call to a tool outside the enabled set is refused **by name** — which toolset it
+Unset = everything (the bundled skills need the whole surface). `chat,combat` advertises 12 tools
+at ~4k tokens. A call to a tool outside the enabled set is refused **by name** — which toolset it
 is in and how to enable it — never as "unknown tool"; a misspelt toolset stops the server at
 startup with the valid names. The table is [`src/toolsets.ts`](src/toolsets.ts).
 

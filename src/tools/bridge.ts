@@ -36,12 +36,9 @@ export class BridgeTools {
       {
         name: 'disconnect-bridge',
         description:
-          'Log the bridge user (FOUNDRY_USER) out of the live Foundry world: closes the persistent ' +
-          'headless browser session so the user goes inactive (drops off the active-player list). ' +
-          'The world itself keeps running and the MCP server stays up — the NEXT tool call ' +
-          'transparently reconnects (wake → join → ready), so nothing needs to be restarted. ' +
-          'Use at the end of a work session ("log out please"); safe to call any time — already ' +
-          'disconnected is a clean no-op.',
+          'Log the bridge user out of the live world: closes the headless browser session so the ' +
+          'user drops off the active-player list. The world keeps running and the server stays up; ' +
+          'the next tool call reconnects (wake → join → ready). Already disconnected is a clean no-op.',
         inputSchema: toInputSchema(DisconnectBridgeSchema),
       },
     ];

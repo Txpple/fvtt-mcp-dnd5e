@@ -484,7 +484,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
     expect(tools.length).toBe(151);
   });
 
-  it('a selection advertises only those toolsets — plus world, always', () => {
+  it('a selection advertises only those toolsets — plus session, always', () => {
     const { foundry } = makeFoundry();
     const { tools, enabledToolsets } = buildToolRegistry({
       foundry,
@@ -492,11 +492,13 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
       host,
       toolsets: ['chat', ' combat '],
     });
-    expect([...enabledToolsets].sort()).toEqual(['chat', 'combat', 'world']);
+    expect([...enabledToolsets].sort()).toEqual(['chat', 'combat', 'session']);
     const names = tools.map(t => t.name).sort();
-    expect(names).toEqual([...TOOLSETS.world, ...TOOLSETS.chat, ...TOOLSETS.combat].sort());
+    expect(names).toEqual([...TOOLSETS.session, ...TOOLSETS.chat, ...TOOLSETS.combat].sort());
     expect(names).not.toContain('create-scene');
     expect(names).toContain('get-world-info');
+    // the world-level writes are opt-in like any other family (M7)
+    expect(names).not.toContain('configure-dnd5e-settings');
   });
 
   it('a call outside the enabled toolsets is refused by name, not as an unknown tool', async () => {
@@ -508,7 +510,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
       toolsets: ['chat'],
     });
     await expect(dispatch('create-scene', {})).rejects.toThrow(
-      /"create-scene" is in the "scenes" toolset.*FOUNDRY_TOOLSETS=world,chat/
+      /"create-scene" is in the "scenes" toolset.*FOUNDRY_TOOLSETS=session,chat/
     );
     await expect(dispatch('not-a-tool', {})).rejects.toThrow(/Unknown tool/);
   });
@@ -517,12 +519,12 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
     const { foundry } = makeFoundry();
     expect(() =>
       buildToolRegistry({ foundry, logger: makeLogger(), host, toolsets: ['scenes', 'sceens'] })
-    ).toThrow(/"sceens" is not a toolset \(one of: world, actors/);
+    ).toThrow(/"sceens" is not a toolset \(one of: session, settings, actors/);
   });
 
   it('parseToolsetsEnv splits a comma list and ignores blanks', () => {
     expect(parseToolsetsEnv(undefined)).toEqual([]);
     expect(parseToolsetsEnv('')).toEqual([]);
-    expect(parseToolsetsEnv(' world, chat ,,assets ')).toEqual(['world', 'chat', 'assets']);
+    expect(parseToolsetsEnv(' settings, chat ,,assets ')).toEqual(['settings', 'chat', 'assets']);
   });
 });

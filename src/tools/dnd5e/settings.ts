@@ -14,7 +14,7 @@ import { toInputSchema } from '../../utils/schema.js';
  */
 
 function fieldFor(spec: Dnd5eSettingSpec): z.ZodTypeAny {
-  const describe = `${spec.label}. ${spec.hint}${spec.requiresReload ? ' Takes effect after clients reload.' : ''}`;
+  const describe = `${spec.hint}${spec.requiresReload ? ' Reload to apply.' : ''}`;
   if (spec.kind === 'boolean') return z.boolean().optional().describe(describe);
   if (spec.kind === 'integer') return z.number().int().min(1).optional().describe(describe);
   if (spec.choices) {
@@ -23,7 +23,7 @@ function fieldFor(spec: Dnd5eSettingSpec): z.ZodTypeAny {
       .optional()
       .describe(describe);
   }
-  return z.string().min(1).optional().describe(`${describe} Validated against the live list.`);
+  return z.string().min(1).optional().describe(describe);
 }
 
 const shape: Record<string, z.ZodTypeAny> = {};
@@ -49,14 +49,11 @@ export class DnD5eSettingsTool {
       {
         name: 'configure-dnd5e-settings',
         description:
-          '[D&D 5e] Read or set the dnd5e 6.0 AUTOMATION settings — falling damage, token size ↔ ' +
-          'creature size, senses ↔ token vision, exhaustion, initiative grouping, auto-apply ' +
-          'Unconscious/Dead at 0 HP, encounter placement, the player damage / effects trays, the ' +
-          'bastion system, and the calendar (enabled, daily recovery mode, which calendar). Call with ' +
-          'NO arguments to read every switch; pass any of them to change it — each change echoes ' +
-          'previous → new, re-applying the current value is a clean no-op, and the switches that need ' +
-          'a client reload are named. Allow-listed: nothing else in the settings menu is reachable. ' +
-          'GM-only.',
+          '[D&D 5e] Read or set the dnd5e 6.0 automation switches: falling, token size / vision ' +
+          'sync, exhaustion, initiative grouping, auto-Downed, encounter placement, the player trays, ' +
+          'bastions, the calendar. No arguments: every switch. Any argument: applied and echoed ' +
+          'previous → new; the switches that need a client reload are named. Only the listed keys ' +
+          'are reachable. GM-only.',
         inputSchema: toInputSchema(ConfigureDnd5eSettingsSchema),
       },
     ];

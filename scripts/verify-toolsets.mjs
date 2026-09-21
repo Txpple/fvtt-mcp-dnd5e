@@ -94,13 +94,14 @@ console.log('[1] FOUNDRY_TOOLSETS unset → the whole surface');
 }
 
 console.log(
-  '[2] FOUNDRY_TOOLSETS=chat,combat → those + world; an out-of-set call is refused by name'
+  '[2] FOUNDRY_TOOLSETS=chat,combat → those + session; an out-of-set call is refused by name'
 );
 {
   const { responses } = await rpc({ FOUNDRY_TOOLSETS: 'chat,combat' }, [init, list, callScene]);
   const tools = responses.get(2)?.result?.tools ?? [];
   const names = tools.map(t => t.name);
-  check(names.includes('get-world-info'), 'world is always advertised');
+  check(names.includes('get-world-info'), 'session is always advertised');
+  check(!names.includes('configure-dnd5e-settings'), 'settings is opt-in (M7)');
   check(
     names.includes('send-chat-message') && names.includes('get-combat-stats'),
     'the selected toolsets are advertised'
@@ -118,7 +119,7 @@ console.log(
     text.slice(0, 160)
   );
   check(
-    /FOUNDRY_TOOLSETS=world,chat,combat/.test(text),
+    /FOUNDRY_TOOLSETS=session,chat,combat/.test(text),
     'the refusal names the enabled set',
     text.slice(0, 160)
   );
@@ -131,7 +132,7 @@ console.log(
   const { responses, stderr, code } = await rpc({ FOUNDRY_TOOLSETS: 'sceens' }, [init, list]);
   check(!responses.get(2)?.result, 'no tools/list answer');
   check(
-    /"sceens" is not a toolset \(one of: world, actors/.test(stderr),
+    /"sceens" is not a toolset \(one of: session, settings, actors/.test(stderr),
     'startup error names the valid toolsets',
     stderr.slice(0, 200)
   );

@@ -6,8 +6,10 @@
 //
 //     "env": { "FOUNDRY_TOOLSETS": "world,chat,combat" }
 //
-// and advertise just those. Unset = everything (the skills need the whole surface). `world` is
-// always on — get-world-info / disconnect-bridge are the session's lifeline whatever else is off.
+// and advertise just those. Unset = everything (the skills need the whole surface). `session` is
+// always on — get-world-info / disconnect-bridge are the session's lifeline whatever else is off;
+// the world-level writes (`settings`) are opt-in like every other family, so a narrow
+// registration does not carry them (M7 of the 3.0 plan: the always-on set ≤ 2,100 chars).
 //
 // This table is the single source of truth: every dispatchable tool belongs to exactly ONE
 // toolset, and registry.test.ts fails the build if a tool is unlisted, listed twice, or listed
@@ -15,17 +17,10 @@
 // how to enable it), never as "unknown tool".
 
 export const TOOLSETS = {
-  /** The session's lifeline + world-level state: always advertised. */
-  world: [
-    'get-world-info',
-    'get-current-scene',
-    'disconnect-bridge',
-    'list-users',
-    'update-user',
-    'set-user-avatar',
-    'configure-dnd5e-settings',
-    'manage-calendar',
-  ],
+  /** The session's lifeline: always advertised, whatever else is off. */
+  session: ['get-world-info', 'get-current-scene', 'disconnect-bridge', 'list-users'],
+  /** World-level state: user accounts, the dnd5e automation switches, the calendar. */
+  settings: ['update-user', 'set-user-avatar', 'configure-dnd5e-settings', 'manage-calendar'],
   /** Actors — NPCs and PCs, their sheets, effects, activities, inventory, groups, art, ownership. */
   actors: [
     'get-actor',
@@ -198,7 +193,7 @@ export type ToolsetName = keyof typeof TOOLSETS;
 export const TOOLSET_NAMES = Object.keys(TOOLSETS) as ToolsetName[];
 
 /** The toolset that is advertised whatever a registration asks for. */
-export const ALWAYS_ON: ToolsetName = 'world';
+export const ALWAYS_ON: ToolsetName = 'session';
 
 /** tool name → its toolset. */
 export function toolsetOf(): Map<string, ToolsetName> {
@@ -211,7 +206,7 @@ export function toolsetOf(): Map<string, ToolsetName> {
 
 /**
  * Resolve a registration's toolset selection. Empty = every toolset. An unknown name is a
- * misconfiguration and fails loudly (at startup) with the valid names. `world` is always included.
+ * misconfiguration and fails loudly (at startup) with the valid names. `session` is always included.
  */
 export function resolveToolsets(selected: readonly string[]): Set<ToolsetName> {
   const clean = selected.map(s => s.trim()).filter(Boolean);
