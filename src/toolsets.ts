@@ -95,15 +95,7 @@ export const TOOLSETS = {
     'add-journal-image',
   ],
   /** Roll tables. */
-  tables: [
-    'create-rolltable',
-    'import-rolltable',
-    'list-rolltables',
-    'update-rolltable',
-    'roll-on-table',
-    'get-rolltable',
-    'delete-rolltable',
-  ],
+  tables: ['manage-rolltables', 'roll-on-table'],
   /** Card decks. */
   cards: ['manage-cards'],
   /** Playlists and the per-scene soundscape. */

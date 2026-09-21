@@ -356,14 +356,9 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // the music system; this is the layer neither Playlists nor AmbientSound placeables cover.
     'configure-soundscape': args => soundscapeTools.handleConfigureSoundscape(args),
 
-    // Roll tables
-    'create-rolltable': args => tableTools.handleCreateRollTable(args),
-    'import-rolltable': args => tableTools.handleImportRollTable(args),
-    'list-rolltables': args => tableTools.handleListRollTables(args),
-    'update-rolltable': args => tableTools.handleUpdateRollTable(args),
+    // Roll tables — the CRUD as ONE tool (action; M8) + the play op
+    'manage-rolltables': args => tableTools.handleManageRollTables(args),
     'roll-on-table': args => tableTools.handleRollOnTable(args),
-    'get-rolltable': args => tableTools.handleGetRollTable(args),
-    'delete-rolltable': args => tableTools.handleDeleteRollTable(args),
 
     // Cards — ONE tool (action; M8)
     'manage-cards': args => cardsTools.handle('manage-cards', args),

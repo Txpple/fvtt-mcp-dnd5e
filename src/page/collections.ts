@@ -513,7 +513,7 @@ export function buildResultEditPatches(
     if (typeof e.resultId === 'string' && e.resultId.trim() !== '') {
       target = existing.find(r => r.id === e.resultId);
       if (!target) {
-        errors.push(`${label}: no result with id "${e.resultId}" (see get-rolltable)`);
+        errors.push(`${label}: no result with id "${e.resultId}" (see the get action)`);
         continue;
       }
     } else if (typeof e.roll === 'number' && Number.isFinite(e.roll)) {
@@ -525,7 +525,7 @@ export function buildResultEditPatches(
           e.roll! <= r.range[1]
       );
       if (hits.length === 0) {
-        errors.push(`${label}: no entry covers roll ${e.roll} (see get-rolltable for the ranges)`);
+        errors.push(`${label}: no entry covers roll ${e.roll} (see the get action for the ranges)`);
         continue;
       }
       if (hits.length > 1) {
@@ -791,7 +791,7 @@ export async function importRollTable(args: {
   if (!args?.packId || !args?.itemId) {
     throw invalid('Both packId and itemId are required');
   }
-  assertNoSrdPacks(args.packId, 'import-rolltable');
+  assertNoSrdPacks(args.packId, 'manage-rolltables import');
 
   const { data } = await importFromCompendium(args.packId, args.itemId, {
     requirePackType: 'RollTable',

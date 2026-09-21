@@ -110,7 +110,9 @@ describe('tool registry', () => {
     // − 3 (M8): list / create / update / delete-folder → manage-folders (action).
     // − 3 (M8): create / list / update / delete-playlist → manage-playlists (action).
     // − 3 (M8): create / import / list / delete-cards → manage-cards (action).
-    expect(names.length).toBe(106);
+    // − 5 (M8): create / import / list / get / update / delete-rolltable → manage-rolltables
+    //   (action); roll-on-table stays (a play op, not CRUD).
+    expect(names.length).toBe(101);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -410,7 +412,8 @@ describe('tool registry', () => {
   it('every advertised tool input schema is valid JSON Schema 2020-12 (no draft-7-only constructs)', () => {
     // The Anthropic API validates each tool input_schema as JSON Schema draft 2020-12 and 400s the
     // ENTIRE request — not just the call — if any one is invalid, silently bricking the session the
-    // moment that tool enters the tool list (this actually happened: create-rolltable's `range`
+    // moment that tool enters the tool list (this actually happened: create-rolltable's `range` —
+    // today manage-rolltables' create member —
     // tuple emitted the draft-7 `items: [..]` shape and bricked a live session). Sweep every
     // advertised schema for the 2020-12-incompatible constructs zod's generator can emit so a bad
     // dialect can never silently ship again.
@@ -538,7 +541,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(106);
+    expect(tools.length).toBe(101);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

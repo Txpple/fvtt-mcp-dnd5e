@@ -45,7 +45,7 @@ offending snippet.
 | Surface | Tools | What to check |
 |---|---|---|
 | Journals (the big one) | `search-journals` per stem; `list-journals` | old names in content, contradicted facts, page names |
-| Roll tables | `list-rolltables` → `get-rolltable` on plot-adjacent tables | entry text (the classic straggler — a rename misses table entries) |
+| Roll tables | `manage-rolltables` `list` → `get` on plot-adjacent tables | entry text (the classic straggler — a rename misses table entries) |
 | Actors | `list-actors` for names; `get-actor` on plot-relevant NPCs/PCs | actor names, token names, biographies |
 | Items | `search-actor-contents` / `list-items` → `get-item` for plot items | descriptions, unidentified vs true names |
 | Scenes & pins | `list-scenes`, `manage-placeables { kind: "notes", action: "list" }` | scene names, map-pin labels |
@@ -84,7 +84,7 @@ folder) if the user wants it in-world.
 Narrowest write wins; never rebuild a document to change a phrase:
 
 - Journal page text → `update-journal` (the affected page only).
-- Roll-table entry → `update-rolltable` with `editResults` (surgical per-entry; siblings untouched).
+- Roll-table entry → `manage-rolltables { action: "update" }` with `editResults` (surgical per-entry; siblings untouched).
 - Actor name/token name/bio → `update-actor` (`name`, `tokenName`, `biography`).
 - Item description/name → `update-actor-item` / `update-item` (mind the unidentified true-name
   masking — verify the echo).

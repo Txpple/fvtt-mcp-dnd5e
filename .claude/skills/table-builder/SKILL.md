@@ -40,26 +40,27 @@ SRD · ask-don't-invent). Two table-specific clarifications:
 
 ## Tools
 
-- **`create-rolltable`** — the structuring creator (your main tool). `{ name, results[], formula?,
-  replacement?, displayRoll?, folderName?, description? }`. Ranges auto-assign from weights and the
-  formula defaults to `1d<total weight>` unless you pass explicit ones.
-- **`import-rolltable`** — copy a whole **published** table from a compendium into the world
+- **`manage-rolltables { action: "create" }`** — the structuring creator (your main tool). `{ name,
+  results[], formula?, replacement?, displayRoll?, folderName?, description? }`. Ranges auto-assign from
+  weights and the formula defaults to `1d<total weight>` unless you pass explicit ones.
+- **`{ action: "import" }`** — copy a whole **published** table from a compendium into the world
   (`{ packId, itemId, folderName? }`). Roll tables are world-only at roll time, so a DMG treasure /
   magic-item table must be imported before you can roll it; its results (and their @UUID item links)
   come along intact. Premium-book packs only. This is the table version of import-item — prefer it over
   hand-rebuilding a book table.
-- **`update-rolltable`** — change table fields and/or edit entries, two ways. **To fix ONE entry
+- **`{ action: "update" }`** — change table fields and/or edit entries, two ways. **To fix ONE entry
   (a typo, a re-link, a weight), use `editResults`** — target it by `roll` (the die face, e.g. 7 on
-  a d12) or `resultId` (from get-rolltable) and patch just its `text`/`uuid`/`weight`/`range`; the
+  a d12) or `resultId` (from the `get` action) and patch just its `text`/`uuid`/`weight`/`range`; the
   other entries — their ranges and @UUID item links — are left untouched. `text` REPLACES that
-  entry's content: copy the raw text from `get-rolltable`, change only what you need, and keep any
+  entry's content: copy the raw text from `{ action: "get" }`, change only what you need, and keep any
   `@UUID[...]` enrichers you want preserved. Supplying `results` instead **replaces the entire set**
   (deletes + recreates all entries with fresh ranges) — right for a full re-theme, wrong for a typo.
 - **`roll-on-table`** — preview a draw on a **world** table (evaluates without marking drawn / posting
   to chat). A drawn loot entry's `@UUID` items come back as **importable** (uuid + label) so you can
   pull them into the world with `import-item` (see physical-item-builder).
-- **`list-rolltables`** — find tables + their ids (needed to target updates/deletes/rolls).
-- **`delete-rolltable`** — remove tables by exact id/name (strict, no fuzzy match).
+- **`{ action: "list" }`** — one line per table (id, name, formula, result count) — the ids target
+  updates/deletes/rolls; **`{ action: "get" }`** reads every entry of one table.
+- **`{ action: "delete" }`** — remove tables by exact id/name (strict, no fuzzy match).
 
 ## The result vocabulary (what you pass in `results[]`)
 
@@ -109,7 +110,7 @@ tables, the Treasure table, encounter tables). **Don't rebuild them by hand — 
 
 1. **`list-compendium-packs type:RollTable`** → find the pack (e.g. `dnd-dungeon-masters-guide.tables`)
    and the table's id (use `get-compendium-entry` / search to identify the exact `itemId`).
-2. **`import-rolltable`** `{ packId, itemId, folderName:"DMG Treasure" }` → the table (with its @UUID
+2. **`manage-rolltables`** `{ action: "import", packId, itemId, folderName:"DMG Treasure" }` → the table (with its @UUID
    item links) lands in the world.
 3. **`roll-on-table`** on the imported table → each drawn magic item comes back as an importable
    `@UUID` (uuid + label).
@@ -122,10 +123,11 @@ This is the sanctioned path for "roll on the DMG treasure tables and give me the
 1. **Decide the contents.** Theme, entries, weights — your judgment. For loot/encounters, **find the
    real documents first** with `search-compendium-items` / `-creatures` (premium-only, so you get
    correct uuids) and reference them by `uuid`.
-2. **Create** with `create-rolltable` (weights, or explicit ranges to match a printed table).
+2. **Create** with `manage-rolltables { action: "create" }` (weights, or explicit ranges to match a
+   printed table).
 3. **Preview** with `roll-on-table` a few times to sanity-check the spread; a loot draw reports the
    importable item uuids.
-4. **Refine** with `update-rolltable` — `editResults` for surgical fixes (one entry's text/link/
+4. **Refine** with `{ action: "update" }` — `editResults` for surgical fixes (one entry's text/link/
    weight/range), or `results` to replace the whole set when the table needs a full re-cut.
 
 ## Don't

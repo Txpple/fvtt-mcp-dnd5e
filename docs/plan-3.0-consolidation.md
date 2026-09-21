@@ -430,3 +430,23 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   preset import, the list header + both rows, the two refusals by name, the delete with the
   not-found tail), integration 80 passed / 6 skipped. Next: tables → items → journals → scenes
   → actors.
+- 2026-09-21 — **M8 tables → `manage-rolltables`** (`action`: create / import / list / get /
+  update / delete): 6 tools → 1, the union **5,578** against the six's **5,646** (−1.2%; the naive
+  fold was 5,703, +1.0%). `roll-on-table` stays its own tool (a play op, not CRUD — the family the
+  plan named). `identifier` (get + update) and `folderName` (create + import) are the `shared`
+  root leaves; the result-entry `uuid` leaf (inlined twice, under create's and update's
+  `results`) no longer restates the @UUID / SRD sentence the family description carries, and
+  the update description no longer restates its `results` / `editResults` leaves. tools/list
+  203,588, names 101 (7,605 chars). The §3 shapes: list is `N table(s): id name formula results`;
+  create / import / update are one line (import's "Roll it with roll-on-table" gone); get / update
+  / roll-on-table misses are `isError` (all three had answered prose); delete is `deletedLine`.
+  `get` keeps its entry rendering (the reader the skills copy raw text from). Re-pointed:
+  table-builder (7 lines), plot-drift-check (2), README (counts + the CRUD parenthetical), the two
+  page-side error hints that named `get-rolltable`, the SRD refusal's tool label, tool-results,
+  the registry tests (106 → 101); skills-matrix 0 / 0; siblings 0. Decision #20: the six kept as
+  actions. Live: verify-table-tooling **52/52** with the new section 9 (create with a weight + a
+  uuid result, the list row, get's ranges-from-weights + resolved link, rename + one in-place
+  edit, roll-on-table through dispatch, the two refusals, three misses as errors, the delete with
+  the not-found tail) — and its DMG-draw check made deterministic (the Arcana table has plain-text
+  entries; one d100 draw could miss a link and had flaked twice) — integration 80 passed /
+  6 skipped. Next: items → journals → scenes → actors.

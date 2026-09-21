@@ -11,15 +11,22 @@
 //   * roll-on-table surfaces the @UUID links as importable (uuid + label);
 //   * GUARDS (correctness, design.md §2.3/§2.4): an SRD uuid is refused, an unresolvable premium uuid
 //     is refused, and a result with neither text nor uuid is refused.
-//   * import-rolltable (Phase 3.1b): copy a published DMG magic-item table into the world, confirm it
+//   * importRollTable (Phase 3.1b): copy a published DMG magic-item table into the world, confirm it
 //     keeps its formula + results, roll it (world-only) and confirm drawn results are importable @UUID
-//     item links; an SRD pack is refused.
+//     item links; an SRD pack is refused;
+//   * manage-rolltables (action create / import / list / get / update / delete — the M8 union,
+//     src/tools/tables.ts) through buildToolRegistry().dispatch: the six per-op tools are gone,
+//     roll-on-table stays; create / update / delete answer one-line confirmations; list is the §3
+//     line shape (header + one row per table); get renders every entry; an unknown action / key is
+//     refused by name; a miss is an error on get / update and on roll-on-table.
 // A single-entry table (formula 1d1) always draws its one entry, so every assertion is deterministic.
 // Everything created is cleaned up.
 //
 // Build first: npm run build. Run: node scripts/verify-table-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const env = loadEnv();
@@ -54,7 +61,8 @@ async function expectThrow(label, fn, re) {
   }
 }
 
-const f = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const f = new Foundry(cfg);
 
 const createdTableIds = [];
 async function makeTable(name, results) {
@@ -141,7 +149,7 @@ try {
   );
 
   // --- 6. get-rolltable: read a table's FULL entries deterministically (no rolling) ---
-  console.log('\n# get-rolltable (deterministic full read — the reader tool)');
+  console.log('\n# getRollTable (deterministic full read — the reader)');
   const tR = await makeTable('Readable', [
     { text: 'First entry' },
     { text: 'A pouch holding {{link}} and 2d6 gp', uuid: itemB.uuid },
@@ -203,7 +211,7 @@ try {
   );
 
   // --- import-rolltable: copy a published DMG magic-item table into the world, then roll it ---
-  console.log('\n# import-rolltable (copy a published DMG table, then roll it)');
+  console.log('\n# importRollTable (copy a published DMG table, then roll it)');
   const imp = await f.call('importRollTable', {
     packId: 'dnd-dungeon-masters-guide.tables',
     itemId: 'dmgArcanaCommon0', // "Arcana - Common" — a 1d100 magic-item table of @UUID item links
@@ -216,7 +224,13 @@ try {
 
   // The imported world table is now rollable (roll-on-table is world-only) and its results carry
   // the real @UUID item links — importable straight into the world (the treasure-table workflow).
-  const drawnImported = await rollOnce(imp.tableId);
+  // The DMG table also has plain-text entries ("Spell Scroll (cantrip or level 1 spell)"), so a
+  // single d100 draw can miss a link: draw until one lands (a handful of rolls at most).
+  let drawnImported = {};
+  for (let i = 0; i < 12; i++) {
+    drawnImported = await rollOnce(imp.tableId);
+    if (/^@UUID\[/.test(drawnImported.description ?? '')) break;
+  }
   assert(
     /^@UUID\[Compendium\.dnd-dungeon-masters-guide\.equipment\.Item\./.test(
       drawnImported.description ?? ''
@@ -229,7 +243,7 @@ try {
   );
 
   await expectThrow(
-    'import-rolltable(SRD pack -> refused)',
+    'importRollTable(SRD pack -> refused)',
     () => f.call('importRollTable', { packId: 'dnd5e.tables', itemId: 'whatever00000000' }),
     /SRD/
   );
@@ -238,7 +252,7 @@ try {
   // The pain case this exists for: fixing a one-word typo on entry N of a tuned table must NOT
   // require re-authoring every entry + re-attaching its @UUID links. Proof: raw toObject() JSON of
   // every UNTOUCHED entry is byte-identical across the edit.
-  console.log('\n# update-rolltable editResults -> surgical per-entry edits');
+  console.log('\n# updateRollTable editResults -> surgical per-entry edits');
   const t8 = await makeTable('Edit Target', [
     { text: 'Entry one — a GM aside about the Sleeper.' },
     { text: 'Entry two gives the party {{link}}', uuid: itemA.uuid },
@@ -335,6 +349,115 @@ try {
     (edit4?.edited ?? 0) === 0 && (edit4?.errors ?? []).some(e => /SRD/.test(e)),
     '8d — an SRD @UUID in edited text is refused (isolated per-edit)'
   );
+
+  // --- 9. manage-rolltables through the registry (the M8 union) ---
+  console.log('\n# 9) manage-rolltables (action) through dispatch');
+  const { dispatch, tools } = buildToolRegistry({
+    foundry: f,
+    logger: new Logger({ level: 'error' }),
+    host: cfg.host,
+  });
+  const names = new Set(tools.map(t => t.name));
+  assert(
+    names.has('manage-rolltables') &&
+      names.has('roll-on-table') &&
+      [
+        'create-rolltable',
+        'import-rolltable',
+        'list-rolltables',
+        'update-rolltable',
+        'get-rolltable',
+        'delete-rolltable',
+      ].every(n => !names.has(n)),
+    '9 — manage-rolltables + roll-on-table are advertised, the six per-op tools are gone'
+  );
+  const mt = args => dispatch('manage-rolltables', args);
+  const cr = String(
+    await mt({
+      action: 'create',
+      name: `${TAG} Union`,
+      results: [{ text: 'One', weight: 2 }, { uuid: itemA.uuid }],
+    })
+  );
+  const crId = /\((\w+)\)/.exec(cr)?.[1];
+  if (crId) createdTableIds.push(crId);
+  assert(
+    !!crId && cr === `Created roll table "${TAG} Union" (${crId}): formula 1d3, 2 result(s)`,
+    `9 — create: the one-line confirmation (${cr})`
+  );
+  const lines = String(await mt({ action: 'list' })).split('\n');
+  assert(
+    /^\d+ table\(s\): id name formula results$/.test(lines[0] ?? '') &&
+      lines.includes(`${crId} "${TAG} Union" 1d3 2`),
+    `9 — list: the header + the row (${lines[0]} / ${lines.find(x => x.startsWith(crId))})`
+  );
+  const got9 = String(await mt({ action: 'get', identifier: crId }));
+  assert(
+    got9.startsWith(
+      `Roll table "${TAG} Union" (${crId}) — 1d3, 2 result(s) [replacement on, displayRoll on]`
+    ) &&
+      got9.includes('\n  [1-2] One') &&
+      got9.includes(`\n  [3] ${itemA.name}\n      → ${itemA.name} [${itemA.uuid}]`),
+    `9 — get: the header, the ranges from the weights, the resolved link (${got9.split('\n')[0]})`
+  );
+  const up = String(
+    await mt({
+      action: 'update',
+      identifier: crId,
+      name: `${TAG} Union 2`,
+      editResults: [{ roll: 3, weight: 1, range: [3, 3] }],
+    })
+  );
+  assert(
+    up === `Updated roll table "${TAG} Union 2" (${crId}): 2 result(s), 1 entry edited in place`,
+    `9 — update: rename + one in-place edit on one line (${up})`
+  );
+  const rolled = String(await dispatch('roll-on-table', { identifier: crId }));
+  assert(
+    rolled.startsWith('Rolled ') && rolled.includes(`on "${TAG} Union 2" → "`),
+    `9 — roll-on-table still rolls (${rolled.split('\n')[0]})`
+  );
+  for (const [tool, args, want] of [
+    [
+      'manage-rolltables',
+      { action: 'roll', identifier: crId },
+      'action must be one of "create", "import", "list", "get", "update", "delete"',
+    ],
+    [
+      'manage-rolltables',
+      { action: 'get', identifiers: [crId] },
+      'unknown argument "identifiers" — it takes: action, identifier',
+    ],
+    [
+      'manage-rolltables',
+      { action: 'get', identifier: 'ZZ-no-such-table' },
+      'Roll table not found: "ZZ-no-such-table". Nothing read.',
+    ],
+    [
+      'manage-rolltables',
+      { action: 'update', identifier: 'ZZ-no-such-table', name: 'x' },
+      'Roll table not found: "ZZ-no-such-table". Nothing changed.',
+    ],
+    [
+      'roll-on-table',
+      { identifier: 'ZZ-no-such-table' },
+      'Roll table not found: "ZZ-no-such-table". Nothing rolled.',
+    ],
+  ]) {
+    let msg = '';
+    try {
+      await dispatch(tool, args);
+    } catch (e) {
+      msg = e?.message ?? String(e);
+    }
+    assert(msg.includes(want), `9 — refused by name / a miss is an error: ${want.slice(0, 60)}`);
+  }
+  const del = String(await mt({ action: 'delete', identifiers: [crId, 'ZZ-NOPE-TABLE'] }));
+  assert(
+    del === `Deleted 1 roll table(s): "${TAG} Union 2" (${crId}) (1 not found: ZZ-NOPE-TABLE)`,
+    `9 — delete: the one-line confirmation with the not-found tail (${del})`
+  );
+  createdTableIds.splice(createdTableIds.indexOf(crId), 1);
 } catch (e) {
   fails++;
   console.log(`\n[verify-table] FATAL: ${e?.message || String(e)}`);
