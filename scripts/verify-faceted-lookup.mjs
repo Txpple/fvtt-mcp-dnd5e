@@ -49,7 +49,7 @@ async function facet(label, args, checks) {
   console.log(`\n# ${label}`);
   let hits;
   try {
-    hits = await f.call('searchCompendiumFaceted', args);
+    hits = (await f.call('searchCompendiumFaceted', args))?.results; // M2: one search shape {results, totalFound}
   } catch (e) {
     fails++;
     console.log(`  FAIL  call threw: ${(e?.message || String(e)).slice(0, 160)}`);

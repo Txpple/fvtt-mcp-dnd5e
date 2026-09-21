@@ -15,43 +15,22 @@ const SearchCompendiumSchema = z.object({
   query: z
     .string()
     .min(2, 'Search query must be at least 2 characters')
-    .describe(
-      'Search query to find items in compendiums by name only. Use broad, simple terms (e.g., "dragon", "sword", "feat"). Descriptions and traits are NOT searchable.'
-    ),
-  packType: z
-    .string()
-    .optional()
-    .describe('Optional filter by pack type (e.g., "Item", "Actor", "JournalEntry")'),
-  limit: z
-    .number()
-    .min(1)
-    .max(50)
-    .default(50)
-    .describe('Maximum number of results to return (default: 50 for discovery searches, max: 50)'),
+    .describe('Name terms (all must appear); descriptions are not searched.'),
+  packType: z.string().optional().describe('Pack document type ("Item", "Actor", "JournalEntry").'),
+  limit: z.number().min(1).max(50).default(50).describe('Max results.'),
 });
 
 const GetCompendiumEntrySchema = z.object({
-  packId: z
-    .string()
-    .min(1, 'Pack ID cannot be empty')
-    .describe('ID of the compendium pack containing the item'),
-  itemId: z
-    .string()
-    .min(1, 'Item ID cannot be empty')
-    .describe('ID of the specific item to retrieve'),
+  packId: z.string().min(1, 'Pack ID cannot be empty').describe('Compendium pack id.'),
+  itemId: z.string().min(1).describe('Entry id within the pack.'),
   compact: z
     .boolean()
     .default(false)
-    .describe(
-      'Return condensed stat block (recommended for UI performance). Includes key stats, abilities, and actions but omits lengthy descriptions and technical data.'
-    ),
+    .describe('Key stats, abilities and actions only; no descriptions or system data.'),
 });
 
 const ListCreaturesByCriteriaSchema = z.object({
-  name: z
-    .string()
-    .optional()
-    .describe('Case-insensitive substring to narrow by creature name (e.g., "goblin", "dragon").'),
+  name: z.string().optional().describe('Case-insensitive name substring.'),
   // D&D 5e: challengeRating
   challengeRating: z
     .union([
@@ -96,16 +75,11 @@ const ListCreaturesByCriteriaSchema = z.object({
         .transform(val => parseFloat(val)),
     ])
     .optional()
-    .describe(
-      'Filter by Challenge Rating - accepts number, string, or range object. Use ranges for broader discovery (e.g., {"min": 10, "max": 15}) or exact values (12 or "12")'
-    ),
+    .describe('A number, a string ("1/4"), or a {min, max} range.'),
 
   // Common filters
-  creatureType: z.string().optional().describe('Filter by creature type'), // Accept any string, validate per system
-  size: z
-    .enum(['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'])
-    .optional()
-    .describe('Filter by creature size'),
+  creatureType: z.string().optional().describe('Creature type key.'), // Accept any string, validate per system
+  size: z.enum(['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan']).optional(),
 
   // Spellcasting flags
   hasSpells: z
@@ -117,7 +91,7 @@ const ListCreaturesByCriteriaSchema = z.object({
         .transform(val => val.toLowerCase() === 'true'),
     ])
     .optional()
-    .describe('Filter for spellcasting creatures'),
+    .describe('Spellcasters only (an approximate index flag).'),
   hasLegendaryActions: z
     .union([
       z.boolean(),
@@ -127,7 +101,7 @@ const ListCreaturesByCriteriaSchema = z.object({
         .transform(val => val.toLowerCase() === 'true'),
     ])
     .optional()
-    .describe('Filter for creatures with legendary actions (D&D 5e)'),
+    .describe('Legendary-action creatures only (an approximate index flag).'),
 
   limit: z
     .union([
@@ -142,11 +116,11 @@ const ListCreaturesByCriteriaSchema = z.object({
     ])
     .optional()
     .default(50)
-    .describe('Maximum results to return (default: 50, max: 500); totalFound is the full count.'),
+    .describe('Max results (default 50); totalFound is the full count.'),
 });
 
 const ListCompendiumPacksSchema = z.object({
-  type: z.string().optional().describe('Optional filter by pack type'),
+  type: z.string().optional().describe('Pack document type.'),
 });
 
 // Thin typed facade over the page-side faceted engine (searchCompendiumFaceted). The tool hard-codes
@@ -154,10 +128,7 @@ const ListCompendiumPacksSchema = z.object({
 // contract"). Lenient string/number unions mirror the other compendium schemas — they recover the
 // stringified argument shapes some MCP clients send.
 const SearchCompendiumSpellsSchema = z.object({
-  name: z
-    .string()
-    .optional()
-    .describe('Case-insensitive substring to narrow by spell name (e.g., "fire", "cure wounds").'),
+  name: z.string().optional().describe('Case-insensitive name substring.'),
   spellLevel: z
     .union([
       z
@@ -193,21 +164,15 @@ const SearchCompendiumSpellsSchema = z.object({
         .transform(val => parseInt(val, 10)),
     ])
     .optional()
-    .describe(
-      'Filter by spell level — exact number (0 = cantrip … 9) or a {"min","max"} range for surveys.'
-    ),
+    .describe('A level (0 = cantrip) or a {min, max} range.'),
   spellSchool: z
     .union([z.string(), z.array(z.string())])
     .optional()
-    .describe(
-      'Spell school(s): abjuration · conjuration · divination · enchantment · evocation · illusion · necromancy · transmutation (full name or dnd5e 3-letter key; one value or an array).'
-    ),
+    .describe('School name or dnd5e 3-letter key; one or an array.'),
   damageType: z
     .string()
     .optional()
-    .describe(
-      'Keep only spells that deal this damage type (e.g., "fire", "cold", "radiant"). Two-stage: candidate spells are loaded to inspect their activities, so this narrows an already facet-filtered set.'
-    ),
+    .describe('Damage type dealt ("fire"); a second pass over the facet-filtered candidates.'),
   limit: z
     .union([
       z.number().min(1).max(200),
@@ -220,7 +185,7 @@ const SearchCompendiumSpellsSchema = z.object({
         .transform(val => parseInt(val, 10)),
     ])
     .default(50)
-    .describe('Maximum results to return (default: 50, max: 200)'),
+    .describe('Max results (default 50).'),
 });
 
 // Thin typed facade over the faceted engine for GEAR. documentType narrows the item family
@@ -229,31 +194,22 @@ const SearchCompendiumItemsSchema = z.object({
   documentType: z
     .enum(['gear', 'weapon', 'armor', 'consumable'])
     .default('gear')
-    .describe(
-      'Item family to search: "gear" = everything (weapons, armor/equipment, consumables, tools, loot, containers); or narrow to "weapon", "armor", or "consumable".'
-    ),
-  name: z
-    .string()
-    .optional()
-    .describe('Case-insensitive substring to narrow by item name (e.g., "flame", "healing").'),
+    .describe('gear = every physical item; or one family.'),
+  name: z.string().optional().describe('Case-insensitive name substring.'),
   rarity: z
     .union([z.string(), z.array(z.string())])
     .optional()
-    .describe(
-      'Rarity/-ies: common · uncommon · rare · very rare · legendary · artifact (case- and space-insensitive; one value or an array).'
-    ),
+    .describe('common … artifact (case-insensitive); one or an array.'),
   itemType: z
     .union([z.string(), z.array(z.string())])
     .optional()
     .describe(
-      'dnd5e item SUBTYPE key (system.type.value), e.g. "wand" · "wondrous" · "rod" · "ring" · "potion" · "scroll" · "ammo"; for weapons the weapon-type key (e.g. "martialM"). One value or an array.'
+      'Subtype key (system.type.value: "wand", "ring", "potion", "martialM" …); one or an array.'
     ),
   properties: z
     .array(z.string())
     .optional()
-    .describe(
-      'Keep items carrying ANY of these dnd5e property keys (e.g. "mgc" = magical, "fin" = finesse, "ver" = versatile).'
-    ),
+    .describe('Any of these dnd5e property keys ("mgc", "fin", "ver").'),
   magical: z
     .union([
       z.boolean(),
@@ -263,7 +219,7 @@ const SearchCompendiumItemsSchema = z.object({
         .transform(val => val.toLowerCase() === 'true'),
     ])
     .optional()
-    .describe('If true, keep only items flagged magical (the "mgc" property).'),
+    .describe('Magical items only ("mgc").'),
   limit: z
     .union([
       z.number().min(1).max(200),
@@ -276,7 +232,7 @@ const SearchCompendiumItemsSchema = z.object({
         .transform(val => parseInt(val, 10)),
     ])
     .default(50)
-    .describe('Maximum results to return (default: 50, max: 200)'),
+    .describe('Max results (default 50).'),
 });
 
 /**
@@ -353,37 +309,45 @@ export class CompendiumTools {
       {
         name: 'search-compendium',
         description:
-          'Broad NAME search across the premium book compendium packs (any document type). The SRD (dnd5e.*) packs are NOT searched and never appear in results — the authoring library is the premium books only (design.md §2.3). Matches entity NAMES only (all whitespace-separated terms must appear); descriptions and traits are NOT searchable. Premium-first ranked, exact-name first; hits are {id,name,type,uuid,pack,img} with totalFound. For faceted discovery by real system data (CR/type/size, spell level/school, item rarity/type), use the type-specific tools instead: search-compendium-creatures, search-compendium-spells, search-compendium-items. Use this for a quick name lookup, then inspect with get-compendium-entry.',
+          'Name search across the premium compendium packs, any document type (SRD packs are never ' +
+          'searched). Exact-name first, premium-first; hits are {id, name, type, uuid, pack, img} with ' +
+          'totalFound. Facets (CR, level, rarity …): the search-compendium-* tools.',
         inputSchema: toInputSchema(SearchCompendiumSchema),
       },
       {
         name: 'get-compendium-entry',
         description:
-          'Retrieve a specific compendium entry (monster, item, spell, etc.) by pack id + entry id. Returns the full stat block — items, spells, abilities, effects, system data — needed for actor/item creation. Set compact=true for a condensed stat block when full detail is not needed. An SRD (dnd5e.*) pack id is refused — author only from the premium books (design.md §2.3).',
+          'One compendium entry in full (items, spells, abilities, effects, system data), or compact. ' +
+          'An SRD pack id is refused.',
         inputSchema: toInputSchema(GetCompendiumEntrySchema),
       },
       {
         name: 'search-compendium-creatures',
         description:
-          'D&D 5e CREATURE DISCOVERY: find creatures matching faceted criteria (Challenge Rating, type, size, spellcasting, legendary actions) across the premium book Actor packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so CR/type/size check real system data (not name heuristics); hasSpells/hasLegendaryActions are approximate index flags. Returns compact hits ({id,name,type,uuid,pack,img,facets}) premium-first ranked with totalFound (the full match count — raise limit for a survey); identify candidates by name, then pull full stat blocks with get-compendium-entry.',
+          'Creatures by facet (CR, type, size, spellcasting, legendary actions) across the premium ' +
+          'Actor packs, on real system data. Hits are {id, name, type, uuid, pack, img, facets}, ' +
+          'premium-first, with totalFound.',
         inputSchema: toInputSchema(ListCreaturesByCriteriaSchema),
       },
       {
         name: 'search-compendium-spells',
         description:
-          'D&D 5e SPELL DISCOVERY: find spells matching faceted criteria (level, school, damage type, name) across the premium book packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so filters check real spell data (not name heuristics). Returns compact hits ({id,name,type,uuid,pack,img,facets}) premium-first ranked with totalFound — identify candidates here, then pull full detail with get-compendium-entry. damageType is a two-stage refine (loads candidate spells to inspect their activities).',
+          'Spells by facet (level, school, damage type, name) across the premium packs, on real ' +
+          'system data. Hits are {id, name, type, uuid, pack, img, facets}, premium-first, with ' +
+          'totalFound.',
         inputSchema: toInputSchema(SearchCompendiumSpellsSchema),
       },
       {
         name: 'search-compendium-items',
         description:
-          'D&D 5e ITEM/GEAR DISCOVERY: find equipment, weapons, armor, consumables, and treasure matching faceted criteria (rarity, subtype, properties, magical, name) across the premium book packs only — the SRD (dnd5e.*) packs are excluded and never appear in results (design.md §2.3). Backed by the system Compendium Browser, so filters check real item data (not name heuristics). Returns compact hits ({id,name,type,uuid,pack,img,facets}) premium-first ranked with totalFound — identify candidates here, then pull full detail with get-compendium-entry. Use documentType to narrow the item family (gear=all, or weapon/armor/consumable).',
+          'Gear by facet (family, rarity, subtype, properties, magical, name) across the premium ' +
+          'packs, on real system data. Hits are {id, name, type, uuid, pack, img, facets}, ' +
+          'premium-first, with totalFound.',
         inputSchema: toInputSchema(SearchCompendiumItemsSchema),
       },
       {
         name: 'list-compendium-packs',
-        description:
-          'List the available compendium packs. SRD (dnd5e.*) packs are excluded — only the premium book packs (and any other non-SRD packs) are listed (design.md §2.3).',
+        description: 'The compendium packs (SRD packs excluded).',
         inputSchema: toInputSchema(ListCompendiumPacksSchema),
       },
     ];

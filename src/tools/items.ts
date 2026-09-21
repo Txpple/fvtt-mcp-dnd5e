@@ -18,38 +18,25 @@ const CreateItemSchema = z.object({
   items: z
     .array(
       z.object({
-        name: z.string().min(1, 'Item name cannot be empty').describe('Display name of the item'),
+        name: z.string().min(1),
         type: z
           .string()
-          .min(1, 'Item type cannot be empty')
-          .describe('dnd5e item type (e.g. "weapon", "equipment", "consumable", "feat", "spell")'),
-        img: z.string().optional().describe('Optional icon path (e.g. "icons/svg/explosion.svg")'),
-        system: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            "System-specific data (free-form). Passed through to Foundry's DataModel layer."
-          ),
+          .min(1)
+          .describe('dnd5e item type (weapon, equipment, consumable, feat, spell …).'),
+        img: z.string().optional().describe('Icon path.'),
+        system: z.record(z.string(), z.any()).optional().describe('System data, as-is.'),
         effects: z.array(z.record(z.string(), z.any())).optional(),
         flags: z.record(z.string(), z.any()).optional(),
       })
     )
     .min(1, 'At least one item is required')
-    .describe(
-      'One or more items to create. Each requires a name and a valid dnd5e item type (e.g. "weapon", "equipment", "consumable", "feat", "spell"). Pass system-specific data via the "system" field.'
-    ),
-  folder: z
-    .string()
-    .optional()
-    .describe('Folder name/ID to place the items in (created if absent).'),
+    .describe('The items to create.'),
+  folder: z.string().optional().describe('Folder name or id (created if absent).'),
 });
 
 const ListItemsSchema = z.object({
-  type: z
-    .string()
-    .optional()
-    .describe('Filter by item type (e.g. "weapon", "spell"). Omit to return all types.'),
-  folder: z.string().optional().describe('Filter to items inside this folder (name or ID).'),
+  type: z.string().optional().describe('Item type ("weapon", "spell").'),
+  folder: z.string().optional().describe('Only items in this folder (name or id).'),
   nameFilter: z.string().optional().describe('Case-insensitive substring match on item name.'),
 });
 
@@ -57,30 +44,22 @@ const GetItemSchema = z.object({
   identifier: z
     .string()
     .min(1, 'Item identifier cannot be empty')
-    .describe('World Item id (preferred) or name to look up.'),
+    .describe('World Item id, exact name, or case-insensitive name.'),
 });
 
 const UpdateItemSchema = z.object({
   updates: z
     .array(
       z.object({
-        id: z.string().min(1, 'Item id cannot be empty').describe('ID of the world Item to update'),
-        name: z.string().optional().describe('New display name'),
-        img: z.string().optional().describe('New icon path'),
-        system: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe('System-specific fields to update (merged into existing system data)'),
-        folder: z
-          .string()
-          .optional()
-          .describe('Move item into this folder (name or ID). Created if absent.'),
+        id: z.string().min(1).describe('World Item id.'),
+        name: z.string().optional(),
+        img: z.string().optional(),
+        system: z.record(z.string(), z.any()).optional().describe('Merged into the system data.'),
+        folder: z.string().optional().describe('Folder name or id (created if absent).'),
       })
     )
-    .min(1, 'At least one update entry is required')
-    .describe(
-      'One or more item patches. Each entry must include "id" plus at least one field to change (name, img, system, folder).'
-    ),
+    .min(1)
+    .describe('The patches, each an id plus the fields to change.'),
 });
 
 const DeleteItemSchema = z.object({
@@ -161,31 +140,34 @@ export class ItemTools {
       {
         name: 'create-item',
         description:
-          'Create world-level Item document(s) in the Items sidebar — reusable library items (weapons, equipment, consumables, feats, spells). For dnd5e prefer the 2024 data model; pass system-specific data via the "system" field. GM-only. To put items on an actor instead, copy from a compendium with import-item, author one with add-item, or attach raw item data with add-feature (mode "items").',
+          'Create world Items (the Items sidebar) from raw data. GM-only. Items on an actor: ' +
+          'import-item / add-item / add-feature.',
         inputSchema: toInputSchema(CreateItemSchema),
       },
       {
         name: 'list-items',
-        description:
-          'List world-level Item documents, optionally filtered by type, name substring, or folder.',
+        description: 'World Items, filtered by type, name substring or folder.',
         inputSchema: toInputSchema(ListItemsSchema),
       },
       {
         name: 'get-item',
         description:
-          'Retrieve a single world-level Item document with its full system data, embedded effects, flags, and flattened description. Resolves by id (most reliable), exact name, or case-insensitive name. Use list-items first to find ids. For an UNIDENTIFIED dnd5e item (system.identified=false) `name` is the mystery mask; the real source name is returned as `trueName`.',
+          'One world Item in full: system data, effects, flags, description. An unidentified item ' +
+          'answers its mask as `name` and its real name as `trueName`.',
         inputSchema: toInputSchema(GetItemSchema),
       },
       {
         name: 'update-item',
         description:
-          'Update existing world-level Item(s) by id — change name, img, system data, or folder. GM-only. Renaming an UNIDENTIFIED dnd5e item works on the true source name; the echo shows the mystery-mask `name` plus `trueName` so the rename is visible.',
+          'Update world Items by id: name, img, system data, folder. A rename on an unidentified item ' +
+          'changes the true name (echoed as `trueName`). GM-only.',
         inputSchema: toInputSchema(UpdateItemSchema),
       },
       {
         name: 'delete-item',
         description:
-          'Permanently delete one or more world-level Item documents (Items sidebar) by exact id or exact name. STRICT resolution — no fuzzy/substring matching, so it never deletes the wrong item. GM-only. To remove an item embedded on an actor instead, use remove-from-actor.',
+          'Permanently delete world Items by exact id or exact name. GM-only. Items on an actor: ' +
+          'remove-from-actor.',
         inputSchema: toInputSchema(DeleteItemSchema),
       },
       {

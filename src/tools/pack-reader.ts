@@ -37,45 +37,30 @@ const ReadPackSchema = z.object({
   modulePath: z
     .string()
     .min(1)
-    .describe('Absolute path to the unzipped module folder OR directly to its module.json.'),
+    .describe('Absolute path to the unzipped module folder or its module.json.'),
   destRoot: z
     .string()
     .optional()
     .describe(
-      'Data-relative asset destination root the skill chose (e.g. ' +
-        '"worlds/<world>/assets/tom-cartos/<module-id>"). When set, every referenced asset gets a ' +
-        '`dataPath` rewrite hint (modules/<id>/<rel> → <destRoot>/<rel>, percent-decoded) so the ' +
-        'create tools receive already-correct paths. Omit to get the decoded module-relative paths only.'
+      'Data-relative asset destination root; set, every asset gets a `dataPath` hint ' +
+        '(modules/<id>/<rel> → <destRoot>/<rel>).'
     ),
   packName: z
     .string()
     .optional()
-    .describe(
-      'Only read this pack (matched against module.json packs[].name). Default: all packs.'
-    ),
+    .describe('Only this pack (module.json packs[].name); default all.'),
   sceneLimit: z
     .number()
     .int()
     .positive()
     .optional()
-    .describe(
-      'Page size: how many Scene records to return this call (default 10). The manifest must fit ' +
-        'the MCP response cap, so a big pack is read in pages — import a page, then call again with ' +
-        '`offset` advanced by the returned count until `nextOffset` is null.'
-    ),
-  offset: z
-    .number()
-    .int()
-    .min(0)
-    .optional()
-    .describe('Index of the first Scene to return (for paging a big pack). Default 0.'),
+    .describe('Scenes per page (default 10); page with offset until nextOffset is null.'),
+  offset: z.number().int().min(0).optional().describe('Index of the first scene (default 0).'),
   index: z
     .boolean()
     .optional()
     .describe(
-      'Survey mode: return ONLY the lightweight scene list ({sourceId, name, counts}) + descriptor + ' +
-        'journal names — no paths, payloads, or assets. Call this ONCE to plan variant selection and ' +
-        'dedup across the whole pack before paging the full import (the full manifest is capped/paged).'
+      'Survey only: the scene list ({sourceId, name, counts}), descriptor and journal names.'
     ),
 });
 
@@ -530,25 +515,11 @@ export async function extractPackDocs(
 // --- tool --------------------------------------------------------------------
 
 const READ_PACK_DESCRIPTION =
-  'Read a Tom-Cartos-style Foundry SCENE-PACK MODULE off disk (a `module.json` + LevelDB/NeDB ' +
-  'compendium packs — Scene/JournalEntry packs AND modern `type:"Adventure"` packs whose single ' +
-  'Adventure doc embeds every scene/journal) and return its era-normalized documents for import. ' +
-  'OFF-LINE and Node-only: ' +
-  "it reads files, never the live world. Detects the pack's Foundry era from field shape (older " +
-  'v10/NeDB vs newer v13/LevelDB), extracts each Scene (dimensions, grid, background, thumbnail, ' +
-  'walls, lights, regions/teleporters) and JournalEntry (pages), strips cli pack artifacts, and — ' +
-  'when given the destination root the skill chose — emits per-asset path REWRITE HINTS (the ' +
-  'module-relative %-encoded src → a clean Data-relative path). Also discovers any standalone TILE ' +
-  'images the pack ships (building/prop pieces with a `Tile_<W>x<H>` grid footprint in the name, not ' +
-  'referenced by any scene) so the skill can make them available for the GM to drop onto scenes. The heavy per-scene ' +
-  'walls/lights/regions are written to PAYLOAD FILES and referenced by `placeablesPath` (NOT inline — ' +
-  'the response cap truncates them at scene scale); pass that path to create-scene, which reads it ' +
-  'server-side. The skill then uploads the assets, recreates the scenes/journals, and (modern packs) ' +
-  'remaps the cross-scene teleporters. Handles all eras: modern v13/LevelDB (via the ' +
-  '`@foundryvtt/foundryvtt-cli` child process) AND legacy v10/NeDB `.db` (parsed directly — no cli ' +
-  'needed). The full manifest is PAGED to fit the response cap: returns `totalScenes` + a page of ' +
-  'scenes + `nextOffset` (call again with `offset` until null). Pass `index:true` first for a tiny ' +
-  'names-only survey of the whole pack (variant planning + dedup) before paging the heavy import.';
+  'Read a Foundry scene-pack module off disk (module.json + LevelDB or NeDB packs, Adventure ' +
+  'packs included; never the live world) into era-normalized scenes (with walls / lights / ' +
+  'regions in payload files for create-scene placeablesPath), journals, asset rewrite hints ' +
+  '(destRoot) and standalone Tile_<W>x<H> images. Paged: totalScenes, a page, nextOffset; ' +
+  'index:true for a names-only survey.';
 
 export interface PackReaderToolsOptions {
   logger: Logger;
