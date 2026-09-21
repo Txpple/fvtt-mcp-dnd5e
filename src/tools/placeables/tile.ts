@@ -1,16 +1,16 @@
-// Tile CRUD tools — thin schemas/handlers over the page-side Tile descriptor (src/page/placeables/tile.ts).
+// Tile actions of manage-placeables — thin schemas/handlers over the page-side Tile descriptor
+// (src/page/placeables/tile.ts).
 
 import { z } from 'zod';
-import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
   formatUpdatePlaceables,
 } from '../../utils/placeable-format.js';
-import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
+import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
-// The editable Tile fields shared by create-tiles and update-tiles. A tile's on-map SIZE is
+// The editable Tile fields shared by the create and update actions. A tile's on-map SIZE is
 // width/height (px) — that is the "scale" you resize a prop with; texture.scaleX/scaleY instead
 // zoom the image WITHIN that frame. x/y are absolute canvas pixels, TOP-LEFT of the tile (see
 // get-scene-dimensions for the padding-aware cell→px math) — the page layer converts to/from the
@@ -57,7 +57,7 @@ const tileFields = {
 
 const CreateTilesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  tiles: z
+  items: z
     .array(
       z.object({
         src: z
@@ -81,7 +81,7 @@ const ListTilesSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateTileSchema = z
   .object({
-    id: z.string().min(1).describe('Tile id (from list-tiles).'),
+    id: z.string().min(1).describe('Tile id (from action list).'),
     x: z.number().optional().describe('New top-left X in canvas pixels.'),
     y: z.number().optional().describe('New top-left Y in canvas pixels.'),
     width: z
@@ -103,69 +103,59 @@ const UpdateTileSchema = z
 
 const UpdateTilesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  tiles: z
-    .array(UpdateTileSchema)
-    .min(1)
-    .describe('The tile patches to apply (each targets one id).'),
+  patches: z.array(UpdateTileSchema).min(1).describe('One patch per tile; each targets one id.'),
 });
 
 const DeleteTilesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  tileIds: z.array(z.string().min(1)).min(1).describe('Tile ids to delete (from list-tiles).'),
+  ids: z.array(z.string().min(1)).min(1).describe('Tile ids to delete (from action list).'),
 });
 
-export const tileToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'create-tiles',
+export const tileKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'tiles',
+  actions: [
+    placeableAction({
+      action: 'create',
       description:
         'Place tiles (props, roofs, decals, video overlays) from Data-relative paths: x / y the ' +
         'top-left and width / height the on-map size, all in canvas pixels (the center-anchor ' +
-        'conversion is done). A 404 texture keeps the path with a warning; one bad tile does not ' +
-        'fail the batch. Returns the ids. GM-only.',
-      inputSchema: toInputSchema(CreateTilesSchema),
-    },
-    {
-      name: 'list-tiles',
+        'conversion is done). A 404 texture keeps the path with a warning.',
+      schema: CreateTilesSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('createSceneTiles', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'tile');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
         'Every tile on a scene: id, top-left x / y, width / height, rotation, elevation, sort, ' +
-        'texture, image scale, hidden / locked.',
-      inputSchema: toInputSchema(ListTilesSchema),
-    },
-    {
-      name: 'update-tiles',
+        'hidden / locked, texture src, image scale.',
+      schema: ListTilesSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneTiles', parsed);
+        return formatListPlaceableLines(result, 'tile');
+      },
+    }),
+    placeableAction({
+      action: 'update',
       description:
         'Edit placed tiles by id: move (x / y, the top-left), resize (width / height), and any ' +
-        'other tile field. Only the fields passed change; unresolved ids are reported, not fatal. ' +
-        'GM-only.',
-      inputSchema: toInputSchema(UpdateTilesSchema),
-    },
-    {
-      name: 'delete-tiles',
-      description: 'Delete tiles by id; missing ids are reported, never fatal. GM-only.',
-      inputSchema: toInputSchema(DeleteTilesSchema),
-    },
+        'other tile field. Only the fields passed change.',
+      schema: UpdateTilesSchema,
+      handler: async ({ sceneIdentifier, patches }) => {
+        const result = await foundry.call('updateSceneTiles', { sceneIdentifier, patches });
+        return formatUpdatePlaceables(result, 'tile');
+      },
+    }),
+    placeableAction({
+      action: 'delete',
+      description: 'Delete tiles by id.',
+      schema: DeleteTilesSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneTiles', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'tile');
+      },
+    }),
   ],
-  handlers: {
-    'create-tiles': async args => {
-      const { sceneIdentifier, tiles } = CreateTilesSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneTiles', { sceneIdentifier, items: tiles });
-      return formatCreatePlaceables(result, 'tile');
-    },
-    'list-tiles': async args => {
-      const parsed = ListTilesSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneTiles', parsed);
-      return formatListPlaceables(result, 'tile');
-    },
-    'update-tiles': async args => {
-      const { sceneIdentifier, tiles } = UpdateTilesSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneTiles', { sceneIdentifier, patches: tiles });
-      return formatUpdatePlaceables(result, 'tile');
-    },
-    'delete-tiles': async args => {
-      const { sceneIdentifier, tileIds } = DeleteTilesSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneTiles', { sceneIdentifier, ids: tileIds });
-      return formatDeletePlaceables(result, 'tile');
-    },
-  },
 });

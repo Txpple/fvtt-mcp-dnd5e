@@ -345,28 +345,15 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'get-scene-dimensions': args => sceneTools.handleGetSceneDimensions(args),
     'screenshot-scene': args => sceneTools.handleScreenshotScene(args),
 
-    // Scene placeables — the per-type CRUD library over the shared kernel
-    // (src/page/_placeables.ts + src/page/placeables/** + src/tools/placeables/**)
-    'create-tiles': args => placeableTools.handle('create-tiles', args),
-    'list-tiles': args => placeableTools.handle('list-tiles', args),
-    'update-tiles': args => placeableTools.handle('update-tiles', args),
-    'delete-tiles': args => placeableTools.handle('delete-tiles', args),
-    'create-lights': args => placeableTools.handle('create-lights', args),
-    'list-lights': args => placeableTools.handle('list-lights', args),
-    'update-lights': args => placeableTools.handle('update-lights', args),
-    'delete-lights': args => placeableTools.handle('delete-lights', args),
+    // Scene placeables — the per-kind CRUD library over the shared kernel
+    // (src/page/_placeables.ts + src/page/placeables/** + src/tools/placeables/**). The
+    // consolidated kinds ride ONE tool, manage-placeables (kind × action; M8); the rest are still
+    // their pre-M8 per-op tools until their family commit.
+    'manage-placeables': args => placeableTools.handle('manage-placeables', args),
     'create-sounds': args => placeableTools.handle('create-sounds', args),
     'list-sounds': args => placeableTools.handle('list-sounds', args),
     'update-sounds': args => placeableTools.handle('update-sounds', args),
     'delete-sounds': args => placeableTools.handle('delete-sounds', args),
-    'create-drawings': args => placeableTools.handle('create-drawings', args),
-    'list-drawings': args => placeableTools.handle('list-drawings', args),
-    'update-drawings': args => placeableTools.handle('update-drawings', args),
-    'delete-drawings': args => placeableTools.handle('delete-drawings', args),
-    'create-walls': args => placeableTools.handle('create-walls', args),
-    'list-walls': args => placeableTools.handle('list-walls', args),
-    'update-walls': args => placeableTools.handle('update-walls', args),
-    'delete-walls': args => placeableTools.handle('delete-walls', args),
     'list-tokens': args => placeableTools.handle('list-tokens', args),
     'place-tokens': args => placeableTools.handle('place-tokens', args),
     'update-token': args => placeableTools.handle('update-token', args),
@@ -473,8 +460,11 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   // The advertised top level is closed (toInputSchema sets additionalProperties:false): an unknown
   // argument is refused HERE, by name, before the handler's zod parse would strip it silently —
   // `{query:"goblin"}` to a tool whose facet is `name` is a wrong call, not an unfiltered survey.
+  // A union tool (src/tools/_union.ts) refuses per MEMBER — the keys the selected kind × action
+  // takes, not the union of every member's — so it is left out here and does its own check.
   const knownArgs = new Map<string, Set<string>>();
   for (const [name, def] of defByName) {
+    if (Array.isArray(def.inputSchema?.anyOf)) continue;
     knownArgs.set(name, new Set(Object.keys(def.inputSchema?.properties ?? {})));
   }
   const refuseUnknownArgs = (name: string, args: unknown): void => {

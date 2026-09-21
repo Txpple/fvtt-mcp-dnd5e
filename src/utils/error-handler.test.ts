@@ -33,7 +33,7 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
   // substring heuristic. Each now arrives with the code its handler attaches.
   const cases: Array<[string, string, PageErrorCode, string]> = [
     [
-      'create-tiles',
+      'manage-placeables',
       'createSceneTiles',
       'invalid',
       'Scene "Crypt" has no grid; set gridType first',

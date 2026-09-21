@@ -1,4 +1,6 @@
-// Live verification for the placeable CRUD kernel — Tile CRUD (create/list/update/delete-tiles).
+// Live verification for the placeable CRUD kernel — Tile CRUD, Light CRUD, the token / note list
+// reads, and (G) the consolidated tool the four skill-cheap kinds ride: manage-placeables
+// (kind × action; src/tools/_union.ts, M8) through the registry's dispatch.
 //
 // Drives a real headless Foundry session (fresh dist/, no CC restart) and exercises the page fns
 // createSceneTiles / listSceneTiles / updateSceneTiles / deleteSceneTiles through f.call against a
@@ -12,9 +14,15 @@
 //     the TL back, a resize without x/y keeps the corner fixed, and the RENDERED bounds match.
 // Fixture scene is deleted in `finally`.
 //
-// Build first: npm run build.  Run: node scripts/verify-placeables-tooling.mjs
+//   • (G) manage-placeables: every kind × action of tiles / lights / walls / drawings through
+//     buildToolRegistry().dispatch — the union selects the member, the list answers one line per
+//     record under a header naming the columns, an unknown kind / action / key is refused by name.
+//
+// Build first: npm run build.  Run: FOUNDRY_HOST=local node scripts/verify-placeables-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const env = loadEnv();
@@ -32,7 +40,8 @@ function assert(cond, msg) {
   }
 }
 
-const f = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const f = new Foundry(cfg);
 
 let sceneId;
 let journalId;
@@ -53,7 +62,7 @@ try {
   }, TAG);
 
   // --- A: create — 2 good tiles + 1 bad (missing width) → isolated ---
-  console.log('# A: create-tiles (nested texture/occlusion; per-item error isolation)');
+  console.log('# A: createSceneTiles (nested texture/occlusion; per-item error isolation)');
   const created = await f.call('createSceneTiles', {
     sceneIdentifier: sceneId,
     items: [
@@ -114,7 +123,7 @@ try {
   );
 
   // --- B: list — read back ids + salient fields ---
-  console.log('\n# B: list-tiles');
+  console.log('\n# B: listSceneTiles');
   const listed = await f.call('listSceneTiles', { sceneIdentifier: sceneId });
   assert(
     listed?.found === true && listed?.count === 3,
@@ -146,7 +155,7 @@ try {
   );
 
   // --- C: update — resize (w/h) + move (x/y) + image zoom (texture.scaleX) + one bad id ---
-  console.log('\n# C: update-tiles (resize + move + image zoom; unresolved id reported)');
+  console.log('\n# C: updateSceneTiles (resize + move + image zoom; unresolved id reported)');
   const updated = await f.call('updateSceneTiles', {
     sceneIdentifier: sceneId,
     patches: [
@@ -186,7 +195,7 @@ try {
   );
 
   // --- D: delete — by id, missing id reported ---
-  console.log('\n# D: delete-tiles');
+  console.log('\n# D: deleteSceneTiles');
   const deleted = await f.call('deleteSceneTiles', {
     sceneIdentifier: sceneId,
     ids: [ids[0], ids[1], ids[2], 'ghostTile00'],
@@ -311,6 +320,130 @@ try {
     nt?.entryId === fx.journalId && nt?.text === 'Probe Note',
     'F — note reports the linked journal + label'
   );
+
+  // --- G: manage-placeables through the registry (the M8 union: kind × action) ---
+  console.log('\n# G: manage-placeables (kind × action) through dispatch');
+  const { dispatch, tools } = buildToolRegistry({
+    foundry: f,
+    logger: new Logger({ level: 'error' }),
+    host: cfg.host,
+  });
+  const names = new Set(tools.map(t => t.name));
+  assert(names.has('manage-placeables'), 'G — manage-placeables is advertised');
+  assert(
+    ['tiles', 'lights', 'walls', 'drawings'].every(k =>
+      ['create', 'list', 'update', 'delete'].every(a => !names.has(`${a}-${k}`))
+    ),
+    'G — the 16 per-op tools are gone'
+  );
+  const mp = (kind, action, args = {}) =>
+    dispatch('manage-placeables', { kind, action, sceneIdentifier: sceneId, ...args });
+  const gIds = {};
+  // create: one of each kind
+  const gCreate = {
+    tiles: { items: [{ src: 'icons/svg/hazard.svg', x: 100, y: 100, width: 200, height: 200 }] },
+    lights: { items: [{ x: 600, y: 600, dim: 30, bright: 15, color: '#ff9900' }] },
+    walls: { items: [{ x0: 0, y0: 0, x1: 300, y1: 0, door: 1, ds: 2 }] },
+    drawings: {
+      items: [
+        { x: 700, y: 700, shapeType: 'rectangle', width: 120, height: 80, text: 'Trap Room' },
+      ],
+    },
+  };
+  for (const [kind, args] of Object.entries(gCreate)) {
+    const out = await mp(kind, 'create', args);
+    const id = /• (\w+)/.exec(String(out))?.[1];
+    gIds[kind] = id;
+    assert(
+      typeof out === 'string' && out.startsWith(`Created 1 ${kind.slice(0, -1)}(s) on`) && id,
+      `G — create ${kind}: one-line confirmation + the id (${String(out).split('\n')[0]})`
+    );
+  }
+  // list: one line per record under the column header; the id we made is a row
+  const gColumns = {
+    tiles: 'id x y width height rotation elevation sort hidden locked src scaleX scaleY',
+    lights: 'id x y rotation hidden walls vision dim bright color angle animation',
+    walls: 'id c move sight light sound dir door ds',
+    drawings: 'id x y shapeType width height rotation elevation sort text fillType strokeColor',
+  };
+  for (const [kind, columns] of Object.entries(gColumns)) {
+    const out = await mp(kind, 'list');
+    const [head, ...rows] = String(out).split('\n');
+    assert(
+      head.startsWith(
+        `${rows.length} ${kind.slice(0, -1)}(s) on "${TAG} Scene" (${sceneId}): ${columns}`
+      ),
+      `G — list ${kind}: header names the scene and the column order (${head.slice(0, 70)}…)`
+    );
+    const row = rows.find(r => r.startsWith(`${gIds[kind]} `));
+    assert(row, `G — list ${kind}: the created id is a row (${row})`);
+  }
+  const wallsRow = String(await mp('walls', 'list', { doorsOnly: true })).split('\n');
+  assert(
+    wallsRow.length === 2 && /^\w+ 0,0,300,0 20 20 20 20 0 1 2/.test(wallsRow[1]),
+    `G — list walls doorsOnly: the one door, its segment one cell, door 1 ds 2 (${wallsRow[1]})`
+  );
+  const drawingRow = String(await mp('drawings', 'list')).split('\n')[1];
+  assert(
+    drawingRow.includes(' "Trap Room" '),
+    `G — list drawings: a label with a space is quoted (${drawingRow})`
+  );
+  // update: one patch per kind
+  const gUpdate = {
+    tiles: { patches: [{ id: gIds.tiles, width: 250 }] },
+    lights: { patches: [{ id: gIds.lights, dim: 45 }] },
+    walls: { patches: [{ id: gIds.walls, ds: 0 }] },
+    drawings: { patches: [{ id: gIds.drawings, text: '' }] },
+  };
+  for (const [kind, args] of Object.entries(gUpdate)) {
+    const out = await mp(kind, 'update', args);
+    assert(
+      String(out).startsWith(`Updated 1 of 1 matched ${kind.slice(0, -1)}(s)`),
+      `G — update ${kind}: ${String(out).split('\n')[0]}`
+    );
+  }
+  const tileAfter = String(await mp('tiles', 'list')).split('\n')[1];
+  assert(/^\w+ 100 100 250 200 /.test(tileAfter), `G — the tile update landed (${tileAfter})`);
+  // refusals by name
+  for (const [args, want] of [
+    [
+      { kind: 'roofs', action: 'list' },
+      'kind must be one of "tiles", "lights", "walls", "drawings" (got "roofs")',
+    ],
+    [
+      { kind: 'walls', action: 'roll' },
+      'action must be one of "create", "list", "update", "delete" for kind "walls" (got "roll")',
+    ],
+    [
+      { kind: 'tiles', action: 'delete', tileIds: ['x'] },
+      'unknown argument "tileIds" — it takes: kind, action, sceneIdentifier, ids',
+    ],
+    [
+      { kind: 'tiles', action: 'list', sceneIdentifier: 'ZZ-no-such-scene' },
+      'Scene not found: "ZZ-no-such-scene". No tiles listed.',
+    ],
+  ]) {
+    let msg = '';
+    try {
+      await dispatch('manage-placeables', args);
+    } catch (e) {
+      msg = e?.message ?? String(e);
+    }
+    assert(msg.includes(want), `G — refused by name: ${want.slice(0, 60)}`);
+  }
+  // delete: each id, plus a ghost reported not fatal
+  for (const kind of Object.keys(gIds)) {
+    const out = await mp(kind, 'delete', { ids: [gIds[kind], 'ZZghost0000000'] });
+    assert(
+      String(out).startsWith(`Deleted 1 ${kind.slice(0, -1)}(s)`) &&
+        String(out).includes('1 id(s) not found: ZZghost0000000'),
+      `G — delete ${kind}: ${String(out).split('\n')[0]}`
+    );
+  }
+  assert(
+    String(await mp('tiles', 'list')) === `0 tile(s) on "${TAG} Scene" (${sceneId}).`,
+    'G — an empty list is the header alone'
+  );
 } catch (e) {
   fails++;
   console.log(`\n[verify-tiles] FATAL: ${e?.stack || e?.message || String(e)}`);
@@ -332,5 +465,5 @@ try {
   await f.dispose?.();
 }
 
-console.log(`\n==== placeable (tile) verification: ${passes} passed, ${fails} failed ====`);
+console.log(`\n==== placeables verification: ${passes} passed, ${fails} failed ====`);
 process.exit(fails > 0 ? 1 : 0);

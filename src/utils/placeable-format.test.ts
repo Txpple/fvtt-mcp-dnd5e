@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
+  formatListPlaceableLines,
   formatListPlaceables,
   formatUpdatePlaceables,
 } from './placeable-format.js';
@@ -91,6 +92,64 @@ describe('formatDeletePlaceables', () => {
   it('throws a curated error on a not-found scene', () => {
     expect(() => formatDeletePlaceables({ notFound: 'Ghost' }, 'tile')).toThrow(
       'Scene not found: "Ghost". Nothing deleted.'
+    );
+  });
+});
+
+describe('formatListPlaceableLines (the M8 list shape: header + one line per record)', () => {
+  it('names the scene, the active flag and the column order, then one row per record', () => {
+    const out = formatListPlaceableLines(
+      {
+        found: true,
+        sceneId: 'sc1',
+        sceneName: 'Cave',
+        sceneActive: true,
+        items: [
+          { id: 'w1', c: [0, 0, 100, 0], door: 1, ds: 0 },
+          { id: 'w2', c: [0, 0, 0, 100], door: 2, ds: 2, doorSound: 'woodBasic' },
+        ],
+      },
+      'wall'
+    );
+    expect(out).toBe(
+      '2 wall(s) on "Cave" (sc1) [active]: id c door ds doorSound' +
+        '\nw1 0,0,100,0 1 0 -\nw2 0,0,0,100 2 2 woodBasic'
+    );
+  });
+
+  it('cells: - for null / missing, bare tokens, quoted strings with whitespace, JSON for the rest', () => {
+    const out = formatListPlaceableLines(
+      {
+        found: true,
+        sceneId: 's',
+        sceneName: 'S',
+        items: [
+          {
+            id: 'a',
+            name: 'Big Rock',
+            hidden: false,
+            color: null,
+            tags: ['x', 'y'],
+            pos: { x: 1 },
+          },
+          { id: 'b', name: '', hidden: true },
+        ],
+      },
+      'tile'
+    );
+    expect(out.split('\n')).toEqual([
+      '2 tile(s) on "S" (s): id name hidden color tags pos',
+      'a "Big Rock" false - ["x","y"] {"x":1}',
+      'b "" true - - -',
+    ]);
+  });
+
+  it('an empty scene is the header alone; a missing scene is the curated error', () => {
+    expect(
+      formatListPlaceableLines({ found: true, sceneId: 's', sceneName: 'S', items: [] }, 'light')
+    ).toBe('0 light(s) on "S" (s).');
+    expect(() => formatListPlaceableLines({ found: false, notFound: 'Ghost' }, 'tile')).toThrow(
+      'Scene not found: "Ghost". No tiles listed.'
     );
   });
 });

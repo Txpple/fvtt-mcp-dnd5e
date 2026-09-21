@@ -32,6 +32,9 @@ console.log(
 console.log(`  tool descriptions:             ${fmt(t.description)} (${pct(t.description, all)})`);
 console.log(`  inputSchema total:             ${fmt(t.schema)} (${pct(t.schema, all)})`);
 console.log(
+  `    union member descriptions:   ${fmt(t.memberDescriptions)} (${pct(t.memberDescriptions, all)} of list — the consolidated families' per-op descriptions, M8)`
+);
+console.log(
   `    leaf "description" strings:  ${fmt(t.leafDescriptions)} (${pct(t.leafDescriptions, all)} of list, ` +
     `${pct(t.leafDescriptions, t.schema)} of schema) in ${fmt(t.leafDescriptionCount)} fields; longest ${t.longestLeafDescription}`
 );

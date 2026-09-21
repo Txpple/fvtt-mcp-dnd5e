@@ -41,6 +41,12 @@ export interface ToolBytes {
   total: number;
   /** The tool description as JSON-escaped chars, without its quotes (newlines count 2). */
   description: number;
+  /**
+   * A union tool's member descriptions (src/tools/_union.ts) — the descriptions its members' tools
+   * carried before the family was consolidated; inside the schema, but prose of the same kind as
+   * `description`, so the budget print sums the two.
+   */
+  memberDescriptions: number;
   /** `JSON.stringify(inputSchema).length`. */
   schema: number;
   /** Leaf `"description"` strings inside the schema — zod `.describe()` prose. */
@@ -114,17 +120,48 @@ export function decomposeTool(tool: AdvertisedTool): ToolBytes {
     consts: 0,
     examples: 0,
   };
-  walkSchema(tool.inputSchema, acc);
+  const { root, members } = splitUnion(tool.inputSchema);
+  walkSchema(root, acc);
+  // A union tool's member descriptions (src/tools/_union.ts) are what the members' tools
+  // advertised before the family was consolidated: descriptions, not leaves.
+  let memberDescriptions = 0;
+  for (const { description, ...rest } of members) {
+    memberDescriptions += jsonChars(description ?? '') - 2;
+    walkSchema(rest, acc);
+  }
   const schema = jsonChars(tool.inputSchema);
   return {
     name: tool.name,
     total: jsonChars(tool),
     description: jsonChars(tool.description ?? '') - 2,
+    memberDescriptions,
     schema,
     ...acc,
     structural:
-      schema - acc.leafDescriptions - acc.enums - acc.defaults - acc.consts - acc.examples,
+      schema -
+      memberDescriptions -
+      acc.leafDescriptions -
+      acc.enums -
+      acc.defaults -
+      acc.consts -
+      acc.examples,
   };
+}
+
+/**
+ * A union tool's root without its members, and the members. A plain tool is its own root with
+ * no members. (`anyOf` below the root is an ordinary leaf union — a member is only a root one.)
+ */
+function splitUnion(inputSchema: unknown): {
+  root: unknown;
+  members: Array<Record<string, unknown>>;
+} {
+  if (!inputSchema || typeof inputSchema !== 'object' || Array.isArray(inputSchema)) {
+    return { root: inputSchema, members: [] };
+  }
+  const { anyOf, ...root } = inputSchema as Record<string, unknown>;
+  if (!Array.isArray(anyOf)) return { root: inputSchema, members: [] };
+  return { root, members: anyOf as Array<Record<string, unknown>> };
 }
 
 /** The `tools/list` decomposition: the list's chars, the per-tool rows, and the column totals. */
@@ -142,6 +179,7 @@ export function decomposeToolsList(tools: AdvertisedTool[]): ToolsListBytes {
   const totals: ToolsListBytes['totals'] = {
     total: 0,
     description: 0,
+    memberDescriptions: 0,
     schema: 0,
     leafDescriptions: 0,
     leafDescriptionCount: 0,
@@ -213,7 +251,14 @@ export function proseOffenders(
   const out: ProseOffender[] = [];
   for (const tool of tools) {
     const leaves: ProseOffender['leaves'] = [];
-    walkLeaves(tool.inputSchema, '', budget.leaf, leaves);
+    const { root, members } = splitUnion(tool.inputSchema);
+    walkLeaves(root, '', budget.leaf, leaves);
+    members.forEach(({ description, ...rest }, i) => {
+      // The member description is a tool description (≤ budget.description), reported by its path.
+      const d = typeof description === 'string' ? description.length : 0;
+      if (d > budget.description) leaves.push({ path: `.anyOf[${i}] (description)`, length: d });
+      walkLeaves(rest, `.anyOf[${i}]`, budget.leaf, leaves);
+    });
     const description = (tool.description ?? '').length;
     if (leaves.length || description > budget.description) {
       out.push({

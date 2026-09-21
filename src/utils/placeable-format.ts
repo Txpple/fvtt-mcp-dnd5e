@@ -25,6 +25,10 @@ interface CreateResult {
 interface ListResult {
   found?: boolean | undefined;
   notFound?: string | undefined;
+  sceneId?: string | undefined;
+  sceneName?: string | undefined;
+  sceneActive?: boolean | undefined;
+  items?: Array<Record<string, unknown>> | undefined;
 }
 
 interface UpdateResult {
@@ -72,10 +76,46 @@ export function formatCreatePlaceables(r: CreateResult, noun: string): string {
   );
 }
 
-/** List: pass the structured result straight through (ids + fields), or a not-found message. */
+/**
+ * List: one line per placeable under a header naming the scene and the column order — the
+ * design.md §3 list shape (decision #10: line records are ~40% smaller than the same fields as
+ * JSON). Columns are the descriptor's dump fields in its order, `id` first; a field only some
+ * records carry (a tile's `name`, a wall's `doorSound`) is a column too, `-` where absent.
+ *
+ *   3 tile(s) on "Cave" (sc1) [active]: id x y width height rotation …
+ *   tileA 100 100 200 200 0 …
+ */
+export function formatListPlaceableLines(r: ListResult, noun: string): string {
+  if (r?.found === false) sceneMiss(r?.notFound ?? '', `No ${noun}s listed.`);
+  const items = Array.isArray(r?.items) ? r.items : [];
+  const active = r?.sceneActive ? ' [active]' : '';
+  const head = `${items.length} ${noun}(s) on "${r?.sceneName}" (${r?.sceneId})${active}`;
+  if (items.length === 0) return `${head}.`;
+  const columns = ['id'];
+  for (const it of items) {
+    for (const key of Object.keys(it)) if (!columns.includes(key)) columns.push(key);
+  }
+  const rows = items.map(it => columns.map(c => cell(it[c])).join(' '));
+  return `${head}: ${columns.join(' ')}\n${rows.join('\n')}`;
+}
+
+/**
+ * Pre-M8 list: the structured result straight through (ids + fields as JSON), or a scene miss.
+ * The kinds still on their per-op tools (sounds, tokens, notes, regions) keep this until their
+ * family commit moves them to the line shape above; it goes with the last of them.
+ */
 export function formatListPlaceables(r: ListResult, noun: string): unknown {
   if (r?.found === false) sceneMiss(r?.notFound ?? '', `No ${noun}s listed.`);
   return r;
+}
+
+/** One cell of a list line: `-` for a missing value, a bare token where it can be, JSON otherwise. */
+function cell(v: unknown): string {
+  if (v === undefined || v === null) return '-';
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'string') return v !== '' && !/\s/.test(v) ? v : JSON.stringify(v);
+  if (Array.isArray(v) && v.every(x => typeof x === 'number')) return v.join(',');
+  return JSON.stringify(v);
 }
 
 /** "Updated N of M matched tile(s) on "Scene" (id)" + unresolved ids + warnings. */

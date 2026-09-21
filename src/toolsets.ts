@@ -1,6 +1,6 @@
 // Toolsets — the named slices of the tool surface a registration can choose to advertise.
 //
-// Why: the full surface is 151 tools, ~79k tokens of tools/list. A client that loads MCP schemas
+// Why: the full surface is ~150 tools, ~57k tokens of tools/list. A client that loads MCP schemas
 // eagerly pays that before the first word — twice, when prod and the sandbox are both registered.
 // A registration that only ever narrates a session, or only ever manages files, can say so:
 //
@@ -78,26 +78,11 @@ export const TOOLSETS = {
     'delete-scene',
     'get-scene-dimensions',
     'screenshot-scene',
-    'create-tiles',
-    'list-tiles',
-    'update-tiles',
-    'delete-tiles',
-    'create-lights',
-    'list-lights',
-    'update-lights',
-    'delete-lights',
+    'manage-placeables',
     'create-sounds',
     'list-sounds',
     'update-sounds',
     'delete-sounds',
-    'create-drawings',
-    'list-drawings',
-    'update-drawings',
-    'delete-drawings',
-    'create-walls',
-    'list-walls',
-    'update-walls',
-    'delete-walls',
     'list-tokens',
     'place-tokens',
     'update-token',

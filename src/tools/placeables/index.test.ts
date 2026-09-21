@@ -1,57 +1,41 @@
 /**
- * Unit tests for the PlaceableTools facade — the per-type CRUD library.
+ * Unit tests for the PlaceableTools facade — the per-kind CRUD library.
  *
  * These handlers own: zod input parsing (required create fields; update needs one field beyond id;
  * delete needs ids), the exact page-op names + arg SHAPE forwarded across the bridge
- * (create/list/update/deleteScene<Type> with items/patches/ids), and the output shaping via
- * utils/placeable-format. The page-side kernel + descriptors are unit-tested next to their files and
+ * (create/list/update/deleteScene<Kind> with items/patches/ids), and the output shaping via
+ * utils/placeable-format. The consolidated kinds (tiles, lights, walls, drawings) ride ONE tool,
+ * manage-placeables, selected by kind × action (src/tools/_union.ts); the rest are still their
+ * pre-M8 per-op tools. The page-side kernel + descriptors are unit-tested next to their files and
  * live-verified.
  */
 
 import { describe, it, expect } from 'vitest';
-import { PlaceableTools } from './index.js';
+import { MANAGE_PLACEABLES, PlaceableTools } from './index.js';
 import { makeLogger, makeFoundry } from '../test-helpers.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
   const tools = new PlaceableTools({ foundry, logger: makeLogger() });
-  return { tools, calls, foundry };
+  /** One manage-placeables call. */
+  const manage = (kind: string, action: string, args: Record<string, unknown> = {}) =>
+    tools.handle(MANAGE_PLACEABLES, { kind, action, ...args });
+  return { tools, calls, foundry, manage };
 }
 
 describe('PlaceableTools.getToolDefinitions', () => {
-  it('exposes the COMPLETE placeable library (8 types + token lifecycle + teleporter ops)', () => {
+  it('exposes the COMPLETE placeable library: manage-placeables (4 kinds × 4 actions) + the pre-M8 kinds', () => {
     const { tools } = build();
-    const names = tools
-      .getToolDefinitions()
-      .map(t => t.name)
-      .sort();
+    const defs = tools.getToolDefinitions();
+    const names = defs.map(t => t.name).sort();
     expect(names).toEqual(
       [
-        // Tile
-        'create-tiles',
-        'list-tiles',
-        'update-tiles',
-        'delete-tiles',
-        // AmbientLight
-        'create-lights',
-        'list-lights',
-        'update-lights',
-        'delete-lights',
+        MANAGE_PLACEABLES,
         // AmbientSound
         'create-sounds',
         'list-sounds',
         'update-sounds',
         'delete-sounds',
-        // Drawing
-        'create-drawings',
-        'list-drawings',
-        'update-drawings',
-        'delete-drawings',
-        // Wall
-        'create-walls',
-        'list-walls',
-        'update-walls',
-        'delete-walls',
         // Token (place/update bespoke/delete + list)
         'list-tokens',
         'place-tokens',
@@ -72,32 +56,50 @@ describe('PlaceableTools.getToolDefinitions', () => {
         'remap-teleporters',
       ].sort()
     );
+    const union = defs.find(d => d.name === MANAGE_PLACEABLES)!.inputSchema as any;
+    expect(union.properties.kind.enum).toEqual(['tiles', 'lights', 'walls', 'drawings']);
+    expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
+    // the shared target leaf is described once, at the root; the members carry it bare
+    expect(union.properties.sceneIdentifier.description).toMatch(/^Scene id or exact name/);
+    expect(
+      union.anyOf.map((m: any) => `${m.properties.kind.const}/${m.properties.action.const}`)
+    ).toEqual(
+      ['tiles', 'lights', 'walls', 'drawings'].flatMap(k =>
+        ['create', 'list', 'update', 'delete'].map(a => `${k}/${a}`)
+      )
+    );
+    for (const m of union.anyOf) {
+      expect(m.description.length).toBeGreaterThan(10);
+      expect(m.additionalProperties).toBe(false);
+      expect(m.properties.sceneIdentifier).toEqual({ type: 'string' });
+      expect(m.required.slice(0, 2)).toEqual(['kind', 'action']);
+    }
   });
 
   it('every definition has an object inputSchema and a dispatchable handler', async () => {
     const { tools } = build({});
     for (const def of tools.getToolDefinitions()) {
       expect((def.inputSchema as any).type).toBe('object');
+      expect(typeof (tools as any).handlers[def.name]).toBe('function');
     }
-    await expect(tools.handle('no-such-tool', {})).rejects.toThrow(/Unknown placeable tool/);
   });
 });
 
-describe('tile handlers', () => {
-  it('create-tiles forwards {sceneIdentifier, items} and formats the created ids', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — tiles', () => {
+  it('create forwards {sceneIdentifier, items} and formats the created ids', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
       created: 1,
       items: [{ id: 'tileA', name: 'Blood Splatter' }],
     });
-    const out = await tools.handle('create-tiles', {
+    const out = await manage('tiles', 'create', {
       sceneIdentifier: 'Cave',
-      tiles: [{ src: 'worlds/w/props/blood.png', x: 100, y: 200, width: 280, height: 320 }],
+      items: [{ src: 'worlds/w/props/blood.png', x: 100, y: 200, width: 280, height: 320 }],
     });
     expect(calls[0][0]).toBe('createSceneTiles');
-    expect(calls[0][1]).toMatchObject({
+    expect(calls[0][1]).toEqual({
       sceneIdentifier: 'Cave',
       items: [{ src: 'worlds/w/props/blood.png', x: 100, y: 200, width: 280, height: 320 }],
     });
@@ -105,8 +107,8 @@ describe('tile handlers', () => {
     expect(out).toContain('tileA — Blood Splatter');
   });
 
-  it('create-tiles surfaces per-tile errors + warnings from the kernel result', async () => {
-    const { tools } = build({
+  it('create surfaces per-tile errors + warnings from the kernel result', async () => {
+    const { manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
@@ -114,73 +116,100 @@ describe('tile handlers', () => {
       errors: ['Tile 0: src (texture path) is required'],
       warnings: ['Supplied src "x.png" was not found on the server — ...'],
     });
-    const out = await tools.handle('create-tiles', {
+    const out = await manage('tiles', 'create', {
       sceneIdentifier: 'Cave',
-      tiles: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
+      items: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
     });
     expect(out).toContain('Created 0 tile(s)');
     expect(out).toContain('⚠ Tile 0: src (texture path) is required');
     expect(out).toContain('1 warning(s)');
   });
 
-  it('create-tiles reports scene-not-found and rejects invalid input', async () => {
-    const { tools } = build({ success: true, created: 0, notFound: 'Nowhere' });
+  it('create reports scene-not-found and rejects invalid input', async () => {
+    const { manage } = build({ success: true, created: 0, notFound: 'Nowhere' });
     await expect(
-      tools.handle('create-tiles', {
+      manage('tiles', 'create', {
         sceneIdentifier: 'Nowhere',
-        tiles: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
+        items: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
       })
     ).rejects.toThrow('Scene not found: "Nowhere". No tiles created.');
     await expect(
-      tools.handle('create-tiles', {
-        sceneIdentifier: 'Cave',
-        tiles: [{ src: 'x.png', x: 0, y: 0 }],
-      })
+      manage('tiles', 'create', { sceneIdentifier: 'Cave', items: [{ src: 'x.png', x: 0, y: 0 }] })
     ).rejects.toThrow();
     await expect(
-      tools.handle('create-tiles', { sceneIdentifier: 'Cave', tiles: [] })
+      manage('tiles', 'create', { sceneIdentifier: 'Cave', items: [] })
     ).rejects.toThrow();
   });
 
-  it('list-tiles passes the structured list through and reports a missing scene', async () => {
+  it('list renders one line per tile under a header with the column order, and reports a missing scene', async () => {
     const result = {
       found: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
-      count: 1,
-      items: [{ id: 't1', x: 0, y: 0, width: 100, height: 100, src: 'a.png' }],
+      sceneActive: true,
+      count: 2,
+      items: [
+        { id: 't1', x: 0, y: 0, width: 100, height: 100, hidden: false, src: 'a.png', scaleX: 1 },
+        {
+          id: 't2',
+          name: 'Big Rock',
+          x: 50,
+          y: 60,
+          width: 100,
+          height: 100,
+          hidden: true,
+          src: 'props/big rock.png',
+          scaleX: 1.25,
+        },
+      ],
     };
-    const { tools, calls } = build(result);
-    const out = await tools.handle('list-tiles', { sceneIdentifier: 'Cave' });
+    const { calls, manage } = build(result);
+    const out = await manage('tiles', 'list', { sceneIdentifier: 'Cave' });
     expect(calls[0][0]).toBe('listSceneTiles');
-    expect(out).toEqual(result);
+    expect(calls[0][1]).toEqual({ sceneIdentifier: 'Cave' });
+    expect(out).toBe(
+      [
+        '2 tile(s) on "Cave" (sc1) [active]: id x y width height hidden src scaleX name',
+        't1 0 0 100 100 false a.png 1 -',
+        't2 50 60 100 100 true "props/big rock.png" 1.25 "Big Rock"',
+      ].join('\n')
+    );
 
-    const { tools: t2 } = build({ found: false, notFound: 'Ghost' });
-    await expect(t2.handle('list-tiles', { sceneIdentifier: 'Ghost' })).rejects.toThrow(
+    const { manage: m2 } = build({ found: false, notFound: 'Ghost' });
+    await expect(m2('tiles', 'list', { sceneIdentifier: 'Ghost' })).rejects.toThrow(
       'Scene not found: "Ghost". No tiles listed.'
     );
+    // the active scene by default: no sceneIdentifier forwarded
+    const { calls: c3, manage: m3 } = build({
+      found: true,
+      sceneId: 's',
+      sceneName: 'S',
+      items: [],
+    });
+    expect(await m3('tiles', 'list')).toBe('0 tile(s) on "S" (s).');
+    expect(c3[0][1]).toEqual({});
   });
 
-  it('update-tiles forwards {patches}, reports matched/updated + unresolved ids, rejects empty patch', async () => {
-    const { tools, calls } = build({
+  it('update forwards {patches}, reports matched/updated + unresolved ids, rejects an empty patch', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
       matched: 1,
       updated: 1,
     });
-    const out = await tools.handle('update-tiles', {
+    const out = await manage('tiles', 'update', {
       sceneIdentifier: 'Cave',
-      tiles: [{ id: 't1', width: 400, height: 460 }],
+      patches: [{ id: 't1', width: 400, height: 460 }],
     });
     expect(calls[0][0]).toBe('updateSceneTiles');
-    expect(calls[0][1]).toMatchObject({
+    expect(calls[0][1]).toEqual({
       sceneIdentifier: 'Cave',
       patches: [{ id: 't1', width: 400, height: 460 }],
     });
     expect(out).toContain('Updated 1 of 1 matched tile(s) on "Cave" (sc1)');
 
-    const { tools: t2 } = build({
+    const { manage: m2 } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
@@ -188,40 +217,56 @@ describe('tile handlers', () => {
       updated: 0,
       notFoundIds: ['ghostTile'],
     });
-    const out2 = await t2.handle('update-tiles', {
+    const out2 = await m2('tiles', 'update', {
       sceneIdentifier: 'Cave',
-      tiles: [{ id: 'ghostTile', x: 5 }],
+      patches: [{ id: 'ghostTile', x: 5 }],
     });
     expect(out2).toContain('No tiles matched');
     expect(out2).toContain('not found: ghostTile');
 
     await expect(
-      tools.handle('update-tiles', { sceneIdentifier: 'Cave', tiles: [{ id: 't1' }] })
-    ).rejects.toThrow();
+      manage('tiles', 'update', { sceneIdentifier: 'Cave', patches: [{ id: 't1' }] })
+    ).rejects.toThrow('Provide at least one field to change besides id');
   });
 
-  it('delete-tiles forwards tileIds as {ids} and reports count + missing ids', async () => {
-    const { tools, calls } = build({
+  it('delete forwards {ids} and reports count + missing ids', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
       deleted: 1,
       notFoundIds: ['ghost'],
     });
-    const out = await tools.handle('delete-tiles', {
-      sceneIdentifier: 'Cave',
-      tileIds: ['t1', 'ghost'],
-    });
+    const out = await manage('tiles', 'delete', { sceneIdentifier: 'Cave', ids: ['t1', 'ghost'] });
     expect(calls[0][0]).toBe('deleteSceneTiles');
-    expect(calls[0][1]).toMatchObject({ sceneIdentifier: 'Cave', ids: ['t1', 'ghost'] });
+    expect(calls[0][1]).toEqual({ sceneIdentifier: 'Cave', ids: ['t1', 'ghost'] });
     expect(out).toContain('Deleted 1 tile(s) from "Cave" (sc1)');
     expect(out).toContain('1 id(s) not found: ghost');
   });
+
+  it('refuses an unknown kind / action / argument by name, naming what it takes', async () => {
+    const { manage, tools } = build();
+    await expect(manage('roofs', 'list')).rejects.toThrow(
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings" (got "roofs").'
+    );
+    await expect(manage('tiles', 'move')).rejects.toThrow(
+      'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "tiles" (got "move").'
+    );
+    await expect(tools.handle(MANAGE_PLACEABLES, { action: 'list' })).rejects.toThrow(
+      'kind must be one of "tiles", "lights", "walls", "drawings" (got nothing)'
+    );
+    // the old per-kind key is an unknown argument now — refused, never silently dropped
+    await expect(
+      manage('tiles', 'delete', { sceneIdentifier: 'Cave', tileIds: ['t1'] })
+    ).rejects.toThrow(
+      'manage-placeables (kind "tiles", action "delete"): unknown argument "tileIds" — it takes: kind, action, sceneIdentifier, ids.'
+    );
+  });
 });
 
-describe('light handlers', () => {
-  it('create-lights forwards {items}; update-lights {patches}; delete-lights {ids}', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — lights', () => {
+  it('create forwards {items}; update {patches}; delete {ids}', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Tavern',
@@ -231,9 +276,9 @@ describe('light handlers', () => {
       deleted: 2,
       items: [{ id: 'l1' }],
     });
-    const out = await tools.handle('create-lights', {
+    const out = await manage('lights', 'create', {
       sceneIdentifier: 'Tavern',
-      lights: [{ x: 100, y: 100, dim: 40, bright: 20, animationType: 'torch' }],
+      items: [{ x: 100, y: 100, dim: 40, bright: 20, animationType: 'torch' }],
     });
     expect(calls[0][0]).toBe('createSceneLights');
     expect(calls[0][1]).toMatchObject({
@@ -242,9 +287,9 @@ describe('light handlers', () => {
     });
     expect(out).toContain('Created 1 light(s) on "Tavern" (sc1)');
 
-    await tools.handle('update-lights', {
+    await manage('lights', 'update', {
       sceneIdentifier: 'Tavern',
-      lights: [{ id: 'l1', dim: 60, animationType: 'flame' }],
+      patches: [{ id: 'l1', dim: 60, animationType: 'flame' }],
     });
     expect(calls[1][0]).toBe('updateSceneLights');
     expect(calls[1][1]).toMatchObject({
@@ -252,22 +297,47 @@ describe('light handlers', () => {
       patches: [{ id: 'l1', dim: 60, animationType: 'flame' }],
     });
 
-    const out3 = await tools.handle('delete-lights', {
-      sceneIdentifier: 'Tavern',
-      lightIds: ['a', 'b'],
-    });
+    const out3 = await manage('lights', 'delete', { sceneIdentifier: 'Tavern', ids: ['a', 'b'] });
     expect(calls[2][0]).toBe('deleteSceneLights');
     expect(calls[2][1]).toMatchObject({ sceneIdentifier: 'Tavern', ids: ['a', 'b'] });
     expect(out3).toContain('Deleted 2 light(s)');
   });
 
+  it('list renders the light columns (a null color / animation as -)', async () => {
+    const { manage } = build({
+      found: true,
+      sceneId: 'sc1',
+      sceneName: 'Tavern',
+      items: [
+        {
+          id: 'l1',
+          x: 100,
+          y: 100,
+          rotation: 0,
+          hidden: false,
+          walls: true,
+          vision: false,
+          dim: 40,
+          bright: 20,
+          color: '#fcd674',
+          angle: 360,
+          animation: null,
+        },
+      ],
+    });
+    expect(await manage('lights', 'list', { sceneIdentifier: 'Tavern' })).toBe(
+      '1 light(s) on "Tavern" (sc1): id x y rotation hidden walls vision dim bright color angle animation\n' +
+        'l1 100 100 0 false true false 40 20 #fcd674 360 -'
+    );
+  });
+
   it('rejects a light create missing a center coord and a patch with no field beyond id', async () => {
-    const { tools } = build();
+    const { manage } = build();
     await expect(
-      tools.handle('create-lights', { sceneIdentifier: 'Tavern', lights: [{ x: 100, dim: 40 }] })
+      manage('lights', 'create', { sceneIdentifier: 'Tavern', items: [{ x: 100, dim: 40 }] })
     ).rejects.toThrow();
     await expect(
-      tools.handle('update-lights', { sceneIdentifier: 'Tavern', lights: [{ id: 'l1' }] })
+      manage('lights', 'update', { sceneIdentifier: 'Tavern', patches: [{ id: 'l1' }] })
     ).rejects.toThrow();
   });
 });
@@ -332,18 +402,18 @@ describe('sound handlers', () => {
   });
 });
 
-describe('drawing handlers', () => {
-  it('create-drawings forwards {items} with shape + style fields', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — drawings', () => {
+  it('create forwards {items} with shape + style fields', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
       created: 1,
       items: [{ id: 'd1' }],
     });
-    const out = await tools.handle('create-drawings', {
+    const out = await manage('drawings', 'create', {
       sceneIdentifier: 'Cave',
-      drawings: [
+      items: [
         {
           x: 400,
           y: 500,
@@ -363,8 +433,8 @@ describe('drawing handlers', () => {
     expect(out).toContain('Created 1 drawing(s)');
   });
 
-  it('update/delete-drawings forward {patches}/{ids}; create rejects a bad shapeType', async () => {
-    const { tools, calls } = build({
+  it('update / delete forward {patches} / {ids}; create rejects a bad shapeType', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
@@ -372,37 +442,64 @@ describe('drawing handlers', () => {
       updated: 1,
       deleted: 1,
     });
-    await tools.handle('update-drawings', {
+    await manage('drawings', 'update', {
       sceneIdentifier: 'Cave',
-      drawings: [{ id: 'd1', width: 800, text: '' }],
+      patches: [{ id: 'd1', width: 800, text: '' }],
     });
     expect(calls[0][0]).toBe('updateSceneDrawings');
     expect(calls[0][1]).toMatchObject({ patches: [{ id: 'd1', width: 800, text: '' }] });
 
-    await tools.handle('delete-drawings', { sceneIdentifier: 'Cave', drawingIds: ['d1'] });
+    await manage('drawings', 'delete', { sceneIdentifier: 'Cave', ids: ['d1'] });
     expect(calls[1][0]).toBe('deleteSceneDrawings');
+    expect(calls[1][1]).toMatchObject({ ids: ['d1'] });
 
     await expect(
-      tools.handle('create-drawings', {
+      manage('drawings', 'create', {
         sceneIdentifier: 'Cave',
-        drawings: [{ x: 0, y: 0, shapeType: 'blob' }],
+        items: [{ x: 0, y: 0, shapeType: 'blob' }],
       })
     ).rejects.toThrow();
   });
+
+  it('list renders a text label with spaces quoted and a conditional column as -', async () => {
+    const { manage } = build({
+      found: true,
+      sceneId: 'sc1',
+      sceneName: 'Cave',
+      items: [
+        {
+          id: 'd1',
+          x: 0,
+          y: 0,
+          shapeType: 'rectangle',
+          width: 10,
+          height: 10,
+          text: 'Secret Area',
+          hidden: true,
+        },
+        { id: 'd2', x: 5, y: 5, shapeType: 'circle', radius: 20, hidden: false },
+      ],
+    });
+    expect(await manage('drawings', 'list', { sceneIdentifier: 'Cave' })).toBe(
+      '2 drawing(s) on "Cave" (sc1): id x y shapeType width height text hidden radius\n' +
+        'd1 0 0 rectangle 10 10 "Secret Area" true -\n' +
+        'd2 5 5 circle - - - false 20'
+    );
+  });
 });
 
-describe('wall handlers', () => {
-  it('create-walls forwards {items}; list-walls passes doorsOnly through', async () => {
-    const { tools, calls } = build({
+describe('manage-placeables — walls', () => {
+  it('create forwards {items}; list passes doorsOnly through and renders the segment as one cell', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
       created: 1,
       items: [{ id: 'w1' }],
     });
-    const out = await tools.handle('create-walls', {
+    const out = await manage('walls', 'create', {
       sceneIdentifier: 'Cave',
-      walls: [{ x0: 1000, y0: 1000, x1: 1100, y1: 1000, door: 1, ds: 0 }],
+      items: [{ x0: 1000, y0: 1000, x1: 1100, y1: 1000, door: 1, ds: 0 }],
     });
     expect(calls[0][0]).toBe('createSceneWalls');
     expect(calls[0][1]).toMatchObject({
@@ -411,13 +508,48 @@ describe('wall handlers', () => {
     });
     expect(out).toContain('Created 1 wall(s)');
 
-    await tools.handle('list-walls', { sceneIdentifier: 'Cave', doorsOnly: true });
-    expect(calls[1][0]).toBe('listSceneWalls');
-    expect(calls[1][1]).toMatchObject({ sceneIdentifier: 'Cave', doorsOnly: true });
+    const { calls: c2, manage: m2 } = build({
+      found: true,
+      sceneId: 'sc1',
+      sceneName: 'Cave',
+      items: [
+        {
+          id: 'w1',
+          c: [1000, 1000, 1100, 1000],
+          move: 20,
+          sight: 20,
+          light: 20,
+          sound: 20,
+          dir: 0,
+          door: 1,
+          ds: 0,
+        },
+        {
+          id: 'w2',
+          c: [0, 0, 0, 100],
+          move: 20,
+          sight: 20,
+          light: 20,
+          sound: 20,
+          dir: 0,
+          door: 2,
+          ds: 2,
+          doorSound: 'woodBasic',
+        },
+      ],
+    });
+    const listed = await m2('walls', 'list', { sceneIdentifier: 'Cave', doorsOnly: true });
+    expect(c2[0][0]).toBe('listSceneWalls');
+    expect(c2[0][1]).toEqual({ sceneIdentifier: 'Cave', doorsOnly: true });
+    expect(listed).toBe(
+      '2 wall(s) on "Cave" (sc1): id c move sight light sound dir door ds doorSound\n' +
+        'w1 1000,1000,1100,1000 20 20 20 20 0 1 0 -\n' +
+        'w2 0,0,0,100 20 20 20 20 0 2 2 woodBasic'
+    );
   });
 
-  it('update-walls forwards {patches} (door state edits); delete-walls {ids}', async () => {
-    const { tools, calls } = build({
+  it('update forwards {patches} (door state edits); delete {ids}', async () => {
+    const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
       sceneName: 'Cave',
@@ -425,9 +557,9 @@ describe('wall handlers', () => {
       updated: 2,
       deleted: 1,
     });
-    const out = await tools.handle('update-walls', {
+    const out = await manage('walls', 'update', {
       sceneIdentifier: 'Cave',
-      walls: [
+      patches: [
         { id: 'w1', door: 2, ds: 2 },
         { id: 'w2', ds: 1 },
       ],
@@ -441,7 +573,7 @@ describe('wall handlers', () => {
     });
     expect(out).toContain('Updated 2 of 2 matched wall(s)');
 
-    await tools.handle('delete-walls', { sceneIdentifier: 'Cave', wallIds: ['w9'] });
+    await manage('walls', 'delete', { sceneIdentifier: 'Cave', ids: ['w9'] });
     expect(calls[1][0]).toBe('deleteSceneWalls');
     expect(calls[1][1]).toMatchObject({ ids: ['w9'] });
   });

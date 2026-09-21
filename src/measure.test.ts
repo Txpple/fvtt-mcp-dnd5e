@@ -77,7 +77,7 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
         skillChars,
         `(${skills.length} skills; ≤ ${fmt(BUDGET.skillDescriptionChars)}; M3 done)`
       ),
-      `  leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description)} · ` +
+      `  leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description + list.totals.memberDescriptions)} · ` +
         `structural ${fmt(list.totals.structural)} · longest leaf ${fmt(list.totals.longestLeafDescription)}`,
       line(`always-on (${ALWAYS_ON})`, alwaysOn, `(≤ ${fmt(BUDGET.alwaysOnChars)})`),
       `  prose budget: ${offenders.length} tools over (leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}; M7 done)`,
@@ -133,9 +133,21 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
     };
     const bad: string[] = [];
     for (const tool of tools) {
-      const props = (tool.inputSchema as { properties: Record<string, Record<string, unknown>> })
-        .properties;
-      for (const [key, schema] of Object.entries(props)) {
+      // A union tool (src/tools/_union.ts) advertises its shared target leaves once, at the root;
+      // a member lists such a leaf bare (no description) — the root's text is the contract. A leaf
+      // a member describes itself is held to the rule like any other.
+      const root = tool.inputSchema as {
+        properties: Record<string, Record<string, unknown>>;
+        anyOf?: Array<{ properties: Record<string, Record<string, unknown>> }>;
+      };
+      const leaves: Array<[string, Record<string, unknown>]> = Object.entries(root.properties);
+      for (const member of root.anyOf ?? []) {
+        for (const [key, schema] of Object.entries(member.properties)) {
+          if (!leafText(schema) && key in root.properties) continue;
+          leaves.push([key, schema]);
+        }
+      }
+      for (const [key, schema] of leaves) {
         const text = leafText(schema);
         const isActor = ACTOR_LEAVES.has(key) || ACTOR_ALIASES[key]?.includes(tool.name);
         const want = isActor

@@ -58,8 +58,8 @@ itself applies the rules, no macro:
   freely), `magical: true` for a spell's terrain, `dispositions` = who IGNORES it. Movement cost
   doubles while the token plans a path through it.
 - **`dnd5e.rotateArea`** — a turning platform / puzzle room: `rotate: {positions: [0, 90, 180,
-  270], tiles: [...], walls: [...], lights: [...]}` (ids from `list-tiles` / `list-walls` /
-  `list-lights`, validated to exist) turns the listed placeables together around the region's first
+  270], tiles: [...], walls: [...], lights: [...]}` (ids from `manage-placeables` `action: "list"`
+  with `kind: "tiles"` / `"walls"` / `"lights"`, validated to exist) turns the listed placeables together around the region's first
   shape, stopping at the angles; `direction` (`short` / `cw` / `ccw`), `timeMs`. The DM triggers a
   turn from the region config (or a macro calling `behavior.system.rotate()`) — walking in does not
   turn it. Draw the region centred on the pivot.

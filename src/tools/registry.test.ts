@@ -50,7 +50,7 @@ function draft2020Violations(node: unknown, path: string): string[] {
 }
 
 describe('tool registry', () => {
-  it('advertises 151 uniquely-named tools (matches the documented surface)', () => {
+  it('advertises 136 uniquely-named tools (matches the documented surface)', () => {
     const { tools } = build();
     const names = tools.map(t => t.name);
     expect(new Set(names).size).toBe(names.length); // no duplicate names
@@ -100,7 +100,10 @@ describe('tool registry', () => {
     //   never a code dependency.)
     // + configure-dnd5e-settings (dnd5e 6.0 automation switches — allow-listed read + set, the
     //   owner's 2026-09-15 decision) + manage-calendar (read / advance / set the in-world date)
-    expect(names.length).toBe(151);
+    // − 15 (M8, 2026-09-21): the tiles / lights / walls / drawings CRUD (16 tools) became the
+    //   kind × action members of ONE tool, manage-placeables (src/tools/_union.ts); the other
+    //   four placeable kinds join it in their own family commits.
+    expect(names.length).toBe(136);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -188,24 +191,24 @@ describe('tool registry', () => {
     expect(typeof handlers['update-token']).toBe('function');
   });
 
-  it('registers the placeable CRUD tools (Tile + Light full CRUD, Token/Note list) over the kernel', () => {
+  it('registers the placeable tools over the kernel: manage-placeables (kind × action) + the pre-M8 kinds', () => {
     const { tools, handlers } = build();
     const names = new Set(tools.map(t => t.name));
-    for (const name of [
-      'create-tiles',
-      'list-tiles',
-      'update-tiles',
-      'delete-tiles',
-      'create-lights',
-      'list-lights',
-      'update-lights',
-      'delete-lights',
-      'list-tokens',
-      'list-notes',
-    ]) {
+    for (const name of ['manage-placeables', 'list-tokens', 'list-notes']) {
       expect(names.has(name)).toBe(true);
       expect(typeof handlers[name]).toBe('function');
     }
+    // the consolidated kinds no longer advertise a per-op tool
+    for (const kind of ['tiles', 'lights', 'walls', 'drawings']) {
+      for (const verb of ['create', 'list', 'update', 'delete']) {
+        expect(names.has(`${verb}-${kind}`), `${verb}-${kind}`).toBe(false);
+      }
+    }
+    const union = tools.find(t => t.name === 'manage-placeables')!.inputSchema;
+    expect(union.type).toBe('object');
+    expect(union.properties.kind.enum).toEqual(['tiles', 'lights', 'walls', 'drawings']);
+    expect(union.properties.action.enum).toEqual(['create', 'list', 'update', 'delete']);
+    expect(union.anyOf).toHaveLength(16);
   });
 
   it('registers the journal page-visibility tools + update-folder (dogfood tooling gaps)', () => {
@@ -331,7 +334,15 @@ describe('tool registry', () => {
   it('every advertised schema closes its top level, and dispatch refuses an unknown argument by name', async () => {
     const { tools, dispatch } = build();
     for (const tool of tools) {
-      expect(tool.inputSchema.additionalProperties, tool.name).toBe(false);
+      if (Array.isArray(tool.inputSchema.anyOf)) {
+        // a union tool (src/tools/_union.ts): the root stays open (a closed root would refuse every
+        // member key); every member is closed, and the tool refuses per member below
+        expect(tool.inputSchema.additionalProperties, tool.name).toBeUndefined();
+        for (const m of tool.inputSchema.anyOf)
+          expect(m.additionalProperties, tool.name).toBe(false);
+      } else {
+        expect(tool.inputSchema.additionalProperties, tool.name).toBe(false);
+      }
     }
     // The F6 case: a facet the tool does not have must not be stripped into an unfiltered survey.
     await expect(dispatch('search-compendium-creatures', { query: 'goblin' })).rejects.toThrow(
@@ -339,6 +350,24 @@ describe('tool registry', () => {
     );
     await expect(dispatch('get-world-info', { verbose: true, x: 1 })).rejects.toThrow(
       /unknown arguments "verbose", "x" — it takes: no arguments/
+    );
+    // A union tool refuses against the SELECTED member — a key no member takes and a key another
+    // member takes get the same by-name refusal, naming what this kind × action takes.
+    await expect(
+      dispatch('manage-placeables', { kind: 'tiles', action: 'list', query: 'x' })
+    ).rejects.toThrow(
+      'manage-placeables (kind "tiles", action "list"): unknown argument "query" — it takes: kind, action, sceneIdentifier.'
+    );
+    await expect(
+      dispatch('manage-placeables', { kind: 'tiles', action: 'list', ids: ['a'] })
+    ).rejects.toThrow(
+      'manage-placeables (kind "tiles", action "list"): unknown argument "ids" — it takes: kind, action, sceneIdentifier.'
+    );
+    await expect(dispatch('manage-placeables', { kind: 'roofs', action: 'list' })).rejects.toThrow(
+      'manage-placeables: kind must be one of "tiles", "lights", "walls", "drawings" (got "roofs").'
+    );
+    await expect(dispatch('manage-placeables', { kind: 'walls' })).rejects.toThrow(
+      'manage-placeables: action must be one of "create", "list", "update", "delete" for kind "walls" (got nothing).'
     );
   });
 
@@ -481,7 +510,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(151);
+    expect(tools.length).toBe(136);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

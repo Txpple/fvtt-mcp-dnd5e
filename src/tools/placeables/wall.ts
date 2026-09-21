@@ -1,4 +1,4 @@
-// Wall CRUD tools — over the page-side Wall descriptor (src/page/placeables/wall.ts).
+// Wall actions of manage-placeables — over the page-side Wall descriptor (src/page/placeables/wall.ts).
 //
 // Walls are normally DRAWN in the Foundry app or shipped by a map pack — bulk authoring stays there.
 // These tools exist for the edit loop the app is slow at: flip a door to secret, lock/open door
@@ -7,14 +7,13 @@
 // x/y point.
 
 import { z } from 'zod';
-import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
   formatUpdatePlaceables,
 } from '../../utils/placeable-format.js';
-import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
+import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
 const wallChannelFields = {
   move: z
@@ -83,7 +82,7 @@ const wallChannelFields = {
 
 const CreateWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  walls: z
+  items: z
     .array(
       z.object({
         x0: z.number().optional().describe('Segment start X in absolute canvas pixels.'),
@@ -99,7 +98,7 @@ const CreateWallsSchema = z.object({
       })
     )
     .min(1)
-    .describe('One or more wall segments to create (omitted channels default to blocking).'),
+    .describe('The wall segments to create (omitted channels default to blocking).'),
 });
 
 const ListWallsSchema = z.object({
@@ -109,7 +108,7 @@ const ListWallsSchema = z.object({
 
 const UpdateWallSchema = z
   .object({
-    id: z.string().min(1).describe('Wall id (from list-walls).'),
+    id: z.string().min(1).describe('Wall id (from action list).'),
     x0: z.number().optional().describe('Move: new segment start X (provide ALL of x0,y0,x1,y1).'),
     y0: z.number().optional().describe('Move: new segment start Y.'),
     x1: z.number().optional().describe('Move: new segment end X.'),
@@ -127,68 +126,60 @@ const UpdateWallSchema = z
 
 const UpdateWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  walls: z
-    .array(UpdateWallSchema)
-    .min(1)
-    .describe('The wall patches to apply (each targets one id).'),
+  patches: z.array(UpdateWallSchema).min(1).describe('One patch per wall; each targets one id.'),
 });
 
 const DeleteWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  wallIds: z.array(z.string().min(1)).min(1).describe('Wall ids to delete (from list-walls).'),
+  ids: z.array(z.string().min(1)).min(1).describe('Wall ids to delete (from action list).'),
 });
 
-export const wallToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'create-walls',
+export const wallKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'walls',
+  actions: [
+    placeableAction({
+      action: 'create',
       description:
         'Create wall segments (x0, y0 → x1, y1 or c:[4], in canvas pixels) with their move / ' +
         'light / sight / sound channels (omitted = 20, blocking), one-way dir, door kind + state + ' +
-        'sound, proximity thresholds. One bad wall does not fail the batch. Returns the ids. GM-only.',
-      inputSchema: toInputSchema(CreateWallsSchema),
-    },
-    {
-      name: 'list-walls',
+        'sound, proximity thresholds.',
+      schema: CreateWallsSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('createSceneWalls', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'wall');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
         'Walls on a scene: id, segment c:[x0, y0, x1, y1], the four channels, dir, door kind + ' +
         'state + sound; doorsOnly for just the doors.',
-      inputSchema: toInputSchema(ListWallsSchema),
-    },
-    {
-      name: 'update-walls',
+      schema: ListWallsSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneWalls', parsed);
+        return formatListPlaceableLines(result, 'wall');
+      },
+    }),
+    placeableAction({
+      action: 'update',
       description:
         'Edit walls by id: door kind / state / sound, the channels, dir, thresholds, or a move (the ' +
         'whole segment, never a half). Only the fields passed change; an off-enum value skips that ' +
-        'patch with a warning. GM-only.',
-      inputSchema: toInputSchema(UpdateWallsSchema),
-    },
-    {
-      name: 'delete-walls',
-      description: 'Delete walls by id; missing ids are reported, never fatal. GM-only.',
-      inputSchema: toInputSchema(DeleteWallsSchema),
-    },
+        'patch with a warning.',
+      schema: UpdateWallsSchema,
+      handler: async ({ sceneIdentifier, patches }) => {
+        const result = await foundry.call('updateSceneWalls', { sceneIdentifier, patches });
+        return formatUpdatePlaceables(result, 'wall');
+      },
+    }),
+    placeableAction({
+      action: 'delete',
+      description: 'Delete walls by id.',
+      schema: DeleteWallsSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneWalls', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'wall');
+      },
+    }),
   ],
-  handlers: {
-    'create-walls': async args => {
-      const { sceneIdentifier, walls } = CreateWallsSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneWalls', { sceneIdentifier, items: walls });
-      return formatCreatePlaceables(result, 'wall');
-    },
-    'list-walls': async args => {
-      const parsed = ListWallsSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneWalls', parsed);
-      return formatListPlaceables(result, 'wall');
-    },
-    'update-walls': async args => {
-      const { sceneIdentifier, walls } = UpdateWallsSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneWalls', { sceneIdentifier, patches: walls });
-      return formatUpdatePlaceables(result, 'wall');
-    },
-    'delete-walls': async args => {
-      const { sceneIdentifier, wallIds } = DeleteWallsSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneWalls', { sceneIdentifier, ids: wallIds });
-      return formatDeletePlaceables(result, 'wall');
-    },
-  },
 });

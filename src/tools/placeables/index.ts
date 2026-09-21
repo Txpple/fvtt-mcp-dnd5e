@@ -1,25 +1,29 @@
-// Scene PLACEABLE editing tools — the per-type CRUD library over the shared page-side kernel
-// (src/page/_placeables.ts) and per-type descriptors (src/page/placeables/**).
+// Scene PLACEABLE editing tools — the per-kind CRUD library over the shared page-side kernel
+// (src/page/_placeables.ts) and per-kind descriptors (src/page/placeables/**).
 //
 // Separate from src/tools/scene.ts (scene-DOCUMENT tools: background, grid, mood, fog — never
-// placeables) — the two axes stay hard-split. Each placeable type is one module file here (schemas,
-// defs, handlers keyed by tool name); this facade composes them and asserts defs↔handlers can't
-// drift. Full library: Tile, AmbientLight, AmbientSound, Drawing, Wall, Token (place/update/delete),
-// Note (pins), Region (+ teleporter special ops). MeasuredTemplate is out of scope (combat
-// ephemera, not world-building) — the descriptor recipe in
-// docs/history/scene-placeables-architecture.md §3.6 makes it a cheap add if ever wanted.
+// placeables) — the two axes stay hard-split. Each placeable kind is one module file here; this
+// facade composes the consolidated kinds into ONE advertised tool, `manage-placeables` (kind ×
+// action; src/tools/_union.ts — M8 of the 3.0 plan), and the kinds not yet consolidated as their
+// pre-M8 per-op tools, asserting defs↔handlers can't drift. Full library: Tile, AmbientLight,
+// AmbientSound, Drawing, Wall, Token (place/update/delete), Note (pins), Region (+ teleporter
+// special ops). MeasuredTemplate is out of scope (combat ephemera, not world-building) — the
+// descriptor recipe in docs/history/scene-placeables-architecture.md §3.6 makes it a cheap add.
 
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
-import type { PlaceableToolModule } from './_module.js';
-import { tileToolModule } from './tile.js';
-import { lightToolModule } from './light.js';
+import { unionTool, type UnionTool } from '../_union.js';
+import { sceneTarget, type PlaceableKindModule, type PlaceableToolModule } from './_module.js';
+import { tileKindModule } from './tile.js';
+import { lightKindModule } from './light.js';
 import { soundToolModule } from './sound.js';
-import { drawingToolModule } from './drawing.js';
-import { wallToolModule } from './wall.js';
+import { drawingKindModule } from './drawing.js';
+import { wallKindModule } from './wall.js';
 import { tokenToolModule } from './token.js';
 import { noteToolModule } from './note.js';
 import { regionToolModule } from './region.js';
+
+export const MANAGE_PLACEABLES = 'manage-placeables';
 
 export interface PlaceableToolsOptions {
   foundry: FoundryBridge;
@@ -28,24 +32,46 @@ export interface PlaceableToolsOptions {
 
 export class PlaceableTools {
   private logger: Logger;
-  private modules: PlaceableToolModule[];
+  private union: UnionTool;
+  private legacy: PlaceableToolModule[];
   private handlers: Record<string, (args: any) => Promise<any>>;
 
   constructor({ foundry, logger }: PlaceableToolsOptions) {
     this.logger = logger.child({ component: 'PlaceableTools' });
-    this.modules = [
-      tileToolModule(foundry),
-      lightToolModule(foundry),
+    const kinds: PlaceableKindModule[] = [
+      tileKindModule(foundry),
+      lightKindModule(foundry),
+      wallKindModule(foundry),
+      drawingKindModule(foundry),
+    ];
+    this.union = unionTool({
+      name: MANAGE_PLACEABLES,
+      description:
+        `Scene placeables by kind (${kinds.map(k => k.kind).join(' / ')}) × action (create / ` +
+        'list / update / delete). sceneIdentifier omitted = the ACTIVE scene; a scene miss is an ' +
+        'error. create / update take one entry per placeable and one bad entry does not fail the ' +
+        'batch; create returns the ids; unresolved ids are reported, never fatal. GM-only.',
+      discriminators: ['kind', 'action'],
+      shared: { sceneIdentifier: sceneTarget },
+      members: kinds.flatMap(k =>
+        k.actions.map(a => ({
+          select: { kind: k.kind, action: a.action },
+          description: a.description,
+          schema: a.schema,
+          handler: a.handler,
+        }))
+      ),
+    });
+
+    this.legacy = [
       soundToolModule(foundry),
-      drawingToolModule(foundry),
-      wallToolModule(foundry),
       tokenToolModule(foundry),
       noteToolModule(foundry),
       regionToolModule(foundry),
     ];
     // Compose the name->handler map and fail LOUDLY on any def↔handler drift or name collision.
-    this.handlers = {};
-    for (const m of this.modules) {
+    this.handlers = { [MANAGE_PLACEABLES]: args => this.union.handle(args) };
+    for (const m of this.legacy) {
       const defNames = new Set(m.defs.map(d => d.name));
       for (const name of Object.keys(m.handlers)) {
         if (!defNames.has(name)) {
@@ -65,10 +91,10 @@ export class PlaceableTools {
   }
 
   getToolDefinitions() {
-    return this.modules.flatMap(m => m.defs);
+    return [this.union.def, ...this.legacy.flatMap(m => m.defs)];
   }
 
-  /** Route one placeable tool call to its module handler (registry-facing). */
+  /** Route one placeable tool call to its handler (registry-facing). */
   async handle(name: string, args: any): Promise<any> {
     const handler = this.handlers[name];
     if (!handler) throw new Error(`Unknown placeable tool: ${name}`);

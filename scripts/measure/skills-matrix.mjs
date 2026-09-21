@@ -83,13 +83,11 @@ const uniq = rows => [...new Map(rows.map(r => [`${r.file}:${r.name}`, r])).valu
 const unresolvedRows = uniq(unresolved);
 const candidateRows = uniq(candidates);
 
-// The 17 CRUD families M8 consolidates — one commit each, every skill line re-pointed in it.
+// The 17 CRUD families M8 consolidates — one commit each, every skill line re-pointed in it. A
+// consolidated family is its one tool (tiles / lights / walls / drawings → manage-placeables).
 const FAMILIES = {
-  tiles: ['create-tiles', 'list-tiles', 'update-tiles', 'delete-tiles'],
-  lights: ['create-lights', 'list-lights', 'update-lights', 'delete-lights'],
+  placeables: ['manage-placeables'],
   sounds: ['create-sounds', 'list-sounds', 'update-sounds', 'delete-sounds'],
-  drawings: ['create-drawings', 'list-drawings', 'update-drawings', 'delete-drawings'],
-  walls: ['create-walls', 'list-walls', 'update-walls', 'delete-walls'],
   tokens: ['list-tokens', 'place-tokens', 'update-token', 'delete-tokens'],
   notes: ['create-scene-notes', 'list-notes', 'update-note', 'delete-note'],
   regions: [

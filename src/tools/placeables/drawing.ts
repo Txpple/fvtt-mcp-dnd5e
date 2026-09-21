@@ -1,17 +1,16 @@
-// Drawing CRUD tools — GM annotations (secret-area boxes, trap outlines, labels, planning marks)
+// Drawing actions of manage-placeables — GM annotations (secret-area boxes, trap outlines, labels, planning marks)
 // over the page-side Drawing descriptor (src/page/placeables/drawing.ts). x/y are the TOP-LEFT
 // origin in absolute canvas pixels; polygon points are RELATIVE to that origin. Drawings default to
 // hidden:false and the GM's stroke color — set hidden:true for GM-only planning marks.
 
 import { z } from 'zod';
-import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
   formatUpdatePlaceables,
 } from '../../utils/placeable-format.js';
-import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
+import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
 const drawingStyleFields = {
   rotation: z.number().optional().describe('Rotation in degrees (0–359).'),
@@ -46,7 +45,7 @@ const drawingStyleFields = {
 
 const CreateDrawingsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  drawings: z
+  items: z
     .array(
       z.object({
         x: z.number().describe('Top-left origin X in absolute canvas pixels.'),
@@ -72,14 +71,14 @@ const CreateDrawingsSchema = z.object({
       })
     )
     .min(1)
-    .describe('One or more drawings (annotation shapes / labels) to place.'),
+    .describe('The drawings (annotation shapes / labels) to place.'),
 });
 
 const ListDrawingsSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateDrawingSchema = z
   .object({
-    id: z.string().min(1).describe('Drawing id (from list-drawings).'),
+    id: z.string().min(1).describe('Drawing id (from action list).'),
     x: z.number().optional().describe('New top-left origin X in canvas pixels.'),
     y: z.number().optional().describe('New top-left origin Y in canvas pixels.'),
     width: z.number().positive().optional().describe('Resize width in px (rectangle/ellipse).'),
@@ -97,79 +96,62 @@ const UpdateDrawingSchema = z
 
 const UpdateDrawingsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  drawings: z
+  patches: z
     .array(UpdateDrawingSchema)
     .min(1)
-    .describe('The drawing patches to apply (each targets one id).'),
+    .describe('One patch per drawing; each targets one id.'),
 });
 
 const DeleteDrawingsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  drawingIds: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Drawing ids to delete (from list-drawings).'),
+  ids: z.array(z.string().min(1)).min(1).describe('Drawing ids to delete (from action list).'),
 });
 
-export const drawingToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'create-drawings',
+export const drawingKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'drawings',
+  actions: [
+    placeableAction({
+      action: 'create',
       description:
         'Place drawings: x / y the top-left in canvas pixels; shapeType rectangle / ellipse (width + ' +
         'height), circle (radius) or polygon (relative points); stroke, fill, a text label, hidden, ' +
-        'interface. One bad drawing does not fail the batch. Returns the ids. GM-only.',
-      inputSchema: toInputSchema(CreateDrawingsSchema),
-    },
-    {
-      name: 'list-drawings',
+        'interface.',
+      schema: CreateDrawingsSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('createSceneDrawings', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'drawing');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
         'Every drawing on a scene: id, origin, shape and dimensions, rotation, text, fill, stroke, ' +
         'hidden / locked / interface.',
-      inputSchema: toInputSchema(ListDrawingsSchema),
-    },
-    {
-      name: 'update-drawings',
+      schema: ListDrawingsSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneDrawings', parsed);
+        return formatListPlaceableLines(result, 'drawing');
+      },
+    }),
+    placeableAction({
+      action: 'update',
       description:
         'Edit placed drawings by id (text:"" clears the label); the shape kind cannot change. Only ' +
-        'the fields passed change. GM-only.',
-      inputSchema: toInputSchema(UpdateDrawingsSchema),
-    },
-    {
-      name: 'delete-drawings',
-      description: 'Delete drawings by id; missing ids are reported, never fatal. GM-only.',
-      inputSchema: toInputSchema(DeleteDrawingsSchema),
-    },
+        'the fields passed change.',
+      schema: UpdateDrawingsSchema,
+      handler: async ({ sceneIdentifier, patches }) => {
+        const result = await foundry.call('updateSceneDrawings', { sceneIdentifier, patches });
+        return formatUpdatePlaceables(result, 'drawing');
+      },
+    }),
+    placeableAction({
+      action: 'delete',
+      description: 'Delete drawings by id.',
+      schema: DeleteDrawingsSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneDrawings', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'drawing');
+      },
+    }),
   ],
-  handlers: {
-    'create-drawings': async args => {
-      const { sceneIdentifier, drawings } = CreateDrawingsSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneDrawings', {
-        sceneIdentifier,
-        items: drawings,
-      });
-      return formatCreatePlaceables(result, 'drawing');
-    },
-    'list-drawings': async args => {
-      const parsed = ListDrawingsSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneDrawings', parsed);
-      return formatListPlaceables(result, 'drawing');
-    },
-    'update-drawings': async args => {
-      const { sceneIdentifier, drawings } = UpdateDrawingsSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneDrawings', {
-        sceneIdentifier,
-        patches: drawings,
-      });
-      return formatUpdatePlaceables(result, 'drawing');
-    },
-    'delete-drawings': async args => {
-      const { sceneIdentifier, drawingIds } = DeleteDrawingsSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneDrawings', {
-        sceneIdentifier,
-        ids: drawingIds,
-      });
-      return formatDeletePlaceables(result, 'drawing');
-    },
-  },
 });

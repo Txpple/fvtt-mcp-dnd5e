@@ -1,17 +1,16 @@
-// AmbientLight CRUD tools — thin schemas/handlers over the page-side Light descriptor
+// AmbientLight actions of manage-placeables — thin schemas/handlers over the page-side Light descriptor
 // (src/page/placeables/light.ts). Emission nests under config{} page-side; these flat inputs fold in
 // there. dim/bright are radii in grid-distance units (feet), NOT pixels. x/y are the light CENTER in
 // absolute canvas pixels.
 
 import { z } from 'zod';
-import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
   formatDeletePlaceables,
-  formatListPlaceables,
+  formatListPlaceableLines,
   formatUpdatePlaceables,
 } from '../../utils/placeable-format.js';
-import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
+import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
 const lightFields = {
   rotation: z.number().optional().describe('Emission-cone rotation in degrees.'),
@@ -59,7 +58,7 @@ const lightFields = {
 
 const CreateLightsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  lights: z
+  items: z
     .array(
       z.object({
         x: z.number().describe('Light center X in absolute canvas pixels.'),
@@ -68,14 +67,14 @@ const CreateLightsSchema = z.object({
       })
     )
     .min(1)
-    .describe('One or more ambient lights (torches, glows, magical light) to place.'),
+    .describe('The ambient lights (torches, glows, magical light) to place.'),
 });
 
 const ListLightsSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateLightSchema = z
   .object({
-    id: z.string().min(1).describe('AmbientLight id (from list-lights).'),
+    id: z.string().min(1).describe('AmbientLight id (from action list).'),
     x: z.number().optional().describe('New center X in canvas pixels.'),
     y: z.number().optional().describe('New center Y in canvas pixels.'),
     ...lightFields,
@@ -86,70 +85,59 @@ const UpdateLightSchema = z
 
 const UpdateLightsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  lights: z
-    .array(UpdateLightSchema)
-    .min(1)
-    .describe('The light patches to apply (each targets one id).'),
+  patches: z.array(UpdateLightSchema).min(1).describe('One patch per light; each targets one id.'),
 });
 
 const DeleteLightsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  lightIds: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('AmbientLight ids to delete (from list-lights).'),
+  ids: z.array(z.string().min(1)).min(1).describe('AmbientLight ids to delete (from action list).'),
 });
 
-export const lightToolModule: PlaceableModuleFactory = foundry => ({
-  defs: [
-    {
-      name: 'create-lights',
+export const lightKindModule: PlaceableKindFactory = foundry => ({
+  kind: 'lights',
+  actions: [
+    placeableAction({
+      action: 'create',
       description:
         'Place ambient lights: x / y the center in canvas pixels, dim / bright radii in grid ' +
         'distance (feet), color, angle, luminosity, attenuation, animation, a darkness activation ' +
-        'range, walls, vision. One bad light does not fail the batch. Returns the ids. GM-only.',
-      inputSchema: toInputSchema(CreateLightsSchema),
-    },
-    {
-      name: 'list-lights',
+        'range, walls, vision.',
+      schema: CreateLightsSchema,
+      handler: async ({ sceneIdentifier, items }) => {
+        const result = await foundry.call('createSceneLights', { sceneIdentifier, items });
+        return formatCreatePlaceables(result, 'light');
+      },
+    }),
+    placeableAction({
+      action: 'list',
       description:
-        'Every ambient light on a scene: id, center, rotation, dim / bright, color, angle, ' +
-        'animation, hidden, walls / vision.',
-      inputSchema: toInputSchema(ListLightsSchema),
-    },
-    {
-      name: 'update-lights',
+        'Every ambient light on a scene: id, center, rotation, hidden, walls / vision, dim / ' +
+        'bright, color, angle, animation.',
+      schema: ListLightsSchema,
+      handler: async parsed => {
+        const result = await foundry.call('listSceneLights', parsed);
+        return formatListPlaceableLines(result, 'light');
+      },
+    }),
+    placeableAction({
+      action: 'update',
       description:
         'Edit placed ambient lights by id; only the fields passed change (a partial config never ' +
-        'wipes the rest). Unresolved ids are reported. GM-only.',
-      inputSchema: toInputSchema(UpdateLightsSchema),
-    },
-    {
-      name: 'delete-lights',
-      description: 'Delete ambient lights by id; missing ids are reported, never fatal. GM-only.',
-      inputSchema: toInputSchema(DeleteLightsSchema),
-    },
+        'wipes the rest).',
+      schema: UpdateLightsSchema,
+      handler: async ({ sceneIdentifier, patches }) => {
+        const result = await foundry.call('updateSceneLights', { sceneIdentifier, patches });
+        return formatUpdatePlaceables(result, 'light');
+      },
+    }),
+    placeableAction({
+      action: 'delete',
+      description: 'Delete ambient lights by id.',
+      schema: DeleteLightsSchema,
+      handler: async ({ sceneIdentifier, ids }) => {
+        const result = await foundry.call('deleteSceneLights', { sceneIdentifier, ids });
+        return formatDeletePlaceables(result, 'light');
+      },
+    }),
   ],
-  handlers: {
-    'create-lights': async args => {
-      const { sceneIdentifier, lights } = CreateLightsSchema.parse(args ?? {});
-      const result = await foundry.call('createSceneLights', { sceneIdentifier, items: lights });
-      return formatCreatePlaceables(result, 'light');
-    },
-    'list-lights': async args => {
-      const parsed = ListLightsSchema.parse(args ?? {});
-      const result = await foundry.call('listSceneLights', parsed);
-      return formatListPlaceables(result, 'light');
-    },
-    'update-lights': async args => {
-      const { sceneIdentifier, lights } = UpdateLightsSchema.parse(args ?? {});
-      const result = await foundry.call('updateSceneLights', { sceneIdentifier, patches: lights });
-      return formatUpdatePlaceables(result, 'light');
-    },
-    'delete-lights': async args => {
-      const { sceneIdentifier, lightIds } = DeleteLightsSchema.parse(args ?? {});
-      const result = await foundry.call('deleteSceneLights', { sceneIdentifier, ids: lightIds });
-      return formatDeletePlaceables(result, 'light');
-    },
-  },
 });
