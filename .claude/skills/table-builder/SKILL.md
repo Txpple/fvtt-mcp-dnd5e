@@ -46,7 +46,7 @@ SRD · ask-don't-invent). Two table-specific clarifications:
 - **`{ action: "import" }`** — copy a whole **published** table from a compendium into the world
   (`{ packId, itemId, folderName? }`). Roll tables are world-only at roll time, so a DMG treasure /
   magic-item table must be imported before you can roll it; its results (and their @UUID item links)
-  come along intact. Premium-book packs only. This is the table version of import-item — prefer it over
+  come along intact. Premium-book packs only. This is the table version of `manage-items` `import` — prefer it over
   hand-rebuilding a book table.
 - **`{ action: "update" }`** — change table fields and/or edit entries, two ways. **To fix ONE entry
   (a typo, a re-link, a weight), use `editResults`** — target it by `roll` (the die face, e.g. 7 on
@@ -57,7 +57,7 @@ SRD · ask-don't-invent). Two table-specific clarifications:
   (deletes + recreates all entries with fresh ranges) — right for a full re-theme, wrong for a typo.
 - **`roll-on-table`** — preview a draw on a **world** table (evaluates without marking drawn / posting
   to chat). A drawn loot entry's `@UUID` items come back as **importable** (uuid + label) so you can
-  pull them into the world with `import-item` (see physical-item-builder).
+  pull them into the world with `manage-items` `import` (see physical-item-builder).
 - **`{ action: "list" }`** — one line per table (id, name, formula, result count) — the ids target
   updates/deletes/rolls; **`{ action: "get" }`** reads every entry of one table.
 - **`{ action: "delete" }`** — remove tables by exact id/name (strict, no fuzzy match).
@@ -114,7 +114,7 @@ tables, the Treasure table, encounter tables). **Don't rebuild them by hand — 
    item links) lands in the world.
 3. **`roll-on-table`** on the imported table → each drawn magic item comes back as an importable
    `@UUID` (uuid + label).
-4. **`import-item`** (physical-item-builder) each drawn uuid into the world to make the actual loot item.
+4. **`manage-items` `import`** (physical-item-builder) each drawn uuid into the world to make the actual loot item.
 
 This is the sanctioned path for "roll on the DMG treasure tables and give me the loot."
 

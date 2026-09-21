@@ -47,7 +47,7 @@ offending snippet.
 | Journals (the big one) | `search-journals` per stem; `list-journals` | old names in content, contradicted facts, page names |
 | Roll tables | `manage-rolltables` `list` → `get` on plot-adjacent tables | entry text (the classic straggler — a rename misses table entries) |
 | Actors | `list-actors` for names; `get-actor` on plot-relevant NPCs/PCs | actor names, token names, biographies |
-| Items | `search-actor-contents` / `list-items` → `get-item` for plot items | descriptions, unidentified vs true names |
+| Items | `search-actor-contents` / `manage-items` `list` → `get` for plot items | descriptions, unidentified vs true names |
 | Scenes & pins | `list-scenes`, `manage-placeables { kind: "notes", action: "list" }` | scene names, map-pin labels |
 | Folders & playlists | `manage-folders` / `manage-playlists` `{ action: "list" }` | organizational names that carry old terms |
 | Visibility | journal page ownership from the journal reads | any **secret** term readable on a player-visible page |
@@ -86,7 +86,7 @@ Narrowest write wins; never rebuild a document to change a phrase:
 - Journal page text → `update-journal` (the affected page only).
 - Roll-table entry → `manage-rolltables { action: "update" }` with `editResults` (surgical per-entry; siblings untouched).
 - Actor name/token name/bio → `update-actor` (`name`, `tokenName`, `biography`).
-- Item description/name → `update-actor-item` / `update-item` (mind the unidentified true-name
+- Item description/name → `update-actor-item` / `manage-items` `update` (mind the unidentified true-name
   masking — verify the echo).
 - Leaks → `set-journal-page-visibility` (or move the text to a GM page).
 

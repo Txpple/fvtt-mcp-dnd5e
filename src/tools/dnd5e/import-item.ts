@@ -3,21 +3,22 @@ import { ACTOR_TARGET, actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
-import { toInputSchema } from '../../utils/schema.js';
 import { assertNoSrdPacks } from '../../utils/compendium-sources.js';
 import { formatUnresolvedScale } from '../../utils/format.js';
 
 /**
- * import-item — COPY a physical item from a compendium pack onto an actor (or into the world Items
- * sidebar), preserving its art, system data, and activities. This is the compendium-first counterpart
- * to add-item (which authors from scratch): the project policy is to grab the real PHB/DMG 2024 entry
- * and tweak it, rather than rebuild gear by hand. Find the packId + itemId with search-compendium /
- * get-compendium-entry first, then copy here; afterward refine the copy with update-actor-item,
- * manage-activity, or manage-effect (e.g. bump a base shield to +1 and rename it for a custom item).
+ * manage-items `import` — COPY a physical item from a compendium pack onto an actor (or into the
+ * world Items sidebar), preserving its art, system data, and activities. This is the
+ * compendium-first counterpart to add-item (which authors from scratch): the project policy is to
+ * grab the real PHB/DMG 2024 entry and tweak it, rather than rebuild gear by hand. Find the packId
+ * + itemId with search-compendium / get-compendium-entry first, then copy here; afterward refine
+ * the copy with update-actor-item, manage-activity, or manage-effect (e.g. bump a base shield to
+ * +1 and rename it for a custom item). The member rides the items union (src/tools/items.ts,
+ * M8 of the 3.0 plan); this file owns its contract, its dnd5e / SRD guards and its confirmation.
  */
 export type ImportItemArgs = z.output<typeof ImportItemSchema>;
 
-const ImportItemSchema = z.object({
+export const ImportItemSchema = z.object({
   packId: z
     .string()
     .min(1, 'packId cannot be empty')
@@ -37,7 +38,7 @@ const ImportItemSchema = z.object({
     .string()
     .optional()
     .describe('An existing container on the same target (id or name) to nest inside.'),
-  folder: z.string().optional().describe('World Item: its folder.'),
+  folder: z.string().optional(),
   lootCopy: z
     .boolean()
     .optional()
@@ -51,86 +52,47 @@ const ImportItemSchema = z.object({
     .describe('Folder for the loot copy (created if absent). Default "Loot".'),
 });
 
-export interface DnD5eImportItemToolOptions {
-  foundry: FoundryBridge;
-  logger: Logger;
-}
+export const IMPORT_ITEM_DESCRIPTION =
+  '[D&D 5e] Copy a compendium item onto an actor or into the sidebar with its art, system data ' +
+  'and activities; premium packs only.';
 
-export class DnD5eImportItemTool {
-  private foundry: FoundryBridge;
-  private logger: Logger;
+/** The import member's handler: the guards, the page call, the one-line confirmation. */
+export async function importItem(
+  foundry: FoundryBridge,
+  logger: Logger,
+  parsed: ImportItemArgs
+): Promise<string> {
+  assertNoSrdPacks(parsed.packId, 'manage-items import');
+  await assertDnd5e(foundry, logger, 'manage-items import');
 
-  constructor({ foundry, logger }: DnD5eImportItemToolOptions) {
-    this.foundry = foundry;
-    this.logger = logger.child({ component: 'DnD5eImportItemTool' });
-  }
+  logger.info('Copying item from compendium', {
+    packId: parsed.packId,
+    itemId: parsed.itemId,
+    target: parsed.actorIdentifier ?? 'world',
+    rename: parsed.name,
+  });
 
-  getToolDefinitions() {
-    return [
-      {
-        name: 'import-item',
-        description:
-          '[D&D 5e] Copy a compendium item (packId + itemId, from search-compendium) onto an actor or ' +
-          'into the world Items sidebar with its art, system data and activities; name / quantity / ' +
-          'equipped / identified / container are applied to the copy. Premium packs only: an SRD ' +
-          'pack is refused.',
-        inputSchema: toInputSchema(ImportItemSchema),
-      },
-    ];
-  }
-
-  async handleImportItem(args: any): Promise<any> {
-    const parsed = ImportItemSchema.parse(args ?? {});
-    assertNoSrdPacks(parsed.packId, 'import-item');
-    await assertDnd5e(this.foundry, this.logger, 'import-item');
-
-    this.logger.info('Copying item from compendium', {
-      packId: parsed.packId,
-      itemId: parsed.itemId,
-      target: parsed.actorIdentifier ?? 'world',
-      rename: parsed.name,
-    });
-
-    const result = await this.foundry.call('importItemFromCompendium', parsed);
-    return this.formatResponse(result);
-  }
-
-  private formatResponse(result: any): any {
-    const item = result?.item ?? {};
-    const src = result?.source ?? {};
-    const target =
-      result?.target?.type === 'actor'
-        ? `actor "${result.target.name}"`
-        : `world Items${result?.target?.folderName ? ` (folder "${result.target.folderName}")` : ''}`;
-    const renamed = src.name && item.name && src.name !== item.name ? ` (from "${src.name}")` : '';
-    const loot = result?.lootCopy;
-    const summary = `✅ Copied "${item.name ?? '?'}"${renamed} onto ${target}`;
-    const details = [
-      `**Item:** ${item.name ?? '?'} (id: \`${item.id ?? '?'}\`, type: ${item.type ?? '?'})`,
-      `**Source:** \`${src.packId ?? '?'}\` / \`${src.itemId ?? '?'}\``,
-      `**Target:** ${target}`,
-      loot
-        ? `**Loot copy:** "${loot.name}" (id: \`${loot.id}\`) in folder "${loot.folderName ?? 'Loot'}" — a lootable world Item (rule 9)`
-        : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
-    // The page reports any unresolved @scale tokens the copy carries (rare for gear, but a magic-item
-    // feature rider can); surface them so the skill sets the die.
-    const unresolvedScale = (result?.unresolvedScale ?? []).map((t: any) => ({
-      label: item.name ?? '?',
-      path: t.path,
-      formula: t.formula,
-    }));
-    return {
-      summary,
-      success: true,
-      item,
-      source: result?.source,
-      target: result?.target,
-      ...(loot ? { lootCopy: loot } : {}),
-      ...(unresolvedScale.length > 0 ? { unresolvedScale } : {}),
-      message: `${summary}\n\n${details}${formatUnresolvedScale(unresolvedScale)}`,
-    };
-  }
+  const result = await foundry.call('importItemFromCompendium', parsed);
+  const item = result?.item ?? {};
+  const src = result?.source ?? {};
+  const target =
+    result?.target?.type === 'actor'
+      ? `actor "${result.target.name}"`
+      : `world Items${result?.target?.folderName ? ` (folder "${result.target.folderName}")` : ''}`;
+  const renamed = src.name && item.name && src.name !== item.name ? ` (from "${src.name}")` : '';
+  const loot = result?.lootCopy;
+  // The page reports any unresolved @scale tokens the copy carries (rare for gear, but a magic-item
+  // feature rider can); surface them so the skill sets the die.
+  const unresolvedScale = (result?.unresolvedScale ?? []).map((t: any) => ({
+    label: item.name ?? '?',
+    path: t.path,
+    formula: t.formula,
+  }));
+  return (
+    `Copied "${item.name ?? '?'}"${renamed} onto ${target}: id ${item.id ?? '?'}, type ${item.type ?? '?'}` +
+    (loot
+      ? `; loot copy "${loot.name}" (${loot.id}) in folder "${loot.folderName ?? 'Loot'}"`
+      : '') +
+    formatUnresolvedScale(unresolvedScale)
+  );
 }

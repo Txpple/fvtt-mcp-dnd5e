@@ -47,7 +47,7 @@ export function buildAddFeatureTool() {
       'Add a feature, attack, spellcasting setup or spells to an actor. mode compendium-features ' +
       'imports named features from a pack (a copied feature reports any unresolved @scale formula); ' +
       'feature authors one by featureType (a duplicate name is refused); items attaches raw item ' +
-      'data. Gear: import-item / add-item.',
+      'data. Gear: manage-items import / add-item.',
     inputSchema: toInputSchema(AddFeatureWrapperSchema),
   };
 }

@@ -43,7 +43,6 @@ export const TOOLSETS = {
     'manage-effect',
     'apply-condition',
     'add-item',
-    'import-item',
     'content-audit',
     'add-feature',
     'remove-from-actor',
@@ -55,8 +54,8 @@ export const TOOLSETS = {
     'list-actor-ownership',
     'set-actor-art',
   ],
-  /** World (sidebar) Items. */
-  items: ['create-item', 'list-items', 'get-item', 'update-item', 'delete-item'],
+  /** World (sidebar) Items — and the compendium copy onto an actor (`import`, formerly in actors). */
+  items: ['manage-items'],
   /** The premium-book library and pack readers. */
   compendium: [
     'search-compendium',

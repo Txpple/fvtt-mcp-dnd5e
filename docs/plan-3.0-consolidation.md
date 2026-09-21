@@ -450,3 +450,27 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   the not-found tail) — and its DMG-draw check made deterministic (the Arcana table has plain-text
   entries; one d100 draw could miss a link and had flaked twice) — integration 80 passed /
   6 skipped. Next: items → journals → scenes → actors.
+- 2026-09-21 — **M8 items → `manage-items`** (`action`: create / list / get / update / delete /
+  import): 6 tools → 1, the union **4,613** against the six's **4,679** (−1.4%; the naive fold was
+  4,767, +1.9%). `import-item` (the dnd5e compendium copy, `src/tools/dnd5e/import-item.ts`)
+  is the `import` member — the file keeps its contract, its dnd5e / SRD guards and its
+  confirmation, the class is gone; `remove-from-actor` stays its own tool (an actor-side op) and
+  add-feature's un-advertised add-to-actor route calls `handleAddActorItems` directly. **Toolset
+  note:** `import` now rides the `items` toolset (`import-item` had sat in `actors`) — a
+  registration that names `actors` alone no longer carries the compendium copy; `actors,items`
+  does. `folder` (create / list / import) is the `shared` root leaf; the family description
+  carries the unidentified-mask sentence once (get / update had each said it) and the import
+  description no longer lists the leaves beside it. tools/list 203,549, names 96 (7,280 chars).
+  The §3 shapes: list is `N item(s): id name type folder` (+ `trueName` only when a row is
+  masked; the old JSON `{items,total}` gone); create / update / import are one line naming each
+  id + type (+ the true name); delete is `deletedLine`; get stays JSON. Re-pointed:
+  physical-item-builder (11 lines), stat-block-builder (8), pc-builder (5), authoring-policy (4),
+  table-builder (3), plot-drift-check (2), the four tool descriptions that named `import-item`
+  as the gear path (add-item, add-feature, group, author-npc), README (counts + the CRUD
+  parenthetical), tool-results, the registry tests (101 → 96); skills-matrix 0 / 0; siblings 0
+  (the campaign repo's one mention is a session note). Decision #20: the six kept as actions.
+  Live: verify-item-tooling **24/24** with the new section 11 (create two into a folder, the list
+  row under the folder filter, the get JSON, rename + system patch, a PHB Dagger imported into the
+  sidebar with a rename, the two refusals, the SRD refusal, the get miss, the delete with the
+  not-found tail), verify-loot-copy 11/11 (the import path), integration 80 passed / 6 skipped.
+  Next: journals → scenes → actors.

@@ -187,7 +187,7 @@ const AUTHOR_NPC_DESCRIPTION =
   'Author an NPC (type:npc) from a stat block: identity, CR, HP, AC (acMode flat needs acValue), ' +
   'abilities, saves, skills, speeds, senses, damage and condition traits, languages, biography, ' +
   'source. An off-canon damage type or condition warns, never refuses. Features, attacks and ' +
-  'spells: add-feature; gear: import-item.';
+  'spells: add-feature; gear: manage-items import.';
 
 // ---------------------------------------------------------------------------
 // Options interface

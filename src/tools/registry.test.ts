@@ -112,7 +112,9 @@ describe('tool registry', () => {
     // − 3 (M8): create / import / list / delete-cards → manage-cards (action).
     // − 5 (M8): create / import / list / get / update / delete-rolltable → manage-rolltables
     //   (action); roll-on-table stays (a play op, not CRUD).
-    expect(names.length).toBe(101);
+    // − 5 (M8): create / list / get / update / delete-item + import-item → manage-items (action);
+    //   remove-from-actor stays (an actor-side op).
+    expect(names.length).toBe(96);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -301,7 +303,7 @@ describe('tool registry', () => {
     expect(names.has('manage-effect')).toBe(true);
     expect(names.has('apply-condition')).toBe(true);
     expect(names.has('add-item')).toBe(true);
-    expect(names.has('import-item')).toBe(true);
+    expect(names.has('manage-items')).toBe(true);
   });
 
   it('advertises the unified actor-authoring tool as add-feature (renamed from grant-to-actor)', () => {
@@ -541,7 +543,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(101);
+    expect(tools.length).toBe(96);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

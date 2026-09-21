@@ -110,7 +110,7 @@ export class DnD5eGroupTools {
         description:
           'Create a dnd5e group actor (type:group) with members, default ownership, shared coin, ' +
           'optionally as the primary party. One unresolved member refuses the whole create. Its ' +
-          'inventory: add-item / import-item.',
+          'inventory: add-item / manage-items import.',
         inputSchema: toInputSchema(CreateGroupSchema),
       },
       {

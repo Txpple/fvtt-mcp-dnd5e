@@ -40,7 +40,6 @@ import { DnD5eSettingsTool } from './tools/dnd5e/settings.js';
 import { DnD5eCalendarTool } from './tools/dnd5e/calendar.js';
 import { DnD5eConditionTool } from './tools/dnd5e/conditions.js';
 import { DnD5eAddItemTool } from './tools/dnd5e/add-item.js';
-import { DnD5eImportItemTool } from './tools/dnd5e/import-item.js';
 import { DnD5eContentAuditTool } from './tools/dnd5e/content-audit.js';
 import { DnD5eGroupTools } from './tools/dnd5e/group.js';
 import { buildAddFeatureTool } from './tools/dnd5e/grant-to-actor.js';
@@ -119,7 +118,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const dnd5eCalendarTool = new DnD5eCalendarTool({ foundry, logger });
   const dnd5eConditionTool = new DnD5eConditionTool({ foundry, logger });
   const dnd5eAddItemTool = new DnD5eAddItemTool({ foundry, logger });
-  const dnd5eImportItemTool = new DnD5eImportItemTool({ foundry, logger });
   const dnd5eContentAuditTool = new DnD5eContentAuditTool({ foundry, logger });
   const dnd5eGroupTools = new DnD5eGroupTools({ foundry, logger });
 
@@ -176,7 +174,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     ...dnd5eCalendarTool.getToolDefinitions(),
     ...dnd5eConditionTool.getToolDefinitions(),
     ...dnd5eAddItemTool.getToolDefinitions(),
-    ...dnd5eImportItemTool.getToolDefinitions(),
     ...dnd5eContentAuditTool.getToolDefinitions(),
     ...dnd5eGroupTools.getToolDefinitions(),
     addFeatureTool,
@@ -208,15 +205,10 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'get-actor-entity': args => actorTools.handleGetCharacterEntity(args),
     'search-actor-contents': args => actorTools.handleSearchCharacterItems(args),
 
-    // World-item lifecycle (ItemTools): CRUD on sidebar Items + remove-from-actor. Each name routes
-    // through the handleManageWorldItems dispatcher with a pre-stamped `action`.
-    'create-item': args => itemTools.handleManageWorldItems({ ...args, action: 'create' }),
-    'list-items': args => itemTools.handleManageWorldItems({ ...args, action: 'list' }),
-    'get-item': args => itemTools.handleManageWorldItems({ ...args, action: 'get' }),
-    'update-item': args => itemTools.handleManageWorldItems({ ...args, action: 'update' }),
-    'delete-item': args => itemTools.handleManageWorldItems({ ...args, action: 'delete' }),
-    'remove-from-actor': args =>
-      itemTools.handleManageWorldItems({ ...args, action: 'remove-from-actor' }),
+    // World-item lifecycle (ItemTools): ONE tool for the sidebar Items (action create / list / get
+    // / update / delete / import; M8) + remove-from-actor.
+    'manage-items': args => itemTools.handleManageItems(args),
+    'remove-from-actor': args => itemTools.handleRemoveActorItems(args),
 
     // Compendium
     'search-compendium': args => compendiumTools.handleSearchCompendium(args),
@@ -258,7 +250,6 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'manage-calendar': args => dnd5eCalendarTool.handleManageCalendar(args),
     'apply-condition': args => dnd5eConditionTool.handleApplyCondition(args),
     'add-item': args => dnd5eAddItemTool.handleAddItem(args),
-    'import-item': args => dnd5eImportItemTool.handleImportItem(args),
     'content-audit': args => dnd5eContentAuditTool.handleContentAudit(args),
 
     // dnd5e group actors (party stash / travel group) + the primaryParty world setting
@@ -281,11 +272,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
         });
       }
       if (a.mode === 'items') {
-        return itemTools.handleManageWorldItems({
-          action: 'add-to-actor',
-          actorIdentifier,
-          items: a.items,
-        });
+        return itemTools.handleAddActorItems({ actorIdentifier, items: a.items });
       }
       throw new Error(
         `add-feature: unknown mode "${a.mode}" — use "compendium-features", "feature", or "items"`

@@ -2,17 +2,24 @@ import { z } from 'zod';
 import { actorTarget } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
+import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
+import { IMPORT_ITEM_DESCRIPTION, ImportItemSchema, importItem } from './dnd5e/import-item.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 // ItemTools — the world-item building block as a first-class tool family (design.md §5: items are a
-// content building block, not an actor sub-concern). It owns the whole world-Item lifecycle: CRUD on
-// sidebar Items (create/list/get/update/delete) plus placing items on / removing them from an actor
-// (add-to-actor / remove-from-actor). Actor reads/authoring live in ActorTools (src/tools/actor.ts);
-// embedded-item editing has its own dnd5e tools (update-actor-item, manage-activity, manage-effect).
+// content building block, not an actor sub-concern). The world-Item lifecycle is ONE tool,
+// `manage-items` (action create / list / get / update / delete / import; src/tools/_union.ts — M8
+// of the 3.0 plan), plus `remove-from-actor` (an actor-side op) and the un-advertised add-to-actor
+// action add-feature mode "items" rides. Actor reads/authoring live in ActorTools
+// (src/tools/actor.ts); embedded-item editing has its own dnd5e tools (update-actor-item,
+// manage-activity, manage-effect).
 //
-// Single source of truth for each tool's input contract: the handler parses with these schemas and
-// getToolDefinitions() advertises toInputSchema(...) of the same schema, so the advertised and
-// enforced contracts cannot drift.
+// Single source of truth for each action's input contract: the member parses with these schemas
+// and the advertised JSON Schema is derived from the same zod, so the advertised and enforced
+// contracts cannot drift.
+
+export const MANAGE_ITEMS = 'manage-items';
 
 const CreateItemSchema = z.object({
   items: z
@@ -31,12 +38,12 @@ const CreateItemSchema = z.object({
     )
     .min(1, 'At least one item is required')
     .describe('The items to create.'),
-  folder: z.string().optional().describe('Folder name or id (created if absent).'),
+  folder: z.string().optional(),
 });
 
 const ListItemsSchema = z.object({
   type: z.string().optional().describe('Item type ("weapon", "spell").'),
-  folder: z.string().optional().describe('Only items in this folder (name or id).'),
+  folder: z.string().optional(),
   nameFilter: z.string().optional().describe('Case-insensitive substring match on item name.'),
 });
 
@@ -66,7 +73,7 @@ const DeleteItemSchema = z.object({
   identifiers: z
     .array(z.string().min(1))
     .min(1, 'At least one identifier is required')
-    .describe('Exact ids (preferred) or exact names of world Items to delete.'),
+    .describe('Exact ids or exact names.'),
 });
 
 const RemoveFromActorSchema = z
@@ -102,24 +109,19 @@ export const AddToActorItemsSchema = z
   )
   .min(1, 'At least one item is required');
 
-// add-to-actor is reached via the handleManageWorldItems dispatcher (and add-feature mode "items"),
-// not advertised as its own tool — so this is a parse-only contract.
+// add-to-actor is reached via handleAddActorItems (add-feature mode "items"), not advertised as
+// its own tool — so this is a parse-only contract.
 const AddToActorSchema = z.object({
   actorIdentifier: z.string().min(1, 'Actor identifier cannot be empty'),
   items: AddToActorItemsSchema,
 });
 
-/**
- * Surface page-side asset warnings (e.g. a bad img path that was substituted with a real floor icon)
- * onto the tool result. Leaves the result untouched when there are none, so the common path keeps its
- * exact shape; otherwise appends a human-readable block to a `message` field for the caller to see.
- */
-function surfaceWarnings(result: any): any {
-  const warns = Array.isArray(result?.warnings) ? result.warnings : [];
-  if (warns.length === 0) return result;
-  const warnSection = `\n\n⚠️ ${warns.length} warning(s):\n${warns.map((w: string) => `- ${w}`).join('\n')}`;
-  return { ...result, message: (result?.message ?? '') + warnSection };
-}
+/** The list columns (§3: a fixed, documented order); `trueName` is appended when any row has one. */
+const LIST_COLUMNS = ['id', 'name', 'type', 'folder'] as const;
+
+/** `"name" (id, type)` — with the true name when an unidentified mask hides it. */
+const itemRef = (d: { id?: string; name?: string; trueName?: string; type?: string }): string =>
+  `"${d.name}" (${d.id}, ${d.type}${d.trueName ? `, true "${d.trueName}"` : ''})`;
 
 export interface ItemToolsOptions {
   foundry: FoundryBridge;
@@ -129,47 +131,118 @@ export interface ItemToolsOptions {
 export class ItemTools {
   private foundry: FoundryBridge;
   private logger: Logger;
+  private union: UnionTool;
 
   constructor({ foundry, logger }: ItemToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'ItemTools' });
+    const log = this.logger;
+    this.union = unionTool({
+      name: MANAGE_ITEMS,
+      description:
+        'World Items (the sidebar): create / list / get / update / delete / import; an ' +
+        'unidentified item answers its mask as name and its real name as trueName. GM-only. ' +
+        'Items on an actor: add-item / add-feature / remove-from-actor.',
+      discriminators: ['action'],
+      shared: {
+        folder: z
+          .string()
+          .describe('Folder name or id (created if absent); list: only items in it.'),
+      },
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description: 'Create world Items from raw data.',
+          schema: CreateItemSchema,
+          handler: async ({ items, folder }) => {
+            log.info('Creating world items', {
+              count: items.length,
+              folder: folder ?? null,
+              types: items.map(i => i.type),
+            });
+            const r = await foundry.call('createWorldItems', { items, folder });
+            const created = Array.isArray(r?.created) ? r.created : [];
+            const where = r?.folderId ? ` in folder "${r.folderName}" (${r.folderId})` : '';
+            return (
+              `Created ${created.length} world item(s)${where}: ${created.map(itemRef).join(', ')}` +
+              warningBlock(r?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description: 'World Items: id, name, type, folder; filtered by type, name, folder.',
+          schema: ListItemsSchema,
+          handler: async ({ type, folder, nameFilter }) => {
+            const items = await foundry.call('listWorldItems', {
+              ...(type !== undefined ? { type } : {}),
+              ...(folder !== undefined ? { folder } : {}),
+              ...(nameFilter !== undefined ? { nameFilter } : {}),
+            });
+            const records = (Array.isArray(items) ? items : []).map(i => ({
+              id: i.id,
+              name: i.name,
+              type: i.type,
+              folder: i.folderName ?? null,
+              ...(i.trueName ? { trueName: i.trueName } : {}),
+            }));
+            const columns = records.some(r => 'trueName' in r)
+              ? [...LIST_COLUMNS, 'trueName']
+              : [...LIST_COLUMNS];
+            return listLines(`${records.length} item(s)`, columns, records);
+          },
+        }),
+        unionMember({
+          select: { action: 'get' },
+          description: 'One world Item in full: system data, effects, flags, description.',
+          schema: GetItemSchema,
+          handler: async ({ identifier }) => {
+            log.info('Getting world item', { identifier });
+            return foundry.call('getWorldItem', { identifier });
+          },
+        }),
+        unionMember({
+          select: { action: 'update' },
+          description:
+            'Update world Items by id: name, img, system data, folder. A rename on an ' +
+            'unidentified item changes the true name.',
+          schema: UpdateItemSchema,
+          handler: async ({ updates }) => {
+            log.info('Updating world items', {
+              count: updates.length,
+              ids: updates.map(u => u.id),
+            });
+            const r = await foundry.call('updateWorldItems', { updates });
+            const updated = Array.isArray(r?.updated) ? r.updated : [];
+            return (
+              `Updated ${updated.length} world item(s): ${updated.map(itemRef).join(', ')}` +
+              warningBlock(r?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: 'Permanently delete world Items.',
+          schema: DeleteItemSchema,
+          handler: async ({ identifiers }) => {
+            log.info('Deleting world items', { count: identifiers.length });
+            const r = await foundry.call('deleteWorldItems', { identifiers });
+            return deletedLine(r, 'world item');
+          },
+        }),
+        unionMember({
+          select: { action: 'import' },
+          description: IMPORT_ITEM_DESCRIPTION,
+          schema: ImportItemSchema,
+          handler: parsed => importItem(foundry, log, parsed),
+        }),
+      ],
+    });
   }
 
   getToolDefinitions() {
     return [
-      {
-        name: 'create-item',
-        description:
-          'Create world Items (the Items sidebar) from raw data. GM-only. Items on an actor: ' +
-          'import-item / add-item / add-feature.',
-        inputSchema: toInputSchema(CreateItemSchema),
-      },
-      {
-        name: 'list-items',
-        description: 'World Items, filtered by type, name substring or folder.',
-        inputSchema: toInputSchema(ListItemsSchema),
-      },
-      {
-        name: 'get-item',
-        description:
-          'One world Item in full: system data, effects, flags, description. An unidentified item ' +
-          'answers its mask as `name` and its real name as `trueName`.',
-        inputSchema: toInputSchema(GetItemSchema),
-      },
-      {
-        name: 'update-item',
-        description:
-          'Update world Items by id: name, img, system data, folder. A rename on an unidentified item ' +
-          'changes the true name (echoed as `trueName`). GM-only.',
-        inputSchema: toInputSchema(UpdateItemSchema),
-      },
-      {
-        name: 'delete-item',
-        description:
-          'Permanently delete world Items by exact id or exact name. GM-only. Items on an actor: ' +
-          'remove-from-actor.',
-        inputSchema: toInputSchema(DeleteItemSchema),
-      },
+      this.union.def,
       {
         name: 'remove-from-actor',
         description:
@@ -179,131 +252,9 @@ export class ItemTools {
     ];
   }
 
-  // Dispatcher: the six world-item tool names route through here (registry wires each to a
-  // pre-stamped `action`); add-feature mode "items" reuses the 'add-to-actor' action.
-  async handleManageWorldItems(args: any): Promise<any> {
-    const { action } = z
-      .object({
-        action: z.enum([
-          'create',
-          'list',
-          'get',
-          'update',
-          'delete',
-          'add-to-actor',
-          'remove-from-actor',
-        ]),
-      })
-      .parse(args);
-
-    switch (action) {
-      case 'create':
-        return this.handleCreateWorldItems(args);
-      case 'list':
-        return this.handleListWorldItems(args);
-      case 'get':
-        return this.handleGetWorldItem(args);
-      case 'update':
-        return this.handleUpdateWorldItems(args);
-      case 'delete':
-        return this.handleDeleteWorldItems(args);
-      case 'add-to-actor':
-        return this.handleAddActorItems(args);
-      case 'remove-from-actor':
-        return this.handleRemoveActorItems(args);
-    }
-  }
-
-  async handleCreateWorldItems(args: any): Promise<any> {
-    const { items, folder } = CreateItemSchema.parse(args);
-
-    this.logger.info('Creating world items', {
-      count: items.length,
-      folder: folder ?? null,
-      types: items.map(i => i.type),
-    });
-
-    const result = await this.foundry.call('createWorldItems', {
-      items,
-      folder,
-    });
-
-    this.logger.debug('Successfully created world items', {
-      folderId: result.folderId,
-      created: result.created?.length ?? 0,
-    });
-
-    return surfaceWarnings(result);
-  }
-
-  async handleListWorldItems(args: any): Promise<any> {
-    const { type, folder, nameFilter } = ListItemsSchema.parse(args);
-
-    this.logger.info('Listing world items', {
-      type: type ?? null,
-      folder: folder ?? null,
-      nameFilter: nameFilter ?? null,
-    });
-
-    const items = await this.foundry.call('listWorldItems', {
-      ...(type !== undefined ? { type } : {}),
-      ...(folder !== undefined ? { folder } : {}),
-      ...(nameFilter !== undefined ? { nameFilter } : {}),
-    });
-
-    this.logger.debug('Successfully listed world items', { count: items?.length ?? 0 });
-
-    return {
-      items: items ?? [],
-      total: items?.length ?? 0,
-    };
-  }
-
-  async handleGetWorldItem(args: any): Promise<any> {
-    const { identifier } = GetItemSchema.parse(args);
-
-    this.logger.info('Getting world item', { identifier });
-
-    const item = await this.foundry.call('getWorldItem', {
-      identifier,
-    });
-
-    this.logger.debug('Successfully retrieved world item', { id: item?.id, name: item?.name });
-
-    return item;
-  }
-
-  async handleUpdateWorldItems(args: any): Promise<any> {
-    const { updates } = UpdateItemSchema.parse(args);
-
-    this.logger.info('Updating world items', {
-      count: updates.length,
-      ids: updates.map(u => u.id),
-    });
-
-    const result = await this.foundry.call('updateWorldItems', {
-      updates,
-    });
-
-    this.logger.debug('Successfully updated world items', { count: result.updated?.length ?? 0 });
-
-    return surfaceWarnings(result);
-  }
-
-  async handleDeleteWorldItems(args: any): Promise<any> {
-    const { identifiers } = DeleteItemSchema.parse(args);
-
-    this.logger.info('Deleting world items', { count: identifiers.length });
-
-    const result = await this.foundry.call('deleteWorldItems', {
-      identifiers,
-    });
-
-    this.logger.debug('Successfully deleted world items', {
-      deleted: result?.deletedCount ?? 0,
-    });
-
-    return result;
+  /** The world-item union (registry-facing). */
+  async handleManageItems(args: unknown): Promise<unknown> {
+    return this.union.handle(args);
   }
 
   async handleAddActorItems(args: any): Promise<any> {

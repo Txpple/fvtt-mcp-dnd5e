@@ -35,7 +35,7 @@ const CALLS = [
   ['list-scenes', {}],
   ['list-actors', {}],
   ['list-actors', { type: 'npc' }],
-  ['list-items', {}],
+  ['manage-items', { action: 'list' }],
   ['list-journals', {}],
   ['manage-rolltables', { action: 'list' }],
   ['manage-playlists', { action: 'list' }],

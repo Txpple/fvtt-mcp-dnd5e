@@ -30,7 +30,7 @@ Tools used: **`create-pc`** (build + persist the PC, running advancement), **`cr
 **`inspect-pc-advancement`**
 (read-only: what choices a class needs at a level + the legal options), `search-compendium`
 (name lookup to confirm a class/species/background/spell exists in the premium books),
-`search-compendium-spells` (find spells by facet for casters), **`import-item`** (starting equipment —
+`search-compendium-spells` (find spells by facet for casters), **`manage-items { action: "import" }`** (starting equipment —
 copy real gear from the PHB), `add-feature` (a feat taken at an ASI tier), `set-actor-art`,
 `set-actor-ownership` (assign the *player* as owner), `move-documents` (file the PC), `get-actor` /
 `get-actor-entity` (read back). Defer gear judgment to [[physical-item-builder]].
@@ -187,13 +187,13 @@ in `warnings` — fix or ask, don't invent a spell.
 **Always-prepared house rule (policy rule 14):** for a KNOWN-style caster — **sorcerer, bard,
 ranger, warlock** — pass `spells.alwaysPrepared: true` and every listed spell (cantrips + leveled)
 lands *always prepared*, no toggle state. Prepared casters (cleric/druid/wizard/paladin) leave it
-off. (A spell added later to a known caster — a level-up pick via `import-item` — gets the same
+off. (A spell added later to a known caster — a level-up pick via `manage-items` `import` — gets the same
 `{"system.prepared": 2}` by `update-actor-item`; `level-up-pc` imports no spells.)
 
-## Step 6 — Starting equipment + ASI-feats (your call, via `import-item` / `add-feature`)
+## Step 6 — Starting equipment + ASI-feats (your call, via `manage-items` `import` / `add-feature`)
 
 `create-pc` adds **no gear and no ASI-feats**. After the PC exists:
-- **Equipment** — compose the starting kit by **copying real items** from the PHB/DMG with `import-item`
+- **Equipment** — compose the starting kit by **copying real items** from the PHB/DMG with `manage-items` `import`
   (`actorIdentifier` = the new PC), `equipped: true` for what it wears/wields. The 2024 class+background
   starting-equipment package, **or** the gold option if the player would rather buy — ask. Worn armor /
   shield, the primary weapon(s), adventuring gear, any spellbook/focus. Defer item judgment to
@@ -202,7 +202,7 @@ off. (A spell added later to a known caster — a level-up pick via `import-item
   disagrees with (an unarmored-defense class needs its calc, not a flat number).
 - **Feats** — for a PC **above level 3** whose player took a **feat** at an ASI tier (4/8/12/16/19),
   add it now: `add-feature` mode `compendium-features` with the feat name (it copies the real PHB feat),
-  or `import-item` for a feat-as-item. (Ability-increase ASIs are already in the final scores — don't
+  or `manage-items` `import` for a feat-as-item. (Ability-increase ASIs are already in the final scores — don't
   re-apply them. The Origin feat from the background is granted automatically.)
 - **Feature-granted free casts** — when a feat/lineage grants "cast X without a spell slot N/rest"
   (Magic Initiate, a lineage spell, Favored Enemy…), one call to **`add-free-cast`** builds the whole

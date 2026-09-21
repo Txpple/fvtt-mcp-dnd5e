@@ -1,15 +1,20 @@
 // Live acceptance for the COMPLETE-NPC inventory build: add-item (structured physical-item builder)
-// across every itemType + the update-actor currency group. Exercises the page-side write/read seams
-// against the live Molten world; unit tests mock the seam, so this is the real correctness gate. Test
-// docs are tagged ZZ-MCP-ITEM and cleaned up in a finally.
+// across every itemType + the update-actor currency group, then manage-items (action create / list /
+// get / update / delete / import — the M8 union, src/tools/items.ts) through
+// buildToolRegistry().dispatch. Exercises the page-side write/read seams against the live world;
+// unit tests mock the seam, so this is the real correctness gate. Test docs are tagged ZZ-MCP-ITEM
+// and cleaned up in a finally.
 //
 // Build first: npm run build. Run: node scripts/verify-item-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const env = loadEnv();
-const foundry = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const foundry = new Foundry(cfg);
 // dnd5e 6.0 stores a rarity SET (`rarities`); toObject() data carries it as an array.
 const rarityOf = s => (Array.isArray(s?.rarities) ? s.rarities[0] : s?.rarity) ?? '';
 
@@ -328,6 +333,112 @@ try {
     JSON.stringify(bauble) === JSON.stringify(['rare'])
       ? pass('update-actor-item: system.rarity patch -> system.rarities', JSON.stringify(bauble))
       : fail('update-actor-item: rarity patch', JSON.stringify(bauble));
+  }
+
+  // ── 11. manage-items through the registry (the M8 union: action create / list / get / update /
+  //        delete / import) ──
+  {
+    const { dispatch, tools } = buildToolRegistry({
+      foundry,
+      logger: new Logger({ level: 'error' }),
+      host: cfg.host,
+    });
+    const names = new Set(tools.map(t => t.name));
+    names.has('manage-items') &&
+    names.has('remove-from-actor') &&
+    ['create-item', 'list-items', 'get-item', 'update-item', 'delete-item', 'import-item'].every(
+      n => !names.has(n)
+    )
+      ? pass('manage-items: advertised; the six per-op tools gone; remove-from-actor stays')
+      : fail('manage-items: advertised', [...names].filter(n => /item/.test(n)).join(','));
+    const mi = args => dispatch('manage-items', args);
+    const cr = String(
+      await mi({
+        action: 'create',
+        items: [
+          { name: 'ZZ-MCP-ITEM Union Dagger', type: 'weapon' },
+          { name: 'ZZ-MCP-ITEM Union Gem', type: 'loot' },
+        ],
+        folder: 'ZZ-MCP-ITEM Loot',
+      })
+    );
+    const ids = [...cr.matchAll(/\((\w{16}), (\w+)\)/g)].map(m => m[1]);
+    tempWorldItemIds.push(...ids);
+    ids.length === 2 &&
+    cr.startsWith('Created 2 world item(s) in folder "ZZ-MCP-ITEM Loot" (') &&
+    cr.includes(
+      `"ZZ-MCP-ITEM Union Dagger" (${ids[0]}, weapon), "ZZ-MCP-ITEM Union Gem" (${ids[1]}, loot)`
+    )
+      ? pass('manage-items create: one line, the folder, each id + type', cr.slice(0, 80))
+      : fail('manage-items create', cr);
+    const lines = String(await mi({ action: 'list', folder: 'ZZ-MCP-ITEM Loot' })).split('\n');
+    /^\d+ item\(s\): id name type folder$/.test(lines[0] ?? '') &&
+    lines.includes(`${ids[0]} "ZZ-MCP-ITEM Union Dagger" weapon "ZZ-MCP-ITEM Loot"`)
+      ? pass('manage-items list: the header + the row (folder filter)', lines[0])
+      : fail('manage-items list', lines.slice(0, 3).join(' | '));
+    const got = await mi({ action: 'get', identifier: ids[1] });
+    got?.id === ids[1] && got?.type === 'loot' && got?.folderName === 'ZZ-MCP-ITEM Loot'
+      ? pass('manage-items get: the JSON read', `${got.name} / ${got.type}`)
+      : fail('manage-items get', JSON.stringify(got).slice(0, 120));
+    const up = String(
+      await mi({
+        action: 'update',
+        updates: [
+          { id: ids[0], name: 'ZZ-MCP-ITEM Union Dagger +1', system: { rarity: 'uncommon' } },
+        ],
+      })
+    );
+    up === `Updated 1 world item(s): "ZZ-MCP-ITEM Union Dagger +1" (${ids[0]}, weapon)`
+      ? pass('manage-items update: one line', up)
+      : fail('manage-items update', up);
+    const imported = String(
+      await mi({
+        action: 'import',
+        packId: 'dnd-players-handbook.equipment',
+        itemId: (
+          await foundry.call('searchCompendiumFaceted', {
+            documentType: 'gear',
+            name: 'Dagger',
+            limit: 5,
+          })
+        )?.results?.find(h => h.name === 'Dagger')?.id,
+        name: 'ZZ-MCP-ITEM Union Import',
+        folder: 'ZZ-MCP-ITEM Loot',
+      })
+    );
+    const impId = /: id (\w{16}), type/.exec(imported)?.[1];
+    if (impId) tempWorldItemIds.push(impId);
+    !!impId &&
+    imported.startsWith(
+      'Copied "ZZ-MCP-ITEM Union Import" (from "Dagger") onto world Items (folder "ZZ-MCP-ITEM Loot"): id '
+    )
+      ? pass('manage-items import: one line, the rename, the world target + folder', imported)
+      : fail('manage-items import', imported);
+    for (const [args, want] of [
+      [
+        { action: 'add-to-actor', items: [] },
+        'action must be one of "create", "list", "get", "update", "delete", "import"',
+      ],
+      [{ action: 'get', id: 'x' }, 'unknown argument "id" — it takes: action, identifier'],
+      [{ action: 'import', packId: 'dnd5e.items', itemId: 'x' }, 'SRD'],
+      [{ action: 'get', identifier: 'ZZ-no-such-item' }, 'not found'],
+    ]) {
+      let msg = '';
+      try {
+        await mi(args);
+      } catch (e) {
+        msg = e?.message ?? String(e);
+      }
+      msg.includes(want)
+        ? pass(`manage-items refused by name / a miss is an error: ${want.slice(0, 50)}`)
+        : fail(`manage-items refusal: ${want.slice(0, 50)}`, msg.slice(0, 120));
+    }
+    const del = String(await mi({ action: 'delete', identifiers: [ids[1], 'ZZ-NOPE-ITEM'] }));
+    del ===
+    `Deleted 1 world item(s): "ZZ-MCP-ITEM Union Gem" (${ids[1]}) (1 not found: ZZ-NOPE-ITEM)`
+      ? pass('manage-items delete: one line with the not-found tail', del)
+      : fail('manage-items delete', del);
+    tempWorldItemIds.splice(tempWorldItemIds.indexOf(ids[1]), 1);
   }
 } catch (e) {
   fail('SUITE', e?.message || String(e));

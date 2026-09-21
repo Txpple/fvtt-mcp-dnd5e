@@ -50,12 +50,12 @@
    verified core floor), `add-feature` fills a real feature/attack/spell icon **and accepts an `img`**,
    and `author-npc` fills a real creatureType portrait + token. So a blank is off the table — but for a
    *specific* look, still pass `img` (to `add-item` / `add-feature`) or set it afterward from the
-   compendium feature/item you are emulating (`search-compendium-*` → copy its `img` via `update-item` /
-   `update-actor-item` / `set-actor-art`). Copied documents (`import-item` / `create-actor-from-compendium`)
+   compendium feature/item you are emulating (`search-compendium-*` → copy its `img` via `manage-items` `update` /
+   `update-actor-item` / `set-actor-art`). Copied documents (`manage-items` `import` / `create-actor-from-compendium`)
    already carry real art. Confirm with `content-audit` before you finish.
 
 9. **A magic item you put on an NPC must ALSO exist as a world Item, for loot — now AUTOMATIC.** When you
-   `import-item` / `add-item` a magic item onto an actor, the tool mints a matching loose **world Item**
+   `manage-items` `import` / `add-item` a magic item onto an actor, the tool mints a matching loose **world Item**
    (same stats + real icon) in a loot folder by default — control it with `lootCopyFolder` (default
    `"Loot"`) and `lootCopy` (`false` to suppress, `true` to force a mundane copy). **Don't hand-create
    the twin too — that double-mints it.** Plain mundane gear doesn't need a twin; `content-audit` flags
@@ -85,7 +85,7 @@
     language (rule 7), a magic NPC item with no loot twin (rule 9), and a GM note / spoiler in a
     player-visible **item description** (rule 12 — `"GM:"` asides, "the DM", "fill in the …",
     "ready-made hook", "to suit your table"; an NPC biography is GM-facing and is not scanned). Fix
-    each finding — a real icon via `update-actor-item` / `update-item` / `set-actor-art`; real
+    each finding — a real icon via `update-actor-item` / `manage-items` `update` / `set-actor-art`; real
     mechanics in place of fudge; the missing loot copy minted; the item description rewritten to
     innocuous in-world flavour with the GM note moved to a GM-only journal — and re-run until it
     reports clean. These rules are enforced at the tool floor; this is the belt-and-suspenders check

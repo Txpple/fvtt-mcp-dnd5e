@@ -124,7 +124,7 @@ name and became a **[seam](design.md)** (§2.6, [`docs/history/plan-2.2-hosts.md
   the WebDAV plane derived from the URL) · `local` (an install on this machine — no wake, and the
   asset file tools work straight on its `Data/` directory). One `.env`, one registration per
   instance; `FOUNDRY_PROFILE=local` still works as an alias. `get-world-info` reports the host.
-- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 101 tools (14 named toolsets;
+- **`FOUNDRY_TOOLSETS`** — a registration advertises a subset of the 96 tools (14 named toolsets;
   `session` always on); an out-of-set call is refused by name. `chat,combat` is 12 tools at ~3k tokens
   instead of ~57k.
 - **`fvtt-mcp-dnd5e`** — the name says what it is (D&D 5e, by design), not where it runs.
@@ -135,9 +135,9 @@ the placeables) — the biggest context lever left, and a change to every skill,
 commit. First in: `manage-placeables` (`kind`: tiles / lights / walls / drawings / sounds / notes / tokens
 / regions × `action`: create / list / update / delete, plus the region specials) replaces 35 tools
 for fewer advertised bytes than they cost; `manage-macros` (`action`: create / list / delete) the
-three macro tools; `manage-folders`, `manage-playlists`, `manage-cards` and `manage-rolltables`
-(`action`: create / import / list / get / update / delete as each family has them) the folder,
-playlist, cards and roll-table tools.
+three macro tools; `manage-folders`, `manage-playlists`, `manage-cards`, `manage-rolltables` and
+`manage-items` (`action`: create / import / list / get / update / delete as each family has them)
+the folder, playlist, cards, roll-table and world-item tools.
 
 ---
 
@@ -343,7 +343,7 @@ Register the built MCP server in your Claude Code config. Copy
 
 ### Toolsets — advertise less
 
-The full surface is 101 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
+The full surface is 96 tools, and `tools/list` for it is ~57k tokens. A client that loads MCP
 schemas eagerly pays that on every registration before the first word (Claude Code defers them and
 only lists names, so it pays far less). A registration that only ever does part of the job can say
 so with `FOUNDRY_TOOLSETS` (comma-separated) and advertise just those:
@@ -395,7 +395,7 @@ variable to set if something it needs is missing.
 
 ## Tools
 
-**101 tools total: 91 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
+**96 tools total: 86 over the headless bridge (Plane A) + 10 asset file tools over the host's file plane (Plane B).**
 
 Plane A (bridge) covers world introspection and editing — actors, items, compendium search,
 journals & quests, scenes **and their placeables** (walls, lights, tokens, regions/teleporters,
@@ -445,8 +445,8 @@ WebDAV on Molten, the `Data/` directory on a local install) is the asset file li
 | `add-journal-image`     | Append an image page to a journal entry                                      |
 
 The remaining Plane A tools cover world CRUD (`create-actor-from-compendium`/`author-npc`, `add-feature` (features / compendium
-features / spells), `import-item` (copy a real PHB/DMG item — art + stats — onto an actor or the
-sidebar), `add-item` (author structured weapons/armor/consumables/loot/containers), `create-item`,
+features / spells), `manage-items` (`import`: copy a real PHB/DMG item — art + stats — onto an actor
+or the sidebar; `create` from raw data), `add-item` (author structured weapons/armor/consumables/loot/containers),
 `create-journal`/`create-quest-journal`, `manage-rolltables`, `manage-cards`, …), listing/search
 (`list-actors`, `search-compendium`, `list-journals`, …), and organization (`manage-folders`,
 `move-documents`, `bulk-delete`). See the `handlers` map in [`src/registry.ts`](src/registry.ts) for the full dispatch table.

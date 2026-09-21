@@ -17,7 +17,7 @@ biography, and a finishing pass — by sequencing the right tool calls. It adds 
 tool it calls holds its own correctness.
 
 Tools used: `create-actor-from-compendium` (prefab copy · prefab-as-base via `modifications`), `author-npc` (authored from scratch), `update-actor`, `add-feature` (features /
-compendium-features / spells), **`import-item`** (COPY gear from a compendium — the default for
+compendium-features / spells), **`manage-items { action: "import" }`** (COPY gear from a compendium — the default for
 inventory), `add-item` (author homebrew gear — last resort), `manage-activity`, `manage-effect`,
 `apply-condition`, `set-actor-art`, `set-actor-ownership`, `move-documents`, `update-actor-item`
 (per-item corrections), the faceted discovery tools `search-compendium-creatures` /
@@ -29,7 +29,7 @@ each searches the premium books only and never the SRD, so you don't reason abou
 > **Faceted discovery returns minimal hits.** `search-compendium-creatures` / `-spells` / `-items`
 > each return `results: [{ id, name, type, uuid, pack, img, facets }]` plus `totalFound` (the
 > full match count — raise `limit` for a survey), premium-first ranked. Pick a hit by name, then feed its **`pack` + `id`** straight into
-> `create-actor-from-compendium`, `import-item`, or `get-compendium-entry` — no pack-id guesswork.
+> `create-actor-from-compendium`, `manage-items` `import`, or `get-compendium-entry` — no pack-id guesswork.
 
 > **`add-feature` invocation shape.** It takes a top-level `mode` — only `feature`,
 > `compendium-features`, or `items` — plus nested params. Authoring any single
@@ -158,7 +158,7 @@ Only author from scratch with `add-feature` mode `feature` / `featureType: "pass
 ## Step 5 — Actions, attacks, and abilities
 
 Map each action to the right tool:
-- **The weapon it fights with** → COPY the real weapon from a compendium with `import-item` (it arrives
+- **The weapon it fights with** → COPY the real weapon from a compendium with `manage-items` `import` (it arrives
   with its attack activity + artwork), `equipped: true`. For a magic/custom weapon, copy the closest base
   then modify+rename (see [[physical-item-builder]]). Author a `weapon` with `add-item` only for true
   homebrew with no base. Either way it must be a real weapon item with an attack so to-hit/damage derive
@@ -316,27 +316,27 @@ mode by how the block reads:
 - Reading: `manage-activity list` names the profiles; the DM reverts a transformed actor from the
   sheet header. Copy the MM's shapeshifter first — author only when the block is custom.
 
-## Step 8 — Inventory, gear & loot (compendium-first via `import-item`)
+## Step 8 — Inventory, gear & loot (compendium-first via `manage-items` `import`)
 
 Build the rest of what the creature carries and drops — COPY from the 2024 PHB/DMG compendiums first;
 defer item judgment to [[physical-item-builder]]:
 - **Find then copy:** discover gear with `search-compendium-items` (facets: `documentType`
   gear|weapon|armor|consumable, `rarity`, `itemType`, `magical`, `name` — premium books only, never the
-  `dnd5e.*` SRD, so no pack-id reasoning) → `import-item` the chosen hit (`packId` = its `pack`,
+  `dnd5e.*` SRD, so no pack-id reasoning) → `manage-items` `import` the chosen hit (`packId` = its `pack`,
   `itemId` = its `id`, plus `actorIdentifier`). Copies bring correct stats AND art.
-- **Worn armor / shield** → `import-item` the real armor/shield. A stat block's fixed AC is
+- **Worn armor / shield** → `manage-items` `import` the real armor/shield. A stat block's fixed AC is
   `ac: {override: N}` on `update-actor` (author-npc `acMode: "flat"` does the same); a creature whose
   AC should come from worn armor needs the override cleared (`ac: {override: null}` — the default
   calcs then use the armor) and natural armor is `ac: {natural: N}`. A shield's +2 applies under
   every calculation except an override. When you must AUTHOR body armor via `add-item`, pass
   `wireAc: true` to put the actor back on armor-based AC.
-- **Carried gear, consumables, loot** → `import-item` potions/scrolls, magic trinkets, tools, gems. Use
+- **Carried gear, consumables, loot** → `manage-items` `import` potions/scrolls, magic trinkets, tools, gems. Use
   `equipped: false` for stowed items, `identified: false` for mystery loot.
 - **Custom magic gear** → copy the closest base, then modify (`update-actor-item` / `manage-activity` /
   `manage-effect`) and rename. Author with `add-item` only as a last resort (and ASK first).
 - **Containers** → copy/create a `container` first, then place items with `container: "<name>"`.
 - **Coins** → already on the actor via `update-actor` `currency` (Step 3).
-> **⚠ A magic item on the NPC is ALSO loot — now AUTOMATIC.** When you `import-item` / `add-item` a
+> **⚠ A magic item on the NPC is ALSO loot — now AUTOMATIC.** When you `manage-items` `import` / `add-item` a
 > magic item onto the NPC, the tool also mints a matching loose **world Item** (same stats + real icon)
 > in a loot folder so the party can loot it (shared-policy rule 9). Steer it with `lootCopyFolder`
 > (default `"Loot"` — pass your treasure folder); `lootCopy: false` suppresses it, `lootCopy: true`

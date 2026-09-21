@@ -166,7 +166,7 @@ describe('compendium-sources — library policy (design.md §2.3: books only, ne
 
   describe('assertNoSrdPacks (the active pull guard — design.md §2.3 by construction)', () => {
     it('throws on a single SRD pack id', () => {
-      expect(() => assertNoSrdPacks('dnd5e.spells24', 'import-item')).toThrow(/SRD/);
+      expect(() => assertNoSrdPacks('dnd5e.spells24', 'manage-items import')).toThrow(/SRD/);
     });
 
     it('throws if ANY pack in a list is SRD, naming the offender', () => {

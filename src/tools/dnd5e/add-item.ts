@@ -274,7 +274,7 @@ export class DnD5eAddItemTool {
           'container) on an actor or as a world Item; the leaves are tagged by itemType and the rest ' +
           'default. magicalBonus / magical add "mgc" (the +N lands on weapons, body armor and magic ' +
           'ammo; wondrous / potion have none). A duplicate name is not refused. Copying a compendium ' +
-          'item is import-item.',
+          'item is manage-items import.',
         inputSchema: toInputSchema(AddItemSchema),
       },
     ];

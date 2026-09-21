@@ -86,10 +86,11 @@ const candidateRows = uniq(candidates);
 // The 17 CRUD families M8 consolidates — one commit each, every skill line re-pointed in it. A
 // consolidated family is its one tool (the eight placeable kinds → manage-placeables; the
 // macros → manage-macros; the folders → manage-folders; the playlists → manage-playlists; the
-// cards → manage-cards; the six table CRUD tools → manage-rolltables, roll-on-table staying).
+// cards → manage-cards; the six table CRUD tools → manage-rolltables, roll-on-table staying; the
+// six item tools → manage-items, remove-from-actor staying).
 const FAMILIES = {
   placeables: ['manage-placeables'],
-  items: ['create-item', 'list-items', 'get-item', 'update-item', 'delete-item', 'import-item'],
+  items: ['manage-items'],
   tables: ['manage-rolltables'],
   journals: [
     'create-journal',

@@ -19,12 +19,12 @@ bearing, edition-correct** Foundry items. It adds NO new mechanics; the tools ho
 
 **Follow the shared project authoring policy:** read
 [`_shared/authoring-policy.md`](../_shared/authoring-policy.md) (`.claude/skills/_shared/authoring-policy.md`)
-— 2024 by default · compendium-FIRST (copy the real PHB/DMG item with `import-item`, even for plain gear;
+— 2024 by default · compendium-FIRST (copy the real PHB/DMG item with `manage-items` `import`, even for plain gear;
 don't author) · **never the SRD** · custom = copy a base → modify → rename · can't find a 2024 match →
 **STOP and ASK** (never fall back to 2014/SRD, never invent a rarity/price/damage die) · authoring, not
 play. The **item-specific** shaping rules are in "House rules for shaping items" below.
 
-Tools: **`import-item`** (copy from a compendium — the default path), **`search-compendium-items`**
+Tools: **`manage-items { action: "import" }`** (copy from a compendium — the default path), **`search-compendium-items`**
 (faceted discovery by rarity / subtype / magical — the default way to *find* gear), **`search-compendium`**
 (broad name lookup) / **`get-compendium-entry`** (confirm the entry; you copy by the hit's `pack` + `id`),
 **`add-item`** (author from scratch — homebrew last resort only), **`update-actor`** (actor
@@ -44,7 +44,7 @@ Discover the item with **`search-compendium-items`** — faceted by `documentTyp
 `magical`, and `name`. It searches the **premium books ONLY** (never the `dnd5e.*` SRD, design.md §2.3)
 and ranks them first, so you don't reason about pack ids. (For a quick exact-name lookup,
 `search-compendium` by name also works.) Confirm a hit with `get-compendium-entry` if you need the full
-entry, then copy it with **`import-item`** (`packId` = the hit's `pack`, `itemId` = its `id`, plus
+entry, then copy it with **`manage-items` `import`** (`packId` = the hit's `pack`, `itemId` = its `id`, plus
 `actorIdentifier` or `folder`). On-copy you can `name`-rename, set `quantity`, `equipped`, `identified`,
 or nest in a `container`. Done — it has the right stats and art.
 
@@ -52,7 +52,7 @@ or nest in a `container`. Done — it has the right stats and art.
 
 If the exact item isn't in a compendium but a close base IS (the common case for homebrew magic items):
 
-1. **Copy the closest base** with `import-item` — e.g. a `Shield` or `+1 Shield` from the DMG, a plain
+1. **Copy the closest base** with `manage-items` `import` — e.g. a `Shield` or `+1 Shield` from the DMG, a plain
    `Mace`, a `Longsword`.
 2. **Modify it** to match the concept:
    - `update-actor-item` (dot-path patch) — bump `system.armor.magicalBonus`/weapon `magicalBonus`,
@@ -80,9 +80,9 @@ If the exact item isn't in a compendium but a close base IS (the common case for
      effect-level `conditions` over `item.*` (`{o:"OR", v:[{k:"item.type.value", o:"in",
      v:["simpleR","martialR"]}, {k:"item.properties", o:"has", v:"thr"}]}`). Set `magical: true` on a
      magic item's effect. Full recipes + the Filter grammar: [[stat-block-builder]] Step 7.
-3. **Rename** to the custom name (`import-item`'s `name` on copy, or `update-actor-item`).
+3. **Rename** to the custom name (the import's `name` on copy, or `update-actor-item`).
 
-> **If `import-item` reports `unresolvedScale`** (rare — a magic-item feature rider whose damage/uses
+> **If the import reports an unresolved `@scale` token** (rare — a magic-item feature rider whose damage/uses
 > use an advancement-fed `@scale.*` formula), it's flagging a dangling token as a fact, just like the
 > NPC case. Set an explicit value at the reported `path` with `update-actor-item`; the tool reports the
 > token, you choose the die (design.md §2.1).
@@ -119,7 +119,7 @@ menu but does **NOT** actually cast (no template pops). This is the #1 magic-ite
   }
   ```
   `add` **deep-merges**, so a weapon's base Attack activity is preserved (the cast is added alongside).
-  Charges live on the ITEM (`update-item` `system.uses.max` + `recovery:[{period:"dawn",
+  Charges live on the ITEM (`manage-items` `update` `system.uses.max` + `recovery:[{period:"dawn",
   type:"recoverAll"|"formula",formula}]`); the cast's charge consumption is wired by `charges`. The fixed
   `saveDC` is stored but **sanitized from read-back** (data is correct; `attackBonus` shows). To swap a
   wrong activity for a cast: `manage-activity remove` the old, then `manage-activity add` the cast.
@@ -154,15 +154,15 @@ them — and **pull an approximating icon from the compendium** (see House rules
 - **Never ship a blank or generic icon.** `add-item` now AUTO-FILLS a real icon when you give no `img`:
   it tries a live same-kind compendium match by name/baseItem (so a "Mace of the Long Dark" → a real
   mace icon), falling back to a verified core floor — a blank is impossible. So the floor is handled for
-  you, but for a *specific* look still prefer passing `img` (or fixing it after with `update-item` /
+  you, but for a *specific* look still prefer passing `img` (or fixing it after with `manage-items` `update` /
   `update-actor-item`): `search-compendium-items` for the closest thematic item (a *Mace of Terror* icon
   for a dark mace, *Robe of Stars* for a night-veil, a *Dark Shard Amulet* for an unholy focus) and copy
-  its `img`. `import-item` copies already carry real art.
+  its `img`. `manage-items` `import` copies already carry real art.
 - **A custom item's MECHANICS must be real — never a "treat its X as Y" note.** If the item deals
   necrotic, SET its `damage` type to necrotic — do **not** leave a bludgeoning base and write *"deals
   necrotic in place of bludgeoning."* If it's +1, set `magicalBonus`. The description says what the item
   **is**; it never asks the GM to fudge the sheet (shared-policy rule 7).
-- **A magic item you place on an NPC is ALSO loot — now AUTOMATIC.** When you `import-item` / `add-item`
+- **A magic item you place on an NPC is ALSO loot — now AUTOMATIC.** When you `manage-items` `import` / `add-item`
   a magic item onto an actor, the tool also mints a matching loose **world Item** (same stats + real
   icon) in a loot folder by default, so the party can loot it (shared-policy rule 9). Control it with
   `lootCopyFolder` (default `"Loot"`); `lootCopy: false` suppresses it, `lootCopy: true` forces a copy of
@@ -220,5 +220,5 @@ GM-fudge language (rule 7), or magic item on an NPC with no loot twin (rule 9). 
 - **A new tool/param needs a Claude Code restart** to load into the running MCP server; the live
   acceptance script (`scripts/verify-item-tooling.mjs`) bypasses this via `dist/`.
 - Authoring only — this does not equip-in-combat, roll attacks, or spend charges/uses.
-- `create-item` / `add-feature` (mode `items`) remain the raw `system`-data passthrough for edge cases;
+- `manage-items` `create` / `add-feature` (mode `items`) remain the raw `system`-data passthrough for edge cases;
   `update-actor-item` patches any field by dot-path after the fact.
