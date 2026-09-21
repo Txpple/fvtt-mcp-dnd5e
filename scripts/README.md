@@ -39,6 +39,9 @@ tool proofs:
   local `Data/`) and the bridge plane (Foundry's own FilePicker through the page).
 - `verify-toolsets` — the `FOUNDRY_TOOLSETS` registration filter (offline).
 - `prove-bridge` — the smallest possible live round trip (connect, one `foundry.call`, dispose).
+- `verify-error-contract` — the error contract end to end (read-only): a page-side `PageError`
+  code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
+  appends one hint per code, a dead URL is `connection`.
 
 ## The sandbox toolkit (owner-ops; `docs/local-sandbox.md`)
 

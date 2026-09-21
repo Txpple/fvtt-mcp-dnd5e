@@ -15,6 +15,8 @@
 // Bytes cross the bridge as base64 — `page.evaluate` arguments are JSON. Fine for a map or a
 // track; a direct plane (WebDAV, the local filesystem) is the fast path for bulk.
 
+import { unsupported } from './errors.js';
+
 interface BrowseResult {
   target: string;
   dirs: string[];
@@ -25,7 +27,7 @@ interface BrowseResult {
 function filePicker(): any {
   const fp =
     foundry?.applications?.apps?.FilePicker?.implementation ?? (globalThis as any).FilePicker;
-  if (!fp) throw new Error('FilePicker is not available in this Foundry build');
+  if (!fp) throw unsupported('FilePicker is not available in this Foundry build');
   return fp;
 }
 

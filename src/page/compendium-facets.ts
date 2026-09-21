@@ -11,6 +11,7 @@
 // covers the (unlikely) absence of the system API.
 
 import { excludeSrdPacks, isSrdPack, packPriority } from '../utils/compendium-sources.js';
+import { invalid } from './errors.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -323,7 +324,7 @@ export async function searchCompendiumFaceted(
 ): Promise<{ results: CompendiumHit[]; totalFound: number }> {
   const def = CONTENT_TYPES[args?.documentType];
   if (!def) {
-    throw new Error(
+    throw invalid(
       `Unknown documentType "${args?.documentType}". Known: ${Object.keys(CONTENT_TYPES).join(', ')}.`
     );
   }

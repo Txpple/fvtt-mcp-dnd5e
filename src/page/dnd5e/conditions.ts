@@ -20,6 +20,7 @@
 //    "remove" call would ADD a level.
 
 import { resolveActorFuzzy } from '../_shared.js';
+import { invalid, notFound, unsupported } from '../errors.js';
 
 /** dnd5e's static effect id for the exhaustion condition (`staticID("dnd5eexhaustion")`). */
 const EXHAUSTION_STATIC_KEY = 'dnd5eexhaustion';
@@ -163,12 +164,12 @@ export async function applyCondition(args: {
   exhaustionLevel?: number;
 }): Promise<unknown> {
   const actor = resolveActorFuzzy(args?.actorIdentifier);
-  if (!actor) throw new Error(`Actor not found: ${args?.actorIdentifier}`);
+  if (!actor) throw notFound(`Actor not found: ${args?.actorIdentifier}`);
   if (typeof actor.toggleStatusEffect !== 'function') {
-    throw new Error('This Foundry version does not support Actor#toggleStatusEffect.');
+    throw unsupported('This Foundry version does not support Actor#toggleStatusEffect.');
   }
   const conditions = Array.isArray(args.conditions) ? args.conditions : [];
-  if (conditions.length === 0) throw new Error('Provide at least one condition.');
+  if (conditions.length === 0) throw invalid('Provide at least one condition.');
   const active = args.active !== false;
 
   const validIds = collectStatusIds((globalThis as any).CONFIG ?? {});

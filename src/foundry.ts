@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import type { PageApi } from './page/index.js';
+import { asCallError, asConnectError } from './bridge-error.js';
 import type { Host } from './hosts/types.js';
 import { hostConfigProblem } from './hosts/env.js';
 import { clearSystemCache } from './utils/system-detection.js';
@@ -139,13 +140,22 @@ export class Foundry implements FoundryBridge {
     return this.ready && !!this.page && !this.page.isClosed();
   }
 
-  /** Idempotent connect (wake -> join -> game.ready -> inject). Safe to await concurrently. */
+  /**
+   * Idempotent connect (wake -> join -> game.ready -> inject). Safe to await concurrently. Whatever
+   * fails on the way — the wake, /setup, /join, game.ready, Playwright itself — surfaces as a
+   * `connection` BridgeError: the bridge never reached a joinable world, and that is the code, not
+   * a word in the message.
+   */
   async connect(): Promise<void> {
     if (this.isReady()) return;
     if (this.connecting) return this.connecting;
-    this.connecting = this.doConnect().finally(() => {
-      this.connecting = undefined;
-    });
+    this.connecting = this.doConnect()
+      .catch(err => {
+        throw asConnectError(err);
+      })
+      .finally(() => {
+        this.connecting = undefined;
+      });
     return this.connecting;
   }
 
@@ -537,7 +547,9 @@ export class Foundry implements FoundryBridge {
 
   /**
    * The tool seam: invoke a page-side domain function by name.
-   * Mirrors the legacy foundryClient.query('foundry-mcp-bridge.X', data) 1:1.
+   * Mirrors the legacy foundryClient.query('foundry-mcp-bridge.X', data) 1:1. A failure is a
+   * BridgeError: the page's own words as `detail`, its PageError code (or `connection` when the
+   * session was lost under the call) as `code` — see src/bridge-error.ts.
    */
   async call<T = unknown>(name: string, args?: unknown): Promise<T> {
     await this.ensureReady();
@@ -554,10 +566,10 @@ export class Foundry implements FoundryBridge {
         try {
           return await this.invoke<T>(name, args);
         } catch (err2) {
-          throw new Error(`foundry.call('${name}') failed: ${(err2 as Error).message}`);
+          throw asCallError(name, err2);
         }
       }
-      throw new Error(`foundry.call('${name}') failed: ${(err as Error).message}`);
+      throw asCallError(name, err);
     }
   }
 

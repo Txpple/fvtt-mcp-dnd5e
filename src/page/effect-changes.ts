@@ -47,6 +47,7 @@ import {
   RULE_TYPES,
   type RuleType,
 } from '../utils/dnd5e-canonical.js';
+import { invalid } from './errors.js';
 
 /** Legacy numeric ActiveEffect mode → v14 string type (CONST.ACTIVE_EFFECT_MODES). */
 const MODE_NUM_TO_TYPE: Record<number, string> = {
@@ -105,7 +106,7 @@ export function normalizeConditions(input: unknown, scope: FilterScope): string 
     try {
       def = JSON.parse(trimmed);
     } catch {
-      throw new Error(`conditions is not valid Filter JSON: ${trimmed.slice(0, 80)}`);
+      throw invalid(`conditions is not valid Filter JSON: ${trimmed.slice(0, 80)}`);
     }
   }
   if (def === undefined || def === null) return EMPTY_CONDITIONS;
@@ -116,41 +117,41 @@ export function normalizeConditions(input: unknown, scope: FilterScope): string 
 
 function normalizeFilterNode(node: unknown, scope: FilterScope, path: string): unknown {
   if (Array.isArray(node)) {
-    if (node.length === 0) throw new Error(`${path}: an empty filter list matches nothing useful.`);
+    if (node.length === 0) throw invalid(`${path}: an empty filter list matches nothing useful.`);
     return node.map((n, i) => normalizeFilterNode(n, scope, `${path}[${i}]`));
   }
   if (!isPlainObject(node)) {
-    throw new Error(`${path}: a filter must be an object { k, v, o? } or an operator { o, v }.`);
+    throw invalid(`${path}: a filter must be an object { k, v, o? } or an operator { o, v }.`);
   }
   const o = node.o;
   if (o !== undefined && typeof o !== 'string') {
-    throw new Error(`${path}.o: must be a string (operator or comparison name).`);
+    throw invalid(`${path}.o: must be a string (operator or comparison name).`);
   }
   if (o !== undefined && (FILTER_OPERATORS as readonly string[]).includes(o)) {
     if (o === 'NOT') {
       if (!isPlainObject(node.v)) {
-        throw new Error(`${path}: NOT takes a single filter object as v.`);
+        throw invalid(`${path}: NOT takes a single filter object as v.`);
       }
       return { o, v: normalizeFilterNode(node.v, scope, `${path}.v`) };
     }
     if (!Array.isArray(node.v) || node.v.length === 0) {
-      throw new Error(`${path}: ${o} takes a non-empty array of filters as v.`);
+      throw invalid(`${path}: ${o} takes a non-empty array of filters as v.`);
     }
     return { o, v: node.v.map((n, i) => normalizeFilterNode(n, scope, `${path}.v[${i}]`)) };
   }
   const op = o ?? 'exact';
   if (!(FILTER_COMPARISONS as readonly string[]).includes(op)) {
-    throw new Error(
+    throw invalid(
       `${path}.o: unknown operator "${op}". Comparisons: ${FILTER_COMPARISONS.join(' ')}; ` +
         `operators: ${FILTER_OPERATORS.join(' ')}.`
     );
   }
   const k = node.k;
   if (typeof k !== 'string' || k.trim() === '') {
-    throw new Error(`${path}.k: a comparison needs a key path (e.g. "statuses.bloodied").`);
+    throw invalid(`${path}.k: a comparison needs a key path (e.g. "statuses.bloodied").`);
   }
   if (scope === 'effect' && /^roll\./.test(k)) {
-    throw new Error(
+    throw invalid(
       `${path}.k: "${k}" — roll.* keys are only available on the conditions of a RULES-type change ` +
         `(${RULE_TYPES.join(' / ')}), which alone are evaluated at roll time; an effect-level ` +
         'condition (or a core-type change, evaluated at data preparation) cannot see the roll.'
@@ -159,15 +160,15 @@ function normalizeFilterNode(node: unknown, scope: FilterScope, path: string): u
   let v = node.v;
   if (op === 'empty') {
     if (v === undefined) v = true;
-    else if (typeof v !== 'boolean') throw new Error(`${path}.v: "empty" takes true/false.`);
+    else if (typeof v !== 'boolean') throw invalid(`${path}.v: "empty" takes true/false.`);
   } else if (v === undefined) {
-    throw new Error(`${path}.v: a "${op}" comparison needs a value.`);
+    throw invalid(`${path}.v: a "${op}" comparison needs a value.`);
   }
   if (LIST_COMPARISONS.has(op) && !Array.isArray(v)) {
-    throw new Error(`${path}.v: "${op}" takes a list of values.`);
+    throw invalid(`${path}.v: "${op}" takes a list of values.`);
   }
   if (NUMERIC_COMPARISONS.has(op) && typeof v !== 'number') {
-    throw new Error(`${path}.v: "${op}" takes a number.`);
+    throw invalid(`${path}.v: "${op}" takes a number.`);
   }
   if (op === 'has' && isPlainObject(v)) v = normalizeFilterNode(v, scope, `${path}.v`);
   const out: Record<string, unknown> = { k: k.trim() };
@@ -267,13 +268,13 @@ const DICE_TERM = /\d*d(\d+|%)/i;
  */
 export function validateRuleChange(type: RuleType, key: string, value: string): string {
   if (!(RULE_KEYS as readonly string[]).includes(key)) {
-    throw new Error(
+    throw invalid(
       `change type "${type}" is a rule: its key must be a roll category (${RULE_KEYS.join(' ')}), ` +
         `not "${key}".`
     );
   }
   if (!D20_RULE_KEYS.has(key) && type !== 'dnd5e.bonus') {
-    throw new Error(
+    throw invalid(
       `key "${key}" only supports dnd5e.bonus (advantage / minimum / maximum are d20-only).`
     );
   }
@@ -281,15 +282,15 @@ export function validateRuleChange(type: RuleType, key: string, value: string): 
   if (type === 'dnd5e.advantage') {
     const canon = ADVANTAGE_ALIASES[v] ?? v;
     if (!(ADVANTAGE_VALUES as readonly string[]).includes(canon)) {
-      throw new Error(
+      throw invalid(
         `dnd5e.advantage value must be one of ${ADVANTAGE_VALUES.join(' ')} (got "${value}").`
       );
     }
     return canon;
   }
-  if (v === '') throw new Error(`change type "${type}" needs a value (e.g. "1d4", "2", "@prof").`);
+  if (v === '') throw invalid(`change type "${type}" needs a value (e.g. "1d4", "2", "@prof").`);
   if ((type === 'dnd5e.minimum' || type === 'dnd5e.maximum') && DICE_TERM.test(v)) {
-    throw new Error(
+    throw invalid(
       `${type} takes a deterministic formula (a number or @prof), not dice ("${value}").`
     );
   }
@@ -408,7 +409,7 @@ export function normalizeChange(c: any): Record<string, unknown> {
         ? (MODE_NUM_TO_TYPE[c.mode] ?? 'add')
         : 'add';
   if (!CORE_CHANGE_TYPES.has(type) && !isRuleType(type)) {
-    throw new Error(
+    throw invalid(
       `change.type "${type}" is not a change type. Core: ${[...CORE_CHANGE_TYPES].join(' ')}; ` +
         `dnd5e rules: ${RULE_TYPES.join(' ')}.`
     );
@@ -418,7 +419,7 @@ export function normalizeChange(c: any): Record<string, unknown> {
   if (isRuleType(type)) {
     value = validateRuleChange(type, key, value);
   } else if ((RULE_KEYS as readonly string[]).includes(key)) {
-    throw new Error(
+    throw invalid(
       `key "${key}" is a roll category — it only works with a rules change type ` +
         `(${RULE_TYPES.join(' ')}), not "${type}" (which writes to a data path).`
     );
@@ -426,7 +427,7 @@ export function normalizeChange(c: any): Record<string, unknown> {
   let phase = 'initial';
   if (typeof c?.phase === 'string' && c.phase !== '') {
     if (!CHANGE_PHASES.has(c.phase)) {
-      throw new Error(`change.phase must be "initial" or "final" (got "${c.phase}").`);
+      throw invalid(`change.phase must be "initial" or "final" (got "${c.phase}").`);
     }
     phase = c.phase;
   }
@@ -442,7 +443,7 @@ export function normalizeChange(c: any): Record<string, unknown> {
   if (c?.replacement !== undefined && c?.replacement !== null) {
     const r = String(c.replacement);
     if (!REPLACEMENTS.has(r)) {
-      throw new Error(`change.replacement must be "origin" or "target" (got "${r}").`);
+      throw invalid(`change.replacement must be "origin" or "target" (got "${r}").`);
     }
     if (r !== '') out.replacement = r;
   }
@@ -513,7 +514,7 @@ export function normalizeDuration(d: any): Record<string, unknown> | undefined {
     }
   }
   if (typeof out.units === 'string' && !DURATION_UNITS.has(out.units)) {
-    throw new Error(
+    throw invalid(
       `duration.units "${out.units}" is not a Foundry duration unit. Use one of: ` +
         `${[...DURATION_UNITS].join(' ')}.`
     );
@@ -521,7 +522,7 @@ export function normalizeDuration(d: any): Record<string, unknown> | undefined {
   if (out.expiry !== undefined && out.expiry !== null) {
     const expiry = String(out.expiry);
     if (!(EXPIRY_EVENTS as readonly string[]).includes(expiry)) {
-      throw new Error(
+      throw invalid(
         `duration.expiry "${expiry}" is not an expiry event. Use one of: ${EXPIRY_EVENTS.join(' ')}.`
       );
     }

@@ -44,6 +44,7 @@ import {
   sceneGrid,
   TOM_CARTOS_FLAG_SCOPE,
 } from '../scenes.js';
+import { ambiguous, invalid } from '../errors.js';
 
 // --- dnd5e 6.0 behavior conveniences (pure) --------------------------------------
 
@@ -93,28 +94,28 @@ export interface Dnd5eBehaviorOpts {
 export function rotateAreaSystem(r: RotateAreaOpts): Record<string, unknown> {
   const positions = r.positions ?? [0];
   if (!Array.isArray(positions) || positions.length === 0) {
-    throw new Error('rotate.positions needs at least one stop angle (e.g. [0, 90, 180, 270]).');
+    throw invalid('rotate.positions needs at least one stop angle (e.g. [0, 90, 180, 270]).');
   }
   for (const a of positions) {
     if (typeof a !== 'number' || !Number.isFinite(a) || a < -360 || a > 360) {
-      throw new Error(`rotate.positions: "${a}" is not an angle between -360 and 360.`);
+      throw invalid(`rotate.positions: "${a}" is not an angle between -360 and 360.`);
     }
   }
   const direction = r.direction ?? 'short';
   if (!(ROTATE_DIRECTIONS as readonly string[]).includes(direction)) {
-    throw new Error(
+    throw invalid(
       `rotate.direction "${direction}" is unknown. Use one of: ${ROTATE_DIRECTIONS.join(' ')}.`
     );
   }
   const timeMode = r.timeMode ?? 'fixed';
   if (!(ROTATE_SPEED_MODES as readonly string[]).includes(timeMode)) {
-    throw new Error(
+    throw invalid(
       `rotate.timeMode "${timeMode}" is unknown. Use one of: ${ROTATE_SPEED_MODES.join(' ')}.`
     );
   }
   const timeMs = r.timeMs ?? 1000;
   if (!Number.isInteger(timeMs) || timeMs < 0)
-    throw new Error('rotate.timeMs must be a whole number of milliseconds.');
+    throw invalid('rotate.timeMs must be a whole number of milliseconds.');
   const ids = (list: string[] | undefined) => [...(list ?? [])];
   return {
     time: { value: timeMs, mode: timeMode },
@@ -131,7 +132,7 @@ export function rotateAreaSystem(r: RotateAreaOpts): Record<string, unknown> {
 const assertKeys = (values: string[] | undefined, vocab: readonly string[], label: string) => {
   for (const v of values ?? []) {
     if (!vocab.includes(v))
-      throw new Error(`${label} "${v}" is unknown. Use one of: ${vocab.join(' ')}.`);
+      throw invalid(`${label} "${v}" is unknown. Use one of: ${vocab.join(' ')}.`);
   }
 };
 
@@ -160,20 +161,19 @@ export function dnd5eBehaviorSystem(
   if (given.length === 0) return {};
   if (type === ROTATE_AREA_BEHAVIOR) {
     const bad = given.filter(k => k !== 'rotate');
-    if (bad.length) throw new Error(`${bad.join(', ')} do not apply to ${ROTATE_AREA_BEHAVIOR}.`);
+    if (bad.length) throw invalid(`${bad.join(', ')} do not apply to ${ROTATE_AREA_BEHAVIOR}.`);
     return rotateAreaSystem(opts.rotate ?? {});
   }
-  if (opts.rotate !== undefined) throw new Error(`rotate only applies to ${ROTATE_AREA_BEHAVIOR}.`);
+  if (opts.rotate !== undefined) throw invalid(`rotate only applies to ${ROTATE_AREA_BEHAVIOR}.`);
   assertKeys(opts.dispositions, BEHAVIOR_DISPOSITIONS, 'disposition');
   const dispositionNumbers = (opts.dispositions ?? []).map(
     d => TOKEN_DISPOSITION[d as keyof typeof TOKEN_DISPOSITION]
   );
   if (type === APPLY_EFFECT_BEHAVIOR) {
     const bad = given.filter(k => k === 'terrainTypes' || k === 'magical');
-    if (bad.length)
-      throw new Error(`${bad.join(', ')} only apply to ${DIFFICULT_TERRAIN_BEHAVIOR}.`);
+    if (bad.length) throw invalid(`${bad.join(', ')} only apply to ${DIFFICULT_TERRAIN_BEHAVIOR}.`);
     if (effectUuids.length === 0) {
-      throw new Error(
+      throw invalid(
         `${APPLY_EFFECT_BEHAVIOR} needs at least one effect (effects: ["Poisoned"] …).`
       );
     }
@@ -188,7 +188,7 @@ export function dnd5eBehaviorSystem(
   }
   if (type === DIFFICULT_TERRAIN_BEHAVIOR) {
     const bad = given.filter(k => k === 'effects' || k === 'sizes' || k === 'creatureTypes');
-    if (bad.length) throw new Error(`${bad.join(', ')} only apply to ${APPLY_EFFECT_BEHAVIOR}.`);
+    if (bad.length) throw invalid(`${bad.join(', ')} only apply to ${APPLY_EFFECT_BEHAVIOR}.`);
     assertKeys(opts.terrainTypes, DIFFICULT_TERRAIN_TYPES, 'terrain type');
     return {
       ...(opts.terrainTypes ? { types: [...opts.terrainTypes] } : {}),
@@ -196,7 +196,7 @@ export function dnd5eBehaviorSystem(
       ...(opts.dispositions ? { ignoredDispositions: dispositionNumbers } : {}),
     };
   }
-  throw new Error(
+  throw invalid(
     `${given.join(', ')} are dnd5e behavior conveniences — only valid with type ` +
       `${APPLY_EFFECT_BEHAVIOR}, ${DIFFICULT_TERRAIN_BEHAVIOR} or ${ROTATE_AREA_BEHAVIOR} (got "${type}").`
   );
@@ -207,7 +207,7 @@ function assertRotateIds(scene: any, r: RotateAreaOpts): void {
   const check = (label: string, collection: any, ids: string[] | undefined) => {
     for (const id of ids ?? []) {
       if (!collection?.get?.(id)) {
-        throw new Error(
+        throw invalid(
           `rotate.${label}: "${id}" is not a ${label.replace(/s$/, '')} on scene "${scene.name}".`
         );
       }
@@ -423,7 +423,7 @@ export function resolveRegionStrict(scene: any, identifier: string): any | null 
   if (byId) return byId;
   const matches = (scene.regions?.contents ?? []).filter((r: any) => r.name === identifier);
   if (matches.length > 1) {
-    throw new Error(
+    throw ambiguous(
       `Region name "${identifier}" is ambiguous on "${scene.name}" (${matches.length} matches) — use an id`
     );
   }
@@ -551,7 +551,7 @@ export async function createSceneTeleporter(args: {
   to?: Record<string, unknown> & { sceneId: string; sceneName: string };
 }> {
   if (!args?.from?.sceneIdentifier || !args?.to?.sceneIdentifier) {
-    throw new Error('both from.sceneIdentifier and to.sceneIdentifier are required');
+    throw invalid('both from.sceneIdentifier and to.sceneIdentifier are required');
   }
   const fromScene = resolveSceneStrict(args.from.sceneIdentifier);
   if (!fromScene) return { success: true, notFound: args.from.sceneIdentifier };
@@ -627,8 +627,8 @@ export async function addRegionBehavior(
     teleportTo?: { sceneIdentifier: string; regionIdentifier: string };
   } & Dnd5eBehaviorOpts
 ): Promise<Record<string, unknown>> {
-  if (!args?.regionIdentifier) throw new Error('regionIdentifier is required');
-  if (!args?.type) throw new Error('type is required');
+  if (!args?.regionIdentifier) throw invalid('regionIdentifier is required');
+  if (!args?.type) throw invalid('type is required');
   const scene = resolveTargetScene(args.sceneIdentifier);
   if (!scene) return { success: true, notFound: args.sceneIdentifier };
   const region = resolveRegionStrict(scene, args.regionIdentifier);
@@ -640,7 +640,7 @@ export async function addRegionBehavior(
     (globalThis as any).CONFIG?.RegionBehavior?.dataModels ?? {}
   ) as string[];
   if (registered.length > 0 && !registered.includes(args.type)) {
-    throw new Error(`Unknown behavior type "${args.type}" — registered: ${registered.join(', ')}`);
+    throw invalid(`Unknown behavior type "${args.type}" — registered: ${registered.join(', ')}`);
   }
 
   const system: Record<string, unknown> = { ...(args.system ?? {}) };
@@ -671,14 +671,14 @@ export async function addRegionBehavior(
   if (args.type === APPLY_EFFECT_BEHAVIOR) {
     const effects = system.effects;
     if (!Array.isArray(effects) || effects.length === 0) {
-      throw new Error(
+      throw invalid(
         `${APPLY_EFFECT_BEHAVIOR} needs at least one effect — pass effects: ["Poisoned"] (a name, an ActiveEffect uuid, or "Item uuid#Effect").`
       );
     }
   }
   if (args.teleportTo) {
     if (args.type !== 'teleportToken') {
-      throw new Error('teleportTo is only valid with type "teleportToken"');
+      throw invalid('teleportTo is only valid with type "teleportToken"');
     }
     const destScene = resolveSceneStrict(args.teleportTo.sceneIdentifier);
     if (!destScene) return { success: true, notFound: args.teleportTo.sceneIdentifier };
@@ -697,7 +697,7 @@ export async function addRegionBehavior(
     args.type === 'teleportToken' &&
     !(Array.isArray(system.destinations) && system.destinations.length > 0)
   ) {
-    throw new Error('a teleportToken needs a destination — pass teleportTo or system.destinations');
+    throw invalid('a teleportToken needs a destination — pass teleportTo or system.destinations');
   }
   // House default for transitions: ask before moving maps. Core's `choice` field ("show
   // teleportation confirmation dialog?", teleport-token.mjs) initials to false, so an unset
@@ -753,7 +753,7 @@ export async function remapSceneTeleporters(args: { sourceModule: string }): Pro
   unchanged: number;
   unresolved: string[];
 }> {
-  if (!args?.sourceModule) throw new Error('sourceModule is required');
+  if (!args?.sourceModule) throw invalid('sourceModule is required');
   const scope = TOM_CARTOS_FLAG_SCOPE;
   // Read the provenance flag by DIRECT property access — never `doc.getFlag(scope, …)`, which THROWS
   // ("Flag scope is not valid or not currently active") for any document lacking the flag when `scope`

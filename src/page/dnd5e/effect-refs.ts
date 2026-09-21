@@ -20,6 +20,7 @@
 // the one permitted `dnd5e.*` pack.
 
 import { assertNoSrdPacks, EFFECTS_PACK } from '../../utils/compendium-sources.js';
+import { ambiguous, invalid, notFound } from '../errors.js';
 
 export type EffectRef =
   | { kind: 'effect-uuid'; uuid: string }
@@ -32,7 +33,7 @@ const ITEM_UUID_RE = /^(Compendium\..+\.Item|Item)\.[A-Za-z0-9]{16}$/;
 /** Classify one authored effect reference (see the module header). Pure. */
 export function parseEffectRef(raw: unknown): EffectRef {
   const ref = String(raw ?? '').trim();
-  if (!ref) throw new Error('an effect reference must be a name or a uuid (got an empty string).');
+  if (!ref) throw invalid('an effect reference must be a name or a uuid (got an empty string).');
   const hash = ref.indexOf('#');
   const head = hash >= 0 ? ref.slice(0, hash).trim() : ref;
   const effectName = hash >= 0 ? ref.slice(hash + 1).trim() : '';
@@ -40,7 +41,7 @@ export function parseEffectRef(raw: unknown): EffectRef {
   if (ITEM_UUID_RE.test(head)) {
     return { kind: 'item-uuid', uuid: head, ...(effectName ? { effectName } : {}) };
   }
-  if (!head) throw new Error(`effect reference "${ref}" has no name before the "#".`);
+  if (!head) throw invalid(`effect reference "${ref}" has no name before the "#".`);
   return { kind: 'name', name: head, ...(effectName ? { effectName } : {}) };
 }
 
@@ -72,7 +73,7 @@ function packIdOf(doc: any): string | undefined {
 
 function acceptEffect(effect: any, ref: string): ResolvedEffect {
   if (isOnActor(effect)) {
-    throw new Error(
+    throw invalid(
       `effect "${ref}" lives on an actor — a behavior needs an effect in a compendium or on a WORLD ` +
         'item (it copies the effect onto each token that enters and deletes the copy on exit).'
     );
@@ -89,11 +90,11 @@ function acceptEffect(effect: any, ref: string): ResolvedEffect {
 
 function pickItemEffect(item: any, effectName: string | undefined, ref: string): any {
   const effects: any[] = Array.from(item?.effects ?? []);
-  if (effects.length === 0) throw new Error(`item "${item?.name ?? ref}" carries no effects.`);
+  if (effects.length === 0) throw notFound(`item "${item?.name ?? ref}" carries no effects.`);
   if (effectName) {
     const hit = effects.find(e => sameName(e.name, effectName));
     if (!hit) {
-      throw new Error(
+      throw notFound(
         `item "${item.name}" has no effect named "${effectName}" — it carries: ` +
           `${effects.map(e => `"${e.name}"`).join(', ')}.`
       );
@@ -101,7 +102,7 @@ function pickItemEffect(item: any, effectName: string | undefined, ref: string):
     return hit;
   }
   if (effects.length > 1) {
-    throw new Error(
+    throw ambiguous(
       `item "${item.name}" carries ${effects.length} effects — name one with "#": ` +
         `${effects.map(e => `"${e.name}"`).join(', ')}.`
     );
@@ -141,7 +142,7 @@ export async function resolveEffectRefs(
     if (parsed.kind === 'effect-uuid') {
       const doc = await fromUuid(parsed.uuid);
       if (doc?.documentName !== 'ActiveEffect') {
-        throw new Error(`"${ref}" does not resolve to an ActiveEffect.`);
+        throw notFound(`"${ref}" does not resolve to an ActiveEffect.`);
       }
       resolved.push(acceptEffect(doc, ref));
       continue;
@@ -149,10 +150,10 @@ export async function resolveEffectRefs(
     if (parsed.kind === 'item-uuid') {
       const item = await fromUuid(parsed.uuid);
       if (item?.documentName !== 'Item') {
-        throw new Error(`"${parsed.uuid}" does not resolve to an Item.`);
+        throw notFound(`"${parsed.uuid}" does not resolve to an Item.`);
       }
       if (isOnActor(item)) {
-        throw new Error(
+        throw invalid(
           `"${parsed.uuid}" is an item on an actor — reference the compendium or world item instead.`
         );
       }
@@ -166,7 +167,7 @@ export async function resolveEffectRefs(
       const item = (globalThis as any).game?.items?.find?.((i: any) =>
         sameName(i.name, parsed.name)
       );
-      if (!item) throw new Error(`no world item named "${parsed.name}" (for "${ref}").`);
+      if (!item) throw notFound(`no world item named "${parsed.name}" (for "${ref}").`);
       resolved.push(acceptEffect(pickItemEffect(item, parsed.effectName, ref), ref));
       continue;
     }
@@ -202,7 +203,7 @@ export async function resolveEffectRefs(
       resolved.push(acceptEffect(worldHits[0], ref));
       continue;
     }
-    throw new Error(
+    throw notFound(
       `effect "${parsed.name}" not found in the stock ${EFFECTS_PACK} pack or on any world item. ` +
         'Pass an ActiveEffect uuid, an Item uuid + "#<effect name>" (a premium-pack spell/item), or ' +
         'author the effect on a world item with manage-effect first.'

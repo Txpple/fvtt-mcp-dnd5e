@@ -23,6 +23,7 @@ import { resolveActorFuzzy, toSource } from '../_shared.js';
 import { ruleChangeProblem } from '../effect-changes.js';
 import { isPlaceholderIcon } from './icons.js';
 import { isMagicItemDoc } from './items.js';
+import { unsupported } from '../errors.js';
 
 /**
  * GM-fudge / pretend-reskin phrasings (rule 7). Anchored to avoid false positives on legitimate rules
@@ -105,7 +106,7 @@ interface AuditArgs {
  */
 export async function auditContent(args?: AuditArgs): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`auditContent requires D&D 5e. Current system: "${game.system.id}".`);
+    throw unsupported(`auditContent requires D&D 5e. Current system: "${game.system.id}".`);
   }
   const { actorIdentifiers, itemFolders, worldItemIds } = args ?? {};
   const noTarget = !actorIdentifiers?.length && !itemFolders?.length && !worldItemIds?.length;

@@ -20,6 +20,7 @@ import {
   type Dnd5eSettingChange,
   planDnd5eSettingChanges,
 } from '../../utils/dnd5e-settings.js';
+import { forbidden } from '../errors.js';
 
 const NS = 'dnd5e';
 
@@ -97,7 +98,7 @@ export async function configureDnd5eSettings(args: Record<string, unknown> = {})
     return { success: true, settings: current, calendars };
   }
   if (!game.user?.isGM) {
-    throw new Error(
+    throw forbidden(
       'configure-dnd5e-settings writes world settings — the bridge user must be a GM.'
     );
   }

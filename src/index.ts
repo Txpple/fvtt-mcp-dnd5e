@@ -58,9 +58,9 @@ async function main(): Promise<void> {
   });
   logger.info('Tool surface', { tools: tools.length, toolsets: [...enabledToolsets] });
 
-  // Central error mapper for the dispatch wrapper: turns raw failures (esp. cold-box / bridge
-  // errors) from EVERY tool into actionable messages, while passing through messages the tools
-  // already curated (FormattedToolError) verbatim.
+  // Central error mapper for the dispatch wrapper: a coded BridgeError (the page's PageError code,
+  // or `connection`) keeps its words and gains one hint; everything else is its raw message; a
+  // tool's own curated message (FormattedToolError) passes through verbatim.
   const errorHandler = new ErrorHandler(logger);
 
   const mcp = new Server(
@@ -81,8 +81,7 @@ async function main(): Promise<void> {
       };
     } catch (e) {
       // Tools that curate their own errors throw FormattedToolError — pass those through verbatim.
-      // Everything else is mapped centrally so EVERY tool (not just the few that wired in
-      // ErrorHandler) surfaces actionable guidance for cold-box / permission / not-found failures.
+      // Everything else is mapped centrally by its code (src/utils/error-handler.ts).
       const message =
         e instanceof FormattedToolError ? e.message : errorHandler.toUserMessage(e, name);
       logger.error('Tool call failed', { name, error: message });

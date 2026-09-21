@@ -13,6 +13,7 @@
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveCreatureIcon } from './dnd5e/icons.js';
 import { resolveActorFuzzy } from './_shared.js';
+import { invalid, notFound } from './errors.js';
 
 /** Role number ↔ human label, indexed by CONST.USER_ROLES value (0–4). */
 const ROLE_LABELS = ['none', 'player', 'trusted', 'assistant', 'gamemaster'] as const;
@@ -73,11 +74,11 @@ export async function updateUser(args: {
   pronouns?: string;
   character?: string;
 }): Promise<unknown> {
-  if (!args?.user) throw new Error('user is required (a user id or exact name)');
+  if (!args?.user) throw invalid('user is required (a user id or exact name)');
   const user = resolveUser(args.user);
   if (!user) {
     const names = (game.users?.contents ?? []).map((u: any) => u.name).join(', ');
-    throw new Error(`user "${args.user}" not found. Users in this world: ${names}`);
+    throw notFound(`user "${args.user}" not found. Users in this world: ${names}`);
   }
 
   const applied: string[] = [];
@@ -87,11 +88,11 @@ export async function updateUser(args: {
 
   if (args.role !== undefined) {
     const newRole = ROLE_LABELS.indexOf(args.role);
-    if (newRole < 0) throw new Error(`unknown role "${args.role}" (${ROLE_LABELS.join(' | ')})`);
+    if (newRole < 0) throw invalid(`unknown role "${args.role}" (${ROLE_LABELS.join(' | ')})`);
     // Guard 1: never change the bridge user's own role — dropping below ASSISTANT would sever the
     // GM permissions every other tool depends on, mid-session, with no way back from here.
     if (user.id === game.user?.id) {
-      throw new Error(
+      throw invalid(
         `refusing to change the bridge user's ("${user.name}") own role — that could revoke the GM ` +
           'permissions this MCP session runs on. Change it from the Foundry UI if you really mean to.'
       );
@@ -104,7 +105,7 @@ export async function updateUser(args: {
         (u: any) => u.role === GM && u.id !== user.id
       );
       if (otherGMs.length === 0) {
-        throw new Error(
+        throw invalid(
           `refusing to demote "${user.name}" — they are the world's only GAMEMASTER (role 4). ` +
             'Promote another user to gamemaster first.'
         );
@@ -142,7 +143,7 @@ export async function updateUser(args: {
       applied.push('character');
     } else {
       const actor = resolveActorFuzzy(args.character);
-      if (!actor) throw new Error(`character actor "${args.character}" not found`);
+      if (!actor) throw notFound(`character actor "${args.character}" not found`);
       if (actor.type !== 'character') {
         warnings.push(
           `"${actor.name}" is type "${actor.type}", not a player character (type "character") — ` +
@@ -168,12 +169,12 @@ export async function updateUser(args: {
 
 export async function setUserAvatar(args: { user?: string; avatar: string }): Promise<unknown> {
   if (!args?.avatar || typeof args.avatar !== 'string') {
-    throw new Error(
+    throw invalid(
       'avatar is required and must be a non-empty string (a path or URL Foundry can load)'
     );
   }
   const user = resolveUser(args.user);
-  if (!user) throw new Error(`user "${args.user}" not found`);
+  if (!user) throw notFound(`user "${args.user}" not found`);
 
   const warnings: string[] = [];
 

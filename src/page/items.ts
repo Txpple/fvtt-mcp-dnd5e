@@ -11,6 +11,7 @@
 import { toSource, unmaskedName, sanitizeDocData as sanitizeData } from './_shared.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { GENERIC_ICON } from './dnd5e/icons.js';
+import { invalid, notFound } from './errors.js';
 
 // Foundry document classes (Item, Folder) live in the page global scope but are
 // not declared in foundry-globals.d.ts; reach them off globalThis (loosely typed).
@@ -98,7 +99,7 @@ interface GetWorldItemArgs {
 export function getWorldItem(args?: GetWorldItemArgs): unknown {
   const identifier = (args?.identifier ?? '').trim();
   if (identifier.length === 0) {
-    throw new Error('identifier is required and must be a non-empty string');
+    throw invalid('identifier is required and must be a non-empty string');
   }
 
   const items = game.items;
@@ -108,7 +109,7 @@ export function getWorldItem(args?: GetWorldItemArgs): unknown {
     item = items?.find((i: any) => (i.name ?? '').toLowerCase() === idLower) ?? null;
   }
   if (!item) {
-    throw new Error(`World Item "${identifier}" not found`);
+    throw notFound(`World Item "${identifier}" not found`);
   }
 
   const system = item.system ?? {};
@@ -156,7 +157,7 @@ export async function updateWorldItems(args: UpdateWorldItemsArgs): Promise<unkn
   const { updates } = args ?? ({} as UpdateWorldItemsArgs);
 
   if (!Array.isArray(updates) || updates.length === 0) {
-    throw new Error('updates array is required and must contain at least one entry');
+    throw invalid('updates array is required and must contain at least one entry');
   }
 
   // Cache folder resolutions so we only look up / create each folder once.
@@ -186,12 +187,12 @@ export async function updateWorldItems(args: UpdateWorldItemsArgs): Promise<unkn
   for (let idx = 0; idx < updates.length; idx++) {
     const upd = updates[idx];
     if (!upd || typeof upd.id !== 'string' || upd.id.trim().length === 0) {
-      throw new Error(`updates[${idx}]: "id" is required and must be a non-empty string`);
+      throw invalid(`updates[${idx}]: "id" is required and must be a non-empty string`);
     }
 
     const item = game.items?.get(upd.id);
     if (!item) {
-      throw new Error(`updates[${idx}]: Item "${upd.id}" not found in world`);
+      throw notFound(`updates[${idx}]: Item "${upd.id}" not found in world`);
     }
 
     const patch: Record<string, any> = { _id: upd.id };
@@ -247,7 +248,7 @@ export async function createWorldItems(args: CreateWorldItemsArgs): Promise<unkn
   const { items, folder } = args ?? ({} as CreateWorldItemsArgs);
 
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error('items array is required and must contain at least one entry');
+    throw invalid('items array is required and must contain at least one entry');
   }
 
   const itemDocTypes = game.system?.documentTypes?.Item;
@@ -256,13 +257,13 @@ export async function createWorldItems(args: CreateWorldItemsArgs): Promise<unkn
 
   const payload = items.map((it, idx) => {
     if (!it || typeof it.name !== 'string' || it.name.trim().length === 0) {
-      throw new Error(`items[${idx}]: "name" is required and must be a non-empty string`);
+      throw invalid(`items[${idx}]: "name" is required and must be a non-empty string`);
     }
     if (typeof it.type !== 'string' || it.type.trim().length === 0) {
-      throw new Error(`items[${idx}] ("${it.name}"): "type" is required`);
+      throw invalid(`items[${idx}] ("${it.name}"): "type" is required`);
     }
     if (validTypes && !validTypes.includes(it.type)) {
-      throw new Error(
+      throw invalid(
         `items[${idx}] ("${it.name}"): unknown type "${it.type}" for system "${game.system?.id}". ` +
           `Valid Item types: ${validTypes.join(', ')}`
       );
@@ -339,7 +340,7 @@ export async function deleteWorldItems(args: DeleteWorldItemsArgs): Promise<unkn
   const identifiers = args?.identifiers;
 
   if (!Array.isArray(identifiers) || identifiers.length === 0) {
-    throw new Error('identifiers array is required and must contain at least one entry');
+    throw invalid('identifiers array is required and must contain at least one entry');
   }
 
   const deleted: Array<{ id: string; name: string; trueName?: string; type: string }> = [];

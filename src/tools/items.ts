@@ -249,24 +249,17 @@ export class ItemTools {
       types: items.map(i => i.type),
     });
 
-    try {
-      const result = await this.foundry.call('createWorldItems', {
-        items,
-        folder,
-      });
+    const result = await this.foundry.call('createWorldItems', {
+      items,
+      folder,
+    });
 
-      this.logger.debug('Successfully created world items', {
-        folderId: result.folderId,
-        created: result.created?.length ?? 0,
-      });
+    this.logger.debug('Successfully created world items', {
+      folderId: result.folderId,
+      created: result.created?.length ?? 0,
+    });
 
-      return surfaceWarnings(result);
-    } catch (error) {
-      this.logger.error('Failed to create world items', error);
-      throw new Error(
-        `Failed to create world items: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return surfaceWarnings(result);
   }
 
   async handleListWorldItems(args: any): Promise<any> {
@@ -278,25 +271,18 @@ export class ItemTools {
       nameFilter: nameFilter ?? null,
     });
 
-    try {
-      const items = await this.foundry.call('listWorldItems', {
-        ...(type !== undefined ? { type } : {}),
-        ...(folder !== undefined ? { folder } : {}),
-        ...(nameFilter !== undefined ? { nameFilter } : {}),
-      });
+    const items = await this.foundry.call('listWorldItems', {
+      ...(type !== undefined ? { type } : {}),
+      ...(folder !== undefined ? { folder } : {}),
+      ...(nameFilter !== undefined ? { nameFilter } : {}),
+    });
 
-      this.logger.debug('Successfully listed world items', { count: items?.length ?? 0 });
+    this.logger.debug('Successfully listed world items', { count: items?.length ?? 0 });
 
-      return {
-        items: items ?? [],
-        total: items?.length ?? 0,
-      };
-    } catch (error) {
-      this.logger.error('Failed to list world items', error);
-      throw new Error(
-        `Failed to list world items: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return {
+      items: items ?? [],
+      total: items?.length ?? 0,
+    };
   }
 
   async handleGetWorldItem(args: any): Promise<any> {
@@ -304,20 +290,13 @@ export class ItemTools {
 
     this.logger.info('Getting world item', { identifier });
 
-    try {
-      const item = await this.foundry.call('getWorldItem', {
-        identifier,
-      });
+    const item = await this.foundry.call('getWorldItem', {
+      identifier,
+    });
 
-      this.logger.debug('Successfully retrieved world item', { id: item?.id, name: item?.name });
+    this.logger.debug('Successfully retrieved world item', { id: item?.id, name: item?.name });
 
-      return item;
-    } catch (error) {
-      this.logger.error('Failed to get world item', error);
-      throw new Error(
-        `Failed to get world item "${identifier}": ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return item;
   }
 
   async handleUpdateWorldItems(args: any): Promise<any> {
@@ -328,20 +307,13 @@ export class ItemTools {
       ids: updates.map(u => u.id),
     });
 
-    try {
-      const result = await this.foundry.call('updateWorldItems', {
-        updates,
-      });
+    const result = await this.foundry.call('updateWorldItems', {
+      updates,
+    });
 
-      this.logger.debug('Successfully updated world items', { count: result.updated?.length ?? 0 });
+    this.logger.debug('Successfully updated world items', { count: result.updated?.length ?? 0 });
 
-      return surfaceWarnings(result);
-    } catch (error) {
-      this.logger.error('Failed to update world items', error);
-      throw new Error(
-        `Failed to update world items: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return surfaceWarnings(result);
   }
 
   async handleDeleteWorldItems(args: any): Promise<any> {
@@ -349,22 +321,15 @@ export class ItemTools {
 
     this.logger.info('Deleting world items', { count: identifiers.length });
 
-    try {
-      const result = await this.foundry.call('deleteWorldItems', {
-        identifiers,
-      });
+    const result = await this.foundry.call('deleteWorldItems', {
+      identifiers,
+    });
 
-      this.logger.debug('Successfully deleted world items', {
-        deleted: result?.deletedCount ?? 0,
-      });
+    this.logger.debug('Successfully deleted world items', {
+      deleted: result?.deletedCount ?? 0,
+    });
 
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to delete world items', error);
-      throw new Error(
-        `Failed to delete world items: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return result;
   }
 
   async handleAddActorItems(args: any): Promise<any> {
@@ -376,24 +341,17 @@ export class ItemTools {
       types: items.map(i => i.type),
     });
 
-    try {
-      const result = await this.foundry.call('addActorItems', {
-        actorIdentifier,
-        items,
-      });
+    const result = await this.foundry.call('addActorItems', {
+      actorIdentifier,
+      items,
+    });
 
-      this.logger.debug('Successfully added actor items', {
-        actorName: result.actorName,
-        created: result.created?.length ?? 0,
-      });
+    this.logger.debug('Successfully added actor items', {
+      actorName: result.actorName,
+      created: result.created?.length ?? 0,
+    });
 
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to add actor items', error);
-      throw new Error(
-        `Failed to add items to "${actorIdentifier}": ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return result;
   }
 
   async handleRemoveActorItems(args: any): Promise<any> {
@@ -406,25 +364,18 @@ export class ItemTools {
       type: type ?? null,
     });
 
-    try {
-      const result = await this.foundry.call('removeActorItems', {
-        actorIdentifier,
-        ...(itemIds !== undefined ? { itemIds } : {}),
-        ...(itemNames !== undefined ? { itemNames } : {}),
-        ...(type !== undefined ? { type } : {}),
-      });
+    const result = await this.foundry.call('removeActorItems', {
+      actorIdentifier,
+      ...(itemIds !== undefined ? { itemIds } : {}),
+      ...(itemNames !== undefined ? { itemNames } : {}),
+      ...(type !== undefined ? { type } : {}),
+    });
 
-      this.logger.debug('Successfully removed actor items', {
-        actorName: result.actorName,
-        removed: result.removed?.length ?? 0,
-      });
+    this.logger.debug('Successfully removed actor items', {
+      actorName: result.actorName,
+      removed: result.removed?.length ?? 0,
+    });
 
-      return result;
-    } catch (error) {
-      this.logger.error('Failed to remove actor items', error);
-      throw new Error(
-        `Failed to remove items from "${actorIdentifier}": ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return result;
   }
 }

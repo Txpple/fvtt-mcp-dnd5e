@@ -216,5 +216,17 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   refuses its probe item on the current sandbox world, verify-partystash's drag-and-drop move
   assertions fail on dnd5e 6.0.3 (8/…) — pre-existing, recorded in those repos' commits for
   their next pass. The battleflow `.claude/worktrees/nostalgic-curie-8e42e7` checkout still
-  carries the old path (another branch; not touched). **Next: M6** (error contract + seam
-  typing). Nothing pushed yet — 13 commits across 10 repos are local.
+  carries the old path (another branch; not touched). Nothing pushed yet — 13 commits across 10
+  repos are local. **M6 in progress** — F5 landed first (the coded error contract): the page
+  throws a `PageError` whose code rides in the Error's `name`, the one field measured to survive
+  `page.evaluate` (live: the Node-side `.name` is `Error`; the header is
+  `page.evaluate: PageError:not-found: …`); 359 of 393 page throws coded by a reviewed codemod
+  (invalid 231 · not-found 95 · unsupported 21 · ambiguous 10 · permission 2), the 34 left are
+  Foundry's own words (`Failed to create …`, `Actor.create returned nothing`) and the
+  serialization guard; 25 catch-and-rewrap shells (10 page, 15 tool) deleted — each turned a
+  coded error back into a plain one; `BridgeError` on the Node side (`code` / `fn` / `detail` /
+  `pageStack`, the 2.x message shape kept for the siblings, exported from the client); the mapper
+  rewritten around the code (one hint each; the substring classifier gone; an uncoded error is
+  its raw words). Offline: 12/12 review cases keep their text with their own hint; live:
+  verify-error-contract 15/15, integration 80 passed / 6 skipped. **Next: F24** (the seam typed
+  end to end — 446 `tsc` errors behind the signature flip today, was 397 at the review).

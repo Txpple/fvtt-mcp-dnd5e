@@ -1,3 +1,4 @@
+import { BridgeError, type BridgeErrorCode } from '../bridge-error.js';
 import { Logger } from '../logger.js';
 
 // THE TOOL ERROR-HANDLING CONTRACT (one contract, applied uniformly across every tool module):
@@ -6,51 +7,51 @@ import { Logger } from '../logger.js';
 //   • It throws `FormattedToolError` for a message it curates itself — validation/precondition
 //     guidance and domain "not found" messages. The central dispatch wrapper (index.ts) passes
 //     these through VERBATIM.
-//   • Every OTHER throw (a ZodError from `.parse()`, a bridge/cold-box failure, an unexpected error)
-//     bubbles to that same wrapper, which maps it via `toUserMessage` below — adding cold-box /
-//     permission / not-found guidance while preserving already-specific (ZodError / raw) messages.
+//   • Every OTHER throw (a ZodError from `.parse()`, a BridgeError from the seam, an unexpected
+//     error) bubbles to that same wrapper, which maps it via `toUserMessage` below.
 //
-// So `toUserMessage` is the SINGLE error mapper; no tool instantiates ErrorHandler or maps errors
-// itself, and there is no per-handler `instanceof FormattedToolError` re-throw guard to forget.
+// What `toUserMessage` adds is decided by the error's CODE, never by a word in its message:
+//   • a BridgeError with a code (the page threw a PageError — src/page/errors.ts — or the bridge
+//     never reached a joinable world) = the page's own words, then `[code]` and one hint;
+//   • a BridgeError without a code (Foundry's own TypeError, a plain `new Error` in a handler),
+//     a ZodError, any other throw = its raw message, nothing added.
+// The 2.x mapper classified by substring and replaced the message with canned text — 11 of 12
+// realistic page errors lost their words (review 2026-09, F5). The message is the fact; the hint
+// is a suffix.
 
-// The actor-creation tool family — a validation failure on any of these earns the "search-compendium
-// first" tip. Covers the two split tools (create-actor-from-compendium / author-npc).
+// The actor-creation tool family — a not-found on any of these earns the "search-compendium first"
+// tip. Covers the two split tools (create-actor-from-compendium / author-npc).
 const ACTOR_CREATION_TOOLS = new Set(['create-actor-from-compendium', 'author-npc']);
 
-export interface MCPError {
-  type: 'user' | 'system' | 'permission' | 'validation' | 'connection';
-  message: string;
-  details?: any;
-  suggestions?: string[];
-  recoverable: boolean;
-}
+/** One hint per code: what to do next, in one sentence. */
+export const HINTS: Readonly<Record<BridgeErrorCode, string>> = {
+  'not-found':
+    'Nothing matched that identifier — list or search first, then retry with the id or exact name.',
+  ambiguous: 'The name matched several documents — retry with the id.',
+  invalid: 'The page rejected the arguments — fix the field it names and retry.',
+  permission:
+    'Foundry refused it for the bridge user — it needs the Gamemaster or Assistant GM role ' +
+    '(get-world-info shows bridgeUser) or ownership of the document.',
+  unsupported:
+    'This world cannot do it — check the game system, module or Foundry version the message names.',
+  'rolled-back': 'Nothing was written — the whole change was undone; fix the cause and retry.',
+  connection:
+    'The bridge could not reach a joinable world — check FOUNDRY_URL, that the world is launched ' +
+    '(Setup → Launch World; a host with a wake URL is woken automatically, and a cold box can take ' +
+    'a minute — retry once it is up) and that FOUNDRY_USER can join.',
+};
 
 /**
  * A tool-authored, user-facing error message. A handler throws this for guidance it curates itself
  * (validation/precondition failures, domain "not found" messages). The central dispatch wrapper
- * (index.ts) passes these through verbatim instead of running them through the keyword classifier —
- * re-mapping an already-formatted message (which carries suggestion text like "...sufficient
- * permissions") would misclassify it. Every OTHER error a handler throws bubbles to that wrapper and
- * is mapped by ErrorHandler.toUserMessage; tools never map their own errors.
+ * (index.ts) passes these through verbatim. Every OTHER error a handler throws bubbles to that
+ * wrapper and is mapped by ErrorHandler.toUserMessage; tools never map their own errors.
  */
 export class FormattedToolError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'FormattedToolError';
   }
-}
-
-/**
- * The page's own words, without the plumbing: the bridge's `foundry.call(…) failed:` wrapper,
- * Playwright's `page.evaluate: Error: ` prefix, and the in-page stack that page.evaluate folds
- * into the message after the first line.
- */
-export function rawPageMessage(raw: string): string {
-  return raw
-    .replace(/^foundry\.call\('[^']+'\) failed: /, '')
-    .replace(/^page\.evaluate: (?:Error: )?/, '')
-    .split(/\r?\n\s+at /)[0]
-    .trim();
 }
 
 export class ErrorHandler {
@@ -61,219 +62,39 @@ export class ErrorHandler {
   }
 
   /**
-   * Map Foundry errors to user-friendly MCP errors
-   */
-  mapFoundryError(error: any, context: string): MCPError {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorLower = errorMessage.toLowerCase();
-
-    // Permission errors
-    if (errorLower.includes('access denied') || errorLower.includes('permission')) {
-      return {
-        type: 'permission',
-        message: 'Permission denied for this operation',
-        details: errorMessage,
-        suggestions: [
-          'Ensure the MCP user (FOUNDRY_USER) has GM rights in this world',
-          "Some operations are GM-only — check the joined user's role",
-          "Verify the document's ownership allows this operation",
-        ],
-        recoverable: true,
-      };
-    }
-
-    // Connection errors — the headless bridge: launching Chromium, waking the box,
-    // joining the world, or the in-page socket dropping.
-    if (
-      errorLower.includes('connection') ||
-      errorLower.includes('websocket') ||
-      errorLower.includes('timeout') ||
-      errorLower.includes('navigation') ||
-      errorLower.includes('net::') ||
-      errorLower.includes('target closed') ||
-      errorLower.includes('target page') ||
-      errorLower.includes('browser') ||
-      errorLower.includes('game.ready')
-    ) {
-      return {
-        type: 'connection',
-        message: 'Connection to the Foundry world failed',
-        details: errorMessage,
-        suggestions: [
-          'Ensure the world is launched (Setup → Launch World); a host that sleeps is woken automatically when its wake is configured',
-          "Check the host's server URL / wake settings (the bridge error names the variables for this host)",
-          'Verify FOUNDRY_USER is a valid, passwordless user that can join this world',
-          'A cold box can be slow to wake on the first call — retry once it is up',
-        ],
-        recoverable: true,
-      };
-    }
-
-    // Validation errors
-    if (
-      errorLower.includes('not found') ||
-      errorLower.includes('invalid') ||
-      errorLower.includes('missing')
-    ) {
-      if (context.includes('compendium') || context.includes('creature')) {
-        return {
-          type: 'validation',
-          message: 'Creature not found in compendiums',
-          details: errorMessage,
-          suggestions: [
-            'Try searching with a different creature name',
-            'Check if the compendium pack is available',
-            'Use more specific terms (e.g., "goblin warrior" instead of "goblin")',
-          ],
-          recoverable: true,
-        };
-      }
-
-      return {
-        type: 'validation',
-        message: 'Invalid request or missing data',
-        details: errorMessage,
-        suggestions: [
-          'Check that all required parameters are provided',
-          'Verify the data exists in Foundry VTT',
-        ],
-        recoverable: true,
-      };
-    }
-
-    // Actor creation specific errors
-    if (errorLower.includes('actor creation') || errorLower.includes('create actor')) {
-      return {
-        type: 'system',
-        message: 'Failed to create actor in Foundry VTT',
-        details: errorMessage,
-        suggestions: [
-          'Check that the source compendium entry is valid',
-          'Ensure Foundry VTT has sufficient permissions',
-          'Try creating actors one at a time instead of in bulk',
-        ],
-        recoverable: true,
-      };
-    }
-
-    // Scene errors (scene documents only — token/placeable manipulation is out of scope)
-    if (errorLower.includes('scene')) {
-      return {
-        type: 'system',
-        message: 'Failed to read or modify the scene',
-        details: errorMessage,
-        suggestions: [
-          'Check that the target scene exists (use list-scenes)',
-          'Verify the MCP user has permission to edit scenes',
-          'For background art, confirm the asset path resolves to a public URL',
-        ],
-        recoverable: true,
-      };
-    }
-
-    // Transaction/rollback errors
-    if (errorLower.includes('rollback') || errorLower.includes('transaction')) {
-      return {
-        type: 'system',
-        message: 'Operation was rolled back due to errors',
-        details: errorMessage,
-        suggestions: [
-          'The system prevented partial failures by undoing changes',
-          'Try the operation again with different parameters',
-          'Check Foundry VTT console for more details',
-        ],
-        recoverable: true,
-      };
-    }
-
-    // Generic system errors
-    return {
-      type: 'system',
-      message: 'An unexpected error occurred',
-      details: errorMessage,
-      suggestions: [
-        'Check Foundry VTT console for more details',
-        'Try the operation again',
-        'Contact support if the issue persists',
-      ],
-      recoverable: false,
-    };
-  }
-
-  /**
-   * Build a plain-text error message for the MCP text channel: the mapped message plus any
-   * actionable suggestions. No markdown/emoji — index.ts prefixes "Error: " when returning it,
-   * and the consumer is a model, not a terminal.
-   */
-  formatErrorMessage(mcpError: MCPError, toolName: string): string {
-    let message = mcpError.message;
-
-    if (mcpError.suggestions && mcpError.suggestions.length > 0) {
-      message += ` Try: ${mcpError.suggestions.join('; ')}.`;
-    }
-
-    if (mcpError.type === 'validation' && ACTOR_CREATION_TOOLS.has(toolName)) {
-      message += ' Tip: use search-compendium first to see available creatures.';
-    }
-
-    return message;
-  }
-
-  /**
-   * Log error with appropriate level
-   */
-  logError(mcpError: MCPError, toolName: string, originalError?: any): void {
-    const logData = {
-      toolName,
-      errorType: mcpError.type,
-      message: mcpError.message,
-      recoverable: mcpError.recoverable,
-      details: mcpError.details,
-    };
-
-    switch (mcpError.type) {
-      case 'user':
-      case 'validation':
-        this.logger.warn('User/validation error', logData);
-        break;
-      case 'permission':
-        this.logger.warn('Permission error', logData);
-        break;
-      case 'connection':
-        this.logger.error('Connection error', logData);
-        break;
-      default:
-        this.logger.error('System error', logData);
-        if (originalError) {
-          this.logger.error('Original error details', originalError);
-        }
-        break;
-    }
-  }
-
-  /**
    * Map + log an arbitrary tool error into a user-facing message — the form used by the central
-   * dispatch wrapper for every error a tool doesn't curate itself. Crucially it does
-   * NOT flatten messages that are already specific: zod validation errors keep their field-level
-   * detail, the generic catch-all falls back to the raw message rather than the vague
-   * "An unexpected error occurred", and every classified message ends with the page's own words
-   * ("Foundry said: …") — the classifier is a substring heuristic, so its guidance is a hint and
-   * the original text is the fact. Central handling only ADDS value and never hides the message.
+   * dispatch wrapper for every error a tool doesn't curate itself. The original words are always
+   * the message; a coded error gets its code and one hint appended. No markdown/emoji — index.ts
+   * prefixes "Error: " when returning it, and the consumer is a model, not a terminal.
    */
-  toUserMessage(error: any, toolName: string): string {
-    const raw = error instanceof Error ? error.message : String(error);
-    // zod already produces precise, field-level messages — don't run them through the classifier.
-    if (error?.name === 'ZodError') return raw;
-
-    const mcpError = this.mapFoundryError(error, toolName);
-    this.logError(mcpError, toolName, error);
-
-    // The generic catch-all adds nothing over the real message — prefer the raw text.
-    if (mcpError.type === 'system' && mcpError.message === 'An unexpected error occurred') {
-      return raw;
+  toUserMessage(error: unknown, toolName: string): string {
+    if (error instanceof BridgeError) {
+      this.log(error, toolName);
+      if (!error.code) return error.detail;
+      let message = `${error.detail} [${error.code}] ${HINTS[error.code]}`;
+      if (error.code === 'not-found' && ACTOR_CREATION_TOOLS.has(toolName)) {
+        message += ' Tip: use search-compendium first to see available creatures.';
+      }
+      return message;
     }
-    return `${this.formatErrorMessage(mcpError, toolName)} Foundry said: ${rawPageMessage(raw)}`;
+    const raw = error instanceof Error ? error.message : String(error);
+    this.logger.error('Tool error', { toolName, message: raw, error });
+    return raw;
+  }
+
+  /** A refused call is the caller's problem (warn); a lost session or an undone write is ours. */
+  private log(error: BridgeError, toolName: string): void {
+    const data = {
+      toolName,
+      fn: error.fn,
+      code: error.code,
+      detail: error.detail,
+      ...(error.pageStack ? { pageStack: error.pageStack } : {}),
+    };
+    if (error.code === 'connection' || error.code === 'rolled-back' || !error.code) {
+      this.logger.error('Bridge error', data);
+    } else {
+      this.logger.warn('Call refused by the page', data);
+    }
   }
 }
-
-// Note: ErrorHandler should be instantiated with a proper logger, not exported as singleton

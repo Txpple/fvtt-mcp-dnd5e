@@ -10,6 +10,7 @@
 // src/tools/actor-creation.ts and their tests expect.
 
 import { getOrCreateFolder as getOrCreateFolderShared, MCP_FLAG_SCOPE } from './_shared.js';
+import { invalid, notFound as notFoundError } from './errors.js';
 
 // Legacy bridge id — kept ONLY as a console log prefix. The folder flag namespace
 // is MCP_FLAG_SCOPE ('world'), valid with no module installed, so deleteActor's
@@ -101,7 +102,7 @@ async function deleteByResolver(
   failed?: Array<{ id: string; name: string; error: string }>;
 }> {
   if (!Array.isArray(identifiers) || identifiers.length === 0) {
-    throw new Error('identifiers array is required and must contain at least one entry');
+    throw invalid('identifiers array is required and must contain at least one entry');
   }
 
   // Dry-run: resolve and report the set that WOULD be destroyed, deleting nothing. Lets a caller
@@ -172,7 +173,7 @@ async function deleteByResolver(
 export function listFolders(args?: { type?: string }): unknown {
   const type = args?.type;
   if (type !== undefined && !WORLD_DOC_TYPES.includes(type)) {
-    throw new Error(`Unknown folder type "${type}". Valid: ${WORLD_DOC_TYPES.join(', ')}`);
+    throw invalid(`Unknown folder type "${type}". Valid: ${WORLD_DOC_TYPES.join(', ')}`);
   }
   const all: any[] = (game.folders?.contents ?? []).filter(
     (f: any) => type === undefined || f.type === type
@@ -255,10 +256,10 @@ export async function createFolder(data: {
   color?: string;
 }): Promise<unknown> {
   if (!data?.name || data.name.trim().length === 0) {
-    throw new Error('name is required and must be a non-empty string');
+    throw invalid('name is required and must be a non-empty string');
   }
   if (!WORLD_DOC_TYPES.includes(data.type)) {
-    throw new Error(`Unknown folder type "${data.type}". Valid: ${WORLD_DOC_TYPES.join(', ')}`);
+    throw invalid(`Unknown folder type "${data.type}". Valid: ${WORLD_DOC_TYPES.join(', ')}`);
   }
 
   // Resolve optional parent (must be a folder of the same type).
@@ -268,34 +269,28 @@ export async function createFolder(data: {
     const parent =
       game.folders?.get(p) || game.folders?.find((f: any) => f.name === p && f.type === data.type);
     if (!parent) {
-      throw new Error(`Parent folder "${data.parentFolder}" (type ${data.type}) not found`);
+      throw notFoundError(`Parent folder "${data.parentFolder}" (type ${data.type}) not found`);
     }
     parentId = parent.id;
   }
 
-  try {
-    const folder = await FolderClass.create({
-      name: data.name.trim(),
-      type: data.type,
-      ...(data.color ? { color: data.color } : {}),
-      folder: parentId,
-      flags: {
-        [MCP_FLAG_SCOPE]: { mcpGenerated: false, createdAt: new Date().toISOString() },
-      },
-    } as any);
+  const folder = await FolderClass.create({
+    name: data.name.trim(),
+    type: data.type,
+    ...(data.color ? { color: data.color } : {}),
+    folder: parentId,
+    flags: {
+      [MCP_FLAG_SCOPE]: { mcpGenerated: false, createdAt: new Date().toISOString() },
+    },
+  } as any);
 
-    return {
-      success: true,
-      folderId: folder?.id,
-      folderName: folder?.name,
-      type: data.type,
-      parentId,
-    };
-  } catch (error) {
-    throw new Error(
-      `Failed to create folder: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
+  return {
+    success: true,
+    folderId: folder?.id,
+    folderName: folder?.name,
+    type: data.type,
+    parentId,
+  };
 }
 
 /**
@@ -340,36 +335,30 @@ export async function updateFolder(data: {
         game.folders?.get(p) ||
         game.folders?.find((f: any) => f.name === p && f.type === folder.type);
       if (!parent) {
-        throw new Error(`Parent folder "${data.parentFolder}" (type ${folder.type}) not found`);
+        throw notFoundError(`Parent folder "${data.parentFolder}" (type ${folder.type}) not found`);
       }
       if (parent.id === folder.id) {
-        throw new Error('A folder cannot be its own parent');
+        throw invalid('A folder cannot be its own parent');
       }
       update.folder = parent.id;
     }
   }
 
   if (Object.keys(update).length === 0) {
-    throw new Error('Provide at least one of: name, color, parentFolder, sort');
+    throw invalid('Provide at least one of: name, color, parentFolder, sort');
   }
 
-  try {
-    await folder.update(update);
-    return {
-      success: true,
-      updated: true,
-      folder: {
-        id: folder.id ?? data.identifier,
-        name: folder.name ?? '',
-        type: folder.type,
-        sort: typeof folder.sort === 'number' ? folder.sort : 0,
-      },
-    };
-  } catch (error) {
-    throw new Error(
-      `Failed to update folder: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
+  await folder.update(update);
+  return {
+    success: true,
+    updated: true,
+    folder: {
+      id: folder.id ?? data.identifier,
+      name: folder.name ?? '',
+      type: folder.type,
+      sort: typeof folder.sort === 'number' ? folder.sort : 0,
+    },
+  };
 }
 
 /**
@@ -383,12 +372,12 @@ export async function moveDocuments(data: {
   targetFolder?: string;
 }): Promise<unknown> {
   if (!WORLD_DOC_TYPES.includes(data.documentType)) {
-    throw new Error(
+    throw invalid(
       `Unknown documentType "${data.documentType}". Valid: ${WORLD_DOC_TYPES.join(', ')}`
     );
   }
   if (!Array.isArray(data?.identifiers) || data.identifiers.length === 0) {
-    throw new Error('identifiers array is required and must contain at least one entry');
+    throw invalid('identifiers array is required and must contain at least one entry');
   }
 
   // Resolve / create the target folder (null = move to root).
@@ -404,40 +393,34 @@ export async function moveDocuments(data: {
       folder = newId ? game.folders?.get(newId) : null;
     }
     if (!folder) {
-      throw new Error(`Could not resolve or create target folder "${data.targetFolder}"`);
+      throw notFoundError(`Could not resolve or create target folder "${data.targetFolder}"`);
     }
     folderId = folder.id;
     folderName = folder.name;
   }
 
-  try {
-    const moved: Array<{ id: string; name: string }> = [];
-    const notFound: string[] = [];
+  const moved: Array<{ id: string; name: string }> = [];
+  const notFound: string[] = [];
 
-    for (const identifier of data.identifiers) {
-      const doc = resolveDocStrict(data.documentType, identifier);
-      if (doc) {
-        await doc.update({ folder: folderId });
-        moved.push({ id: doc.id ?? identifier, name: doc.name ?? '' });
-      } else {
-        notFound.push(identifier);
-      }
+  for (const identifier of data.identifiers) {
+    const doc = resolveDocStrict(data.documentType, identifier);
+    if (doc) {
+      await doc.update({ folder: folderId });
+      moved.push({ id: doc.id ?? identifier, name: doc.name ?? '' });
+    } else {
+      notFound.push(identifier);
     }
-
-    return {
-      success: true,
-      documentType: data.documentType,
-      targetFolderId: folderId,
-      targetFolderName: folderName,
-      movedCount: moved.length,
-      moved,
-      ...(notFound.length > 0 ? { notFound } : {}),
-    };
-  } catch (error) {
-    throw new Error(
-      `Failed to move documents: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
   }
+
+  return {
+    success: true,
+    documentType: data.documentType,
+    targetFolderId: folderId,
+    targetFolderName: folderName,
+    movedCount: moved.length,
+    moved,
+    ...(notFound.length > 0 ? { notFound } : {}),
+  };
 }
 
 /**
@@ -451,7 +434,7 @@ export async function bulkDelete(data: {
   dryRun?: boolean;
 }): Promise<unknown> {
   if (!WORLD_DOC_TYPES.includes(data.documentType)) {
-    throw new Error(
+    throw invalid(
       `Unknown documentType "${data.documentType}". Valid: ${WORLD_DOC_TYPES.join(', ')}`
     );
   }
@@ -477,49 +460,43 @@ export async function deleteFolder(data: {
 }): Promise<unknown> {
   const type = data.type || 'Actor';
 
-  try {
-    // STRICT resolution: exact id, or exact name within the given folder type.
-    const folder =
-      game.folders?.get(data.identifier) ||
-      game.folders?.find((f: any) => f.name === data.identifier && f.type === type);
+  // STRICT resolution: exact id, or exact name within the given folder type.
+  const folder =
+    game.folders?.get(data.identifier) ||
+    game.folders?.find((f: any) => f.name === data.identifier && f.type === type);
 
-    if (!folder) {
-      return { success: true, deleted: false, notFound: data.identifier };
-    }
+  if (!folder) {
+    return { success: true, deleted: false, notFound: data.identifier };
+  }
 
-    const { documents, subfolders } = folderChildCounts(folder);
-    const isEmpty = documents === 0 && subfolders === 0;
+  const { documents, subfolders } = folderChildCounts(folder);
+  const isEmpty = documents === 0 && subfolders === 0;
 
-    if (!isEmpty && !data.deleteContents) {
-      throw new Error(
-        `Folder "${folder.name}" is not empty (${documents} document(s), ${subfolders} subfolder(s)). ` +
-          `Pass deleteContents:true to delete the folder and everything inside it.`
-      );
-    }
-
-    const folderInfo = {
-      id: folder.id ?? data.identifier,
-      name: folder.name ?? '',
-      type: folder.type,
-    };
-
-    if (isEmpty) {
-      await folder.delete();
-    } else {
-      await folder.delete({ deleteSubfolders: true, deleteContents: true } as any);
-    }
-
-    return {
-      success: true,
-      deleted: true,
-      folder: folderInfo,
-      deletedContents: !isEmpty,
-      removedDocuments: !isEmpty ? documents : 0,
-      removedSubfolders: !isEmpty ? subfolders : 0,
-    };
-  } catch (error) {
-    throw new Error(
-      `Failed to delete folder: ${error instanceof Error ? error.message : 'Unknown error'}`
+  if (!isEmpty && !data.deleteContents) {
+    throw invalid(
+      `Folder "${folder.name}" is not empty (${documents} document(s), ${subfolders} subfolder(s)). ` +
+        `Pass deleteContents:true to delete the folder and everything inside it.`
     );
   }
+
+  const folderInfo = {
+    id: folder.id ?? data.identifier,
+    name: folder.name ?? '',
+    type: folder.type,
+  };
+
+  if (isEmpty) {
+    await folder.delete();
+  } else {
+    await folder.delete({ deleteSubfolders: true, deleteContents: true } as any);
+  }
+
+  return {
+    success: true,
+    deleted: true,
+    folder: folderInfo,
+    deletedContents: !isEmpty,
+    removedDocuments: !isEmpty ? documents : 0,
+    removedSubfolders: !isEmpty ? subfolders : 0,
+  };
 }

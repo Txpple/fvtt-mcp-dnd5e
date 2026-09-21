@@ -32,6 +32,7 @@ import {
   projectDuration,
   summarizeChanges,
 } from './effect-changes.js';
+import { invalid, notFound } from './errors.js';
 
 /** An effect's SOURCE changes off the 6.0 home, tolerating a pre-migration top-level array. */
 const changesOf = (e: any): any[] => {
@@ -68,10 +69,9 @@ export async function manageEffect(params: {
   let kind: 'actor' | 'item';
   if (params.actorIdentifier && params.itemIdentifier) {
     const actor = resolveActorFuzzy(params.actorIdentifier);
-    if (!actor) throw new Error(`Actor not found: ${params.actorIdentifier}`);
+    if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     const item = resolveActorItem(actor, params.itemIdentifier);
-    if (!item)
-      throw new Error(`Item "${params.itemIdentifier}" not found on actor "${actor.name}"`);
+    if (!item) throw notFound(`Item "${params.itemIdentifier}" not found on actor "${actor.name}"`);
     parent = item;
     kind = 'item';
     parentRef = {
@@ -80,18 +80,18 @@ export async function manageEffect(params: {
     };
   } else if (params.actorIdentifier) {
     const actor = resolveActorFuzzy(params.actorIdentifier);
-    if (!actor) throw new Error(`Actor not found: ${params.actorIdentifier}`);
+    if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     parent = actor;
     kind = 'actor';
     parentRef = { actor: { id: actor.id, name: actor.name } };
   } else if (params.itemIdentifier) {
     const item = resolveWorldItem(params.itemIdentifier);
-    if (!item) throw new Error(`World Item "${params.itemIdentifier}" not found`);
+    if (!item) throw notFound(`World Item "${params.itemIdentifier}" not found`);
     parent = item;
     kind = 'item';
     parentRef = { item: { id: item.id, name: item.name, type: item.type } };
   } else {
-    throw new Error('Provide actorIdentifier and/or itemIdentifier.');
+    throw invalid('Provide actorIdentifier and/or itemIdentifier.');
   }
 
   const effectsList = Array.from(parent.effects ?? []);
@@ -139,9 +139,9 @@ export async function manageEffect(params: {
 
     case 'edit': {
       const id = params.effectId;
-      if (!id) throw new Error('effectId is required to edit an effect.');
+      if (!id) throw invalid('effectId is required to edit an effect.');
       const eff = parent.effects?.get?.(id);
-      if (!eff) throw new Error(`Effect "${id}" not found on "${parent.name}".`);
+      if (!eff) throw notFound(`Effect "${id}" not found on "${parent.name}".`);
       const update: Record<string, any> = { _id: id };
       const e = params.effect ?? {};
       if (typeof e.name === 'string') update.name = e.name;
@@ -159,7 +159,7 @@ export async function manageEffect(params: {
       if (duration) for (const [k, v] of Object.entries(duration)) update[`duration.${k}`] = v;
       for (const [k, v] of Object.entries(normalizePatch(params.patch ?? {}))) update[k] = v;
       if (Object.keys(update).length === 1) {
-        throw new Error('Provide effect fields (name/disabled/changes/...) or a patch to edit.');
+        throw invalid('Provide effect fields (name/disabled/changes/...) or a patch to edit.');
       }
       await parent.updateEmbeddedDocuments('ActiveEffect', [update]);
       return {
@@ -172,14 +172,14 @@ export async function manageEffect(params: {
 
     case 'delete': {
       const id = params.effectId;
-      if (!id) throw new Error('effectId is required to delete an effect.');
+      if (!id) throw invalid('effectId is required to delete an effect.');
       const eff = parent.effects?.get?.(id);
-      if (!eff) throw new Error(`Effect "${id}" not found on "${parent.name}".`);
+      if (!eff) throw notFound(`Effect "${id}" not found on "${parent.name}".`);
       await parent.deleteEmbeddedDocuments('ActiveEffect', [id]);
       return { ...base, action: 'delete', effectId: id };
     }
 
     default:
-      throw new Error(`Unknown action "${action}". Use create, edit, delete, or list.`);
+      throw invalid(`Unknown action "${action}". Use create, edit, delete, or list.`);
   }
 }

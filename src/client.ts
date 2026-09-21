@@ -9,6 +9,8 @@
 //   Foundry                       the bridge: `new Foundry(cfg)`, `connect()`, `evaluate(fn, arg)`,
 //                                 `call(name, args)`, `screenshot(path)`, `dispose()` (alias
 //                                 `disconnect()`)
+//   BridgeError                   what a failed call / connect throws: `code` (the page's
+//                                 PageError code, or `connection`), `fn`, `detail`
 //   connectFoundry(opts)          the harness in one call: .env → host → identity → connect, with
 //                                 the watchdog and the raced teardown every sibling had written
 //   loadEnv(path?)                this repo's .env as a map (`fvtt-mcp-dnd5e/env`)
@@ -33,6 +35,9 @@ import { Logger } from './logger.js';
 
 export { Foundry } from './foundry.js';
 export type { FoundryBridge, FoundryConfig, FoundryLogger } from './foundry.js';
+export { BridgeError } from './bridge-error.js';
+export type { BridgeErrorCode } from './bridge-error.js';
+export type { PageErrorCode } from './page/errors.js';
 export { envPath, loadEnv, repoRoot } from './env.js';
 export type { Env } from './env.js';
 export {

@@ -475,14 +475,12 @@ describe('handleGetCurrentScene', () => {
     await expect(tools.handleGetCurrentScene({ includeTokens: 'yes' })).rejects.toThrow();
   });
 
-  it('wraps bridge errors with a descriptive message', async () => {
+  it('lets a bridge error through untouched (the page words are the message; no rewrap)', async () => {
     const { foundry, calls } = makeFoundry(() => {
       throw new Error('no active scene');
     });
     const tools = new SceneTools({ foundry, logger: makeLogger() });
-    await expect(tools.handleGetCurrentScene({})).rejects.toThrow(
-      'Failed to get current scene: no active scene'
-    );
+    await expect(tools.handleGetCurrentScene({})).rejects.toThrow(/^no active scene$/);
     expect(calls[0][0]).toBe('getActiveScene');
   });
 });
@@ -533,14 +531,12 @@ describe('handleGetWorldInfo', () => {
     expect(out.activeUsers).toEqual([]);
   });
 
-  it('wraps bridge errors with a descriptive message', async () => {
+  it('lets a bridge error through untouched (no rewrap)', async () => {
     const { foundry } = makeFoundry(() => {
       throw new Error('bridge down');
     });
     const tools = new SceneTools({ foundry, logger: makeLogger() });
-    await expect(tools.handleGetWorldInfo({})).rejects.toThrow(
-      'Failed to get world information: bridge down'
-    );
+    await expect(tools.handleGetWorldInfo({})).rejects.toThrow(/^bridge down$/);
   });
 
   it('passes the bridge user and the premium-book presence through', async () => {

@@ -16,6 +16,7 @@
 //   • src "" is valid: Foundry falls back to CONFIG.Combat.fallbackTurnMarker.
 
 import { imgResolves } from './img-resolve.js';
+import { invalid, notFound } from './errors.js';
 
 const NAMESPACE = 'core';
 const SETTING = 'combatTrackerConfig';
@@ -62,7 +63,7 @@ export function planCombatTrackerChanges(
   if (args.turnMarker?.animation !== undefined) {
     const ids = validAnimations.map(a => a.value);
     if (!ids.includes(args.turnMarker.animation)) {
-      throw new Error(
+      throw invalid(
         `unknown turn-marker animation "${args.turnMarker.animation}" — this world knows: ` +
           `${ids.map(id => `"${id}"`).join(', ')}`
       );
@@ -101,7 +102,7 @@ export async function configureCombatTracker(args: CombatTrackerArgs = {}): Prom
 
   const src = args?.turnMarker?.src;
   if (src && !(await imgResolves(src))) {
-    throw new Error(
+    throw notFound(
       `turnMarker.src "${src}" does not resolve on the server — nothing was changed. ` +
         `Upload it first (upload-asset) or correct the path; pass "" to reset to the stock marker.`
     );

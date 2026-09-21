@@ -9,6 +9,7 @@ import {
   findUnresolvedScaleTokens,
 } from '../_shared.js';
 import { DEFAULT_FEATURE_PACKS } from '../../utils/compendium-sources.js';
+import { invalid, notFound as notFoundError, unsupported } from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // Add features from compendium packs to an actor
@@ -19,13 +20,13 @@ export async function addFeaturesFromCompendium(args: {
   compendiumPacks?: string[];
 }): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addFeaturesFromCompendium requires the dnd5e game system');
+    throw unsupported('addFeaturesFromCompendium requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(args.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${args.actorIdentifier}"`);
+    throw notFoundError(`Actor not found: "${args.actorIdentifier}"`);
   }
 
   const featureNames: string[] = args.featureNames;
@@ -83,7 +84,7 @@ export async function addFeaturesFromCompendium(args: {
   }
 
   if (packMaps.length === 0) {
-    throw new Error(
+    throw invalid(
       'No valid compendium packs available — check the compendiumPacks parameter. ' +
         'Valid pack IDs are the premium book packs: "dnd-monster-manual.features" (monster features) ' +
         'and "dnd-players-handbook.classes" (class features live alongside the class items). ' +

@@ -29,6 +29,7 @@ import {
   type Visibility,
   type StyleName,
 } from './chat-helpers.js';
+import { invalid, notFound } from './errors.js';
 
 const CONST_: any = (globalThis as any).CONST;
 
@@ -127,7 +128,7 @@ export async function postChatMessage(args: {
   enrich?: boolean;
 }): Promise<unknown> {
   if (!args?.content || typeof args.content !== 'string') {
-    throw new Error('content is required and must be a non-empty string');
+    throw invalid('content is required and must be a non-empty string');
   }
   const Cls = chatMessageClass();
   const visibility: Visibility = args.visibility ?? 'public';
@@ -136,7 +137,7 @@ export async function postChatMessage(args: {
   let speaker: any;
   if (args.speakerActor) {
     actorDoc = resolveActorFuzzy(args.speakerActor);
-    if (!actorDoc) throw new Error(`speakerActor "${args.speakerActor}" not found`);
+    if (!actorDoc) throw notFound(`speakerActor "${args.speakerActor}" not found`);
     speaker = Cls.getSpeaker({ actor: actorDoc });
   } else {
     speaker = Cls.getSpeaker();
@@ -239,7 +240,7 @@ export async function deleteChatMessages(args: {
     }
     if (missing.length > 0) notFound = missing;
   } else {
-    throw new Error('Provide ids, beforeTimestamp, or clearAll.');
+    throw invalid('Provide ids, beforeTimestamp, or clearAll.');
   }
 
   const deleted = targets.map((m: any) => ({ id: m.id, name: m.speaker?.alias ?? m.alias ?? '' }));
@@ -303,12 +304,12 @@ export async function postItemCard(args: {
   critical?: boolean;
 }): Promise<unknown> {
   const actor = resolveActorFuzzy(args.actor);
-  if (!actor) throw new Error(`actor "${args.actor}" not found`);
+  if (!actor) throw notFound(`actor "${args.actor}" not found`);
   const item =
     actor.items?.get(args.item) ||
     actor.items?.getName?.(args.item) ||
     actor.items?.find?.((i: any) => i.name === args.item);
-  if (!item) throw new Error(`item "${args.item}" not found on actor "${actor.name}"`);
+  if (!item) throw notFound(`item "${args.item}" not found on actor "${actor.name}"`);
 
   const activities = item.system?.activities;
   const list: any[] = activities ? (activities.contents ?? Array.from(activities ?? [])) : [];

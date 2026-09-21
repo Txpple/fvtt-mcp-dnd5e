@@ -25,6 +25,7 @@ import { createWorldItems } from '../items.js';
 import { searchCompendiumFaceted } from '../compendium-facets.js';
 import { resolveAuthoredIcon, isPlaceholderIcon } from './icons.js';
 import { imgResolves, badAssetWarning } from '../img-resolve.js';
+import { ambiguous, invalid, notFound, unsupported } from '../errors.js';
 
 /** The finer kind used to pick a default icon: equipmentType for wondrous, consumableType for a
  * consumable, lootType for loot. Other item types have no sub-kind icon (resolver uses the bare key). */
@@ -137,7 +138,7 @@ export function buildPhysicalItemData(opts: PhysicalItemOpts): {
 } {
   const docType = DOC_TYPE[opts.itemType];
   if (!docType) {
-    throw new Error(
+    throw invalid(
       `Unknown itemType "${opts.itemType}". Use weapon, armor, shield, wondrous, consumable, tool, loot, or container.`
     );
   }
@@ -271,7 +272,7 @@ function findContainer(items: any, identifier: string): any {
   const matches =
     items.filter?.((i: any) => i.type === 'container' && i.name?.toLowerCase() === lower) ?? [];
   if (matches.length > 1) {
-    throw new Error(
+    throw ambiguous(
       `Ambiguous container name "${identifier}" (${matches.length} matches). Pass the id instead: ${matches
         .map((c: any) => `${c.name} (${c.id})`)
         .join(', ')}.`
@@ -409,7 +410,7 @@ async function mintLootCopy(
  */
 export async function addItem(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addItem requires the dnd5e game system');
+    throw unsupported('addItem requires the dnd5e game system');
   }
 
   // Optional weapon attack activity — built through the shared buildActivity (no drift with
@@ -502,13 +503,13 @@ export async function addItem(data: any): Promise<unknown> {
   // --- Target: actor (embedded) vs world (sidebar) ---
   if (data.actorIdentifier) {
     const actor = resolveActorFuzzy(data.actorIdentifier);
-    if (!actor) throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    if (!actor) throw notFound(`Actor not found: "${data.actorIdentifier}"`);
 
     let containerId: string | null = null;
     if (data.container) {
       const c = findContainer(actor.items, String(data.container));
       if (!c) {
-        throw new Error(
+        throw notFound(
           `Container not found on "${actor.name}": "${data.container}". Add the container item first.`
         );
       }
@@ -561,7 +562,7 @@ export async function addItem(data: any): Promise<unknown> {
   if (data.container) {
     const c = findContainer(game.items, String(data.container));
     if (!c) {
-      throw new Error(
+      throw notFound(
         `Container world-item not found: "${data.container}". Create the container first.`
       );
     }
@@ -591,7 +592,7 @@ export async function addItem(data: any): Promise<unknown> {
  */
 export async function importItemFromCompendium(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`importItemFromCompendium requires D&D 5e (current: "${game.system.id}").`);
+    throw unsupported(`importItemFromCompendium requires D&D 5e (current: "${game.system.id}").`);
   }
 
   // Fetch + copy-prep through the shared whole-document copy primitive (validates
@@ -611,12 +612,12 @@ export async function importItemFromCompendium(data: any): Promise<unknown> {
   // --- Target: actor (embedded) vs world (sidebar) ---
   if (data.actorIdentifier) {
     const actor = resolveActorFuzzy(data.actorIdentifier);
-    if (!actor) throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    if (!actor) throw notFound(`Actor not found: "${data.actorIdentifier}"`);
 
     if (data.container) {
       const c = findContainer(actor.items, String(data.container));
       if (!c) {
-        throw new Error(
+        throw notFound(
           `Container not found on "${actor.name}": "${data.container}". Add the container item first.`
         );
       }
@@ -657,7 +658,7 @@ export async function importItemFromCompendium(data: any): Promise<unknown> {
   if (data.container) {
     const c = findContainer(game.items, String(data.container));
     if (!c) {
-      throw new Error(
+      throw notFound(
         `Container world-item not found: "${data.container}". Create the container first.`
       );
     }

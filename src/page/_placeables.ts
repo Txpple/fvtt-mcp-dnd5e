@@ -15,6 +15,7 @@
 // correctness" rule as the rest of src/page.
 
 import { resolveTargetScene } from './scenes.js';
+import { invalid, unsupported } from './errors.js';
 
 /** One create-doc result: the built document, OR a per-item error (isolated), plus any warnings. */
 export interface CreateDocResult {
@@ -84,9 +85,9 @@ export async function crudCreate(
   desc: PlaceableDescriptor,
   args: { sceneIdentifier?: string; items: any[] }
 ): Promise<CrudCreateResult> {
-  if (!desc.toCreateDoc) throw new Error(`${desc.docName}: create is not supported`);
+  if (!desc.toCreateDoc) throw unsupported(`${desc.docName}: create is not supported`);
   if (!Array.isArray(args?.items) || args.items.length === 0) {
-    throw new Error('items array is required and must contain at least one entry');
+    throw invalid('items array is required and must contain at least one entry');
   }
   const scene = resolveTargetScene(args.sceneIdentifier);
   if (!scene) return { success: true, created: 0, notFound: args.sceneIdentifier! };
@@ -186,9 +187,9 @@ export async function crudUpdate<P extends { id: string }>(
   desc: PlaceableDescriptor,
   args: { sceneIdentifier?: string; patches: P[] }
 ): Promise<CrudUpdateResult> {
-  if (!desc.buildPatch) throw new Error(`${desc.docName}: update is not supported`);
+  if (!desc.buildPatch) throw unsupported(`${desc.docName}: update is not supported`);
   if (!Array.isArray(args?.patches) || args.patches.length === 0) {
-    throw new Error('patches array is required and must contain at least one entry');
+    throw invalid('patches array is required and must contain at least one entry');
   }
   const scene = resolveTargetScene(args.sceneIdentifier);
   if (!scene) return { success: true, matched: 0, updated: 0, notFound: args.sceneIdentifier! };
@@ -248,7 +249,7 @@ export async function crudDelete(
   args: { sceneIdentifier?: string; ids: string[] }
 ): Promise<CrudDeleteResult> {
   if (!Array.isArray(args?.ids) || args.ids.length === 0) {
-    throw new Error('ids array is required and must contain at least one entry');
+    throw invalid('ids array is required and must contain at least one entry');
   }
   const scene = resolveTargetScene(args.sceneIdentifier);
   if (!scene) return { success: true, deleted: 0, notFound: args.sceneIdentifier! };

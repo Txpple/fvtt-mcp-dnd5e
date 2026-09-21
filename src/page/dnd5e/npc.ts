@@ -19,6 +19,7 @@ import {
   TOKEN_DISPOSITION,
   tokenDefaults,
 } from './token-defaults.js';
+import { invalid, unsupported } from '../errors.js';
 
 // CR helpers keep their npc-prefixed names for existing importers (npc.test.ts); the
 // implementations now live in the shared actor-fields module so create + update share them.
@@ -244,14 +245,14 @@ export async function createNpcActor(data: NpcInput): Promise<unknown> {
 
   // 1. System guard
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`createNpcActor requires D&D 5e. Current system: "${game.system.id}".`);
+    throw unsupported(`createNpcActor requires D&D 5e. Current system: "${game.system.id}".`);
   }
 
   // 2. Duplicate check by name — only against other NPCs, so a player
   //    character sharing the name does not block NPC creation.
   const existingActor = game.actors?.find((a: any) => a.name === data.name && a.type === 'npc');
   if (existingActor) {
-    throw new Error(
+    throw invalid(
       `NPC "${data.name}" already exists (id: ${existingActor.id}). ` +
         `Use a different name or remove the existing NPC first.`
     );

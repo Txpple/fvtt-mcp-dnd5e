@@ -11,6 +11,7 @@
 
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveUser } from './users.js';
+import { invalid, notFound } from './errors.js';
 
 /** Foundry's stock macro icon — the fallback when no (or a broken) img is supplied. */
 const DEFAULT_MACRO_IMG = 'icons/svg/dice-target.svg';
@@ -25,7 +26,7 @@ function resolveUserOrThrow(identifier: string): any {
   const user = resolveUser(identifier);
   if (!user) {
     const names = (game.users?.contents ?? []).map((u: any) => u.name).join(', ');
-    throw new Error(`user "${identifier}" not found. Users in this world: ${names}`);
+    throw notFound(`user "${identifier}" not found. Users in this world: ${names}`);
   }
   return user;
 }
@@ -65,7 +66,7 @@ function firstFreeSlot(user: any): number {
   for (let slot = 1; slot <= HOTBAR_SLOTS; slot++) {
     if (!hotbar[slot]) return slot;
   }
-  throw new Error(`no free hotbar slot on "${user.name}" — all ${HOTBAR_SLOTS} are occupied`);
+  throw invalid(`no free hotbar slot on "${user.name}" — all ${HOTBAR_SLOTS} are occupied`);
 }
 
 export async function createMacro(args: {
@@ -77,12 +78,10 @@ export async function createMacro(args: {
   hotbarUser?: string;
   hotbarSlot?: number;
 }): Promise<unknown> {
-  if (!args?.name) throw new Error('name is required');
-  if (!args?.command) throw new Error('command is required');
+  if (!args?.name) throw invalid('name is required');
+  if (!args?.command) throw invalid('command is required');
   if (args.hotbarSlot !== undefined && !args.hotbarUser) {
-    throw new Error(
-      'hotbarSlot requires hotbarUser — a slot number means nothing without a hotbar'
-    );
+    throw invalid('hotbarSlot requires hotbarUser — a slot number means nothing without a hotbar');
   }
   const type = args.type === 'chat' ? 'chat' : 'script';
   const warnings: string[] = [];
@@ -175,7 +174,7 @@ export function listMacros(args?: { nameFilter?: string; user?: string }): unkno
 
 export async function deleteMacros(args: { macros: string[] }): Promise<unknown> {
   if (!Array.isArray(args?.macros) || args.macros.length === 0) {
-    throw new Error('macros is required — an array of macro ids or exact names');
+    throw invalid('macros is required — an array of macro ids or exact names');
   }
   const resolved: any[] = [];
   const missing: string[] = [];
@@ -192,7 +191,7 @@ export async function deleteMacros(args: { macros: string[] }): Promise<unknown>
   }
   if (resolved.length === 0) {
     const names = (game.macros?.contents ?? []).map((m: any) => m.name).join(', ');
-    throw new Error(
+    throw notFound(
       `no macros matched ${JSON.stringify(args.macros)}. Macros in this world: ${names || '(none)'}`
     );
   }

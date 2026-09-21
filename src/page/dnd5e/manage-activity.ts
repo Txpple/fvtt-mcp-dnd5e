@@ -31,6 +31,7 @@ import {
 import { resolveCastSpell, settleCachedSpellCopies } from './cast-spells.js';
 import { type ResolvedEffect, resolveEffectRefs } from './effect-refs.js';
 import { assertNoSrdPacks, isPremiumBookPack } from '../../utils/compendium-sources.js';
+import { invalid, notFound } from '../errors.js';
 
 /**
  * Resolve a transform profile's `actor` — an Actor uuid (compendium or world; SRD packs refused) or
@@ -38,10 +39,10 @@ import { assertNoSrdPacks, isPremiumBookPack } from '../../utils/compendium-sour
  */
 async function resolveTransformActor(ref: string): Promise<{ uuid: string; name: string }> {
   const r = String(ref ?? '').trim();
-  if (!r) throw new Error('a transform profile `actor` must be a creature name or an Actor uuid.');
+  if (!r) throw invalid('a transform profile `actor` must be a creature name or an Actor uuid.');
   if (/^(Compendium\..+\.Actor|Actor)\.[A-Za-z0-9]{16}$/.test(r)) {
     const doc = await (globalThis as any).fromUuid(r);
-    if (doc?.documentName !== 'Actor') throw new Error(`"${r}" does not resolve to an Actor.`);
+    if (doc?.documentName !== 'Actor') throw notFound(`"${r}" does not resolve to an Actor.`);
     if (doc.pack) assertNoSrdPacks(doc.pack, `transform profile "${r}"`);
     return { uuid: doc.uuid, name: doc.name };
   }
@@ -62,7 +63,7 @@ async function resolveTransformActor(ref: string): Promise<{ uuid: string; name:
   }
   const best = hits.find(h => h.packId.startsWith('dnd-monster-manual.')) ?? hits[0];
   if (best) return { uuid: best.uuid, name: best.name };
-  throw new Error(
+  throw invalid(
     `transform profile actor "${r}" is not a premium-book creature (searched the MM / premium Actor ` +
       'packs by exact name) — pass an Actor uuid, or check the name with search-compendium-creatures.'
   );
@@ -83,7 +84,7 @@ function resolveFormEffects(item: any, forms: unknown): string[] {
           .toLowerCase() === name
     );
     if (!hit) {
-      throw new Error(
+      throw invalid(
         `form "${f}" is not an effect on "${item.name}" — it carries: ` +
           `${effects.map(e => `"${e.name}"`).join(', ') || '(none)'}. Author each form as an effect on ` +
           'the item with manage-effect first.'
@@ -129,7 +130,7 @@ async function resolveAppliedEffects(
   for (const e of entries ?? []) {
     const ref = String(e?.ref ?? '').trim();
     if (!ref) {
-      throw new Error(
+      throw invalid(
         'each appliesEffects entry needs a `ref` — an effect NAME on this item, a stock effect name ' +
           '("Poisoned"), an ActiveEffect uuid, or an Item uuid + "#<effect name>".'
       );
@@ -201,7 +202,7 @@ export async function manageActivity(params: {
   patch?: Record<string, any>;
 }): Promise<unknown> {
   const { action, itemIdentifier } = params ?? ({} as any);
-  if (!itemIdentifier) throw new Error('itemIdentifier is required');
+  if (!itemIdentifier) throw invalid('itemIdentifier is required');
 
   // Resolve the item (embedded on an actor, or world-level) + the matching write path.
   let item: any;
@@ -210,15 +211,15 @@ export async function manageActivity(params: {
   let applyUpdate: (data: Record<string, any>) => Promise<any>;
   if (params.actorIdentifier) {
     const actor = resolveActor(params.actorIdentifier);
-    if (!actor) throw new Error(`Actor not found: ${params.actorIdentifier}`);
+    if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     item = resolveActorItem(actor, itemIdentifier);
-    if (!item) throw new Error(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);
+    if (!item) throw notFound(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);
     actorDoc = actor;
     actorRef = { id: actor.id, name: actor.name };
     applyUpdate = data => actor.updateEmbeddedDocuments('Item', [{ _id: item.id, ...data }]);
   } else {
     item = resolveWorldItem(itemIdentifier);
-    if (!item) throw new Error(`World Item "${itemIdentifier}" not found`);
+    if (!item) throw notFound(`World Item "${itemIdentifier}" not found`);
     applyUpdate = data => item.update(data);
   }
 
@@ -308,7 +309,7 @@ export async function manageActivity(params: {
 
     case 'add': {
       const type = params.activity?.type;
-      if (!type) throw new Error('activity.type is required to add an activity.');
+      if (!type) throw invalid('activity.type is required to add an activity.');
       const id = foundry.utils.randomID(16);
       const { type: _t, ...rest } = params.activity ?? {};
       // A cast activity LINKS a real compendium spell: resolve+validate it (off-book/SRD throws),
@@ -389,8 +390,8 @@ export async function manageActivity(params: {
 
     case 'edit': {
       const id = params.activityId;
-      if (!id) throw new Error('activityId is required to edit an activity.');
-      if (!activities[id]) throw new Error(`Activity "${id}" not found on item "${item.name}".`);
+      if (!id) throw invalid('activityId is required to edit an activity.');
+      if (!activities[id]) throw notFound(`Activity "${id}" not found on item "${item.name}".`);
       // Refuse the typed fields this branch cannot apply rather than reporting a silent success.
       assertEditableActivityFields(params.activity);
       const srcActivity = activities[id];
@@ -425,7 +426,7 @@ export async function manageActivity(params: {
           !!srcActivity?.target?.template?.type ||
           (!srcActivity?.target?.override && !!toSource(item).system?.target?.template?.type);
         if (behaviors.opts.length > 0 && !hasTemplate) {
-          throw new Error(
+          throw invalid(
             'behaviors ride on an AREA TEMPLATE — this activity has none; pass `template` ({type, size}) too.'
           );
         }
@@ -444,7 +445,7 @@ export async function manageActivity(params: {
         data[`system.activities.${id}.${k}`] = v;
       }
       if (Object.keys(data).length === 0) {
-        throw new Error(
+        throw invalid(
           'Provide a `patch`, a `duration`, a `template`/`affects`, `behaviors`, `appliesEffects`, ' +
             'and/or activity.name to edit.'
         );
@@ -464,13 +465,13 @@ export async function manageActivity(params: {
 
     case 'remove': {
       const id = params.activityId;
-      if (!id) throw new Error('activityId is required to remove an activity.');
-      if (!activities[id]) throw new Error(`Activity "${id}" not found on item "${item.name}".`);
+      if (!id) throw invalid('activityId is required to remove an activity.');
+      if (!activities[id]) throw notFound(`Activity "${id}" not found on item "${item.name}".`);
       await applyUpdate({ [toDeletionKey(`system.activities.${id}`)]: null });
       return { ...base, action: 'remove', activityId: id };
     }
 
     default:
-      throw new Error(`Unknown action "${action}". Use add, edit, remove, or list.`);
+      throw invalid(`Unknown action "${action}". Use add, edit, remove, or list.`);
   }
 }

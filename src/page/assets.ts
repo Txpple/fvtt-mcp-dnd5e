@@ -21,6 +21,7 @@ import {
   OWNERSHIP_OBSERVER,
 } from './journals.js';
 import { resolveCreatureIcon } from './dnd5e/icons.js';
+import { invalid } from './errors.js';
 
 /**
  * Group C — find every document that references the given asset path(s).
@@ -37,7 +38,7 @@ import { resolveCreatureIcon } from './dnd5e/icons.js';
 export async function findAssetReferences(data: { paths: string[] }): Promise<unknown> {
   const paths = Array.isArray(data.paths) ? data.paths.filter(p => typeof p === 'string') : [];
   if (paths.length === 0) {
-    throw new Error('paths array is required and must contain at least one asset path');
+    throw invalid('paths array is required and must contain at least one asset path');
   }
 
   const slots = collectAssetSlots();
@@ -81,7 +82,7 @@ export async function relinkAsset(data: {
   dryRun?: boolean;
 }): Promise<unknown> {
   if (!data.oldPath || !data.newPath) {
-    throw new Error('oldPath and newPath are both required');
+    throw invalid('oldPath and newPath are both required');
   }
   const dryRun = data.dryRun === true;
 
@@ -146,7 +147,7 @@ export async function setActorArt(data: {
   autoRotate?: boolean;
 }): Promise<unknown> {
   if (!data.actorIdentifier || !data.imagePath) {
-    throw new Error('actorIdentifier and imagePath are both required');
+    throw invalid('actorIdentifier and imagePath are both required');
   }
 
   const actor = resolveActorStrict(data.actorIdentifier);
@@ -276,7 +277,7 @@ export async function addJournalImage(data: {
   playerVisible?: boolean;
 }): Promise<unknown> {
   if (!data.journalIdentifier || !data.imagePath) {
-    throw new Error('journalIdentifier and imagePath are both required');
+    throw invalid('journalIdentifier and imagePath are both required');
   }
 
   const journal = resolveJournalStrict(data.journalIdentifier);

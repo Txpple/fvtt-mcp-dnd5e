@@ -19,6 +19,7 @@ import {
 import { normalizeAssetPath } from '../_shared.js';
 import { imgResolves } from '../img-resolve.js';
 import { resolveTargetScene } from '../scenes.js';
+import { invalid } from '../errors.js';
 
 const DISPOSITION_NAME: Record<number, string> = {
   [-2]: 'secret',
@@ -323,9 +324,7 @@ export async function updateSceneTokens(
   }
   const wantTokenIds = new Set<string>(args?.tokenIds ?? []);
   if (wantTokenIds.size === 0 && wantActorIds.size === 0) {
-    throw new Error(
-      'provide at least one target: tokenIds and/or actorIds (id or exact actor name)'
-    );
+    throw invalid('provide at least one target: tokenIds and/or actorIds (id or exact actor name)');
   }
 
   const hpPatch = buildHpPatch(args.hp);
@@ -347,7 +346,7 @@ export async function updateSceneTokens(
     args.ring !== undefined ||
     hpPatch !== null;
   if (!hasField) {
-    throw new Error(
+    throw invalid(
       'provide at least one field to change (rotation, randomizeRotation, scale, imagePath, elevation, hidden, lockRotation, x, y, name, displayName, displayBars, bar1, bar2, ring, or hp)'
     );
   }

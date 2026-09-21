@@ -30,6 +30,7 @@ import {
   settleCachedSpellCopies,
   type CastSpellFacts,
 } from './cast-spells.js';
+import { invalid, notFound } from '../errors.js';
 
 /** Recovery periods a feature-granted free cast can meaningfully use (dnd5e 5.3 uses.recovery). */
 const RECOVERY_PERIODS = new Set(['lr', 'sr', 'day', 'dawn', 'dusk']);
@@ -63,14 +64,14 @@ export function buildFreeCastActivityPlan(
   newId: string
 ): FreeCastActivityPlan {
   if (!feature || feature.type === 'spell') {
-    throw new Error(
+    throw invalid(
       'The free cast lands ON the granting FEATURE (a feat/feature/item), not on a spell — pass ' +
         'the feature that grants it (e.g. "Magic Initiate", "Favored Enemy") as grantedBy.'
     );
   }
   const period = opts.recoveryPeriod ?? 'lr';
   if (!RECOVERY_PERIODS.has(period)) {
-    throw new Error(
+    throw invalid(
       `Unknown recoveryPeriod "${period}" — expected one of: ${[...RECOVERY_PERIODS].join(', ')}`
     );
   }
@@ -146,7 +147,7 @@ export function buildRepertoireCleanup(spell: {
   system?: any;
 }): RepertoireCleanup {
   if (spell?.type !== 'spell') {
-    throw new Error(`Repertoire cleanup applies to spells only — got item type "${spell?.type}"`);
+    throw invalid(`Repertoire cleanup applies to spells only — got item type "${spell?.type}"`);
   }
   const update: Record<string, unknown> = {};
   const warnings: string[] = [];
@@ -197,14 +198,14 @@ export async function addFreeCast(params: {
   recoveryPeriod?: string;
 }): Promise<unknown> {
   const { actorIdentifier, spellIdentifier, grantedBy } = params ?? ({} as any);
-  if (!actorIdentifier) throw new Error('actorIdentifier is required');
-  if (!spellIdentifier) throw new Error('spellIdentifier is required');
+  if (!actorIdentifier) throw invalid('actorIdentifier is required');
+  if (!spellIdentifier) throw invalid('spellIdentifier is required');
   if (!grantedBy || !String(grantedBy).trim()) {
-    throw new Error('grantedBy is required — the feature ITEM on the actor that grants the cast');
+    throw invalid('grantedBy is required — the feature ITEM on the actor that grants the cast');
   }
 
   const actor = resolveActorFuzzy(actorIdentifier);
-  if (!actor) throw new Error(`Actor not found: ${actorIdentifier}`);
+  if (!actor) throw notFound(`Actor not found: ${actorIdentifier}`);
 
   // The granting feature must be a real item on the actor — the cast activity lives ON it.
   const feature = resolveActorItem(actor, grantedBy);
@@ -214,7 +215,7 @@ export async function addFreeCast(params: {
       .slice(0, 12)
       .map((i: any) => i.name)
       .join(', ');
-    throw new Error(
+    throw notFound(
       `Granting feature "${grantedBy}" not found on "${actor.name}" (or it resolved to a spell). ` +
         `Pass the feat/feature ITEM that grants the cast. Feats on this actor: ${candidates || '(none)'}`
     );
@@ -231,7 +232,7 @@ export async function addFreeCast(params: {
       : null;
   if (!uuid && embedded) uuid = await resolveSpellUuidByName(embedded.name);
   if (!uuid) {
-    throw new Error(
+    throw invalid(
       embedded
         ? `Spell "${embedded.name}" on "${actor.name}" has no compendium source and no premium-pack ` +
             'name match to link — pass the premium compendium uuid ' +

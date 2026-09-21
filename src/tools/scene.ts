@@ -789,42 +789,28 @@ export class SceneTools {
 
     this.logger.info('Getting current scene information', { includeTokens, includeHidden });
 
-    try {
-      const sceneData = await this.foundry.call('getActiveScene');
+    const sceneData = await this.foundry.call('getActiveScene');
 
-      this.logger.debug('Successfully retrieved scene data', {
-        sceneId: sceneData.id,
-        sceneName: sceneData.name,
-        tokenCount: sceneData.tokens?.length || 0,
-      });
+    this.logger.debug('Successfully retrieved scene data', {
+      sceneId: sceneData.id,
+      sceneName: sceneData.name,
+      tokenCount: sceneData.tokens?.length || 0,
+    });
 
-      return this.formatSceneResponse(sceneData, includeTokens, includeHidden);
-    } catch (error) {
-      this.logger.error('Failed to get current scene', error);
-      throw new Error(
-        `Failed to get current scene: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return this.formatSceneResponse(sceneData, includeTokens, includeHidden);
   }
 
   async handleGetWorldInfo(_args: any): Promise<any> {
     this.logger.info('Getting world information');
 
-    try {
-      const worldData = await this.foundry.call('getWorldInfo');
+    const worldData = await this.foundry.call('getWorldInfo');
 
-      this.logger.debug('Successfully retrieved world data', {
-        worldId: worldData.id,
-        system: worldData.system,
-      });
+    this.logger.debug('Successfully retrieved world data', {
+      worldId: worldData.id,
+      system: worldData.system,
+    });
 
-      return this.formatWorldResponse(worldData);
-    } catch (error) {
-      this.logger.error('Failed to get world information', error);
-      throw new Error(
-        `Failed to get world information: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return this.formatWorldResponse(worldData);
   }
 
   private formatSceneResponse(sceneData: any, includeTokens: boolean, includeHidden: boolean): any {

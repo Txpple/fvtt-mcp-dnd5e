@@ -20,6 +20,7 @@ import {
   type PatchResult,
   type PlaceableDescriptor,
 } from '../_placeables.js';
+import { ambiguous, notFound } from '../errors.js';
 
 const NOTE_ANCHOR_NAME: Record<number, string> = {
   0: 'center',
@@ -54,10 +55,10 @@ export function resolveNoteTarget(
     (() => {
       const m = Array.from(coll ?? []).filter((d: any) => d?.name === journal);
       if (m.length > 1)
-        throw new Error(`Ambiguous journal name "${journal}" (${m.length}). Pass the id.`);
+        throw ambiguous(`Ambiguous journal name "${journal}" (${m.length}). Pass the id.`);
       return m[0];
     })();
-  if (!entry) throw new Error(`No journal found matching "${journal}" (by id or exact name).`);
+  if (!entry) throw notFound(`No journal found matching "${journal}" (by id or exact name).`);
 
   let pageId: string | undefined;
   if (typeof page === 'string' && page.trim() !== '') {
@@ -67,10 +68,10 @@ export function resolveNoteTarget(
       (() => {
         const m = Array.from(pages ?? []).filter((x: any) => x?.name === page);
         if (m.length > 1)
-          throw new Error(`Ambiguous page name "${page}" in "${entry.name}" (${m.length}).`);
+          throw ambiguous(`Ambiguous page name "${page}" in "${entry.name}" (${m.length}).`);
         return m[0];
       })();
-    if (!p) throw new Error(`No page "${page}" in journal "${entry.name}".`);
+    if (!p) throw notFound(`No page "${page}" in journal "${entry.name}".`);
     pageId = p.id;
   }
   // Omit pageId entirely when absent (exactOptionalPropertyTypes — no explicit undefined).

@@ -11,6 +11,7 @@
 
 import { resolveJournalStrict, getOrCreateFolder, normalizeAssetPath } from './_shared.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
+import { invalid, notFound } from './errors.js';
 
 // Foundry document class (JournalEntry) lives in the page global scope but is
 // not declared in foundry-globals.d.ts; reach it off globalThis.
@@ -153,7 +154,7 @@ export async function updateJournalContent(request: {
 }): Promise<{ success: boolean; pageId?: string | undefined; pageName?: string | undefined }> {
   const journal = game.journal.get(request.journalId);
   if (!journal) {
-    throw new Error('Journal entry not found');
+    throw notFound('Journal entry not found');
   }
 
   // Mode 1: Create a new page (carry per-page ownership when given — e.g. a player handout page).
@@ -181,7 +182,7 @@ export async function updateJournalContent(request: {
   if (request.pageId) {
     const page = journal.pages.get(request.pageId);
     if (!page) {
-      throw new Error(`Page not found: ${request.pageId}`);
+      throw notFound(`Page not found: ${request.pageId}`);
     }
     await page.update({
       'text.content': request.content,
@@ -356,10 +357,10 @@ export async function createJournal(params: {
   warnings?: string[];
 }> {
   if (!params?.name || params.name.trim().length === 0) {
-    throw new Error('name is required and must be a non-empty string');
+    throw invalid('name is required and must be a non-empty string');
   }
   if (!Array.isArray(params.pages) || params.pages.length === 0) {
-    throw new Error('pages array is required and must contain at least one page');
+    throw invalid('pages array is required and must contain at least one page');
   }
 
   // KEEP+WARN: a handout image has no sensible substitute, so a non-resolving image src is kept and a
@@ -368,7 +369,7 @@ export async function createJournal(params: {
   const pages = await Promise.all(
     params.pages.map(async (p, idx) => {
       if (!p || typeof p.name !== 'string' || p.name.trim().length === 0) {
-        throw new Error(`pages[${idx}]: "name" is required and must be a non-empty string`);
+        throw invalid(`pages[${idx}]: "name" is required and must be a non-empty string`);
       }
       // An explicit sort lets the caller interleave/order pages; otherwise creation (array) order
       // stands. Per-page ownership (JournalEntryPage carries its own in v10+) is omitted to inherit GM-only.
@@ -379,7 +380,7 @@ export async function createJournal(params: {
       if (p.kind === 'image') {
         const src = normalizeAssetPath(p.src ?? '');
         if (!src) {
-          throw new Error(`pages[${idx}]: an image page requires a non-empty "src"`);
+          throw invalid(`pages[${idx}]: an image page requires a non-empty "src"`);
         }
         if (!(await imgResolves(src))) {
           warnings.push(badAssetWarning('src', src, false));
@@ -453,11 +454,11 @@ export async function updateJournal(params: {
 }> {
   const journal = resolveJournalStrict(params.journalId);
   if (!journal) {
-    throw new Error(`Journal entry "${params.journalId}" not found`);
+    throw notFound(`Journal entry "${params.journalId}" not found`);
   }
 
   if (params.name === undefined && params.content === undefined) {
-    throw new Error('Provide at least one of: name, content');
+    throw invalid('Provide at least one of: name, content');
   }
 
   let renamed = false;
@@ -494,11 +495,11 @@ export async function setJournalPageVisibility(args: {
 }): Promise<{ success: boolean; pageId: string; pageName: string }> {
   const journal = resolveJournalStrict(args.journalId);
   if (!journal) {
-    throw new Error(`Journal entry "${args.journalId}" not found`);
+    throw notFound(`Journal entry "${args.journalId}" not found`);
   }
   const page = journal.pages.get(args.pageId);
   if (!page) {
-    throw new Error(`Page not found: ${args.pageId}`);
+    throw notFound(`Page not found: ${args.pageId}`);
   }
   // Patch ONLY the ownership default (dot-path), preserving any per-user overrides.
   await page.update({
@@ -523,7 +524,7 @@ export async function deleteJournalPage(args: { journalId: string; pageId: strin
 }> {
   const journal = resolveJournalStrict(args.journalId);
   if (!journal) {
-    throw new Error(`Journal entry "${args.journalId}" not found`);
+    throw notFound(`Journal entry "${args.journalId}" not found`);
   }
   const page = journal.pages.get(args.pageId);
   if (!page) {
@@ -546,33 +547,27 @@ export async function deleteJournals(data: { identifiers: string[] }): Promise<{
   notFound?: string[];
 }> {
   if (!Array.isArray(data?.identifiers) || data.identifiers.length === 0) {
-    throw new Error('identifiers array is required and must contain at least one entry');
+    throw invalid('identifiers array is required and must contain at least one entry');
   }
 
-  try {
-    const deleted: Array<{ id: string; name: string }> = [];
-    const notFound: string[] = [];
+  const deleted: Array<{ id: string; name: string }> = [];
+  const notFound: string[] = [];
 
-    for (const identifier of data.identifiers) {
-      const journal = resolveJournalStrict(identifier);
-      if (journal) {
-        const info = { id: journal.id ?? identifier, name: journal.name ?? '' };
-        await journal.delete();
-        deleted.push(info);
-      } else {
-        notFound.push(identifier);
-      }
+  for (const identifier of data.identifiers) {
+    const journal = resolveJournalStrict(identifier);
+    if (journal) {
+      const info = { id: journal.id ?? identifier, name: journal.name ?? '' };
+      await journal.delete();
+      deleted.push(info);
+    } else {
+      notFound.push(identifier);
     }
-
-    return {
-      success: true,
-      deletedCount: deleted.length,
-      deleted,
-      ...(notFound.length > 0 ? { notFound } : {}),
-    };
-  } catch (error) {
-    throw new Error(
-      `Failed to delete journal(s): ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
   }
+
+  return {
+    success: true,
+    deletedCount: deleted.length,
+    deleted,
+    ...(notFound.length > 0 ? { notFound } : {}),
+  };
 }

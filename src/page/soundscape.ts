@@ -23,6 +23,7 @@
 import { normalizeAssetPath } from './_shared.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveSceneStrict } from './scenes.js';
+import { ambiguous, invalid, notFound } from './errors.js';
 
 export const SOUNDSCAPE_MODULE_ID = 'fvtt-mod-soundscape';
 
@@ -150,12 +151,12 @@ export function resolveSet(sets: SoundscapeSet[], identifier: string): Soundscap
     : sets.filter(s => s.name.toLowerCase() === identifier.toLowerCase());
   if (loose.length === 1) return loose[0];
   if (loose.length > 1) {
-    throw new Error(
+    throw ambiguous(
       `"${identifier}" matches ${loose.length} sound sets on this scene — pass the id instead: ` +
         loose.map(s => `${s.id} ("${s.name}")`).join(', ')
     );
   }
-  throw new Error(
+  throw notFound(
     `No sound set "${identifier}" on this scene. ` +
       (sets.length
         ? `Present: ${sets.map(s => `"${s.name}" (${s.id})`).join(', ')}`
@@ -225,7 +226,7 @@ export function resolveTemplate(
     const near = matchTemplates(templates, { query: template })
       .slice(0, 8)
       .map(t => `"${t.name}" (${t.section} / ${t.category})`);
-    throw new Error(
+    throw notFound(
       `No library template named "${template}"` +
         (narrowed ? ' in the requested section/category' : '') +
         '.' +
@@ -235,7 +236,7 @@ export function resolveTemplate(
     );
   }
 
-  throw new Error(
+  throw ambiguous(
     `"${template}" matches ${found.length} templates: ` +
       found.map(t => `${t.section} / ${t.category}`).join(', ') +
       (narrowed
@@ -349,7 +350,7 @@ function targetScene(identifier?: string): any {
   if (identifier) {
     const scene = resolveSceneStrict(identifier);
     if (!scene) {
-      throw new Error(
+      throw notFound(
         `Scene not found: "${identifier}". Use an exact id or name (list-scenes shows both).`
       );
     }
@@ -357,7 +358,7 @@ function targetScene(identifier?: string): any {
   }
   const active = (globalThis as any).game?.scenes?.active;
   if (!active) {
-    throw new Error(
+    throw notFound(
       'No sceneIdentifier given and there is no ACTIVE scene to fall back on — name a scene.'
     );
   }
@@ -526,7 +527,7 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promis
   if (action === 'remove') {
     const identifier = args?.setIdentifier ?? '';
     if (!identifier)
-      throw new Error('remove needs setIdentifier (a set id or exact name, or "all").');
+      throw invalid('remove needs setIdentifier (a set id or exact name, or "all").');
     if (identifier.toLowerCase() === 'all') {
       if (!sets.length) {
         return { action, scene: sceneSummary(scene), removed: [], remaining: 0, warnings: [] };
@@ -563,7 +564,7 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promis
     if (args.template) {
       const templates = await loadLibrary();
       if (!templates) {
-        throw new Error(
+        throw invalid(
           `Cannot add from template: no library at "${SOUNDSCAPE_LIBRARY_PATH}". Pass explicit ` +
             '`files` instead, or publish a library (fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs).'
         );
@@ -576,7 +577,7 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promis
       fromTemplate = match.name;
     } else {
       if (!args.name || !Array.isArray(args.files) || !args.files.length) {
-        throw new Error(
+        throw invalid(
           'add needs either `template` (a library set name — browse with action "library") or ' +
             'both `name` and a non-empty `files` array of Data-relative audio paths.'
         );
@@ -585,17 +586,17 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs): Promis
     }
   } else if (action === 'update') {
     if (!args.setIdentifier) {
-      throw new Error('update needs setIdentifier (a set id or exact name — see action "list").');
+      throw invalid('update needs setIdentifier (a set id or exact name — see action "list").');
     }
     before = resolveSet(sets, args.setIdentifier);
     base = { ...before };
     if (!Object.keys(patch).length) {
-      throw new Error(
+      throw invalid(
         `update named no fields to change. Supply at least one of: ${SET_FIELDS.join(', ')}.`
       );
     }
   } else {
-    throw new Error(
+    throw invalid(
       `Unknown action "${String(action)}" — expected list, library, add, update, or remove.`
     );
   }

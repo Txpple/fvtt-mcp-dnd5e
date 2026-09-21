@@ -14,6 +14,7 @@
 // never lands, dedupe to exactly ONE, and optionally apply a house-convention name.
 
 import { DEFAULT_SPELL_PACKS, isSrdPack } from '../../utils/compendium-sources.js';
+import { invalid, notFound } from '../errors.js';
 
 /** Facts a pure cast-activity builder needs about the linked spell, plus the live compendium doc. */
 export interface CastSpellFacts {
@@ -36,14 +37,14 @@ export interface CastSpellFacts {
  */
 export async function resolveCastSpell(spellUuid: string | undefined): Promise<CastSpellFacts> {
   if (!spellUuid) {
-    throw new Error(
+    throw invalid(
       'A cast activity requires `spellUuid` — the Compendium uuid of the spell to link ' +
         '(e.g. "Compendium.dnd-players-handbook.spells.Item.phbsplFireball00").'
     );
   }
   const spell: any = await fromUuid(spellUuid);
   if (!spell) {
-    throw new Error(
+    throw notFound(
       `Spell not found for uuid "${spellUuid}". A cast activity must LINK a real compendium spell ` +
         '(mirror the Wand of Fireballs). If the spell is not in the premium books, STOP and ASK — ' +
         'substitute a book spell, drop it, or get explicit homebrew permission; do not hand-roll a ' +
@@ -51,13 +52,13 @@ export async function resolveCastSpell(spellUuid: string | undefined): Promise<C
     );
   }
   if (spell.documentName !== 'Item' || spell.type !== 'spell') {
-    throw new Error(
+    throw invalid(
       `uuid "${spellUuid}" resolves to a ${spell.documentName}/${spell.type ?? '?'}, not a spell.`
     );
   }
   const packId: string = spell.pack ?? '';
   if (isSrdPack(packId)) {
-    throw new Error(
+    throw invalid(
       `Refusing to link an SRD spell (pack "${packId}") into a cast activity — author from the ` +
         'premium books only (design.md §2.3). Use the dnd-players-handbook.spells equivalent.'
     );
@@ -135,10 +136,10 @@ export async function settleCachedSpellCopies(
 
   const activity = featureItem?.system?.activities?.get?.(activityId);
   if (!activity) {
-    throw new Error(`Activity "${activityId}" not found on "${featureItem?.name}" while settling`);
+    throw notFound(`Activity "${activityId}" not found on "${featureItem?.name}" while settling`);
   }
   if (activity.type !== 'cast') {
-    throw new Error(`Activity "${activityId}" on "${featureItem?.name}" is not a cast activity`);
+    throw invalid(`Activity "${activityId}" on "${featureItem?.name}" is not a cast activity`);
   }
 
   const rel: string = activity.relativeUUID; // `.Item.<itemId>.Activity.<activityId>`

@@ -397,30 +397,23 @@ export class CompendiumTools {
 
     this.logger.info('Compendium name search', { gameSystem, query, packType });
 
-    try {
-      const found = await this.foundry.call('searchCompendium', { query, packType, limit });
+    const found = await this.foundry.call('searchCompendium', { query, packType, limit });
 
-      // Enforced backstop to the page-side exclusion: an SRD (`dnd5e.*`) hit is never a result
-      // (design.md §2.3). The page already drops SRD packs before indexing; we re-drop here so the
-      // contract holds even if a pack slips past that filter.
-      const results = (found?.results ?? []).filter(
-        (hit: any) => !isHiddenFromEnumeration(hit?.pack)
-      );
+    // Enforced backstop to the page-side exclusion: an SRD (`dnd5e.*`) hit is never a result
+    // (design.md §2.3). The page already drops SRD packs before indexing; we re-drop here so the
+    // contract holds even if a pack slips past that filter.
+    const results = (found?.results ?? []).filter(
+      (hit: any) => !isHiddenFromEnumeration(hit?.pack)
+    );
 
-      this.logger.debug('Compendium search completed', {
-        query,
-        gameSystem,
-        totalFound: found?.totalFound,
-        returned: results.length,
-      });
+    this.logger.debug('Compendium search completed', {
+      query,
+      gameSystem,
+      totalFound: found?.totalFound,
+      returned: results.length,
+    });
 
-      return searchBody({ query }, results, found?.totalFound ?? results.length);
-    } catch (error) {
-      this.logger.error('Failed to search compendium', error);
-      throw new Error(
-        `Failed to search compendium: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return searchBody({ query }, results, found?.totalFound ?? results.length);
   }
 
   async handleGetCompendiumItem(args: any): Promise<any> {
@@ -430,59 +423,52 @@ export class CompendiumTools {
     // SRD packId outright rather than reading from it, consistent with the pull-tool guards.
     assertNoSrdPacks(packId, 'get-compendium-entry');
 
-    try {
-      // Use the proper document retrieval method that already exists in actor creation
-      const item = await this.foundry.call('getCompendiumDocumentFull', {
-        packId,
-        documentId: itemId,
-      });
+    // Use the proper document retrieval method that already exists in actor creation
+    const item = await this.foundry.call('getCompendiumDocumentFull', {
+      packId,
+      documentId: itemId,
+    });
 
-      if (!item) {
-        throw new Error(`Item ${itemId} not found in pack ${packId}`);
-      }
+    if (!item) {
+      throw new Error(`Item ${itemId} not found in pack ${packId}`);
+    }
 
-      // Format the response using the detailed item data
-      const baseResponse = {
-        id: item.id,
-        name: item.name,
-        type: item.type,
-        pack: {
-          id: item.pack,
-          label: item.packLabel,
-        },
-        description: this.extractDescription(item),
-        hasImage: !!item.img,
-        imageUrl: item.img,
+    // Format the response using the detailed item data
+    const baseResponse = {
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      pack: {
+        id: item.pack,
+        label: item.packLabel,
+      },
+      description: this.extractDescription(item),
+      hasImage: !!item.img,
+      imageUrl: item.img,
+    };
+
+    if (compact) {
+      // Compact response for UI performance
+      const compactStats = this.extractCompactStats(item);
+      return {
+        ...baseResponse,
+        stats: compactStats,
+        properties: this.extractItemProperties(item),
+        items: (item.items || []).slice(0, 5), // Limit items to prevent bloat
+        mode: 'compact',
       };
-
-      if (compact) {
-        // Compact response for UI performance
-        const compactStats = this.extractCompactStats(item);
-        return {
-          ...baseResponse,
-          stats: compactStats,
-          properties: this.extractItemProperties(item),
-          items: (item.items || []).slice(0, 5), // Limit items to prevent bloat
-          mode: 'compact',
-        };
-      } else {
-        // Full response
-        return {
-          ...baseResponse,
-          fullDescription: this.extractFullDescription(item),
-          system: this.sanitizeSystemData(item.system || {}),
-          properties: this.extractItemProperties(item),
-          items: item.items || [],
-          effects: item.effects || [],
-          fullData: item.fullData,
-          mode: 'full',
-        };
-      }
-    } catch (error) {
-      this.logger.error('Failed to get compendium item', error);
-      throw new Error(
-        `Failed to retrieve item: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    } else {
+      // Full response
+      return {
+        ...baseResponse,
+        fullDescription: this.extractFullDescription(item),
+        system: this.sanitizeSystemData(item.system || {}),
+        properties: this.extractItemProperties(item),
+        items: item.items || [],
+        effects: item.effects || [],
+        fullData: item.fullData,
+        mode: 'full',
+      };
     }
   }
 
@@ -506,27 +492,20 @@ export class CompendiumTools {
     const criteriaDescription = this.describeCriteria(params);
     this.logger.info('Creature faceted search', { criteria: criteriaDescription });
 
-    try {
-      // Re-backed on the one faceted engine (documentType:'creature'); CR/type/size are index
-      // filters, hasSpells/hasLegendaryActions are engine post-filters on approximate index facets.
-      const found = await this.foundry.call('searchCompendiumFaceted', {
-        documentType: 'creature',
-        name: params.name,
-        challengeRating: params.challengeRating,
-        creatureType: params.creatureType,
-        size: params.size,
-        hasSpells: params.hasSpells,
-        hasLegendaryActions: params.hasLegendaryActions,
-        limit: params.limit,
-      });
+    // Re-backed on the one faceted engine (documentType:'creature'); CR/type/size are index
+    // filters, hasSpells/hasLegendaryActions are engine post-filters on approximate index facets.
+    const found = await this.foundry.call('searchCompendiumFaceted', {
+      documentType: 'creature',
+      name: params.name,
+      challengeRating: params.challengeRating,
+      creatureType: params.creatureType,
+      size: params.size,
+      hasSpells: params.hasSpells,
+      hasLegendaryActions: params.hasLegendaryActions,
+      limit: params.limit,
+    });
 
-      return facetedBody('creature', criteriaDescription, found);
-    } catch (error) {
-      this.logger.error('Failed to list creatures by criteria', error);
-      throw new Error(
-        `Failed to list creatures: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return facetedBody('creature', criteriaDescription, found);
   }
 
   async handleListCompendiumPacks(args: any): Promise<any> {
@@ -534,40 +513,33 @@ export class CompendiumTools {
 
     this.logger.info('Listing compendium packs', { type });
 
-    try {
-      const rawPacks = await this.foundry.call('getAvailablePacks');
+    const rawPacks = await this.foundry.call('getAvailablePacks');
 
-      // Enforced backstop to the page-side exclusion: SRD (`dnd5e.*`) packs are not visible in
-      // lookups (design.md §2.3), and neither is the mechanical `dnd5e.effects` pack — it is
-      // reached by name through the effect-uuid resolver, never browsed. The page already omits
-      // them; re-drop here so the contract holds, and so `availableTypes` below is derived only
-      // from the visible (book) packs.
-      const packs = rawPacks.filter((pack: any) => !isHiddenFromEnumeration(pack?.id));
+    // Enforced backstop to the page-side exclusion: SRD (`dnd5e.*`) packs are not visible in
+    // lookups (design.md §2.3), and neither is the mechanical `dnd5e.effects` pack — it is
+    // reached by name through the effect-uuid resolver, never browsed. The page already omits
+    // them; re-drop here so the contract holds, and so `availableTypes` below is derived only
+    // from the visible (book) packs.
+    const packs = rawPacks.filter((pack: any) => !isHiddenFromEnumeration(pack?.id));
 
-      // Filter by type if specified
-      const filteredPacks = type ? packs.filter((pack: any) => pack.type === type) : packs;
+    // Filter by type if specified
+    const filteredPacks = type ? packs.filter((pack: any) => pack.type === type) : packs;
 
-      this.logger.debug('Successfully retrieved compendium packs', {
-        total: packs.length,
-        filtered: filteredPacks.length,
-        type,
-      });
+    this.logger.debug('Successfully retrieved compendium packs', {
+      total: packs.length,
+      filtered: filteredPacks.length,
+      type,
+    });
 
-      return {
-        packs: filteredPacks.map((pack: any) => ({
-          id: pack.id,
-          label: pack.label,
-          type: pack.type,
-        })),
-        total: filteredPacks.length,
-        availableTypes: [...new Set(packs.map((pack: any) => pack.type))],
-      };
-    } catch (error) {
-      this.logger.error('Failed to list compendium packs', error);
-      throw new Error(
-        `Failed to list compendium packs: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return {
+      packs: filteredPacks.map((pack: any) => ({
+        id: pack.id,
+        label: pack.label,
+        type: pack.type,
+      })),
+      total: filteredPacks.length,
+      availableTypes: [...new Set(packs.map((pack: any) => pack.type))],
+    };
   }
 
   async handleSearchCompendiumSpells(args: any): Promise<any> {
@@ -589,24 +561,17 @@ export class CompendiumTools {
     const criteriaDescription = this.describeSpellCriteria(params);
     this.logger.info('Spell faceted search', { criteria: criteriaDescription });
 
-    try {
-      // Thin facade: hard-code the content type and forward the spell facets to the one engine.
-      const found = await this.foundry.call('searchCompendiumFaceted', {
-        documentType: 'spell',
-        name: params.name,
-        spellLevel: params.spellLevel,
-        spellSchool: params.spellSchool,
-        damageType: params.damageType,
-        limit: params.limit,
-      });
+    // Thin facade: hard-code the content type and forward the spell facets to the one engine.
+    const found = await this.foundry.call('searchCompendiumFaceted', {
+      documentType: 'spell',
+      name: params.name,
+      spellLevel: params.spellLevel,
+      spellSchool: params.spellSchool,
+      damageType: params.damageType,
+      limit: params.limit,
+    });
 
-      return facetedBody('spell', criteriaDescription, found);
-    } catch (error) {
-      this.logger.error('Failed to search compendium spells', error);
-      throw new Error(
-        `Failed to search compendium spells: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return facetedBody('spell', criteriaDescription, found);
   }
 
   async handleSearchCompendiumItems(args: any): Promise<any> {
@@ -631,25 +596,18 @@ export class CompendiumTools {
       criteria: criteriaDescription,
     });
 
-    try {
-      // Thin facade: forward the gear facets to the one engine (documentType picks the family).
-      const found = await this.foundry.call('searchCompendiumFaceted', {
-        documentType: params.documentType,
-        name: params.name,
-        rarity: params.rarity,
-        itemType: params.itemType,
-        properties: params.properties,
-        magical: params.magical,
-        limit: params.limit,
-      });
+    // Thin facade: forward the gear facets to the one engine (documentType picks the family).
+    const found = await this.foundry.call('searchCompendiumFaceted', {
+      documentType: params.documentType,
+      name: params.name,
+      rarity: params.rarity,
+      itemType: params.itemType,
+      properties: params.properties,
+      magical: params.magical,
+      limit: params.limit,
+    });
 
-      return facetedBody(params.documentType, criteriaDescription, found);
-    } catch (error) {
-      this.logger.error('Failed to search compendium items', error);
-      throw new Error(
-        `Failed to search compendium items: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return facetedBody(params.documentType, criteriaDescription, found);
   }
 
   /** Human-readable summary of the item-search facets (transparency + logging). */

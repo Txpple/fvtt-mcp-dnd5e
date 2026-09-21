@@ -17,6 +17,7 @@ import { slugify, resolveActorFuzzy as findActorByIdentifier, DAMAGE_TYPES } fro
 import { WEAPON_PROPERTIES } from '../../utils/dnd5e-canonical.js';
 import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
+import { invalid, notFound, unsupported } from '../errors.js';
 
 // =============================================================================
 // Method-specific constants (ported verbatim from the oracle).
@@ -78,13 +79,13 @@ export function buildAttackRange(data: {
 
 export async function addAttackToActor(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addAttackToActor requires the dnd5e game system');
+    throw unsupported('addAttackToActor requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(data.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    throw notFound(`Actor not found: "${data.actorIdentifier}"`);
   }
 
   // 2. Duplicate check
@@ -92,7 +93,7 @@ export async function addAttackToActor(data: any): Promise<unknown> {
     (i: any) => i.name.toLowerCase() === data.featureName.toLowerCase()
   );
   if (existing) {
-    throw new Error(
+    throw invalid(
       `An item named "${data.featureName}" already exists on actor "${actor.name}". ` +
         `Remove or rename it first.`
     );
@@ -234,13 +235,13 @@ export async function addAttackToActor(data: any): Promise<unknown> {
 
 export async function addAuraToActor(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addAuraToActor requires the dnd5e game system');
+    throw unsupported('addAuraToActor requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(data.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    throw notFound(`Actor not found: "${data.actorIdentifier}"`);
   }
 
   // 2. Duplicate check (case-insensitive name match)
@@ -248,7 +249,7 @@ export async function addAuraToActor(data: any): Promise<unknown> {
     (i: any) => i.name.toLowerCase() === data.featureName.toLowerCase()
   );
   if (existing) {
-    throw new Error(
+    throw invalid(
       `An item named "${data.featureName}" already exists on actor "${actor.name}". ` +
         `Remove or rename it first.`
     );
@@ -393,13 +394,13 @@ export async function addAuraToActor(data: any): Promise<unknown> {
 
 export async function addAttackWithSaveToActor(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addAttackWithSaveToActor requires the dnd5e game system');
+    throw unsupported('addAttackWithSaveToActor requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(data.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    throw notFound(`Actor not found: "${data.actorIdentifier}"`);
   }
 
   // 2. Duplicate check
@@ -407,7 +408,7 @@ export async function addAttackWithSaveToActor(data: any): Promise<unknown> {
     (i: any) => i.name.toLowerCase() === data.featureName.toLowerCase()
   );
   if (existing) {
-    throw new Error(
+    throw invalid(
       `An item named "${data.featureName}" already exists on actor "${actor.name}". ` +
         `Remove or rename it first.`
     );

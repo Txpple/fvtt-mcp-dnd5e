@@ -12,6 +12,7 @@ import { resolveActorFuzzy as findActorByIdentifier } from '../_shared.js';
 import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { DEFAULT_SPELL_PACKS } from '../../utils/compendium-sources.js';
+import { invalid, notFound as notFoundError, unsupported } from '../errors.js';
 
 // =============================================================================
 // Spellcasting slot tables — used by setActorSpellcasting.
@@ -157,7 +158,7 @@ export function planSpellcasting(cls: string, lvl: number, ability: string): Spe
   // The slot tables have exactly 20 rows; an out-of-range/non-integer level would index past
   // the end and throw an opaque "cannot read max of undefined". Fail with a clear message instead.
   if (!Number.isInteger(lvl) || lvl < 1 || lvl > 20) {
-    throw new Error(`spellcastingLevel must be an integer 1-20 (got ${JSON.stringify(lvl)})`);
+    throw invalid(`spellcastingLevel must be an integer 1-20 (got ${JSON.stringify(lvl)})`);
   }
   const idx = lvl - 1; // 0-based index into slot tables
   const warnings: string[] = [];
@@ -214,13 +215,13 @@ export function planSpellcasting(cls: string, lvl: number, ability: string): Spe
 
 export async function setActorSpellcasting(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('setActorSpellcasting requires the dnd5e game system');
+    throw unsupported('setActorSpellcasting requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(data.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    throw notFoundError(`Actor not found: "${data.actorIdentifier}"`);
   }
 
   // 2. Resolve slots from the (pure) SRD tables
@@ -255,13 +256,13 @@ export async function setActorSpellcasting(data: any): Promise<unknown> {
 
 export async function addSpellsToActor(data: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addSpellsToActor requires the dnd5e game system');
+    throw unsupported('addSpellsToActor requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(data.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${data.actorIdentifier}"`);
+    throw notFoundError(`Actor not found: "${data.actorIdentifier}"`);
   }
 
   const spellNames: string[] = data.spellNames;
@@ -322,7 +323,7 @@ export async function addSpellsToActor(data: any): Promise<unknown> {
   }
 
   if (packMaps.length === 0) {
-    throw new Error(
+    throw invalid(
       'No valid compendium packs available — check the compendiumPacks parameter. ' +
         'Valid pack ID is the premium PHB: "dnd-players-handbook.spells". NEVER the dnd5e.* SRD (design.md §2.3).'
     );
@@ -434,18 +435,18 @@ export async function addHomebrewSpellToActor(args: {
   activity?: Record<string, any>;
 }): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error(
+    throw unsupported(
       `addHomebrewSpellToActor requires D&D 5e. Current system: "${game.system.id}".`
     );
   }
   const actor = findActorByIdentifier(args.actorIdentifier);
-  if (!actor) throw new Error(`Actor not found: "${args.actorIdentifier}"`);
+  if (!actor) throw notFoundError(`Actor not found: "${args.actorIdentifier}"`);
 
   const existing = actor.items.find(
     (i: any) => i.type === 'spell' && i.name?.toLowerCase() === args.name?.toLowerCase()
   );
   if (existing) {
-    throw new Error(
+    throw invalid(
       `A spell named "${args.name}" already exists on actor "${actor.name}" (id: ${existing.id}).`
     );
   }

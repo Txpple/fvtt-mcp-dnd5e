@@ -25,6 +25,7 @@ import {
   TRANSFORM_MODES,
   TRANSFORM_PRESETS,
 } from '../../utils/dnd5e-canonical.js';
+import { invalid } from '../errors.js';
 
 export interface RawDamagePart {
   number: number;
@@ -225,7 +226,7 @@ export function normalizeActivityDuration(
   const out: Record<string, unknown> = {};
   if (d.units !== undefined) {
     if (!(ACTIVITY_DURATION_UNITS as readonly string[]).includes(d.units)) {
-      throw new Error(
+      throw invalid(
         `duration.units "${d.units}" is not a dnd5e time period. Use one of: ${ACTIVITY_DURATION_UNITS.join(' ')}.`
       );
     }
@@ -242,13 +243,13 @@ export function normalizeActivityDuration(
     }
   }
   if (scalar && out.value === undefined) {
-    throw new Error(
+    throw invalid(
       `duration.units "${out.units}" needs a duration.value (e.g. 1 for "1 ${out.units}").`
     );
   }
   if (d.expiry !== undefined) {
     if (d.expiry !== null && !(EXPIRY_EVENTS as readonly string[]).includes(d.expiry)) {
-      throw new Error(
+      throw invalid(
         `duration.expiry "${d.expiry}" is not an expiry event. Use one of: ${EXPIRY_EVENTS.join(' ')}.`
       );
     }
@@ -273,13 +274,13 @@ export function normalizeActivityTarget(
   const out: Record<string, unknown> = {};
   if (template) {
     if (!(AREA_TEMPLATE_TYPES as readonly string[]).includes(template.type)) {
-      throw new Error(
+      throw invalid(
         `template.type "${template.type}" is not an area shape. Use one of: ${AREA_TEMPLATE_TYPES.join(' ')}.`
       );
     }
     const size = formula(template.size);
     if (size === undefined)
-      throw new Error('template.size is required (in template.units, default ft).');
+      throw invalid('template.size is required (in template.units, default ft).');
     const t: Record<string, unknown> = { type: template.type, size, units: template.units ?? 'ft' };
     const width = formula(template.width);
     const height = formula(template.height);
@@ -296,7 +297,7 @@ export function normalizeActivityTarget(
         affects.type !== '' &&
         !(TARGET_AFFECTS_TYPES as readonly string[]).includes(affects.type)
       ) {
-        throw new Error(
+        throw invalid(
           `affects.type "${affects.type}" is not a target type. Use one of: ${TARGET_AFFECTS_TYPES.join(' ')}.`
         );
       }
@@ -313,7 +314,7 @@ export function normalizeActivityTarget(
 const assertKeys = (values: string[] | undefined, vocab: readonly string[], label: string) => {
   for (const v of values ?? []) {
     if (!vocab.includes(v))
-      throw new Error(`${label} "${v}" is unknown. Use one of: ${vocab.join(' ')}.`);
+      throw invalid(`${label} "${v}" is unknown. Use one of: ${vocab.join(' ')}.`);
   }
 };
 
@@ -326,7 +327,7 @@ const assertKeys = (values: string[] | undefined, vocab: readonly string[], labe
  */
 export function buildActivityBehavior(b: ActivityBehaviorOpts, id: string): Record<string, any> {
   if (!(ACTIVITY_BEHAVIOR_TYPES as readonly string[]).includes(b.type)) {
-    throw new Error(
+    throw invalid(
       `behavior type "${b.type}" is unknown. Use one of: ${ACTIVITY_BEHAVIOR_TYPES.join(' ')}.`
     );
   }
@@ -336,7 +337,7 @@ export function buildActivityBehavior(b: ActivityBehaviorOpts, id: string): Reco
   let config: Record<string, unknown>;
   if (b.type === 'applyActiveEffect') {
     if (!b.effectUuids?.length) {
-      throw new Error('an applyActiveEffect behavior needs at least one effect.');
+      throw invalid('an applyActiveEffect behavior needs at least one effect.');
     }
     assertKeys(b.sizes, ACTOR_SIZES, 'size');
     assertKeys(b.creatureTypes, CREATURE_TYPE_KEYS, 'creature type');
@@ -354,10 +355,10 @@ export function buildActivityBehavior(b: ActivityBehaviorOpts, id: string): Reco
  */
 export function buildAppliedEffect(e: AppliedEffectOpts, type: string): Record<string, any> {
   if (!e?._id && !e?.uuid) {
-    throw new Error('an applied effect must resolve to an effect on the item (_id) or a uuid.');
+    throw invalid('an applied effect must resolve to an effect on the item (_id) or a uuid.');
   }
   if (typeof e.onSave === 'boolean' && type !== 'save') {
-    throw new Error(
+    throw invalid(
       `appliesEffects[].onSave only exists on a SAVE activity (this is a "${type}" activity).`
     );
   }
@@ -410,7 +411,7 @@ export function assertEditableActivityFields(activity: Record<string, any> | und
     k => activity?.[k] !== undefined && activity?.[k] !== null
   );
   if (offenders.length === 0) return;
-  throw new Error(
+  throw invalid(
     `manage-activity edit cannot change ${offenders.join(', ')}. Edit supports name, duration, ` +
       'template, affects, behaviors and appliesEffects; change anything else with `patch` (dot-paths ' +
       'relative to the activity root, e.g. {"attack.bonus":"3"}, {"save.dc.formula":"16"}) or remove ' +
@@ -439,7 +440,7 @@ export function buildActivity(type: string, opts: BuildActivityOpts): Record<str
   }
   if (opts.behaviors?.length) {
     if (!act.target?.template?.type) {
-      throw new Error(
+      throw invalid(
         'behaviors ride on an AREA TEMPLATE — give `template` ({type, size}) too, or the behavior never fires.'
       );
     }
@@ -447,7 +448,7 @@ export function buildActivity(type: string, opts: BuildActivityOpts): Record<str
   }
   if (opts.appliedEffects?.length) {
     if (type === 'transform') {
-      throw new Error(
+      throw invalid(
         "a transform activity's effects[] ARE its forms (Select-Form mode) — use `forms`, not " +
           '`appliesEffects`.'
       );
@@ -487,7 +488,7 @@ function buildActivityOfType(type: string, opts: BuildActivityOpts): Record<stri
     case 'transform':
       return buildTransformActivity(opts);
     default:
-      throw new Error(
+      throw invalid(
         `Unknown activity type "${type}". Use attack, damage, save, heal, check, utility, cast, teleport, or transform.`
       );
   }
@@ -505,7 +506,7 @@ function buildTeleportActivity(opts: BuildActivityOpts): Record<string, any> {
       ? ''
       : String(opts.teleportDistance).trim();
   if (distance !== '' && !/^[\d@+\-*/(). a-zA-Z]+$/.test(distance)) {
-    throw new Error(
+    throw invalid(
       `teleportDistance "${distance}" is not a deterministic formula (e.g. 30 or "@prof * 10").`
     );
   }
@@ -538,12 +539,10 @@ export function buildTransformProfile(
   assertKeys(p.creatureTypes, CREATURE_TYPE_KEYS, 'creature type');
   assertKeys(p.restrictMovement, MOVEMENT_TYPES, 'movement type');
   if (mode === 'direct' && !p.actorUuid) {
-    throw new Error(
-      'a direct-link transform profile needs an `actor` (a Monster Manual creature).'
-    );
+    throw invalid('a direct-link transform profile needs an `actor` (a Monster Manual creature).');
   }
   if (mode === 'cr' && (p.cr === undefined || p.cr === null || String(p.cr).trim() === '')) {
-    throw new Error(
+    throw invalid(
       'a by-CR transform profile needs a `cr` (the maximum challenge rating, e.g. 0.25 or "@prof / 3").'
     );
   }
@@ -562,13 +561,11 @@ export function buildTransformProfile(
 function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
   const mode = opts.transformMode ?? 'cr';
   if (!(TRANSFORM_MODES as readonly string[]).includes(mode)) {
-    throw new Error(
-      `transformMode "${mode}" is unknown. Use one of: ${TRANSFORM_MODES.join(' ')}.`
-    );
+    throw invalid(`transformMode "${mode}" is unknown. Use one of: ${TRANSFORM_MODES.join(' ')}.`);
   }
   const preset = opts.transformPreset ?? '';
   if (preset !== '' && !(TRANSFORM_PRESETS as readonly string[]).includes(preset)) {
-    throw new Error(
+    throw invalid(
       `transformPreset "${preset}" is unknown. Use one of: ${TRANSFORM_PRESETS.join(' ')}.`
     );
   }
@@ -589,7 +586,7 @@ function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
   };
   if (opts.transformSettings) {
     if (mode === 'form') {
-      throw new Error(
+      throw invalid(
         "transformSettings are not available in Select-Form mode — the forms' effects ARE the transformation."
       );
     }
@@ -616,7 +613,7 @@ function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
   }
   if (mode === 'form') {
     if (!opts.formEffectIds?.length) {
-      throw new Error(
+      throw invalid(
         'a Select-Form transform needs `forms` — the names of effects on the item, one per form ' +
           '(author them with manage-effect on the item first).'
       );
@@ -624,7 +621,7 @@ function buildTransformActivity(opts: BuildActivityOpts): Record<string, any> {
     act.effects = opts.formEffectIds.map(id => ({ _id: id, level: {} }));
   } else {
     if (!opts.profiles?.length) {
-      throw new Error(
+      throw invalid(
         `a ${mode === 'cr' ? 'by-CR' : 'direct-link'} transform needs at least one profile.`
       );
     }

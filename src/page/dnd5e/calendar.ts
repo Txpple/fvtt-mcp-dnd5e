@@ -17,6 +17,7 @@
 //    harptos / khorvaire); calendarConfig.enabled gates the HUD + calendar recovery.
 
 import { readDnd5eSettings } from './settings.js';
+import { forbidden, invalid } from '../errors.js';
 
 /**
  * The seconds-per-unit of the ACTIVE calendar. Core `CalendarData.days` carries hoursPerDay /
@@ -134,7 +135,7 @@ function monthIndex(cal: any, month: number | string): number {
   const months: any[] = cal?.months?.values ?? [];
   if (typeof month === 'number') {
     if (!Number.isInteger(month) || month < 1 || month > months.length) {
-      throw new Error(`month must be 1–${months.length} (got ${month}).`);
+      throw invalid(`month must be 1–${months.length} (got ${month}).`);
     }
     return month - 1;
   }
@@ -146,7 +147,7 @@ function monthIndex(cal: any, month: number | string): number {
       String(loc(m?.abbreviation) ?? '').toLowerCase() === name
   );
   if (idx < 0) {
-    throw new Error(
+    throw invalid(
       `month "${month}" is not in this calendar — it has: ${months.map((m: any) => loc(m?.name)).join(', ')}.`
     );
   }
@@ -162,7 +163,7 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
   const action = args?.action ?? 'read';
   if (action === 'read') return { success: true, ...readCalendar() };
   if (!game.user?.isGM)
-    throw new Error('manage-calendar writes the world time — the bridge user must be a GM.');
+    throw forbidden('manage-calendar writes the world time — the bridge user must be a GM.');
   const before = readCalendar();
   const cal: any = game.time.calendar;
 
@@ -175,7 +176,7 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
       (args.days ?? 0) * unit.day +
       (args.seconds ?? 0);
     if (!Number.isFinite(delta) || delta === 0) {
-      throw new Error(
+      throw invalid(
         'advance needs a non-zero amount: rounds / minutes / hours / days / seconds (negative rewinds).'
       );
     }
@@ -186,12 +187,12 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
   if (action === 'set') {
     const { year, month, day, hour, minute } = args;
     if ([year, month, day, hour, minute].every(v => v === undefined)) {
-      throw new Error('set needs at least one of year / month / day / hour / minute.');
+      throw invalid('set needs at least one of year / month / day / hour / minute.');
     }
     if (year !== undefined || month !== undefined || day !== undefined) {
       const mi = month === undefined ? undefined : monthIndex(cal, month);
       if (day !== undefined && (!Number.isInteger(day) || day < 1)) {
-        throw new Error(`day must be a positive whole number (got ${day}).`);
+        throw invalid(`day must be a positive whole number (got ${day}).`);
       }
       // ⚠️ jumpToDate defaults an omitted `day` to `components.dayOfMonth`, which core keeps
       // 0-BASED, and then does `dayOfYear = day - 1` — so forwarding nothing steps the date back a
@@ -204,7 +205,7 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
       const length = monthLength(cal, target.month, before.leapYear === true);
       if (length > 0 && target.day > length) {
         const name = (before.months as any[])?.[target.month]?.name ?? `month ${target.month + 1}`;
-        throw new Error(`day must be 1–${length} in ${name} (got ${target.day}).`);
+        throw invalid(`day must be 1–${length} in ${name} (got ${target.day}).`);
       }
       await cal.jumpToDate(target);
     }
@@ -212,12 +213,12 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
       const c = { ...(game.time.components as any) };
       if (hour !== undefined) {
         if (!Number.isInteger(hour) || hour < 0 || hour > 23)
-          throw new Error(`hour must be 0–23 (got ${hour}).`);
+          throw invalid(`hour must be 0–23 (got ${hour}).`);
         c.hour = hour;
       }
       if (minute !== undefined) {
         if (!Number.isInteger(minute) || minute < 0 || minute > 59)
-          throw new Error(`minute must be 0–59 (got ${minute}).`);
+          throw invalid(`minute must be 0–59 (got ${minute}).`);
         c.minute = minute;
       }
       await game.time.set(c);
@@ -225,5 +226,5 @@ export async function manageCalendar(args: CalendarArgs): Promise<unknown> {
     return { success: true, action, before, after: readCalendar() };
   }
 
-  throw new Error(`Unknown action "${action}". Use read, advance, or set.`);
+  throw invalid(`Unknown action "${action}". Use read, advance, or set.`);
 }

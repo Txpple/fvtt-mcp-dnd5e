@@ -13,6 +13,7 @@ import {
   normalizeAssetPath,
 } from './_shared.js';
 import { badAssetWarning, imgResolves } from './img-resolve.js';
+import { PageError, invalid, notFound } from './errors.js';
 
 // Foundry document classes (Playlist, RollTable, Cards) and CONST live in the page
 // global scope but are not declared in foundry-globals.d.ts; reach them off globalThis (loosely
@@ -49,7 +50,7 @@ async function deleteByResolver(
   notFound?: string[];
 }> {
   if (!Array.isArray(identifiers) || identifiers.length === 0) {
-    throw new Error('identifiers array is required and must contain at least one entry');
+    throw invalid('identifiers array is required and must contain at least one entry');
   }
 
   const deleted: Array<{ id: string; name: string }> = [];
@@ -217,13 +218,13 @@ export async function createPlaylist(args: {
   repeat?: boolean;
 }): Promise<unknown> {
   if (!args?.name || typeof args.name !== 'string') {
-    throw new Error('name is required');
+    throw invalid('name is required');
   }
   const soundPaths = Array.isArray(args.soundPaths)
     ? args.soundPaths.filter((p: any) => typeof p === 'string' && p.length > 0)
     : [];
   if (soundPaths.length === 0) {
-    throw new Error('soundPaths array is required and must contain at least one path');
+    throw invalid('soundPaths array is required and must contain at least one path');
   }
 
   const PM = CONST_?.PLAYLIST_MODES || PLAYLIST_MODE_FALLBACK;
@@ -280,13 +281,13 @@ export async function updatePlaylist(args: {
   if (typeof args.name === 'string' && args.name.trim().length > 0) update.name = args.name.trim();
   if (typeof args.mode === 'string') {
     const m = modeMap[args.mode.toLowerCase()];
-    if (m === undefined) throw new Error(`Unknown playlist mode "${args.mode}"`);
+    if (m === undefined) throw invalid(`Unknown playlist mode "${args.mode}"`);
     update.mode = m;
   }
   if (typeof args.fade === 'number') update.fade = args.fade;
 
   if (Object.keys(update).length === 0) {
-    throw new Error('Provide at least one field to update (name, mode, fade)');
+    throw invalid('Provide at least one field to update (name, mode, fade)');
   }
 
   await playlist.update(update);
@@ -343,14 +344,14 @@ async function buildResultDescription(r: RollTableResultInput): Promise<string> 
   if (uuid) {
     const packId = packIdFromUuid(uuid);
     if (packId && isSrdPack(packId)) {
-      throw new Error(
+      throw invalid(
         `refusing to reference SRD pack "${packId}" in a table result (design.md §2.3): link the ` +
           'premium-book item instead (dnd-monster-manual.*, dnd-players-handbook.*, dnd-dungeon-masters-guide.*).'
       );
     }
     const doc = typeof fromUuid_ === 'function' ? await fromUuid_(uuid) : null;
     if (!doc) {
-      throw new Error(
+      throw notFound(
         `could not resolve uuid "${uuid}" — use search-compendium / get-compendium-entry to find a ` +
           "real premium-book item (design.md §2.4: ask, don't invent)."
       );
@@ -365,13 +366,13 @@ async function buildResultDescription(r: RollTableResultInput): Promise<string> 
   }
 
   if (text.trim().length === 0) {
-    throw new Error('each result needs either "text" or "uuid"');
+    throw invalid('each result needs either "text" or "uuid"');
   }
   // Never emit an SRD reference, even from hand-written enricher text (design.md §2.3).
   for (const lnk of parseUuidLinks(text)) {
     const linkPackId = packIdFromUuid(lnk.uuid);
     if (linkPackId && isSrdPack(linkPackId)) {
-      throw new Error(
+      throw invalid(
         `refusing an SRD @UUID reference to "${linkPackId}" in result text (design.md §2.3): ` +
           'use the premium-book equivalent.'
       );
@@ -409,7 +410,9 @@ async function buildTableResults(results: RollTableResultInput[]): Promise<
     try {
       description = await buildResultDescription(r ?? {});
     } catch (e: any) {
-      throw new Error(`results[${idx}]: ${e?.message ?? e}`);
+      // Keep the inner code (SRD refusal = invalid, a dead uuid = not-found); add the index.
+      const msg = `results[${idx}]: ${e?.message ?? e}`;
+      throw e instanceof PageError ? new PageError(e.code, msg) : new Error(msg);
     }
     const weight = typeof r?.weight === 'number' && r.weight > 0 ? Math.floor(r.weight) : 1;
     let range: [number, number];
@@ -577,10 +580,10 @@ export async function createRollTable(args: {
   results: RollTableResultInput[];
 }): Promise<unknown> {
   if (!args?.name || args.name.trim().length === 0) {
-    throw new Error('name is required and must be a non-empty string');
+    throw invalid('name is required and must be a non-empty string');
   }
   if (!Array.isArray(args.results) || args.results.length === 0) {
-    throw new Error('results array is required and must contain at least one entry');
+    throw invalid('results array is required and must contain at least one entry');
   }
 
   const results = await buildTableResults(args.results);
@@ -653,12 +656,12 @@ export async function updateRollTable(args: {
   const replacingResults = Array.isArray(args.results) && args.results.length > 0;
   const editingResults = Array.isArray(args.editResults) && args.editResults.length > 0;
   if (replacingResults && editingResults) {
-    throw new Error(
+    throw invalid(
       'Provide results (replace the WHOLE set) or editResults (targeted per-entry edits), not both'
     );
   }
   if (Object.keys(update).length === 0 && !replacingResults && !editingResults) {
-    throw new Error(
+    throw invalid(
       'Provide at least one field to update (name, description, formula, replacement, displayRoll, results, editResults)'
     );
   }
@@ -752,7 +755,7 @@ export async function importRollTable(args: {
   folderName?: string;
 }): Promise<unknown> {
   if (!args?.packId || !args?.itemId) {
-    throw new Error('Both packId and itemId are required');
+    throw invalid('Both packId and itemId are required');
   }
   assertNoSrdPacks(args.packId, 'import-rolltable');
 
@@ -788,7 +791,7 @@ export async function createCards(args: {
   cards?: Array<{ name: string; description?: string; text?: string; img?: string }>;
 }): Promise<unknown> {
   if (!args?.name || args.name.trim().length === 0) {
-    throw new Error('name is required and must be a non-empty string');
+    throw invalid('name is required and must be a non-empty string');
   }
 
   const cardsDocTypes = game.system?.documentTypes?.Cards;
@@ -806,7 +809,7 @@ export async function createCards(args: {
     for (let idx = 0; idx < args.cards.length; idx++) {
       const c = args.cards[idx];
       if (!c || typeof c.name !== 'string' || c.name.trim().length === 0) {
-        throw new Error(`cards[${idx}]: "name" is required and must be a non-empty string`);
+        throw invalid(`cards[${idx}]: "name" is required and must be a non-empty string`);
       }
       const card: any = { name: c.name, type: 'base' };
       if (typeof c.description === 'string') card.description = c.description;
@@ -857,7 +860,7 @@ export async function importCardsPreset(args: {
   const preset = presets[args?.preset ?? ''];
   if (!preset) {
     const available = Object.keys(presets).join(', ') || '(none)';
-    throw new Error(`Unknown card preset "${args?.preset}". Available presets: ${available}.`);
+    throw invalid(`Unknown card preset "${args?.preset}". Available presets: ${available}.`);
   }
   const fetchJson = (globalThis as any).foundry?.utils?.fetchJsonWithTimeout;
   const data =

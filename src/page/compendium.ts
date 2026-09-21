@@ -8,6 +8,7 @@
 
 import { toSource, sanitizeDocData } from './_shared.js';
 import { excludeSrdPacks, packPriority } from '../utils/compendium-sources.js';
+import { invalid, notFound } from './errors.js';
 
 interface CompendiumSearchArgs {
   query: string;
@@ -107,7 +108,7 @@ export async function searchCompendium(
   const limit = args?.limit ?? 50;
 
   if (!query || typeof query !== 'string' || query.trim().length < 2) {
-    throw new Error('Search query must be a string with at least 2 characters');
+    throw invalid('Search query must be a string with at least 2 characters');
   }
 
   const cleanQuery = query.toLowerCase().trim();
@@ -116,7 +117,7 @@ export async function searchCompendium(
     .filter(term => term && typeof term === 'string' && term.length > 0);
 
   if (searchTerms.length === 0) {
-    throw new Error('Search query must contain valid search terms');
+    throw invalid('Search query must contain valid search terms');
   }
 
   // Never search Scene packs; never search SRD packs (design.md §2.3). The session's index
@@ -216,12 +217,12 @@ export async function getCompendiumDocumentFull(
 
   const pack = game.packs.get(packId);
   if (!pack) {
-    throw new Error(`Compendium pack ${packId} not found`);
+    throw notFound(`Compendium pack ${packId} not found`);
   }
 
   const document = await pack.getDocument(documentId);
   if (!document) {
-    throw new Error(`Document ${documentId} not found in pack ${packId}`);
+    throw notFound(`Document ${documentId} not found in pack ${packId}`);
   }
 
   // Sanitize toObject() SOURCE, not the live document: dnd5e 5.x system.activities is a

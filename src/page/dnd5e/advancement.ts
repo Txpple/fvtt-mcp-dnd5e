@@ -31,6 +31,7 @@ import {
 } from '../_shared.js';
 import { addSpellsToActor } from './spells.js';
 import { readDarkvision, TOKEN_DISPOSITION, tokenDefaults } from './token-defaults.js';
+import { ambiguous, invalid, notFound, unsupported } from '../errors.js';
 
 /**
  * Resolve a PC's target folder to a real Folder **id**. Accepts a folder id OR an exact folder name
@@ -670,7 +671,7 @@ export async function inspectAdvancementChoices(args: {
   level?: number;
 }): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error(
+    throw unsupported(
       `inspectAdvancementChoices requires D&D 5e. Current system: "${game.system.id}".`
     );
   }
@@ -689,16 +690,16 @@ export async function inspectAdvancementChoices(args: {
     }
   }
   if (!doc) {
-    throw new Error(
+    throw notFound(
       `Class not found: "${args.className ?? args.classUuid}". Use a premium-book class by exact name ` +
         '(design.md §2.3 — never the SRD). Try search-compendium to find it.'
     );
   }
   if (doc.type !== 'class') {
-    throw new Error(`"${doc.name}" is a "${doc.type}", not a class.`);
+    throw invalid(`"${doc.name}" is a "${doc.type}", not a class.`);
   }
   if (packId && !isPremiumBookPack(packId)) {
-    throw new Error(
+    throw invalid(
       `Refusing to introspect "${doc.name}" from non-premium pack "${packId}" (design.md §2.3). ` +
         'Author only from the premium MM/PHB/DMG books.'
     );
@@ -768,7 +769,7 @@ async function restPcToFull(actor: any, warnings: string[]): Promise<void> {
 export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
   const ActorClass = (globalThis as any).Actor;
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`createPcActor requires D&D 5e. Current system: "${game.system.id}".`);
+    throw unsupported(`createPcActor requires D&D 5e. Current system: "${game.system.id}".`);
   }
 
   const level = plan.level ?? 1;
@@ -778,14 +779,14 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
   // 1. Resolve class / species / background by NAME, premium-gated.
   const classRes = await resolvePremiumDocByType('class', plan.className);
   if (!classRes) {
-    throw new Error(
+    throw notFound(
       `Class "${plan.className}" not found in the premium books (design.md §2.3 — never the SRD). ` +
         'Use the exact PHB class name; try search-compendium.'
     );
   }
   const speciesRes = plan.species ? await resolvePremiumDocByType('race', plan.species) : null;
   if (plan.species && !speciesRes) {
-    throw new Error(
+    throw notFound(
       `Species "${plan.species}" not found in the premium books. Try search-compendium.`
     );
   }
@@ -793,7 +794,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
     ? await resolvePremiumDocByType('background', plan.background)
     : null;
   if (plan.background && !backgroundRes) {
-    throw new Error(
+    throw notFound(
       `Background "${plan.background}" not found in the premium books. Try search-compendium.`
     );
   }
@@ -806,14 +807,14 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
   for (const mc of plan.multiclass ?? []) {
     const res = await resolvePremiumDocByType('class', mc.className);
     if (!res) {
-      throw new Error(
+      throw notFound(
         `Multiclass "${mc.className}" not found in the premium books (design.md §2.3 — never the SRD). ` +
           'Use the exact PHB class name; try search-compendium.'
       );
     }
     const id = res.doc.system?.identifier;
     if (seenClassIds.has(id)) {
-      throw new Error(
+      throw invalid(
         `Class "${mc.className}" is listed more than once — a PC cannot multiclass into the same class. ` +
           'Use level-up-pc to add further levels to a class the PC already has.'
       );
@@ -823,7 +824,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
   }
   const totalLevel = level + multiclassRes.reduce((s, m) => s + m.levels, 0);
   if (totalLevel > 20) {
-    throw new Error(
+    throw invalid(
       `Total character level ${totalLevel} exceeds 20 (primary ${classRes.doc.name} ${level}` +
         `${multiclassRes.map(m => ` + ${m.name} ${m.levels}`).join('')}).`
     );
@@ -1112,7 +1113,7 @@ export interface LevelUpPlan {
 
 export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`levelUpPc requires D&D 5e. Current system: "${game.system.id}".`);
+    throw unsupported(`levelUpPc requires D&D 5e. Current system: "${game.system.id}".`);
   }
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -1120,9 +1121,9 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
 
   // 1. Resolve the actor — must be an existing character.
   const actor = resolveActorFuzzy(plan.actorIdentifier);
-  if (!actor) throw new Error(`PC not found: "${plan.actorIdentifier}". Use the exact name or id.`);
+  if (!actor) throw notFound(`PC not found: "${plan.actorIdentifier}". Use the exact name or id.`);
   if (actor.type !== 'character') {
-    throw new Error(
+    throw invalid(
       `"${actor.name}" is a ${actor.type}, not a player character — level-up-pc only levels PCs.`
     );
   }
@@ -1130,7 +1131,7 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   // 2. Resolve the class by name (premium-gated).
   const classRes = await resolvePremiumDocByType('class', plan.className);
   if (!classRes) {
-    throw new Error(
+    throw notFound(
       `Class "${plan.className}" not found in the premium books (design.md §2.3). Try search-compendium.`
     );
   }
@@ -1144,13 +1145,13 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   const isNewClass = !existing;
   const newClassLevel = isNewClass ? 1 : (existing.system?.levels ?? 0) + 1;
   if (newClassLevel > 20) {
-    throw new Error(`${classRes.doc.name} is already at level ${newClassLevel - 1} (max 20).`);
+    throw invalid(`${classRes.doc.name} is already at level ${newClassLevel - 1} (max 20).`);
   }
   const currentCharLevel = actor.items
     .filter((i: any) => i.type === 'class')
     .reduce((sum: number, i: any) => sum + (i.system?.levels ?? 0), 0);
   if (currentCharLevel >= 20) {
-    throw new Error(`"${actor.name}" is already character level 20.`);
+    throw invalid(`"${actor.name}" is already character level 20.`);
   }
   const originalClassId = actor.system?.details?.originalClass;
   const role: 'primary' | 'secondary' =
@@ -1320,18 +1321,18 @@ async function resolvePremiumCharacter(plan: PcPrefabPlan): Promise<{
 }> {
   if (plan.packId && plan.actorId) {
     if (!isPremiumBookPack(plan.packId)) {
-      throw new Error(
+      throw invalid(
         `Refusing to copy from non-premium pack "${plan.packId}" (design.md §2.3 — never the SRD). ` +
           'Use a premium-book pregen, e.g. dnd-players-handbook.actors.'
       );
     }
     const pack = game.packs.get(plan.packId);
-    if (!pack) throw new Error(`Compendium pack not found: "${plan.packId}".`);
+    if (!pack) throw notFound(`Compendium pack not found: "${plan.packId}".`);
     const idx = await pack.getIndex({ fields: ['type'] });
     const entry = idx.get(plan.actorId);
-    if (!entry) throw new Error(`Actor "${plan.actorId}" not found in pack "${plan.packId}".`);
+    if (!entry) throw notFound(`Actor "${plan.actorId}" not found in pack "${plan.packId}".`);
     if (entry.type !== 'character') {
-      throw new Error(
+      throw invalid(
         `"${entry.name}" is a ${entry.type}, not a character — prefab PCs must be type:character ` +
           'pregens. (For an NPC prefab use create-actor-from-compendium.)'
       );
@@ -1352,14 +1353,14 @@ async function resolvePremiumCharacter(plan: PcPrefabPlan): Promise<{
       }
     }
     if (matches.length === 0) {
-      throw new Error(
+      throw notFound(
         `No premium character pregen named "${plan.prefab}" found. The PHB class pregens ` +
           '(Barbarian, Bard, … Wizard) live in dnd-players-handbook.actors; pass packId+actorId for ' +
           'a specific one.'
       );
     }
     if (matches.length > 1) {
-      throw new Error(
+      throw ambiguous(
         `Multiple premium pregens named "${plan.prefab}" (${matches
           .map(m => m.packId)
           .join(', ')}) — pass packId+actorId to disambiguate.`
@@ -1368,13 +1369,13 @@ async function resolvePremiumCharacter(plan: PcPrefabPlan): Promise<{
     return matches[0];
   }
 
-  throw new Error('Provide either `prefab` (a pregen name) or both `packId` and `actorId`.');
+  throw invalid('Provide either `prefab` (a pregen name) or both `packId` and `actorId`.');
 }
 
 export async function createPcFromPrefab(plan: PcPrefabPlan): Promise<PcBuildResult> {
   const ActorClass = (globalThis as any).Actor;
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`createPcFromPrefab requires D&D 5e. Current system: "${game.system.id}".`);
+    throw unsupported(`createPcFromPrefab requires D&D 5e. Current system: "${game.system.id}".`);
   }
   const warnings: string[] = [];
 

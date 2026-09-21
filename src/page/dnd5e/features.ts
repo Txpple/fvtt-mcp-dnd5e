@@ -11,6 +11,7 @@
 
 import { slugify, resolveActorFuzzy as findActorByIdentifier } from '../_shared.js';
 import { resolveAuthoredIcon } from './icons.js';
+import { invalid, notFound, unsupported } from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // save feature — feat Item with a single "save" activity
@@ -34,18 +35,20 @@ export async function addSaveFeatureToActor(args: {
   // 1. Lookup actor
   const actor = findActorByIdentifier(args.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${args.actorIdentifier}"`);
+    throw notFound(`Actor not found: "${args.actorIdentifier}"`);
   }
 
   // 2. System guard
   if (game.system.id !== 'dnd5e') {
-    throw new Error(`addSaveFeatureToActor requires D&D 5e. Current system: "${game.system.id}".`);
+    throw unsupported(
+      `addSaveFeatureToActor requires D&D 5e. Current system: "${game.system.id}".`
+    );
   }
 
   // 3. Duplicate check (by name only, regardless of item type)
   const existing = actor.items.find((i: any) => i.name === args.featureName);
   if (existing) {
-    throw new Error(
+    throw invalid(
       `Feature "${args.featureName}" already exists on actor "${actor.name}" ` +
         `(id: ${existing.id}). Use a different name or remove the existing feature first.`
     );
@@ -156,13 +159,13 @@ export async function addSaveFeatureToActor(args: {
 
 export async function addPassiveFeatureToActor(args: any): Promise<unknown> {
   if (game.system.id !== 'dnd5e') {
-    throw new Error('addPassiveFeatureToActor requires the dnd5e game system');
+    throw unsupported('addPassiveFeatureToActor requires the dnd5e game system');
   }
 
   // 1. Resolve actor
   const actor = findActorByIdentifier(args.actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: "${args.actorIdentifier}"`);
+    throw notFound(`Actor not found: "${args.actorIdentifier}"`);
   }
 
   // 2. Duplicate check (case-insensitive)
@@ -170,7 +173,7 @@ export async function addPassiveFeatureToActor(args: any): Promise<unknown> {
     (i: any) => i.name.toLowerCase() === args.featureName.toLowerCase()
   );
   if (existing) {
-    throw new Error(
+    throw invalid(
       `An item named "${args.featureName}" already exists on actor "${actor.name}". ` +
         `Remove or rename it first.`
     );

@@ -7,6 +7,8 @@
 // so it must remain browser-only: no Node, no Playwright — only browser + Foundry
 // globals (see foundry-globals.d.ts).
 
+import { invalid, notFound } from './errors.js';
+
 // Foundry's Folder document class isn't declared in foundry-globals.d.ts; reach
 // it off globalThis (the established sibling-page-file pattern).
 const FolderClass: any = (globalThis as any).Folder;
@@ -246,22 +248,22 @@ export async function importFromCompendium(
   opts: { requirePackType?: string } = {}
 ): Promise<{ pack: any; source: any; data: any }> {
   if (!packId || !docId) {
-    throw new Error('Both packId and itemId are required');
+    throw invalid('Both packId and itemId are required');
   }
   const pack = game.packs.get(packId);
   if (!pack) {
-    throw new Error(
+    throw notFound(
       `Compendium pack not found: "${packId}". Use list-compendium-packs to find the exact id.`
     );
   }
   if (opts.requirePackType && pack.metadata.type !== opts.requirePackType) {
-    throw new Error(
+    throw invalid(
       `Pack "${packId}" is type "${pack.metadata.type}", expected "${opts.requirePackType}" — pick a matching pack.`
     );
   }
   const source = await pack.getDocument(docId);
   if (!source) {
-    throw new Error(
+    throw notFound(
       `Document "${docId}" not found in pack "${packId}". ` +
         'Use search-compendium / get-compendium-entry to find the exact packId + itemId.'
     );

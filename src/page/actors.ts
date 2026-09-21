@@ -44,6 +44,7 @@ import {
   tokenDefaults,
   type DispositionKey,
 } from './dnd5e/token-defaults.js';
+import { ambiguous, invalid, notFound as notFoundError } from './errors.js';
 
 // Foundry document class (Actor) lives in the page global scope but is not
 // declared in foundry-globals.d.ts; reach it off globalThis (loosely typed).
@@ -416,12 +417,12 @@ function extractDerived(actor: any): Record<string, any> | undefined {
 export function getCharacterInfo(args: { characterName?: string; characterId?: string }): unknown {
   const identifier = args?.characterName || args?.characterId;
   if (!identifier) {
-    throw new Error('characterName or characterId is required');
+    throw invalid('characterName or characterId is required');
   }
 
   const actor: any = resolveActor(identifier);
   if (!actor) {
-    throw new Error(`Character not found: ${identifier}`);
+    throw notFoundError(`Character not found: ${identifier}`);
   }
 
   const characterData: Record<string, any> = {
@@ -523,12 +524,12 @@ export function getCharacterInfo(args: { characterName?: string; characterId?: s
 export function exportActorData(args: { identifier?: string }): unknown {
   const identifier = args?.identifier;
   if (!identifier) {
-    throw new Error('identifier is required');
+    throw invalid('identifier is required');
   }
 
   const actor: any = resolveActor(identifier);
   if (!actor) {
-    throw new Error(`Character not found: ${identifier}`);
+    throw notFoundError(`Character not found: ${identifier}`);
   }
 
   const data: any = actor.toObject();
@@ -566,95 +567,89 @@ export function getCharacterEntity(args: {
 }): unknown {
   const { characterIdentifier, entityIdentifier } = args;
 
-  try {
-    const character = Array.from(game.actors ?? []).find(
-      (actor: any) =>
-        actor.id === characterIdentifier ||
-        actor.name?.toLowerCase() === characterIdentifier.toLowerCase()
-    );
+  const character = Array.from(game.actors ?? []).find(
+    (actor: any) =>
+      actor.id === characterIdentifier ||
+      actor.name?.toLowerCase() === characterIdentifier.toLowerCase()
+  );
 
-    if (!character) {
-      throw new Error(`Character not found: "${characterIdentifier}"`);
-    }
-
-    // 1. Items (by id or name).
-    const items = (character as any).items?.contents ?? [];
-    let entity = items.find(
-      (item: any) =>
-        item.id === entityIdentifier || item.name?.toLowerCase() === entityIdentifier.toLowerCase()
-    );
-
-    if (entity) {
-      const entityTrueName = unmaskedName(entity);
-      return {
-        success: true,
-        entityType: 'item',
-        entity: {
-          id: entity.id,
-          name: entity.name,
-          ...(entityTrueName !== undefined ? { trueName: entityTrueName } : {}),
-          type: entity.type,
-          img: entity.img,
-          description: entity.system?.description?.value || entity.system?.description || '',
-          // toObject() source so dnd5e activity Maps survive serialization (see toSource).
-          system: toSource(entity).system,
-        },
-      };
-    }
-
-    // 2. Actions (systems that surface actions as a separate collection).
-    if ((character as any).system?.actions) {
-      const actions = Array.isArray((character as any).system.actions)
-        ? (character as any).system.actions
-        : Object.values((character as any).system.actions || {});
-
-      entity = actions.find(
-        (action: any) =>
-          action.id === entityIdentifier ||
-          action.name?.toLowerCase() === entityIdentifier.toLowerCase()
-      );
-
-      if (entity) {
-        return {
-          success: true,
-          entityType: 'action',
-          entity,
-        };
-      }
-    }
-
-    // 3. Effects (by id or name).
-    const effects = (character as any).effects?.contents ?? [];
-    entity = effects.find(
-      (effect: any) =>
-        effect.id === entityIdentifier ||
-        effect.name?.toLowerCase() === entityIdentifier.toLowerCase()
-    );
-
-    if (entity) {
-      return {
-        success: true,
-        entityType: 'effect',
-        entity: {
-          id: entity.id,
-          name: entity.name || entity.label,
-          icon: entity.img ?? entity.icon,
-          disabled: entity.disabled,
-          duration: entity.duration,
-          // v14: system.changes (the top-level getter is a deprecated shim)
-          changes: entity.system?.changes ?? entity.changes,
-        },
-      };
-    }
-
-    throw new Error(
-      `Entity not found: "${entityIdentifier}" in character "${(character as any).name}"`
-    );
-  } catch (error) {
-    throw new Error(
-      `Failed to get character entity: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
+  if (!character) {
+    throw notFoundError(`Character not found: "${characterIdentifier}"`);
   }
+
+  // 1. Items (by id or name).
+  const items = (character as any).items?.contents ?? [];
+  let entity = items.find(
+    (item: any) =>
+      item.id === entityIdentifier || item.name?.toLowerCase() === entityIdentifier.toLowerCase()
+  );
+
+  if (entity) {
+    const entityTrueName = unmaskedName(entity);
+    return {
+      success: true,
+      entityType: 'item',
+      entity: {
+        id: entity.id,
+        name: entity.name,
+        ...(entityTrueName !== undefined ? { trueName: entityTrueName } : {}),
+        type: entity.type,
+        img: entity.img,
+        description: entity.system?.description?.value || entity.system?.description || '',
+        // toObject() source so dnd5e activity Maps survive serialization (see toSource).
+        system: toSource(entity).system,
+      },
+    };
+  }
+
+  // 2. Actions (systems that surface actions as a separate collection).
+  if ((character as any).system?.actions) {
+    const actions = Array.isArray((character as any).system.actions)
+      ? (character as any).system.actions
+      : Object.values((character as any).system.actions || {});
+
+    entity = actions.find(
+      (action: any) =>
+        action.id === entityIdentifier ||
+        action.name?.toLowerCase() === entityIdentifier.toLowerCase()
+    );
+
+    if (entity) {
+      return {
+        success: true,
+        entityType: 'action',
+        entity,
+      };
+    }
+  }
+
+  // 3. Effects (by id or name).
+  const effects = (character as any).effects?.contents ?? [];
+  entity = effects.find(
+    (effect: any) =>
+      effect.id === entityIdentifier ||
+      effect.name?.toLowerCase() === entityIdentifier.toLowerCase()
+  );
+
+  if (entity) {
+    return {
+      success: true,
+      entityType: 'effect',
+      entity: {
+        id: entity.id,
+        name: entity.name || entity.label,
+        icon: entity.img ?? entity.icon,
+        disabled: entity.disabled,
+        duration: entity.duration,
+        // v14: system.changes (the top-level getter is a deprecated shim)
+        changes: entity.system?.changes ?? entity.changes,
+      },
+    };
+  }
+
+  throw notFoundError(
+    `Entity not found: "${entityIdentifier}" in character "${(character as any).name}"`
+  );
 }
 
 /**
@@ -673,7 +668,7 @@ export function searchCharacterItems(args: {
 
   const actor = resolveActor(characterIdentifier);
   if (!actor) {
-    throw new Error(`Character not found: ${characterIdentifier}`);
+    throw notFoundError(`Character not found: ${characterIdentifier}`);
   }
 
   const systemId = game.system?.id;
@@ -909,7 +904,7 @@ async function addActorsToScene(placement: TokenPlacement): Promise<{
 }> {
   const scene = game.scenes.current;
   if (!scene) {
-    throw new Error('No active scene found');
+    throw notFoundError('No active scene found');
   }
 
   const tokenData: any[] = [];
@@ -1093,7 +1088,7 @@ export async function createActorFromCompendium(request: {
 
   // Validate that the document is an Actor.
   if (sourceActor.documentName !== 'Actor') {
-    throw new Error(
+    throw invalid(
       `Document "${itemId}" is not an Actor (documentName: ${sourceActor.documentName}, type: ${sourceActor.type})`
     );
   }
@@ -1102,7 +1097,7 @@ export async function createActorFromCompendium(request: {
   // creatures and Cosmere RPG adversaries.
   const validActorTypes = ['character', 'npc', 'creature', 'adversary'];
   if (!validActorTypes.includes(sourceActor.type)) {
-    throw new Error(
+    throw invalid(
       `Document "${itemId}" has unsupported actor type: ${sourceActor.type}. Supported types: ${validActorTypes.join(', ')}`
     );
   }
@@ -1300,46 +1295,40 @@ export async function deleteActor(data: {
   // remove it (the auto-foldering litter from createActorFromCompendium).
   const removeEmptyFolder = data.removeEmptyFolder !== false;
 
-  try {
-    const deleted: Array<{ id: string; name: string }> = [];
-    const notFound: string[] = [];
-    const touchedFolderIds = new Set<string>();
+  const deleted: Array<{ id: string; name: string }> = [];
+  const notFound: string[] = [];
+  const touchedFolderIds = new Set<string>();
 
-    for (const identifier of data.identifiers) {
-      // STRICT resolution only — exact id, then exact name.
-      const actor = game.actors?.get(identifier) || game.actors?.getName?.(identifier);
-      if (actor) {
-        const info = { id: actor.id ?? identifier, name: actor.name ?? '' };
-        const folderId = actor.folder?.id;
-        await actor.delete();
-        deleted.push(info);
-        if (folderId) touchedFolderIds.add(folderId);
-      } else {
-        notFound.push(identifier);
-      }
+  for (const identifier of data.identifiers) {
+    // STRICT resolution only — exact id, then exact name.
+    const actor = game.actors?.get(identifier) || game.actors?.getName?.(identifier);
+    if (actor) {
+      const info = { id: actor.id ?? identifier, name: actor.name ?? '' };
+      const folderId = actor.folder?.id;
+      await actor.delete();
+      deleted.push(info);
+      if (folderId) touchedFolderIds.add(folderId);
+    } else {
+      notFound.push(identifier);
     }
-
-    // Clean up any bridge-created folder this deletion left completely empty.
-    const removedFolders: Array<{ id: string; name: string }> = [];
-    if (removeEmptyFolder) {
-      for (const folderId of touchedFolderIds) {
-        const removed = await removeFolderIfEmptyAndMcp(folderId);
-        if (removed) removedFolders.push(removed);
-      }
-    }
-
-    return {
-      success: true,
-      deletedCount: deleted.length,
-      deleted,
-      notFound: notFound.length > 0 ? notFound : undefined,
-      removedFolders: removedFolders.length > 0 ? removedFolders : undefined,
-    };
-  } catch (error) {
-    throw new Error(
-      `Failed to delete actor(s): ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
   }
+
+  // Clean up any bridge-created folder this deletion left completely empty.
+  const removedFolders: Array<{ id: string; name: string }> = [];
+  if (removeEmptyFolder) {
+    for (const folderId of touchedFolderIds) {
+      const removed = await removeFolderIfEmptyAndMcp(folderId);
+      if (removed) removedFolders.push(removed);
+    }
+  }
+
+  return {
+    success: true,
+    deletedCount: deleted.length,
+    deleted,
+    notFound: notFound.length > 0 ? notFound : undefined,
+    removedFolders: removedFolders.length > 0 ? removedFolders : undefined,
+  };
 }
 
 /**
@@ -1360,11 +1349,11 @@ function resolveOwnerUser(identifier: string): any {
   const partial = users.filter((u: any) => u.name?.toLowerCase().includes(term));
   if (partial.length === 1) return partial[0];
   if (partial.length > 1) {
-    throw new Error(
+    throw ambiguous(
       `Ambiguous owner "${identifier}" — matches ${partial.map((u: any) => u.name).join(', ')}`
     );
   }
-  throw new Error(`User not found: ${identifier}`);
+  throw notFoundError(`User not found: ${identifier}`);
 }
 
 /**
@@ -1399,7 +1388,7 @@ export async function duplicateActor(request: {
 }): Promise<unknown> {
   const { actorIdentifiers, newNames, suffix, owner } = request;
   if (!Array.isArray(actorIdentifiers) || actorIdentifiers.length === 0) {
-    throw new Error('actorIdentifiers is required and must contain at least one entry');
+    throw invalid('actorIdentifiers is required and must contain at least one entry');
   }
 
   // Read the Actor document class lazily (not the module-scope ActorClass) so
@@ -1513,15 +1502,15 @@ export async function addActorItems(params: {
   const { actorIdentifier, items } = params;
 
   if (!actorIdentifier) {
-    throw new Error('actorIdentifier is required');
+    throw invalid('actorIdentifier is required');
   }
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error('items array is required and must contain at least one entry');
+    throw invalid('items array is required and must contain at least one entry');
   }
 
   const actor = resolveActor(actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: ${actorIdentifier}`);
+    throw notFoundError(`Actor not found: ${actorIdentifier}`);
   }
 
   // Discover the active system's declared Item types for a useful pre-flight
@@ -1532,13 +1521,13 @@ export async function addActorItems(params: {
 
   const payload = items.map((it, idx) => {
     if (!it || typeof it.name !== 'string' || it.name.trim().length === 0) {
-      throw new Error(`items[${idx}]: "name" is required and must be a non-empty string`);
+      throw invalid(`items[${idx}]: "name" is required and must be a non-empty string`);
     }
     if (typeof it.type !== 'string' || it.type.trim().length === 0) {
-      throw new Error(`items[${idx}] ("${it.name}"): "type" is required`);
+      throw invalid(`items[${idx}] ("${it.name}"): "type" is required`);
     }
     if (validTypes && !validTypes.includes(it.type)) {
-      throw new Error(
+      throw invalid(
         `items[${idx}] ("${it.name}"): unknown type "${it.type}" for system "${game.system?.id}". ` +
           `Valid Item types: ${validTypes.join(', ')}`
       );
@@ -1578,17 +1567,17 @@ export async function removeActorItems(params: {
   const { actorIdentifier, itemIds, itemNames, type } = params;
 
   if (!actorIdentifier) {
-    throw new Error('actorIdentifier is required');
+    throw invalid('actorIdentifier is required');
   }
   const hasIds = Array.isArray(itemIds) && itemIds.length > 0;
   const hasNames = Array.isArray(itemNames) && itemNames.length > 0;
   if (!hasIds && !hasNames) {
-    throw new Error('Provide itemIds and/or itemNames identifying the items to remove');
+    throw invalid('Provide itemIds and/or itemNames identifying the items to remove');
   }
 
   const actor = resolveActor(actorIdentifier);
   if (!actor) {
-    throw new Error(`Actor not found: ${actorIdentifier}`);
+    throw notFoundError(`Actor not found: ${actorIdentifier}`);
   }
 
   const typeLower = type?.toLowerCase();
@@ -1658,9 +1647,9 @@ export async function removeActorItems(params: {
  */
 export async function updateActor(params: any): Promise<unknown> {
   const identifier = params?.actorIdentifier;
-  if (!identifier) throw new Error('actorIdentifier is required');
+  if (!identifier) throw invalid('actorIdentifier is required');
   const actor = resolveActor(identifier);
-  if (!actor) throw new Error(`Actor not found: ${identifier}`);
+  if (!actor) throw notFoundError(`Actor not found: ${identifier}`);
 
   const isNpc = actor.type === 'npc';
   const update: Record<string, any> = {};
@@ -2140,7 +2129,7 @@ export async function updateActor(params: any): Promise<unknown> {
 
   if (Object.keys(update).length === 0) {
     const extra = warnings.length ? ` (${warnings.join('; ')})` : '';
-    throw new Error(`No applicable fields to update.${extra}`);
+    throw invalid(`No applicable fields to update.${extra}`);
   }
 
   await actor.update(update);
@@ -2194,14 +2183,14 @@ export async function updateActorItem(params: {
   deletePaths?: string[];
 }): Promise<unknown> {
   const { actorIdentifier, itemIdentifier } = params ?? ({} as any);
-  if (!actorIdentifier) throw new Error('actorIdentifier is required');
-  if (!itemIdentifier) throw new Error('itemIdentifier is required');
+  if (!actorIdentifier) throw invalid('actorIdentifier is required');
+  if (!itemIdentifier) throw invalid('itemIdentifier is required');
 
   const actor = resolveActor(actorIdentifier);
-  if (!actor) throw new Error(`Actor not found: ${actorIdentifier}`);
+  if (!actor) throw notFoundError(`Actor not found: ${actorIdentifier}`);
   const item = resolveActorItem(actor, itemIdentifier, params.type);
   if (!item) {
-    throw new Error(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);
+    throw notFoundError(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);
   }
 
   const warnings: string[] = [];
@@ -2236,7 +2225,7 @@ export async function updateActorItem(params: {
 
   const appliedKeys = Object.keys(update).filter(k => k !== '_id');
   if (appliedKeys.length === 0) {
-    throw new Error('Provide name, img, patch, or deletePaths to change.');
+    throw invalid('Provide name, img, patch, or deletePaths to change.');
   }
 
   await actor.updateEmbeddedDocuments('Item', [update]);

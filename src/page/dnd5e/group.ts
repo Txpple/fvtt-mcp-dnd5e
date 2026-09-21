@@ -19,6 +19,7 @@
 
 import { resolveActorFuzzy, getOrCreateFolder } from '../_shared.js';
 import { imgResolves, badAssetWarning } from '../img-resolve.js';
+import { invalid, notFound } from '../errors.js';
 
 const SETTING_NS = 'dnd5e';
 const SETTING_KEY = 'primaryParty';
@@ -112,7 +113,7 @@ export function assertCreatableMembers(
     problems.push(`group actors cannot be members of a group: ${groups.join(', ')}`);
   }
   if (problems.length) {
-    throw new Error(`create-group: nothing was created — ${problems.join('; ')}`);
+    throw invalid(`create-group: nothing was created — ${problems.join('; ')}`);
   }
 
   const seen = new Set<string>();
@@ -147,10 +148,10 @@ function resolveMembers(identifiers: string[]): MemberResolution[] {
 function resolveGroupStrict(identifier: string): any {
   const actor = resolveActorFuzzy(identifier);
   if (!actor) {
-    throw new Error(`No actor matches "${identifier}"`);
+    throw notFound(`No actor matches "${identifier}"`);
   }
   if (actor.type !== 'group') {
-    throw new Error(
+    throw invalid(
       `"${actor.name}" (${actor.id}) is type "${actor.type}", not a group actor — ` +
         `list-actors shows which actors are groups`
     );
@@ -360,7 +361,7 @@ export async function configurePrimaryParty(
   args: ConfigurePrimaryPartyArgs = {}
 ): Promise<unknown> {
   if (args.groupIdentifier && args.clear) {
-    throw new Error('set-primary-party: pass groupIdentifier OR clear, not both');
+    throw invalid('set-primary-party: pass groupIdentifier OR clear, not both');
   }
 
   const previous = currentPrimaryParty();

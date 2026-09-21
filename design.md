@@ -145,6 +145,13 @@ This is the architectural backbone that makes principle #1 real.
   a success-shaped result. An unknown argument is refused by name, never stripped. A result over
   the response cap is cut at record boundaries with a `truncation` stamp, never mid-record.
   (Decision #10 of the 3.0 plan; the line format lands per family as each is consolidated.)
+- **An error is the page's own words, plus a code.** A page handler refuses a call with a coded
+  `PageError` (`not-found` / `ambiguous` / `invalid` / `permission` / `unsupported` /
+  `rolled-back`; `src/page/errors.ts`); the code rides in the Error's `name` — the one field that
+  survives `page.evaluate` — and comes back as a `BridgeError` (`src/bridge-error.ts`; a lost
+  session is `connection`). The mapper appends one hint per code after the words and never
+  classifies by a word in the message; an uncoded throw (Foundry's own) is its raw text, nothing
+  added. A tool's own curated message (`FormattedToolError`) passes through verbatim.
 - **The boundary is the test.** Before adding code, decide which side it's on. Mixed-concern code is
   the thing this contract exists to prevent.
 
@@ -329,6 +336,11 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   `fvtt-mcp-dnd5e/env` — the one .env reader the server, the scripts, the suite and the siblings
   share) and the host seam (`fvtt-mcp-dnd5e/hosts`). It never imports `src/config.ts`, which reads
   process.env and refuses a placeholder at import — right for the server, wrong for a library.
+- **The error contract.** `src/page/errors.ts` (the coded `PageError` and its helpers; 359 page
+  throws on it) → `src/bridge-error.ts` (`BridgeError`: `code` / `fn` / `detail` / `pageStack`,
+  parsed from the `page.evaluate` header; also on `fvtt-mcp-dnd5e/client`) →
+  `src/utils/error-handler.ts` (one hint per code; no substring classifier). Proven live by
+  `scripts/verify-error-contract.mjs`.
 - **One registry.** `src/registry.ts` is the single source of truth wiring tool name → handler; the
   advertised tool list is derived from it so the two can't drift.
 - **Generated schemas.** Every tool's input schema is generated from one hoisted zod (`io: 'input'`)

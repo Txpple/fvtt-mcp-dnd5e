@@ -264,7 +264,7 @@ describe('handleGetCompendiumItem', () => {
   it('throws when the bridge returns no item', async () => {
     const { tools } = build('dnd5e', null);
     await expect(tools.handleGetCompendiumItem({ packId: 'p', itemId: 'missing' })).rejects.toThrow(
-      /Failed to retrieve item/
+      /Item missing not found in pack p/
     );
   });
 
