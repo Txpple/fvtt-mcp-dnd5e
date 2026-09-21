@@ -1,16 +1,20 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import { toInputSchema } from '../utils/schema.js';
+import { listLines, warningBlock } from '../utils/lines.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 /**
- * Macro tools — world Macro documents and user hotbar pins.
- * - create-macro: author a script/chat macro, grant a player OWNER access, and pin it to their
- *   hotbar in one call — the "hand a player a one-click button" op.
- * - list-macros: the namespace's read — every macro with its type, author, command preview, and
- *   every user hotbar slot it occupies.
- * - delete-macro: remove macros and scrub any user hotbar slots that pointed at them.
+ * Macro tools — world Macro documents and user hotbar pins, advertised as ONE tool:
+ * `manage-macros`, selected by `action` (src/tools/_union.ts — M8 of the 3.0 plan).
+ * - create: author a script/chat macro, grant a player OWNER access, and pin it to their hotbar
+ *   in one call — the "hand a player a one-click button" op.
+ * - list: the namespace's read — every macro with its type, author, pin count (verbose: each
+ *   user hotbar slot it occupies and a command preview), on the design.md §3 line shape.
+ * - delete: remove macros and scrub any user hotbar slots that pointed at them.
  */
+
+export const MANAGE_MACROS = 'manage-macros';
 
 const CreateMacroSchema = z
   .object({
@@ -21,14 +25,12 @@ const CreateMacroSchema = z
       .describe(
         'script: JavaScript, run as the clicking user; chat: the text posted (inline rolls work).'
       ),
-    type: z.enum(['script', 'chat']).default('script').describe('Default script.'),
+    type: z.enum(['script', 'chat']).default('script'),
     img: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'Icon path or URL; an unresolvable path falls back to the stock icon with a warning.'
-      ),
+      .describe('Icon path; unresolvable = the stock icon + a warning.'),
     owner: z
       .string()
       .min(1)
@@ -54,15 +56,22 @@ const CreateMacroSchema = z
 const ListMacrosSchema = z.object({
   nameFilter: z.string().optional().describe('Case-insensitive substring match on macro name.'),
   user: z.string().optional().describe("Only macros on this user's hotbar (id or name)."),
-  verbose: z.boolean().optional().describe('Each pin (user + slot) and a command preview.'),
+  verbose: z.boolean().optional().describe('Add the hotbar and command columns.'),
 });
 
-const DeleteMacroSchema = z.object({
+const DeleteMacrosSchema = z.object({
   macros: z
     .array(z.string().min(1))
     .min(1)
-    .describe('Macro ids or exact names (case-insensitive) to delete. Find them with list-macros.'),
+    .describe('Macro ids or exact names (case-insensitive).'),
 });
+
+/** The list columns (§3: a fixed, documented order); `verbose` appends the last two. */
+const LIST_COLUMNS = ['id', 'name', 'type', 'author', 'pins'] as const;
+const VERBOSE_COLUMNS = [...LIST_COLUMNS, 'hotbar', 'command'] as const;
+
+const pinText = (pins: Array<{ userName: string; slot: number }>): string =>
+  pins.map(p => `${p.userName} slot ${p.slot}`).join(', ');
 
 export interface MacroToolsOptions {
   foundry: FoundryBridge;
@@ -70,95 +79,91 @@ export interface MacroToolsOptions {
 }
 
 export class MacroTools {
-  private foundry: FoundryBridge;
   private logger: Logger;
+  private union: UnionTool;
 
   constructor({ foundry, logger }: MacroToolsOptions) {
-    this.foundry = foundry;
     this.logger = logger.child({ component: 'MacroTools' });
+    this.union = unionTool({
+      name: MANAGE_MACROS,
+      description: 'World macros and user hotbar pins. GM-only.',
+      discriminators: ['action'],
+      members: [
+        unionMember({
+          select: { action: 'create' },
+          description: "Create a script or chat macro, optionally pinned to a user's hotbar.",
+          schema: CreateMacroSchema,
+          handler: async parsed => {
+            const r = await foundry.call('createMacro', parsed);
+            const pinned = r?.hotbar
+              ? `; pinned to ${r.hotbar.userName}'s slot ${r.hotbar.slot}`
+              : '';
+            return (
+              `Created ${r?.macro?.type} macro "${r?.macro?.name}" (${r?.macro?.id})${pinned}` +
+              warningBlock(r?.warnings)
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'list' },
+          description:
+            'List macros: id, name, type, author, pin count (verbose: pins + command preview).',
+          schema: ListMacrosSchema,
+          handler: async ({ nameFilter, user, verbose }) => {
+            const r = await foundry.call('listMacros', {
+              ...(nameFilter !== undefined ? { nameFilter } : {}),
+              ...(user !== undefined ? { user } : {}),
+            });
+            const macros = Array.isArray(r?.macros) ? r.macros : [];
+            const records = macros.map(m => {
+              const pins = Array.isArray(m.hotbar) ? m.hotbar : [];
+              return {
+                id: m.id,
+                name: m.name,
+                type: m.type,
+                author: m.author ?? null,
+                pins: pins.length,
+                hotbar: pins.length ? pinText(pins) : null,
+                command: m.commandPreview
+                  ? String(m.commandPreview).replace(/\s+/g, ' ').trim()
+                  : null,
+              };
+            });
+            return listLines(
+              `${records.length} macro(s)`,
+              verbose ? VERBOSE_COLUMNS : LIST_COLUMNS,
+              records
+            );
+          },
+        }),
+        unionMember({
+          select: { action: 'delete' },
+          description: 'Delete macros and the hotbar slots that pointed at them.',
+          schema: DeleteMacrosSchema,
+          handler: async parsed => {
+            const r = await foundry.call('deleteMacros', parsed);
+            const deleted = Array.isArray(r?.deleted) ? r.deleted : [];
+            const scrubbed = Array.isArray(r?.scrubbedHotbarSlots) ? r.scrubbedHotbarSlots : [];
+            const missing = Array.isArray(r?.missing) ? r.missing : [];
+            return (
+              `Deleted ${deleted.length} macro(s): ` +
+              deleted.map(m => `"${m.name}" (${m.id})`).join(', ') +
+              (scrubbed.length ? `; hotbar slots scrubbed: ${pinText(scrubbed)}` : '') +
+              (missing.length ? ` (${missing.length} not found: ${missing.join(', ')})` : '')
+            );
+          },
+        }),
+      ],
+    });
   }
 
   getToolDefinitions() {
-    return [
-      {
-        name: 'create-macro',
-        description:
-          "Create a world Macro (script or chat), optionally owned by and pinned to a user's " +
-          'hotbar. GM-only.',
-        inputSchema: toInputSchema(CreateMacroSchema),
-      },
-      {
-        name: 'list-macros',
-        description:
-          'Macros: name, id, type, author, pin count (verbose: each pin and a command preview); ' +
-          'filtered by name substring or pinning user.',
-        inputSchema: toInputSchema(ListMacrosSchema),
-      },
-      {
-        name: 'delete-macro',
-        description:
-          'Delete world macros by id or exact name, and the hotbar slots that pointed at them. ' +
-          'GM-only.',
-        inputSchema: toInputSchema(DeleteMacroSchema),
-      },
-    ];
+    return [this.union.def];
   }
 
-  async handleCreateMacro(args: any): Promise<string> {
-    const parsed = CreateMacroSchema.parse(args ?? {});
-    const r = await this.foundry.call('createMacro', parsed);
-    const lines = [`✅ Created ${r?.macro?.type} macro "${r?.macro?.name}" (\`${r?.macro?.id}\`)`];
-    if (r?.hotbar) {
-      lines.push(`**Hotbar:** ${r.hotbar.userName}'s slot ${r.hotbar.slot}`);
-    }
-    const warns = Array.isArray(r?.warnings) ? r.warnings : [];
-    if (warns.length) {
-      lines.push('', `⚠️ ${warns.length} warning(s):`, ...warns.map((w: string) => `- ${w}`));
-    }
-    return lines.join('\n');
-  }
-
-  async handleListMacros(args: any): Promise<string> {
-    const { nameFilter, user, verbose } = ListMacrosSchema.parse(args ?? {});
-    const r = await this.foundry.call('listMacros', {
-      ...(nameFilter !== undefined ? { nameFilter } : {}),
-      ...(user !== undefined ? { user } : {}),
-    });
-    const macros = Array.isArray(r?.macros) ? r.macros : [];
-    if (macros.length === 0) return 'No macros in this world.';
-    const lines = macros.map((m: any) => {
-      const pins = Array.isArray(m.hotbar) ? m.hotbar : [];
-      const pinText = !pins.length
-        ? ''
-        : verbose
-          ? ` · hotbar: ${pins.map((p: any) => `${p.userName} slot ${p.slot}`).join(', ')}`
-          : ` · ${pins.length} pin(s)`;
-      const preview =
-        verbose && m.commandPreview ? `\n    ${String(m.commandPreview).replace(/\s+/g, ' ')}` : '';
-      return `- **${m.name}** (\`${m.id}\`) — ${m.type}${m.author ? ` · by ${m.author}` : ''}${pinText}${preview}`;
-    });
-    return `${macros.length} macro(s):\n${lines.join('\n')}`;
-  }
-
-  async handleDeleteMacros(args: any): Promise<string> {
-    const parsed = DeleteMacroSchema.parse(args ?? {});
-    const r = await this.foundry.call('deleteMacros', parsed);
-    const deleted = Array.isArray(r?.deleted) ? r.deleted : [];
-    const lines = [
-      `🗑️ Deleted ${deleted.length} macro(s): ${deleted.map((m: any) => `"${m.name}"`).join(', ')}`,
-    ];
-    const scrubbed = Array.isArray(r?.scrubbedHotbarSlots) ? r.scrubbedHotbarSlots : [];
-    if (scrubbed.length) {
-      lines.push(
-        `**Hotbar slots scrubbed:** ${scrubbed
-          .map((s: any) => `${s.userName} slot ${s.slot}`)
-          .join(', ')}`
-      );
-    }
-    const missing = Array.isArray(r?.missing) ? r.missing : [];
-    if (missing.length) {
-      lines.push(`⚠️ Not found (skipped): ${missing.join(', ')}`);
-    }
-    return lines.join('\n');
+  /** Route one macro tool call to its member (registry-facing). */
+  async handle(name: string, args: unknown): Promise<unknown> {
+    if (name !== MANAGE_MACROS) throw new Error(`Unknown macro tool: ${name}`);
+    return this.union.handle(args);
   }
 }

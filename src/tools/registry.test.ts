@@ -66,7 +66,8 @@ describe('tool registry', () => {
     // (update-world was built and DROPPED 2026-07-06: /setup editWorld needs a role-4 bridge
     //  user and Claude deliberately stays ASSISTANT — see src/page/world.ts header.)
     // + create-macro / list-macros / delete-macro (world Macro documents + user hotbar pins —
-    //   hand a player a one-click button, e.g. a weapon-mastery Graze roll)
+    //   hand a player a one-click button, e.g. a weapon-mastery Graze roll; since M8 the three
+    //   are the actions of ONE tool, manage-macros)
     // + configure-combat-tracker (core.combatTrackerConfig: custom turn marker / resource /
     //   skip-defeated — the first game-SETTING writer, deliberately one typed tool per setting;
     //   settings are NOT the dropped update-world metadata)
@@ -104,7 +105,8 @@ describe('tool registry', () => {
     //   kind × action members of ONE tool, manage-placeables (src/tools/_union.ts); the other
     //   placeable kinds joined it in their own family commits — sounds (−4), notes (−4),
     //   tokens (−4), regions (−7 incl. the teleporter / behavior / remap specials): 35 → 1.
-    expect(names.length).toBe(117);
+    // − 2 (M8): create-macro / list-macros / delete-macro → manage-macros (action).
+    expect(names.length).toBe(115);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -532,7 +534,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(117);
+    expect(tools.length).toBe(115);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

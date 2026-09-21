@@ -355,3 +355,22 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   verify-teleporter-scene-fields 13/13, integration 80 passed / 6 skipped. What a deferred
   client now loads on first use of any placeable: 48.4k chars ≈ 13.4k tokens, once per session.
   Next: macros → folders → playlists → cards → tables → items → journals → scenes → actors.
+- 2026-09-21 — **M8 macros → `manage-macros`** (`action`: create / list / delete): 3 tools → 1,
+  the union **2,056** against the three's **2,057** (−0.05%). The small-family overhead measured:
+  the naive fold was 2,238 (+8.8% — the `action` enum, three `const`s and three member wrappers
+  are ≈ 300 chars a three-member family cannot amortise); paid for in prose that said nothing the
+  schema did not: "GM-only" once in the family description, the `type` leaf's "Default script."
+  (the advertised `default` already says it), the list description no longer restating its own
+  filter leaves, the delete leaf's "Find them with list-macros", the img leaf tightened.
+  tools/list 203,760, names 115 (8,613 chars). The list moves to the §3 line shape —
+  `N macro(s): id name type author pins`, verbose appends `hotbar command`, an empty result is
+  the header alone — and create / delete are one-line confirmations (the `✅` / `🗑️` markdown
+  gone). The §3 line helpers are now shared: `src/utils/lines.ts` (`listLines` / `cell` /
+  `warningBlock`), the placeables formatter re-pointed to it — every family from here uses the
+  same three. Re-pointed: nothing in `.claude/skills` or the siblings named a macro tool
+  (skills-matrix 0 / 0); tool-results and the registry tests. Decision #20 for the three: kept as
+  actions (the hand-a-player-a-one-click-button op is a GM ask no skill scripts yet). Live:
+  verify-macro-tooling **38/38** with the new section 9 (create / list / verbose + user filter /
+  delete through `dispatch`, the three refusals, the member refinement surviving dispatch),
+  verify-placeables-tooling 87/87 (the moved formatter), integration 80 passed / 6 skipped.
+  Next: folders → playlists → cards → tables → items → journals → scenes → actors.

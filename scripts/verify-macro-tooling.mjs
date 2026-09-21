@@ -1,5 +1,5 @@
-// Live verification: create-macro / list-macros / delete-macro — the macro namespace
-// (src/page/macros.ts).
+// Live verification: manage-macros (action create / list / delete; src/tools/macros.ts, the M8
+// union over src/tools/_union.ts) and the macro namespace under it (src/page/macros.ts).
 //
 // Claims under test:
 //   1. createMacro creates a script macro with the stock icon, grants the hotbar user OWNER,
@@ -11,11 +11,18 @@
 //   6. listMacros surfaces the macros with their hotbar pins.
 //   7. deleteMacros scrubs the user's hotbar slots and deletes the documents.
 //   8. Guards: missing command, hotbarSlot without hotbarUser, unknown user, unknown macro.
+//   9. manage-macros through buildToolRegistry().dispatch: the three per-op tools are gone; create
+//      answers the one-line confirmation with the pin; list is the §3 line shape (header + one row
+//      per macro, verbose appends the hotbar / command columns, the user filter narrows it);
+//      delete confirms with the scrubbed slots and the missing tail; an unknown action / key is
+//      refused by name against the selected member; the member refinement survives dispatch.
 //
 // Drives a real headless Foundry session (fresh dist/, no CC restart). Throwaway fixture user +
 // macros, cleaned in finally. Build first: npm run build. Run: node scripts/verify-macro-tooling.mjs
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
+import { Logger } from '../dist/logger.js';
+import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
 const env = loadEnv();
@@ -33,7 +40,8 @@ function assert(cond, msg) {
   }
 }
 
-const f = new Foundry(bridgeConfig(env));
+const cfg = bridgeConfig(env);
+const f = new Foundry(cfg);
 
 let userId;
 
@@ -184,6 +192,91 @@ try {
     unknownMacro = /no macros matched/.test(e?.message || '');
   }
   assert(unknownMacro, 'deleting only unknown identifiers errors');
+
+  console.log('# 9) manage-macros through dispatch (the M8 union: action create / list / delete)');
+  const { dispatch, tools } = buildToolRegistry({
+    foundry: f,
+    logger: new Logger({ level: 'error' }),
+    host: cfg.host,
+  });
+  const names = new Set(tools.map(t => t.name));
+  assert(
+    names.has('manage-macros') &&
+      ['create-macro', 'list-macros', 'delete-macro'].every(n => !names.has(n)),
+    '9 — manage-macros is advertised, the three per-op tools are gone'
+  );
+  const mm = args => dispatch('manage-macros', args);
+  const c1 = String(
+    await mm({
+      action: 'create',
+      name: `${TAG} Dispatch`,
+      command: 'console.log(9)',
+      hotbarUser: userId,
+    })
+  );
+  const c1Id = /\((\w+)\)/.exec(c1)?.[1];
+  assert(
+    !!c1Id && c1 === `Created script macro "${TAG} Dispatch" (${c1Id}); pinned to ${TAG}'s slot 1`,
+    `9 — create: the one-line confirmation with the pin (${c1})`
+  );
+  const c2 = String(
+    await mm({ action: 'create', name: `${TAG} Chat 9`, command: 'Hi there', type: 'chat' })
+  );
+  const c2Id = /\((\w+)\)/.exec(c2)?.[1];
+  assert(!!c2Id && c2 === `Created chat macro "${TAG} Chat 9" (${c2Id})`, `9 — create chat: ${c2}`);
+  const l1Lines = String(await mm({ action: 'list', nameFilter: TAG })).split('\n');
+  assert(
+    l1Lines[0] === '2 macro(s): id name type author pins' && l1Lines.length === 3,
+    `9 — list: the header + one row per macro (${l1Lines[0]} / ${l1Lines.length - 1} rows)`
+  );
+  const rowDispatch = l1Lines.find(x => x.startsWith(`${c1Id} `)) ?? '';
+  const rowChat = l1Lines.find(x => x.startsWith(`${c2Id} `)) ?? '';
+  assert(
+    rowDispatch.startsWith(`${c1Id} "${TAG} Dispatch" script `) && rowDispatch.endsWith(' 1'),
+    `9 — list row: id, quoted name, type, author, pin count (${rowDispatch})`
+  );
+  assert(
+    rowChat.startsWith(`${c2Id} "${TAG} Chat 9" chat `) && rowChat.endsWith(' 0'),
+    `9 — list row: an unpinned chat macro (${rowChat})`
+  );
+  const l2Lines = String(await mm({ action: 'list', user: userId, verbose: true })).split('\n');
+  assert(
+    l2Lines[0] === '1 macro(s): id name type author pins hotbar command' &&
+      l2Lines.length === 2 &&
+      l2Lines[1].startsWith(`${c1Id} "${TAG} Dispatch" script `) &&
+      l2Lines[1].endsWith(` 1 "${TAG} slot 1" console.log(9)`),
+    `9 — list verbose + user filter: the hotbar and command columns (${l2Lines[1]})`
+  );
+  assert(
+    String(await mm({ action: 'list', nameFilter: 'ZZ-no-such-macro-name' })) === '0 macro(s).',
+    '9 — an empty list is the header alone'
+  );
+  for (const [args, want] of [
+    [
+      { action: 'update', macros: ['x'] },
+      'action must be one of "create", "list", "delete" (got "update")',
+    ],
+    [{ action: 'delete', ids: ['x'] }, 'unknown argument "ids" — it takes: action, macros'],
+    [
+      { action: 'create', name: 'x', command: 'x', hotbarSlot: 2 },
+      'hotbarSlot requires hotbarUser',
+    ],
+  ]) {
+    let msg = '';
+    try {
+      await mm(args);
+    } catch (e) {
+      msg = e?.message ?? String(e);
+    }
+    assert(msg.includes(want), `9 — refused by name: ${want.slice(0, 60)}`);
+  }
+  const d1 = String(await mm({ action: 'delete', macros: [c1Id, `${TAG} Chat 9`, 'ZZ-NOPE-9'] }));
+  assert(
+    d1 ===
+      `Deleted 2 macro(s): "${TAG} Dispatch" (${c1Id}), "${TAG} Chat 9" (${c2Id}); ` +
+        `hotbar slots scrubbed: ${TAG} slot 1 (1 not found: ZZ-NOPE-9)`,
+    `9 — delete: the confirmation with the scrubbed slot and the missing tail (${d1})`
+  );
 } finally {
   await f
     .evaluate(

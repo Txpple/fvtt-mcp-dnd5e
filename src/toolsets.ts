@@ -148,9 +148,7 @@ export const TOOLSETS = {
     'delete-folder',
     'move-documents',
     'bulk-delete',
-    'create-macro',
-    'list-macros',
-    'delete-macro',
+    'manage-macros',
   ],
 } as const satisfies Record<string, readonly string[]>;
 

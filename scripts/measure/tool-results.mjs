@@ -53,7 +53,7 @@ const CALLS = [
   ['manage-placeables', { kind: 'notes', action: 'list' }],
   ['list-actor-ownership', {}],
   ['list-cards', {}],
-  ['list-macros', {}],
+  ['manage-macros', { action: 'list' }],
 ];
 
 const child = spawn(process.execPath, [SERVER], {

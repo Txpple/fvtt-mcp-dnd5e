@@ -7,6 +7,7 @@
 // prose "not found" inside a success-shaped result.
 
 import { FormattedToolError } from './error-handler.js';
+import { listLines, warningBlock } from './lines.js';
 
 function sceneMiss(notFound: string, tail: string): never {
   throw new FormattedToolError(`Scene not found: "${notFound}". ${tail}`);
@@ -50,11 +51,6 @@ interface DeleteResult {
   warnings?: string[] | undefined;
 }
 
-function warningBlock(warnings?: string[]): string {
-  if (!Array.isArray(warnings) || warnings.length === 0) return '';
-  return `\n\n⚠️ ${warnings.length} warning(s):\n${warnings.map(w => `- ${w}`).join('\n')}`;
-}
-
 /** "Created N tile(s) on "Scene" (id)" + one line per created id, + per-item errors + warnings. */
 export function formatCreatePlaceables(r: CreateResult, noun: string): string {
   if (r?.notFound) sceneMiss(r.notFound, `No ${noun}s created.`);
@@ -78,9 +74,9 @@ export function formatCreatePlaceables(r: CreateResult, noun: string): string {
 
 /**
  * List: one line per placeable under a header naming the scene and the column order — the
- * design.md §3 list shape (decision #10: line records are ~40% smaller than the same fields as
- * JSON). Columns are the descriptor's dump fields in its order, `id` first; a field only some
- * records carry (a tile's `name`, a wall's `doorSound`) is a column too, `-` where absent.
+ * design.md §3 list shape (src/utils/lines.ts). Columns are the descriptor's dump fields in its
+ * order, `id` first; a field only some records carry (a tile's `name`, a wall's `doorSound`) is
+ * a column too, `-` where absent.
  *
  *   3 tile(s) on "Cave" (sc1) [active]: id x y width height rotation …
  *   tileA 100 100 200 200 0 …
@@ -90,22 +86,11 @@ export function formatListPlaceableLines(r: ListResult, noun: string): string {
   const items = Array.isArray(r?.items) ? r.items : [];
   const active = r?.sceneActive ? ' [active]' : '';
   const head = `${items.length} ${noun}(s) on "${r?.sceneName}" (${r?.sceneId})${active}`;
-  if (items.length === 0) return `${head}.`;
   const columns = ['id'];
   for (const it of items) {
     for (const key of Object.keys(it)) if (!columns.includes(key)) columns.push(key);
   }
-  const rows = items.map(it => columns.map(c => cell(it[c])).join(' '));
-  return `${head}: ${columns.join(' ')}\n${rows.join('\n')}`;
-}
-
-/** One cell of a list line: `-` for a missing value, a bare token where it can be, JSON otherwise. */
-function cell(v: unknown): string {
-  if (v === undefined || v === null) return '-';
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  if (typeof v === 'string') return v !== '' && !/\s/.test(v) ? v : JSON.stringify(v);
-  if (Array.isArray(v) && v.every(x => typeof x === 'number')) return v.join(',');
-  return JSON.stringify(v);
+  return listLines(head, columns, items);
 }
 
 /** "Updated N of M matched tile(s) on "Scene" (id)" + unresolved ids + warnings. */

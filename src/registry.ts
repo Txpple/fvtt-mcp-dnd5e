@@ -388,10 +388,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     'update-user': args => userTools.handleUpdateUser(args),
     'set-user-avatar': args => userTools.handleSetUserAvatar(args),
 
-    // Macros (world Macro documents + user hotbar pins)
-    'create-macro': args => macroTools.handleCreateMacro(args),
-    'list-macros': args => macroTools.handleListMacros(args),
-    'delete-macro': args => macroTools.handleDeleteMacros(args),
+    // Macros (world Macro documents + user hotbar pins) — ONE tool (action; M8)
+    'manage-macros': args => macroTools.handle('manage-macros', args),
 
     // Combat tracker (the core.combatTrackerConfig world setting — custom turn marker etc.)
     'configure-combat-tracker': args => combatTrackerTools.handleConfigureCombatTracker(args),
