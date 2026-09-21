@@ -34,7 +34,7 @@ if (-not (Test-Path $py)) {
     Write-Host '== Creating venv =='
     # Prefer a SIGNED python.org install if one exists: Windows Application Control policies
     # can block uv-managed (python-build-standalone) interpreters' DLLs (_ctypes) outright —
-    # seen on DESKTOP-NY 2026-08-25. Signed CPython passes; uv's build is the fallback.
+    # seen on one machine 2026-08-25. Signed CPython passes; uv's build is the fallback.
     # Version-aware pick: numeric sort so Python313 beats Python39; skips 32-bit "-32" dirs;
     # floors at 3.12 (the old pin) so an ancient signed install never silently downgrades us.
     $signed = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe" -ErrorAction SilentlyContinue |

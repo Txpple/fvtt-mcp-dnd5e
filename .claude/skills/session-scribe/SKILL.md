@@ -15,45 +15,55 @@ Craig records the table (one audio track per speaker); Foundry's chat log record
 carries its own `startTime` — so the two timelines align by pure wall-clock arithmetic. No sync
 ritual, no markers, no Discord integration. The user pastes one link; everything else is yours.
 
-**The user's contract (locked 2026-07-06, notes-repo memory `session-recording-pipeline`):**
-`/join` Craig at session start → play → `/stop` → paste Claude the link. That is ALL. Do not ask
-them to mark, note, export, or download anything. If they said "mark that" aloud during play, it
-is IN the transcript — grep for it.
+**The user's contract:** `/join` Craig at session start → play → `/stop` → paste Claude the link.
+That is ALL. Do not ask them to mark, note, export, or download anything. If they said "mark that"
+aloud during play, it is IN the transcript — grep for it.
 
-## Machine prerequisites (once per machine)
+## The campaign repo (read this first)
 
-Run `scripts/setup.ps1` (idempotent — installs ffmpeg + uv via winget, builds the
-`~\.session-scribe\venv` with faster-whisper + CUDA wheels, smoke-tests the GPU stack):
+Every campaign fact this skill needs comes from the campaign repo
+([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)) — locate it, **pull it**, and read:
+
+- `campaign.json` — `name`, `worldId` (refuse to write when `get-world-info` reports another
+  world), `party` (the snapshot roster — nothing else is a PC; `excludedActors` never), `journals.sessionDiary`, `sessions.dir` / `outputs` / `pdf` / `skewSeconds`, `snapshots.dir`.
+- `STYLE.md` — the house style, in full, before writing a word. What it does not cover falls to
+  the defaults under "Judgment notes" below.
+
+A campaign with no `campaign.json` gets one before the first run (ask for the roster and the
+journal name; the defaults are in the convention file).
+
+## Machine prerequisites (once per machine) — Windows
+
+The bundled toolchain is **Windows-only** as shipped: `scripts/setup.ps1` (idempotent — installs
+ffmpeg + uv via winget, builds the `~\.session-scribe\venv` with faster-whisper + CUDA wheels,
+smoke-tests the GPU stack), and the PDF step renders with a headless browser found at a Windows
+path. The Python script itself (`scripts/session_scribe.py`) is portable — on another OS build the
+venv by hand (ffmpeg, Python ≥ 3.12, `faster-whisper`) and render PDFs with any headless browser.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .claude\skills\session-scribe\scripts\setup.ps1 -PrefetchModel
 ```
 
-`SMOKE TEST OK` = CUDA works. `OK (CPU ONLY)` = transcription still works, just slower — on a
-new GPU generation this usually means ctranslate2 needs a version bump for the new compute
-capability (`uv pip install --python ~\.session-scribe\venv\Scripts\python.exe -U ctranslate2`),
-then re-run the smoke test. Machines verified: RTX 4070 laptop ✅ (2026-07-06), DESKTOP-NY ✅
-(2026-08-25, cuda/float16 — ~2.9h × 5 tracks in <5 min, on signed Python 3.13; hardened
-setup.ps1 re-verified end-to-end there 2026-08-26, incl. the signed-pick venv-creation path).
+`SMOKE TEST OK` = CUDA works. `OK (CPU ONLY)` = transcription still works, just slower — on a new
+GPU generation this usually means ctranslate2 needs a version bump for the new compute capability
+(`uv pip install --python ~\.session-scribe\venv\Scripts\python.exe -U ctranslate2`), then re-run
+the smoke test.
 
-**Known failure — Windows Application Control blocks the uv-managed Python** (hit on DESKTOP-NY
-2026-08-25): `ImportError: DLL load failed while importing _ctypes: An Application Control
-policy has blocked this file.` The uv/python-build-standalone interpreter's DLLs trip the
-policy; a venv on a SIGNED python.org install passes. Fix: `winget install Python.Python.3.13`
-→ delete `~\.session-scribe\venv` → re-run setup.ps1 (it prefers the newest signed 3.12+ install
-when one exists, and its ctypes probe fails fast with these instructions BEFORE the ~1.3 GB wheel
-download — the smoke test would also catch the block, but only after it). faster-whisper + CUDA
-wheels work fine on 3.13. Never work around this by touching the App Control policy itself.
-If a broken venv was renamed aside as `~\.session-scribe\venv-blocked-*` (~1.3 GB each), delete
-those backups once the rebuilt venv passes the smoke test — setup.ps1 lists any it finds.
+**Known failure — Windows Application Control blocks the uv-managed Python:** `ImportError: DLL
+load failed while importing _ctypes: An Application Control policy has blocked this file.` The
+uv / python-build-standalone interpreter's DLLs trip the policy; a venv on a SIGNED python.org
+install passes. Fix: `winget install Python.Python.3.13` → delete `~\.session-scribe\venv` →
+re-run setup.ps1 (it prefers the newest signed 3.12+ install when one exists, and its ctypes probe
+fails fast with these instructions BEFORE the ~1.3 GB wheel download). faster-whisper + CUDA wheels
+work fine on 3.13. Never work around this by touching the App Control policy itself. If a broken
+venv was renamed aside as `~\.session-scribe\venv-blocked-*` (~1.3 GB each), delete those backups
+once the rebuilt venv passes the smoke test — setup.ps1 lists any it finds.
 
 ## The pipeline (per session)
 
 Let `PY = %USERPROFILE%\.session-scribe\venv\Scripts\python.exe`,
 `SCRIBE = .claude\skills\session-scribe\scripts\session_scribe.py`, and
-`SDIR = <campaign-repo>\sessions\YYYY-MM-DD` (the session's real date; campaign repo per the
-campaign-repos memory — active: `fvtt-campaign-greenrest`). **Pull the campaign repo first**
-(two-machines rule).
+`SDIR = <campaign-repo>\<sessions.dir>\YYYY-MM-DD` (the session's real date).
 
 1. **Fetch** — `& $PY $SCRIBE fetch "<craig-link>" --session-dir $SDIR`
    Downloads the multitrack FLAC zip via Craig's API (cook → poll → `/dl/`), extracts to
@@ -62,200 +72,95 @@ campaign-repos memory — active: `fvtt-campaign-greenrest`). **Pull the campaig
    after 7 days — if fetch 404/410s, tell the user immediately.
 2. **Transcribe** — `& $PY $SCRIBE transcribe --session-dir $SDIR`
    Per-track faster-whisper (default `large-v3-turbo`, VAD on). Long: minutes on a big GPU,
-   ~real-time÷8 on CPU — run it in the background and keep working.
+   ~real-time÷8 on CPU — run it detached (a shell background task's timeout can kill a long run,
+   and the script writes its output at the END) and keep working.
 3. **Export the chat log** — call the `export-chat-log` MCP tool:
    `format: "json"`, `localPath: <SDIR>\chatlog.json`, and `sinceTimestamp` = Craig's
    `startTime` (from craig-info.json) minus ~10 min, to keep the export lean.
-4. **Align** — `& $PY $SCRIBE align --session-dir $SDIR`
+4. **Align** — `& $PY $SCRIBE align --session-dir $SDIR [--skew-seconds <sessions.skewSeconds>]`
    Interleaves speech paragraphs with 🎲 rolls / 💬 chat / 🤫 whispers into `transcript.md`,
-   sliced to the recording window. **First run on a new Craig+Foundry pairing:** verify skew —
+   sliced to the recording window. **First run on a new Craig + Foundry pairing:** verify skew —
    find a moment where the DM says a roll aloud ("make a dex save") and compare its speech
-   timestamp to the roll's; if they differ by more than ~5s, re-run with `--skew-seconds` and
-   record the value in the pipeline memory.
-5. **Write the artifacts** (your judgment — read transcript.md fully first):
-   - `combat-stats.md` + `combat-log.html` — the combat-flow report, from the
-     `get-combat-stats` MCP tool. **Standard artifact since 2026-09-01** — see "combat log
-     house style" below; template at `templates/combat-log.html`.
+   timestamp to the roll's; if they differ by more than ~5 s, re-run with `--skew-seconds` and
+   record the value in `campaign.json`.
+5. **Write the artifacts** (your judgment — read transcript.md fully first). The set is
+   `sessions.outputs`; each is a `.md` and, where a template exists, an `.html` (+ `.pdf` when
+   `sessions.pdf`):
    - `recap.md` — the canonical session record: what happened, in order, with names. GM voice,
-     complete, spoiler-tolerant.
-   - `gm-notes-story.md` + `gm-notes-story.html` — **plot only**: what changed in the world,
-     what is now canon (said out loud, on tape), promises made and their status, threads left
-     open, loot with story weight, quotes of the night. Nothing about the system or the table.
-   - `gm-notes-mechanics.md` + `gm-notes-mechanics.html` — **system and table only**:
-     bookkeeping checklist to apply to the live world (levels, items, coin, renames), automation
-     that cost time ranked by minutes lost (e.g. Battle Flow rolling saves for Careful-Spell-
-     excluded allies), rulings made so they stay consistent, player/table observations, and a
-     pointer to the combat report. Both GM-notes HTMLs come from `templates/gm-notes.html`.
-     (Owner directive 2026-09-09, session 7: the single `gm-notes.md` was split into these two —
-     "story notes are plot-related things I should know; mechanics are your observations like
-     we need to fix Battle Flow for Fireball/Careful Spell taking lots of time.")
+     complete, spoiler-tolerant; exact numbers welcome.
    - `recap.html` — from `templates/recap.html`, filling every placeholder. **Player-safe by
      construction**: written ONLY from what the players saw at the table; nothing that appears
-     solely in the gm-notes files or GM whispers may appear here. The user pastes this into an
-     email — it must render in Gmail/Outlook (keep the inline-style table structure intact).
-     **House style (owner-locked 2026-07-08, session 1):** see "recap.html house style" below.
-   - **Four documents, HTML + PDF, every session (owner directive 2026-09-09).** The output set
-     is exactly: **1 player recap · 2 combat stats · 3 GM notes — story · 4 GM notes —
-     mechanics.** Each exists as `.html` AND `.pdf` in the session dir (`recap`, `combat-log`,
-     `gm-notes-story`, `gm-notes-mechanics`). Render the PDFs with Edge headless — it honours
-     the print CSS in the templates (one call per document, `-Wait`):
-     ```powershell
-     Start-Process "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -Wait -NoNewWindow `
-       -ArgumentList @("--headless=new","--disable-gpu","--no-pdf-header-footer",
-                       "--print-to-pdf=`"<SDIR>\recap.pdf`"","`"file:///<SDIR as forward slashes>/recap.html`"")
-     ```
-     Check each PDF is >20 KB — a ~1 KB file means the page didn't load. When the user asks for
-     "the docs", copy the eight files to a `Desktop\<Campaign> Session N` folder.
-6. **Snapshot the party (owner directives 2026-08-06 + 2026-08-16)** — two artifacts per
-   session date, both committed:
-   - **Full JSON backup (the durable record):** for EACH party PC, call the `manage-actors` `export`
-     MCP tool → `<campaign-repo>\party-snapshots\YYYY-MM-DD\<PC>.json` (`overwrite: true`
-     when re-running the same date). This is the complete native Foundry export — every
-     item's `system.uses.value` (wand charges, potion counts), effects, attunement,
-     ownership — and it restores via the actor sheet's **Import Data** button. The party
-     roster only, per the campaign repo's PC rules; never DM test PCs like Salyth.
-     (Origin lesson, session 3: "how many charges on Gren's Wand of Magic Missiles?" was
-     unanswerable from the `.md` summary and had to be dug out of the transcript. The JSON
-     carries what nobody thought to transcribe. If `manage-actors` `export` is missing from the tool
-     list, the MCP server predates it — restart Claude Code on server ≥ 2026-08-26.)
-   - **Human digest (the story):** `party-snapshots\YYYY-MM-DD.md` from the LIVE sheets
-     (`manage-actors` `get`). Per PC: class/subclass + LEVEL, HP max, AC, the six ability scores,
-     feats/ASIs taken, weapon masteries, spell slots, attuned + equipped magic items, and
-     notable consumables **with their remaining charges/doses/counts** (the table-critical
-     numbers belong in the digest too). One file per session date, diffable against the
-     last — this answers "what did <PC> have before?" after level-ups, deaths, or loot
-     disputes.
-7. **Commit** — in the campaign repo: `git add sessions/<date> party-snapshots` → commit
-   (`session: <date> — <short title>`) → push. `audio/` is gitignored (bulky, and the
-   transcript is the durable artifact); tell the user audio stays local and can be deleted
-   once they're happy with the transcript.
+     solely in the GM notes or GM whispers may appear here. The user pastes this into an email —
+     it must render in Gmail / Outlook (keep the inline-style table structure intact).
+   - `combat-stats.md` + `combat-log.html` — the combat report, from the `get-combat-stats` MCP
+     tool (a world running the companion battleflow module; otherwise say so and skip it);
+     template `templates/combat-log.html`. GM-facing: exact numerals wanted.
+   - `gm-notes.md` + `.html`, or the split pair `gm-notes-story` (plot: what changed in the world,
+     what is now canon, promises and their status, open threads, loot with story weight, quotes)
+     and `gm-notes-mechanics` (bookkeeping checklist to apply to the live world — levels, items,
+     coin, renames; automation that cost time; rulings to keep consistent; table observations).
+     Both from `templates/gm-notes.html`.
+   - PDFs: render each HTML with a headless browser honouring the templates' print CSS (Edge on
+     Windows: `msedge.exe --headless=new --disable-gpu --no-pdf-header-footer
+     --print-to-pdf=<out> file:///<html>`); a ~1 KB PDF means the page didn't load.
+6. **Snapshot the party** — two artifacts per session date, both committed, for the `party` in
+   `campaign.json` and no one else:
+   - **Full JSON backup (the durable record):** for EACH PC, `manage-actors` `export` →
+     `<campaign-repo>\<snapshots.dir>\YYYY-MM-DD\<PC>.json` (`overwrite: true` when re-running
+     the same date). This is the complete native Foundry export — every item's
+     `system.uses.value` (wand charges, potion counts), effects, attunement, ownership — and it
+     restores via the actor sheet's **Import Data** button. The `.md` digest cannot answer "how
+     many charges were left"; the JSON can.
+   - **Human digest (the story):** `<snapshots.dir>\YYYY-MM-DD.md` from the LIVE sheets
+     (`manage-actors` `get`). Per PC: class / subclass + LEVEL, HP max, AC, the six ability scores,
+     feats / ASIs taken, weapon masteries, spell slots, attuned + equipped magic items, and notable
+     consumables **with their remaining charges / doses / counts**. One file per session date,
+     diffable against the last — this answers "what did <PC> have before?" after level-ups,
+     deaths, or loot disputes.
+7. **The session-diary page** — when `journals.sessionDiary` is set: append ONE player-visible
+   text page to that journal (`manage-journals` `update` with `newPageName` + `playerVisible:
+   true`), named `Session N — <title>`, the date in the body; the same player-safe boundary and
+   register as recap.html. Never a journal per session.
+8. **Commit** — in the campaign repo: `git add <sessions.dir>/<date> <snapshots.dir>` → commit
+   (`session: <date> — <short title>`) → push. `audio/` is gitignored (bulky; the transcript is the
+   durable artifact); tell the user audio stays local and can be deleted once they're happy with
+   the transcript.
 
-## Judgment notes
+## Judgment notes (the defaults — `STYLE.md` overrides)
 
-- **Recap voice:** in-world chronicle, not minutes. Lead with the arc, keep table-talk out,
-  name PCs and NPCs. The TL;DR paragraph is one breath; section headings are story beats.
-- **recap.html house style (owner-locked 2026-07-08, iterated live on session 1):**
-  - **Third person, always (owner feedback 2026-09-09, session 7).** The recap is a chronicle
-    about the party, never addressed to them: "all four of them dreamed", "the priest came up to
-    meet them", "the mayor bought them eggs", "level six, all four of them". The session-7 first
-    draft slid into second person in six places ("all four of you dreamed", "bought you eggs",
-    "your power does not come down from Lathander") and the owner sent it back. The only
-    permitted "you/your/we/our" is inside quoted or italicised dialogue. **Before shipping, grep
-    the HTML for `\b(you|your|yours|we|our|us)\b` and check every hit is inside a quote** —
-    reported speech ("the priest argued that your power…") counts as a slip; rewrite it as
-    third-person reported speech ("that Thomas's power…"). The Session Diary page follows the
-    same rule.
-  - **Dice as narrative, never numerals.** Weave the blow-by-blow of checks, crits, failed
-    saves, and big hits into the prose at FULL detail — but the WORDS carry the magnitude, not
-    the numbers. Crit → "his blade found the perfect seam"; nat-20 lore check → "his temple
-    schooling surfaced with perfect, word-for-word clarity"; failed save → "neither had the
-    will to shake it"; near-death → "beaten to the ragged edge of standing." NO raw numerals
-    in the prose (owner tried a numbers version — "27 to hit, 15 radiant" — and rejected it as
-    hard to read; the narrative-weave rewrite is the approved form).
-  - **Name the mechanics (owner feedback 2026-08-12, session 3).** When a PC or monster
-    invokes a spell, feature, feat, maneuver, or mastery, CALL IT BY ITS GAME NAME — Magic
-    Missile, Vow of Enmity, Relentless Endurance, Thunderous Smite, Action Surge, Hunter's
-    Mark, Displacement — wrapped in a bit of flavor but direct about what was used. Do NOT
-    narrate around the ability ("magic that cannot miss", "his oath's enmity", "his orcish
-    blood refused the fall"): the session-3 first draft did exactly that and the owner sent it
-    back. Numerals stay out; names go in. **Styling (owner, 2026-08-12, two-part):** ability/
-    spell/feature names are ITALICS in Title Case when named or invoked — "<em>Magic
-    Missile</em>", "his <em>Relentless Endurance</em> refused the fall", "swore a <em>Vow of
-    Enmity</em>", "<em>Displacement</em> kept its true body a step away" (first introduction).
-    BUT once a trait has been introduced and prose refers to it as a phenomenon, drop to
-    lowercase — "its light tore the <em>displacement</em> off the pack"; capitalizing it
-    mid-sentence there "is weird" (owner). Named magic items and NPCs keep plain Title Case
-    (First Light, Lantern of Revealing, Lae'zel).
-  - **Never surface the DM's narration prompts (owner feedback 2026-08-12).** When the DM asks
-    a player to narrate ("how would you like to kill him?"), the OUTPUT of that exchange is
-    the fiction — render it as straight narration/quote and never mention the asking. Rejected
-    form: "— Thomas, asked how he'd like to finish the alpha." The ask is table process, same
-    category as UI talk.
-  - **Dreams get bullets and specificity (owner feedback 2026-08-12).** The dream sequences are
-    the campaign's central reveal engine — never compress them into a summary paragraph. Give
-    the dream section a short framing paragraph, then ONE BULLET PER DREAMER carrying the
-    specific content: the imagery, the named people (Lae'zel, the sister, the wife and
-    children, the village elders), the emotional turn, and any anomalies (Jetten's moonstone
-    necklace glowing, dreaming in trance). Same treatment in the Session Diary page. When a
-    night is DREAMLESS, that absence is itself a called-out beat.
-  - **Fun endmatter, in-character only.** After Spoils & Progress, add two sections:
-    **Quotable Quotes** (the night's best verbatim table lines with dry one-line attributions
-    — in-character/in-world only) and **Deeds of the Day** (in-world superlative awards, one
-    per PC or so, e.g. "Arrow of the Day", "Finest Masonry in Faerûn"). NO meta, NO player
-    names, NO technical-issues talk anywhere in recap.html — UI/audio/browser troubles belong
-    in gm-notes-mechanics.md only.
-  - **Register: toned DOWN a notch (owner feedback 2026-07-15, session 2).** Narrative, not
-    purple: plain direct sentences, one flourish per paragraph is plenty. The first session-2
-    draft was rejected as "a bit too flowery" — cut phrases like "on the lair's own dark
-    heartbeat" / "truer than true"; keep the beats and the humor, lose the ornament.
-  - **Combat register: PUNCHY (owner feedback 2026-08-12, session 3).** Fight scenes are
-    exciting, with strong beats — short sentences, hard verbs, one beat per sentence, momentum
-    over ornament. "Thunder cracked across the ruin. The beast flew backward through Morgash's
-    reach — his opportunity strike killed it in the air." Long braided clauses and lyrical
-    similes are for the quiet scenes; in combat they read as flowery. Pair this with the
-    name-the-mechanics rule: named ability + hard verb + consequence is the unit of combat
-    prose.
-  - **Combat beats must be factually precise and credit smart play.** Who killed what is not
-    style-flexible (session-2 corrections: Gren's magic missiles killed the Broodmother, NOT
-    the wisp — the wisp escaped; Morgash earned explicit credit for reading the ettercap's
-    glances and dashing to block the door BEFORE the Broodmother burst through). When a
-    sentence about attacking X sits next to a kill of Y, make the target of each unmistakable.
-  - **Quote found-item text verbatim when it matters.** For a plot-loaded item, include the
-    full in-world item description — e.g. the Greenrest Tonic's vial description plus its
-    label line ("One swallow, seventh-day, as ever. — Selma.") — then note who read it aloud,
-    before any paraphrase.
-  - recap.md (the canonical GM record) is exempt: exact rolls/damage numbers are welcome there.
-  - Reference implementations: campaign repo `sessions/2026-07-14/recap.html` (the approved
-    register, after the tone-down) and `sessions/2026-07-07/recap.html` (structure/endmatter;
-    its prose runs a notch more florid than the approved register).
-- **Combat log house style (owner-locked 2026-09-01, session 6 — "that stats is perfect,
-  record it so that format is used going forward").** Reference implementation: campaign repo
-  `sessions/2026-08-31/combat-stats.md` + the Desktop HTML built from
-  `templates/combat-log.html`. It is **GM-facing**, so exact numerals are wanted here — the
-  no-numerals rule belongs to recap.html only. What makes the format work:
-  - **Open on the one headline fact, in numbers.** Session 6's was "one creature did 90% of the
-    damage to the party." Find that sentence first; the rest of the report supports it.
-  - **A required "what the buffs and features actually bought" section.** For every spell,
-    maneuver, mastery and feat that touched a number: what did it *produce*? Damage added,
-    damage prevented, misses converted, saves flipped, outcomes changed. Compute the
-    counterfactual where it exists — *Careful Spell prevented 71 damage for one sorcery point*
-    is the model line, arrived at by summing what each ally would have taken. **Name the duds
-    as plainly as the winners** — "Innate Sorcery raised the DC 15→16 and changed no outcome"
-    is exactly as useful to the DM as a win.
-  - **When the party gets wrecked, work the probability back off the sheets BEFORE calling it a
-    balance problem.** Session 6's near-TPK was a ~1-in-90 run of saves, not a broken statblock,
-    and the DM wanted it framed that way. Quote the odds.
-  - **Charts:** single-series magnitude bars only, one accent hue, direct-labeled with the
-    value, no legend. Never a two-hue categorical set — validate any new accent with the
-    dataviz skill's `validate_palette.js` (two similar browns FAILED CVD separation on the
-    first attempt and read as one colour). `.track`/`.fill` must be `display:block` or the bars
-    silently do not render — **render the page and look at it before shipping.**
-  - **Traceability:** every number comes from the ledger or the transcript, and monster token
-    UUIDs get resolved to names by hand (`get-combat-stats` prints raw UUIDs — known bug).
-  - **No table/tech/meta talk.** Prompt timeouts, module bugs and player names stay in
-    gm-notes-mechanics.md and the bug list.
-  - Deliver as HTML **and** PDF, always (see step 5 — the four-document rule).
-- **The Foundry session journal is a standard artifact (established session 2):** after
-  recap.html, append ONE player-visible text page to the world's single **`Session Diary`**
-  journal (folder *Adventure Log*) — **never a new journal per session** (revised 2026-08-08:
-  the per-session journals were consolidated). Page name = `Session N — <title>`, e.g.
-  "Session 3 — The Road Interlude"; the date lives in the page body. Use `manage-journals` `update` with
-  `newPageName` + `playerVisible: true`, then keep the pages in order (they sort by name, so the
-  `Session N` prefix does the work). Content is the `mcp-journal` format (p.lead TL;DR →
-  h2.spaced story beats → readaloud blocks for item/lore quotes → "Where Things Stand" ul), the
-  same player-safe boundary, the same third-person rule, and the SAME toned-down register as recap.html — it's the in-game
-  handout twin of the email recap, minus Quotable Quotes / Deeds of the Day. Match the existing
-  Session 1/2 pages.
+- **Recap voice:** in-world chronicle, not minutes. Third person about the party, never addressed
+  to them ("you" only inside quoted dialogue). Lead with the arc, keep table-talk out, name PCs
+  and NPCs. The TL;DR paragraph is one breath; section headings are story beats.
+- **Dice as narrative in the player recap.** Weave the checks, crits, failed saves and big hits
+  into the prose at full detail, but the words carry the magnitude, not the numbers. **Name the
+  mechanics** — the spell, feature, feat or mastery by its game name, italic Title Case when
+  invoked — rather than narrating around them.
+- **Never surface the DM's narration prompts** ("how would you like to kill him?"): the output of
+  that exchange is the fiction; the ask is table process.
+- **Register:** narrative, not purple — plain direct sentences, one flourish per paragraph.
+  Combat is punchy: short sentences, hard verbs, one beat per sentence. Who killed what is
+  factual, not style-flexible.
+- **No meta, no player names, no technical-issues talk in the player recap** — UI / audio /
+  browser troubles belong in the mechanics notes.
+- **Quote found-item text verbatim when it matters** (a plot-loaded item's description), then note
+  who read it aloud, before any paraphrase.
+- **The combat report opens on the one headline fact, in numbers**, and has a "what the buffs and
+  features actually bought" section (damage added / prevented, misses converted, saves flipped —
+  the duds named as plainly as the winners). When the party gets wrecked, work the probability
+  back off the sheets before calling it a balance problem. Charts: single-series bars, one hue,
+  direct-labeled; render the page and look at it before shipping.
 - **Monsters the party fought go in the Bestiary** — after the recap, hand off to the
-  `bestiary-builder` skill for anything newly killed; it files a page (MM art + narrative) in the
-  single `Bestiary` journal.
+  `bestiary-builder` skill for anything newly killed.
 - **Attribution is per-speaker-track and trustworthy** — quote players verbatim when it's good
-  ("quotes of the night" in gm-notes-story). Whisper text is GM-only by definition: usable in
-  recap.md and the gm-notes files, NEVER in recap.html.
-- **Bookkeeping handoff:** loot awarded and levels gained belong in gm-notes-mechanics.md as a checklist;
-  offer to apply them to the live world (physical-item-builder / level-up-pc) as a follow-up.
-- **Craig facts:** recordings expire in 7 days; `/recordings` in Discord re-fetches a lost
-  link; `craig-info.json.craigNotes` carries any `/note` markers; the API is mapped in the
-  script header. If the API shape ever drifts (Craig is open source: CraigChat/craig), the
-  manual fallback is: user downloads the flac zip from the Craig page themselves → unzip into
-  `SDIR\audio\tracks\` → continue from step 2.
+  ("quotes of the night" in the story notes). Whisper text is GM-only by definition: usable in
+  recap.md and the GM notes, NEVER in recap.html.
+- **Bookkeeping handoff:** loot awarded and levels gained belong in the mechanics notes as a
+  checklist; offer to apply them to the live world (physical-item-builder / level-up-pc) as a
+  follow-up.
+- **Craig facts:** recordings expire in 7 days; `/recordings` in Discord re-fetches a lost link;
+  `craig-info.json.craigNotes` carries any `/note` markers; the API is mapped in the script
+  header. If the API shape ever drifts (Craig is open source: CraigChat/craig), the manual
+  fallback is: the user downloads the flac zip from the Craig page themselves → unzip into
+  `SDIR\audio\tracks\` → hand-write `craig-info.json` from the zip's `info.txt` (map speakers by
+  Discord id, not track number; use CHARACTER names — they become the transcript labels) →
+  continue from step 2.
