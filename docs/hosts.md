@@ -94,6 +94,33 @@ enabled set is refused **by name** — which toolset it is in and how to enable 
 "unknown tool"; a misspelt toolset stops the server at startup with the valid names. The table is
 [`src/toolsets.ts`](../src/toolsets.ts).
 
+## Bringing a world up to the 3.0 line
+
+The 3.0 tools refuse to author against a pre-6.0 dnd5e world, and dnd5e 6.x declares
+`minimum: 14.367` for Foundry — so a world still on the 2.x-era stack (Foundry 14.364, dnd5e
+5.3.x) is upgraded in **this order**, and the order is not optional:
+
+1. **Foundry first, to ≥ 14.367** (14.368 is what this line is verified on). On a hosting
+   provider that is the panel's Foundry version; on a local install it is the app. Two things
+   changed on the way that the server already handles — the `/join` user field became a free-text
+   input at 14.367 (the bridge joins either shape) and every POST must look same-origin from
+   14.368 (the launcher sends `Origin`) — so a 14.36x server and a 14.368 server are both
+   reachable; only the dnd5e install below needs the newer one.
+2. **Then dnd5e, to 6.x** (6.0.3 verified): update the system from Foundry's Setup screen, then
+   launch the world and let dnd5e run its migration to completion before anything else joins —
+   the migration rewrites every actor and item once, and a bridge that joins mid-migration reads
+   half-converted documents.
+3. **Then this server:** `get-world-info` reports `system.version` and `foundry.version`; the
+   writing tools gate on the dnd5e version they detect at the first call (a refusal names the
+   version it saw), so nothing is configured on this side. Existing world content is untouched
+   by the upgrade (the migration is dnd5e's, not ours); content the tools author afterwards is
+   6.x-shaped (activities, the 2024 traits) and does not read back on a 5.3 world.
+
+Back out is a world backup taken **before step 1** — a dnd5e migration is one-way. On a mirrored
+setup ([local-sandbox.md](local-sandbox.md)) upgrade the sandbox app first (it must be ≥ the
+source's build to receive a pull), rehearse steps 1–2 on the mirror, then do the hosted world.
+The line before this one, 1.5.2, is the last release that speaks dnd5e 5.3.x.
+
 ## When it cannot connect
 
 The error names the variable or the step, and the host adds its own hint:

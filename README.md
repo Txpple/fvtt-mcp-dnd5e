@@ -65,8 +65,9 @@ describes — so nothing about one table lives in this repo.
 - **Node.js 22+** (developed on 24; `.nvmrc`), and Chromium for Playwright
   (`npx playwright install chromium`) — the server drives a headless browser.
 - **Foundry VTT 14.368+** with **dnd5e 6.0.3+** (the tools refuse to author against a pre-6.0
-  world; 1.5.2 is the last release for dnd5e 5.3.x), and a dedicated **Foundry user** for the
-  server to join as.
+  world; 1.5.2 is the last release for dnd5e 5.3.x; a world still on the older stack is upgraded
+  Foundry-first, then dnd5e — [`docs/hosts.md`](docs/hosts.md#bringing-a-world-up-to-the-30-line)),
+  and a dedicated **Foundry user** for the server to join as.
 - **The 2024 premium books as Foundry modules** — `dnd-monster-manual`, `dnd-players-handbook`,
   `dnd-dungeon-masters-guide` are **required for authoring** (the skills copy from them); *Heroes
   of Faerûn* and *Ravenloft: The Horrors Within* are optional extensions. `get-world-info` reports

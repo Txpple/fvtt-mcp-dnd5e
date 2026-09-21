@@ -190,3 +190,11 @@ prints the pulled world's `coreVersion` / `systemVersion` after every refresh. T
 itself is mirrored, so it always matches the world — only the app binary is a manual install.
 A hosting provider's own modules (a sleep-watch, a panel bridge) ride along in `modules/`; they
 are harmless locally.
+
+When the hosted world is still on the pre-3.0 stack (Foundry 14.364 / dnd5e 5.3.x), the sandbox
+is where the upgrade is rehearsed: its app is already ≥ 14.367, so a pulled 5.3 world can be
+taken to dnd5e 6.x here first, and the hosted world follows the same order — Foundry, then dnd5e
+([hosts.md](hosts.md#bringing-a-world-up-to-the-30-line)). Until it does, every refresh mirrors
+the 5.3 system back down with the world, and the pulled world has to be taken to 6.x again (the
+system update + the migration; the app is already new enough) before the 3.0 tools will author
+on it — a refresh of a 5.3 source is never "ready to play" on this line by itself.
