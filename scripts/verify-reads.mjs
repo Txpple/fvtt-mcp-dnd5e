@@ -52,7 +52,7 @@ try {
   const search = await check('searchCompendium', () =>
     f.call('searchCompendium', { query: 'goblin' })
   );
-  const sc0 = search?.[0];
+  const sc0 = search?.results?.[0]; // M2: one search shape {results, totalFound}
   if (sc0)
     await check('getCompendiumDocumentFull', () =>
       f.call('getCompendiumDocumentFull', { packId: sc0.pack, documentId: sc0.id })

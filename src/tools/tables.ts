@@ -22,36 +22,25 @@ const resultSchema = z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'Literal result text (HTML / @UUID enrichers allowed). Combine with `uuid` via a {{link}} ' +
-          'placeholder for mixed loot, e.g. "A pouch holding {{link}} and 2d6 gp".'
-      ),
+      .describe('Result text (HTML, enrichers); {{link}} places the `uuid` link inside it.'),
     uuid: z
       .string()
       .min(1)
       .optional()
       .describe(
-        'Reference a REAL item by compendium UUID (e.g. ' +
-          'Compendium.dnd-dungeon-masters-guide.equipment.Item.<id>) — rendered as a clickable @UUID ' +
-          'link, exactly how the published books build loot tables. Premium-book sources only; the ' +
-          'tool refuses SRD (dnd5e.*) and unresolvable refs. World-document UUIDs (Item.<id>) are ' +
-          'allowed too. Provide `text` OR `uuid` (or both) per result.'
+        'A compendium or world uuid rendered as a @UUID link; an SRD or unresolvable ref is refused. ' +
+          'text and/or uuid.'
       ),
     name: z
       .string()
       .min(1)
       .optional()
-      .describe('Display label for the `uuid` link (default: the resolved document name).'),
-    weight: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('Relative weight (default 1). Determines how many roll values map here.'),
+      .describe('Label for the uuid link (default the document name).'),
+    weight: z.number().int().positive().optional().describe('Relative weight (default 1).'),
     range: z
       .tuple([z.number().int(), z.number().int()])
       .optional()
-      .describe('Explicit [low, high] roll range. Omit to auto-assign from weights.'),
+      .describe('[low, high]; default assigned from the weights.'),
   })
   .refine(
     r =>
@@ -70,14 +59,11 @@ function stripUuidEnrichers(text: string): string {
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
 const CreateRollTableSchema = z.object({
   name: z.string().min(1).describe('Table name.'),
-  description: z.string().optional().describe('Optional table description.'),
-  formula: z.string().optional().describe('Roll formula (default 1d<total weight>), e.g. "1d20".'),
+  description: z.string().optional(),
+  formula: z.string().optional().describe('Roll formula (default 1d<total weight>).'),
   replacement: z.boolean().optional().describe('Draw with replacement (default true).'),
   displayRoll: z.boolean().optional().describe('Show the roll when drawing (default true).'),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Optional folder to place the table in (created if absent).'),
+  folderName: z.string().optional().describe('Folder (created if absent).'),
   results: z.array(resultSchema).min(1).describe('Table entries.'),
 });
 
@@ -94,44 +80,28 @@ const resultEditSchema = z
       .number()
       .int()
       .optional()
-      .describe(
-        'Target the entry whose roll range covers this die face (e.g. 7 = "entry 07" on a d12). ' +
-          'Errors if no entry — or more than one — covers it. Provide roll OR resultId.'
-      ),
-    resultId: z
-      .string()
-      .min(1)
-      .optional()
-      .describe('Target the entry by TableResult id (from get-rolltable) — always unambiguous.'),
+      .describe('The entry whose range covers this die face (none or several = an error).'),
+    resultId: z.string().min(1).optional().describe('The entry by TableResult id.'),
     text: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        "REPLACE this entry's text (HTML / @UUID enrichers allowed — the raw current text is in " +
-          'get-rolltable; copy it and change only what you need). Combine with `uuid` via {{link}}.'
-      ),
+      .describe("Replaces the entry's text (HTML, enrichers; {{link}} for the uuid)."),
     uuid: z
       .string()
       .min(1)
       .optional()
-      .describe(
-        'Re-link the entry to a REAL item by compendium/world UUID (premium-book only, SRD ' +
-          'refused) — rendered as a clickable @UUID link, alone or into a {{link}} placeholder in `text`.'
-      ),
+      .describe('Re-links the entry (a compendium or world uuid; SRD refused).'),
     name: z
       .string()
       .min(1)
       .optional()
-      .describe('Display label for the `uuid` link (default: the resolved document name).'),
-    weight: z.number().int().positive().optional().describe('New relative weight for this entry.'),
+      .describe('Label for the uuid link (default the document name).'),
+    weight: z.number().int().positive().optional().describe('New relative weight.'),
     range: z
       .tuple([z.number().int(), z.number().int()])
       .optional()
-      .describe(
-        'New explicit [low, high] roll range for THIS entry only — other entries are untouched ' +
-          '(an introduced overlap/gap is warned, not blocked).'
-      ),
+      .describe('New [low, high] for this entry only (an overlap or gap is warned).'),
   })
   .refine(e => (e.roll !== undefined) !== (e.resultId !== undefined), {
     message: 'target each edit with exactly one of roll or resultId',
@@ -156,19 +126,12 @@ const UpdateRollTableSchema = z
     results: z
       .array(resultSchema)
       .optional()
-      .describe(
-        'DESTRUCTIVE: replaces ALL existing results (deleted + recreated with auto-assigned ' +
-          'ranges). To change one entry, use editResults instead.'
-      ),
+      .describe('Replaces every result (ranges reassigned); one entry: editResults.'),
     editResults: z
       .array(resultEditSchema)
       .min(1)
       .optional()
-      .describe(
-        "TARGETED per-entry edits — fix one entry's text/link/weight/range in place; every other " +
-          'entry (ranges, weights, @UUID item links) is left byte-identical. Mutually exclusive ' +
-          'with `results`.'
-      ),
+      .describe('Per-entry edits in place; the other entries are untouched. Not with results.'),
   })
   .refine(v => !(v.results && v.editResults), {
     message: 'provide results (replace the whole set) OR editResults (targeted edits), not both',
@@ -190,15 +153,9 @@ const DeleteRollTableSchema = z.object({
 });
 
 const ImportRollTableSchema = z.object({
-  packId: z
-    .string()
-    .min(1)
-    .describe('Compendium pack id holding the table (e.g. dnd-dungeon-masters-guide.tables).'),
-  itemId: z.string().min(1).describe('The RollTable document id within the pack.'),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Optional folder to place the imported table in (created if absent).'),
+  packId: z.string().min(1).describe('Compendium pack id, e.g. dnd-dungeon-masters-guide.tables.'),
+  itemId: z.string().min(1).describe('The RollTable id within the pack.'),
+  folderName: z.string().optional().describe('Folder (created if absent).'),
 });
 
 export class TableTools {
@@ -215,20 +172,16 @@ export class TableTools {
       {
         name: 'create-rolltable',
         description:
-          'Create a RollTable from a list of results. Each result is literal `text` and/or a `uuid` ' +
-          'referencing a REAL premium-book item (rendered as a clickable @UUID link — the way the ' +
-          'published loot tables are built; SRD refs are refused). Ranges are auto-assigned from ' +
-          'weights (and the formula defaults to 1d<total weight>) unless you provide explicit ' +
-          'ranges/formula. Use for random encounter/loot/rumour/treasure tables. GM-only.',
+          'Create a RollTable from results of text and/or a uuid (rendered as a @UUID link; an SRD ' +
+          'ref is refused). Ranges come from the weights and the formula defaults to 1d<total ' +
+          'weight> unless given. GM-only.',
         inputSchema: toInputSchema(CreateRollTableSchema),
       },
       {
         name: 'import-rolltable',
         description:
-          'Copy a whole RollTable from a compendium pack into the world (e.g. a DMG treasure / ' +
-          'magic-item table). Roll tables are world-only at roll time, so a published table must be ' +
-          'imported before roll-on-table can use it; the embedded results — including their @UUID ' +
-          'item links — come along intact. Premium-book packs only (SRD refused). GM-only.',
+          'Copy a RollTable from a compendium pack into the world, results and @UUID links intact ' +
+          '(roll-on-table takes world tables only). An SRD pack is refused. GM-only.',
         inputSchema: toInputSchema(ImportRollTableSchema),
       },
       {
@@ -240,41 +193,28 @@ export class TableTools {
       {
         name: 'update-rolltable',
         description:
-          "Update a RollTable's fields (name, description, formula, replacement, displayRoll) " +
-          'and/or its entries, two ways: `editResults` = TARGETED per-entry edits — name an entry ' +
-          'by its roll face (e.g. 7 on a d12) or resultId (from get-rolltable) and patch just its ' +
-          'text, linked uuid, weight, and/or range; every OTHER entry (ranges, weights, @UUID item ' +
-          'links) stays byte-identical — the right way to fix a typo on one entry of a tuned table. ' +
-          "text/uuid REPLACE that entry's content (copy the raw text from get-rolltable and change " +
-          'only what you need). `results` = DESTRUCTIVE whole-set replace (all entries deleted and ' +
-          'recreated with auto-assigned ranges). Bad edits are isolated + reported; an introduced ' +
-          'range overlap/gap is warned. GM-only.',
+          "Update a RollTable's fields and/or its entries: editResults patches named entries (by " +
+          'roll face or resultId) in place, results replaces the whole set. Bad edits are isolated ' +
+          'and reported; a range overlap or gap is warned. GM-only.',
         inputSchema: toInputSchema(UpdateRollTableSchema),
       },
       {
         name: 'roll-on-table',
         description:
-          'Roll on a world RollTable and return the drawn result(s). Evaluates without marking ' +
-          'results drawn or posting to chat. Any @UUID item links in a drawn result are surfaced as ' +
-          'importable (uuid + label) so loot can be pulled into the world. (World tables only — copy ' +
-          'a compendium/DMG table in first with import-rolltable.)',
+          'Roll on a world RollTable: the drawn results, with any @UUID links as uuid + label. ' +
+          'Nothing is marked drawn or posted to chat.',
         inputSchema: toInputSchema(RollOnTableSchema),
       },
       {
         name: 'get-rolltable',
         description:
-          "Read a RollTable's FULL contents — every entry with its roll range, weight, drawn flag, the " +
-          'result text (HTML/@UUID enrichers intact), and any linked items surfaced as uuid + label — ' +
-          'sorted low-to-high so a d<N> table reads 1..N. The deterministic way to inspect or audit a ' +
-          "table's entries without brute-force rolling (list-rolltables gives only a per-table summary; " +
-          'roll-on-table draws one random entry). Resolves by id or exact name.',
+          "A RollTable's every entry, low to high: range, weight, drawn flag, text (enrichers " +
+          'intact), linked uuid + label.',
         inputSchema: toInputSchema(GetRollTableSchema),
       },
       {
         name: 'delete-rolltable',
-        description:
-          'Permanently delete one or more RollTable documents by exact id or exact name. STRICT ' +
-          'resolution — no fuzzy/substring matching. GM-only.',
+        description: 'Permanently delete roll tables by exact id or exact name. GM-only.',
         inputSchema: toInputSchema(DeleteRollTableSchema),
       },
     ];

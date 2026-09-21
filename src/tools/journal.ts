@@ -18,44 +18,28 @@ const journalPageSchema = z.object({
   playerVisible: z
     .boolean()
     .optional()
-    .describe('If true, players can OBSERVE this page (a handout). Default: GM-only.'),
+    .describe('Players can observe the page (a handout); default GM-only.'),
   blocks: z
     .array(blockSchema)
     .min(1)
     .describe(
-      'Ordered typed blocks that ARE the page body — heading / lead / paragraph / readaloud ' +
-        '(boxed player text) / gmnote (GM-only box) / list / grid / html. You supply the words; the ' +
-        'tool styles them.'
+      'The page body, in order: heading / lead / paragraph / readaloud / gmnote / list / grid / html.'
     ),
 });
 
 const CreateQuestJournalSchema = z.object({
   title: z.string().min(1, 'Title is required').describe('Journal entry name.'),
-  pages: z
-    .array(journalPageSchema)
-    .min(1)
-    .describe(
-      'Ordered pages (e.g. a player Handout page + a GM Notes page), each a list of blocks.'
-    ),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Optional folder to organize the journal into (created if it does not exist).'),
+  pages: z.array(journalPageSchema).min(1).describe('The pages, in order.'),
+  folderName: z.string().optional().describe('Folder (created if absent).'),
 });
 
 const LinkQuestToNPCSchema = z.object({
-  journalId: z.string().min(1, 'Journal ID is required').describe('ID of the quest journal entry.'),
-  npcName: z
-    .string()
-    .min(1, 'NPC name is required')
-    .describe('Name (or id) of a REAL world Actor to link. Must resolve — a dead link is refused.'),
+  journalId: z.string().min(1).describe('The quest journal id.'),
+  npcName: z.string().min(1).describe('World Actor name or id; an unresolved one is refused.'),
   relationship: z
     .enum(['questGiver', 'target', 'ally', 'enemy', 'contact'])
     .describe('Relationship between the NPC and the quest.'),
-  pageId: z
-    .string()
-    .optional()
-    .describe('Page to add the link to (id from list-journals). Omit to use the first text page.'),
+  pageId: z.string().optional().describe('Page id; default the first text page.'),
 });
 
 const UpdateQuestJournalSchema = z.object({
@@ -66,63 +50,26 @@ const UpdateQuestJournalSchema = z.object({
   blocks: z
     .array(blockSchema)
     .min(1)
-    .describe(
-      'Typed blocks to APPEND as a new styled section (e.g. a heading "Session 3 — date" + ' +
-        'paragraphs). You supply the words; the tool styles them. Include a heading block to label it.'
-    ),
-  pageId: z
-    .string()
-    .optional()
-    .describe('Page to append to (id from list-journals). Omit to use the first text page.'),
-  newPageName: z
-    .string()
-    .optional()
-    .describe('If set (without pageId), create a NEW page with this name from the blocks instead.'),
+    .describe('The section to append, as typed blocks (a heading block labels it).'),
+  pageId: z.string().optional().describe('Page id; default the first text page.'),
+  newPageName: z.string().optional().describe('Without pageId: a new page of this name.'),
   playerVisible: z
     .boolean()
     .optional()
-    .describe(
-      'Set the target/new page visibility: true = players can OBSERVE it (a handout), false = ' +
-        'GM-only. Omit to leave visibility unchanged (a new page then inherits GM-only).'
-    ),
+    .describe('Page visibility (true = a handout); omitted, unchanged (a new page is GM-only).'),
 });
 
 const ListJournalsSchema = z.object({
   nameFilter: z.string().optional().describe('Case-insensitive substring match on journal name.'),
-  filterQuests: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Only show journals that appear to be quest-related (default: false)'),
-  includeContent: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe('Include journal content preview (default: false)'),
-  journalId: z
-    .string()
-    .optional()
-    .describe(
-      "If provided, read this journal's content instead of listing all journals. Returns full page content and a list of all pages in the journal."
-    ),
-  pageId: z
-    .string()
-    .optional()
-    .describe(
-      "If provided with journalId, read this specific page's content. Get page IDs from the pages array returned when listing journals or reading a journal."
-    ),
+  filterQuests: z.boolean().optional().default(false).describe('Quest-like journals only.'),
+  includeContent: z.boolean().optional().default(false).describe('A content preview per journal.'),
+  journalId: z.string().optional().describe('Read this journal instead of listing.'),
+  pageId: z.string().optional().describe('With journalId: read this page.'),
 });
 
 const SearchJournalsSchema = z.object({
-  searchQuery: z
-    .string()
-    .min(1, 'Search query is required')
-    .describe('Text to search for in journal entries'),
-  searchType: z
-    .enum(['title', 'content', 'both'])
-    .optional()
-    .default('both')
-    .describe('Where to search (default: both)'),
+  searchQuery: z.string().min(1, 'Search query is required').describe('The text to find.'),
+  searchType: z.enum(['title', 'content', 'both']).optional().default('both'),
 });
 
 // A create-journal page is either a TEXT page (HTML body) or an IMAGE page (a picture — e.g. a map
@@ -132,49 +79,25 @@ const SearchJournalsSchema = z.object({
 // create-journal + N add-journal-image (which also leaves a spurious leading text page).
 const createJournalPageSchema = z
   .object({
-    name: z.string().min(1, 'Page name is required').describe('Page title.'),
-    kind: z
-      .enum(['text', 'image'])
-      .default('text')
-      .describe("Page kind: 'text' (HTML body, default) or 'image' (a picture page)."),
-    content: z
-      .string()
-      .optional()
-      .default('')
-      .describe('HTML content for a text page (ignored when kind is "image").'),
-    src: z
-      .string()
-      .optional()
-      .describe(
-        'Data-relative image path — REQUIRED when kind is "image" (e.g. a map legend key).'
-      ),
-    caption: z.string().optional().describe('Caption shown beneath an image page.'),
-    sort: z
-      .number()
-      .optional()
-      .describe('Optional explicit sort key (ascending). Omit to keep the given array order.'),
+    name: z.string().min(1).describe('Page title.'),
+    kind: z.enum(['text', 'image']).default('text'),
+    content: z.string().optional().default('').describe('text: the HTML body.'),
+    src: z.string().optional().describe('image: the Data-relative image path (required).'),
+    caption: z.string().optional().describe('image: the caption.'),
+    sort: z.number().optional().describe('Sort key; default the array order.'),
     playerVisible: z
       .boolean()
       .optional()
-      .describe('If true, players can OBSERVE this page (a handout). Default: GM-only.'),
+      .describe('Players can observe the page (a handout); default GM-only.'),
   })
   .refine(p => p.kind !== 'image' || (typeof p.src === 'string' && p.src.trim().length > 0), {
     message: 'An image page requires "src" (a Data-relative image path).',
   });
 
 const CreateJournalSchema = z.object({
-  name: z.string().min(1, 'Journal name is required').describe('Journal entry name.'),
-  pages: z
-    .array(createJournalPageSchema)
-    .min(1, 'At least one page is required')
-    .describe(
-      'Ordered pages — each a TEXT page (HTML content) or an IMAGE page (kind:"image" + src). ' +
-        'Each needs a name; text content is HTML (may be empty).'
-    ),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Optional folder to place the journal in (created if absent).'),
+  name: z.string().min(1).describe('Journal entry name.'),
+  pages: z.array(createJournalPageSchema).min(1).describe('The pages, in order.'),
+  folderName: z.string().optional().describe('Folder (created if absent).'),
 });
 
 const UpdateJournalSchema = z
@@ -183,27 +106,14 @@ const UpdateJournalSchema = z
       .string()
       .min(1, 'Journal ID is required')
       .describe('Journal entry id or exact name.'),
-    name: z.string().optional().describe('New journal entry name (rename).'),
-    content: z
-      .string()
-      .optional()
-      .describe('HTML content to set on the target page (replaces existing content).'),
-    pageId: z
-      .string()
-      .optional()
-      .describe('Target a specific page by id (get ids from list-journals).'),
-    newPageName: z
-      .string()
-      .optional()
-      .describe('If set (without pageId), create a new page with this name from content.'),
+    name: z.string().optional().describe('Rename the entry.'),
+    content: z.string().optional().describe('HTML that replaces the target page.'),
+    pageId: z.string().optional().describe('The target page id; default the first text page.'),
+    newPageName: z.string().optional().describe('Without pageId: a new page of this name.'),
     playerVisible: z
       .boolean()
       .optional()
-      .describe(
-        'Set the written page visibility: true = players can OBSERVE it (a handout), false = ' +
-          'GM-only. Omit to leave it unchanged. To flip an EXISTING page without rewriting its ' +
-          'content, use set-journal-page-visibility.'
-      ),
+      .describe('Visibility of the written page (true = a handout); omitted, unchanged.'),
   })
   .refine(v => v.name !== undefined || v.content !== undefined, {
     message: 'Provide at least one of: name, content',
@@ -214,10 +124,8 @@ const SetJournalPageVisibilitySchema = z.object({
     .string()
     .min(1, 'Journal ID is required')
     .describe('Journal entry id or exact name.'),
-  pageId: z.string().min(1, 'Page ID is required').describe('Page id (from list-journals).'),
-  playerVisible: z
-    .boolean()
-    .describe('true = players can OBSERVE this page (a handout); false = GM-only.'),
+  pageId: z.string().min(1).describe('Page id.'),
+  playerVisible: z.boolean().describe('true = a handout players can observe; false = GM-only.'),
 });
 
 const DeleteJournalPageSchema = z.object({
@@ -225,10 +133,7 @@ const DeleteJournalPageSchema = z.object({
     .string()
     .min(1, 'Journal ID is required')
     .describe('Journal entry id or exact name.'),
-  pageId: z
-    .string()
-    .min(1, 'Page ID is required')
-    .describe('Page id to delete (from list-journals).'),
+  pageId: z.string().min(1).describe('Page id.'),
 });
 
 const DeleteJournalSchema = z.object({
@@ -260,85 +165,67 @@ export class JournalTools {
       {
         name: 'create-quest-journal',
         description:
-          'Create a multi-page journal (quest log, handout, lore, GM notes) from STRUCTURED typed ' +
-          'blocks — a STRUCTURING tool, it never writes the words. You pass pages of blocks (heading / ' +
-          'lead / paragraph / readaloud / gmnote / list / grid / html); the tool renders them in the ' +
-          'house style and sets per-page visibility (playerVisible -> players can observe a handout; ' +
-          "omit -> GM-only). Compose the prose yourself (that's the journal-builder skill's job). For " +
-          'plain raw-HTML pages use create-journal instead.',
+          'Create a multi-page journal from typed blocks (heading / lead / paragraph / readaloud / ' +
+          'gmnote / list / grid / html), rendered in the house style, with per-page visibility. ' +
+          'Raw HTML pages: create-journal.',
         inputSchema: toInputSchema(CreateQuestJournalSchema),
       },
       {
         name: 'link-quest-to-npc',
         description:
-          'Append a link from a quest journal to a REAL world NPC: resolves the actor, inserts a ' +
-          'Foundry @UUID[Actor.id]{Name} enricher link (clickable on render) in a GM note, labelled ' +
-          'with the relationship. Refuses an unknown NPC (no dead links) — create the actor first.',
+          'Append a @UUID link to a world NPC, labelled with the relationship, in a GM note of a ' +
+          'quest journal; an unresolved NPC is refused.',
         inputSchema: toInputSchema(LinkQuestToNPCSchema),
       },
       {
         name: 'update-quest-journal',
         description:
-          'Append a new styled section to a quest/journal page from typed blocks (e.g. a heading ' +
-          '"Session 3" + paragraphs of what happened) — the session-log/progress path. You supply ' +
-          'the words as blocks; the tool styles + appends them. By default appends to the first text ' +
-          'page; use pageId to target a page, or newPageName to start a new page. Structuring only.',
+          'Append a styled section of typed blocks to a journal page (the first text page, pageId, ' +
+          'or a new page via newPageName).',
         inputSchema: toInputSchema(UpdateQuestJournalSchema),
       },
       {
         name: 'list-journals',
         description:
-          "List journal entries, or read one. Without journalId: every journal (or a name-substring match) with its pages (id, name, type, playerVisible). With journalId: the journal's first text page content and its page list. With journalId + pageId: that page's full content.",
+          'Journals with their pages (id, name, type, playerVisible); with journalId, that journal ' +
+          "(first text page + page list); with pageId too, that page's content.",
         inputSchema: toInputSchema(ListJournalsSchema),
       },
       {
         name: 'search-journals',
         description:
-          'Search through all pages of all journal entries for specific content or keywords. Returns which specific page matched, so you can read it with list-journals using journalId + pageId.',
+          'Search every journal page by title and/or content; reports the matching pages.',
         inputSchema: toInputSchema(SearchJournalsSchema),
       },
       {
         name: 'create-journal',
         description:
-          'Create a generic multi-page JournalEntry from caller-supplied pages. Each page is either ' +
-          'a TEXT page ({name, content} — HTML, Foundry v13 ProseMirror) or an IMAGE page ' +
-          '({name, kind:"image", src, caption?} — a picture page, e.g. a map legend key), so an ' +
-          'image-only journal builds in one call. Unlike create-quest-journal (styled blocks, ' +
-          'auto-folders), this takes explicit pages and only folders when folderName is given. ' +
-          'Per-page playerVisible exposes a handout; otherwise GM-only.',
+          'Create a JournalEntry from explicit pages: text (HTML) or image (kind:"image" + src), ' +
+          'each with its own visibility. Styled blocks: create-quest-journal.',
         inputSchema: toInputSchema(CreateJournalSchema),
       },
       {
         name: 'update-journal',
         description:
-          'Generic JournalEntry update: rename the entry (name) and/or set page content. Content ' +
-          'replaces the target page — pass pageId to target a specific page, newPageName to add a new ' +
-          'page, or neither to update the first text page. For quest-style append updates use ' +
-          'update-quest-journal instead. GM-only.',
+          'Rename a JournalEntry and/or replace a page (the first text page, pageId, or a new page ' +
+          'via newPageName) with HTML. Appending blocks: update-quest-journal. GM-only.',
         inputSchema: toInputSchema(UpdateJournalSchema),
       },
       {
         name: 'set-journal-page-visibility',
         description:
-          'Flip one journal PAGE between player-visible (a handout players can OBSERVE) and GM-only, ' +
-          'WITHOUT rewriting its content. Sets the page ownership default. Use this to reveal/hide an ' +
-          'existing page — e.g. a page that came up GM-only from an append — instead of rebuilding the ' +
-          'whole journal. GM-only.',
+          'Set one journal page player-visible (a handout) or GM-only without touching its content. ' +
+          'GM-only.',
         inputSchema: toInputSchema(SetJournalPageVisibilitySchema),
       },
       {
         name: 'delete-journal-page',
-        description:
-          'Delete ONE page from a JournalEntry by page id (from list-journals), leaving the rest of ' +
-          'the entry intact. Use to remove a stray/mistaken page instead of deleting and rebuilding ' +
-          'the whole journal. GM-only.',
+        description: 'Delete one page of a JournalEntry by id. GM-only.',
         inputSchema: toInputSchema(DeleteJournalPageSchema),
       },
       {
         name: 'delete-journal',
-        description:
-          'Permanently delete one or more JournalEntry documents by exact id or exact name. STRICT ' +
-          'resolution — no fuzzy/substring matching. GM-only.',
+        description: 'Permanently delete journals by exact id or exact name. GM-only.',
         inputSchema: toInputSchema(DeleteJournalSchema),
       },
     ];

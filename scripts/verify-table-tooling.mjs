@@ -74,7 +74,7 @@ try {
 
   // --- Find two REAL premium-book items to link (mix-and-match loot) ---
   const gear = await f.call('searchCompendiumFaceted', { documentType: 'gear', limit: 25 });
-  const items = (Array.isArray(gear) ? gear : []).filter(i => i?.uuid && i?.name);
+  const items = (gear?.results ?? []).filter(i => i?.uuid && i?.name); // M2: one search shape {results, totalFound}
   assert(items.length >= 2, `found real premium items to link (${items.length})`);
   const itemA = items[0];
   const itemB = items[1] ?? items[0];

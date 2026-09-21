@@ -230,7 +230,7 @@ try {
       documentType: 'creature',
       limit: 1,
     });
-    const creatures = Array.isArray(idx) ? idx : [];
+    const creatures = idx?.results ?? []; // M2: one search shape {results, totalFound}
     const c = creatures?.[0];
     if (c?.pack && c?.id) {
       const ca = await check(

@@ -153,7 +153,7 @@ try {
   // --- 3. @scale suppressed on a type:character copy ----------------------------------------
   console.log('\n# @scale on a character copy resolves natively (no false warning)');
   const hits = await f.call('searchCompendium', { query: 'Bard' });
-  const pregenHit = (Array.isArray(hits) ? hits : []).find(h => h.type === 'character');
+  const pregenHit = (hits?.results ?? []).find(h => h.type === 'character'); // M2: one search shape {results, totalFound}
   if (pregenHit) {
     const pOut = await f.call('createActorFromCompendium', {
       packId: pregenHit.pack,

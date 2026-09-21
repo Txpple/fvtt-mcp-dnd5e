@@ -16,45 +16,30 @@ import { toInputSchema } from '../utils/schema.js';
 const CreateCardsSchema = z.object({
   name: z.string().min(1).describe('Cards stack name.'),
   type: z.enum(['deck', 'hand', 'pile']).optional().describe('Stack type (default "deck").'),
-  description: z.string().optional().describe('Optional description.'),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Optional folder to place the stack in (created if absent).'),
+  description: z.string().optional(),
+  folderName: z.string().optional().describe('Folder (created if absent).'),
   cards: z
     .array(
       z.object({
         name: z.string().min(1).describe('Card name.'),
-        description: z
-          .string()
-          .optional()
-          .describe('Optional GM/meta note for the card (not shown on the face).'),
+        description: z.string().optional().describe('GM note, not shown on the face.'),
         text: z
           .string()
           .optional()
-          .describe(
-            'Optional face text (HTML) shown ON the card — e.g. a Deck of Many Things outcome. A ' +
-              'card with `text` and/or `img` gets a face; with neither it is a plain named card.'
-          ),
-        img: z.string().optional().describe('Optional Data-relative image path for the card face.'),
+          .describe('Face text (HTML); text and/or img give the card a face.'),
+        img: z.string().optional().describe('Data-relative face image path.'),
       })
     )
     .optional()
-    .describe('Optional initial cards.'),
+    .describe('The initial cards.'),
 });
 
 const ListCardsSchema = z.object({});
 
 const ImportCardsSchema = z.object({
-  preset: z
-    .string()
-    .min(1)
-    .describe('Core preset deck key — e.g. "pokerDark" / "pokerLight" (a standard 52-card deck).'),
-  name: z.string().min(1).optional().describe('Optional name for the imported stack.'),
-  folderName: z
-    .string()
-    .optional()
-    .describe('Optional folder to place the stack in (created if absent).'),
+  preset: z.string().min(1).describe('Core preset deck key ("pokerDark" / "pokerLight").'),
+  name: z.string().min(1).optional().describe('Name for the stack.'),
+  folderName: z.string().optional().describe('Folder (created if absent).'),
 });
 
 const DeleteCardsSchema = z.object({
@@ -83,19 +68,13 @@ export class CardsTools {
       {
         name: 'create-cards',
         description:
-          'Create a Cards stack (deck, hand, or pile) with optional initial cards. Each card has a ' +
-          'name and optional face `text` (HTML shown on the card — e.g. a Deck of Many Things ' +
-          'outcome) and/or `img` (a Data-relative path), plus a card-level `description` (GM/meta ' +
-          'note). Use for custom themed decks (Deck of Many Things, tarokka, encounter decks). ' +
-          'GM-only.',
+          'Create a Cards stack (deck, hand or pile) with its cards (name, face text and/or image, a ' +
+          'GM note). GM-only.',
         inputSchema: toInputSchema(CreateCardsSchema),
       },
       {
         name: 'import-cards',
-        description:
-          'Instantiate a core Foundry PRESET deck into the world (e.g. "pokerDark"/"pokerLight" — a ' +
-          'standard 52-card deck). Cards have no premium-book compendium, so this is the ready-made ' +
-          'deck path; build themed D&D decks with create-cards. GM-only.',
+        description: 'Create a stack from a core preset deck (a standard 52-card deck). GM-only.',
         inputSchema: toInputSchema(ImportCardsSchema),
       },
       {
@@ -105,9 +84,7 @@ export class CardsTools {
       },
       {
         name: 'delete-cards',
-        description:
-          'Permanently delete one or more Cards stacks by exact id or exact name. STRICT resolution ' +
-          '— no fuzzy/substring matching. GM-only.',
+        description: 'Permanently delete Cards stacks by exact id or exact name. GM-only.',
         inputSchema: toInputSchema(DeleteCardsSchema),
       },
     ];
