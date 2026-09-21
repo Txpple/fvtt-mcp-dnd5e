@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { SCENE_TARGET, sceneTargetRequired } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import type { Host } from '../hosts/types.js';
 import { filePlaneFor } from '../hosts/index.js';
@@ -26,17 +27,11 @@ const GetCurrentSceneSchema = z.object({
 const GetWorldInfoSchema = z.object({});
 
 const ActivateSceneSchema = z.object({
-  sceneIdentifier: z
-    .string()
-    .min(1)
-    .describe('Scene id or exact name to make the active scene. STRICT — no fuzzy matching.'),
+  sceneIdentifier: sceneTargetRequired,
 });
 
 const PullUsersToSceneSchema = z.object({
-  sceneIdentifier: z
-    .string()
-    .min(1)
-    .describe('Scene id or exact name to pull the users to. STRICT — no fuzzy matching.'),
+  sceneIdentifier: sceneTargetRequired,
   userIdentifiers: z
     .array(z.string().min(1))
     .min(1, 'At least one user identifier is required')
@@ -47,13 +42,9 @@ const PullUsersToSceneSchema = z.object({
 });
 
 const SetLandingSceneSchema = z.object({
-  sceneIdentifier: z
-    .string()
-    .min(1)
-    .describe(
-      'Scene id or exact name the users should LOG IN to. STRICT — no fuzzy matching. Pass ' +
-        '"none" to CLEAR the assignment and put them back on the active scene with everyone else.'
-    ),
+  sceneIdentifier: sceneTargetRequired.describe(
+    `${SCENE_TARGET} they log in to; "none" clears it (back to the active scene).`
+  ),
   userIdentifiers: z
     .array(z.string().min(1))
     .min(1, 'At least one user identifier is required')
@@ -342,7 +333,7 @@ const ListScenesSchema = z.object({
 });
 
 const UpdateSceneSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name.'),
+  sceneIdentifier: sceneTargetRequired,
   name: z.string().min(1).optional().describe('New scene name.'),
   navName: z.string().optional().describe('Navigation label shown in the scene nav bar.'),
   navigation: z.boolean().optional().describe('Whether the scene appears in the navigation bar.'),
@@ -373,11 +364,11 @@ const DeleteSceneSchema = z.object({
 });
 
 const GetSceneDimensionsSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name.'),
+  sceneIdentifier: sceneTargetRequired,
 });
 
 const ScreenshotSceneSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name to screenshot.'),
+  sceneIdentifier: sceneTargetRequired,
   outputPath: z
     .string()
     .optional()

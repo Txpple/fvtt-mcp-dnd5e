@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -91,13 +92,7 @@ const DeleteItemSchema = z.object({
 
 const RemoveFromActorSchema = z
   .object({
-    actorIdentifier: z
-      .string()
-      .min(1, 'Actor identifier cannot be empty')
-      .describe(
-        'Actor name or ID to remove the items from. Also accepts a placed TOKEN id (from list-tokens) — ' +
-          "the removal then hits that token INSTANCE's own delta, not the base actor."
-      ),
+    actorIdentifier: actorTarget,
     itemIds: z
       .array(z.string().min(1))
       .optional()

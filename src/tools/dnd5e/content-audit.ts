@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -14,12 +15,9 @@ import { toInputSchema } from '../../utils/schema.js';
  */
 const ContentAuditSchema = z.object({
   actorIdentifiers: z
-    .array(z.string().min(1))
+    .array(actorTarget)
     .optional()
-    .describe(
-      'Actors to audit (name or id) — each is scanned along with its embedded items/features. ' +
-        'Pass the NPCs you just built.'
-    ),
+    .describe('Actors to audit, each with its embedded items and features.'),
   itemFolders: z
     .array(z.string().min(1))
     .optional()

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, ITEM_TARGET, actorTarget, itemTarget } from '../_targets.js';
 import type { FoundryBridge, PageArgs } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import {
@@ -44,20 +45,8 @@ const ManageActivitySchema = z.object({
     .describe(
       'add a new activity, edit/remove an existing one (by activityId), or list activities.'
     ),
-  itemIdentifier: z
-    .string()
-    .min(1)
-    .describe(
-      'Item to operate on (id or name). On an actor when actorIdentifier is set, else a world item.'
-    ),
-  actorIdentifier: z
-    .string()
-    .optional()
-    .describe(
-      'If set, the item is embedded on this actor; omit to target a world (sidebar) item. Also accepts ' +
-        "a placed TOKEN id (from list-tokens) — the activity edit then lands on that token INSTANCE's " +
-        'own delta, not the base actor.'
-    ),
+  itemIdentifier: itemTarget.describe(`${ITEM_TARGET}; on the actor, else a world item.`),
+  actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world item.`),
   activityId: z
     .string()
     .optional()

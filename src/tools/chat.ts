@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from './_targets.js';
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, isAbsolute, basename } from 'node:path';
 import type { FoundryBridge } from '../foundry.js';
@@ -202,10 +203,7 @@ const ExportChatLogSchema = z
   });
 
 const PostItemCardSchema = z.object({
-  actor: z
-    .string()
-    .min(1)
-    .describe('Actor id / exact name / name-substring (or scene token id) that owns the item.'),
+  actor: actorTarget,
   item: z.string().min(1).describe('Item / feature / spell id or exact name on that actor.'),
   activity: z
     .string()

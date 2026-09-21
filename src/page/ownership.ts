@@ -4,6 +4,8 @@
 // actor's ownership map. No permission/transaction/settings scaffolding — the
 // headless page IS the GM, so it reads and mutates ownership directly.
 
+import { resolveActorFuzzy as findActorByIdentifier } from './_shared.js';
+
 // Foundry token disposition constant for FRIENDLY (CONST.TOKEN_DISPOSITIONS.FRIENDLY).
 const FRIENDLY_DISPOSITION = 1;
 
@@ -13,27 +15,6 @@ const PERMISSION_NAMES: Record<number, string> = {
   2: 'OBSERVER',
   3: 'OWNER',
 };
-
-/**
- * Resolve a world actor by id, exact name, or partial (case-insensitive) name
- * match. Falls back to a scene token id (returning that token's synthetic actor)
- * so an unlinked token on a map can be addressed individually.
- */
-function findActorByIdentifier(identifier: string): any {
-  const worldActor =
-    game.actors?.get(identifier) ||
-    game.actors?.getName(identifier) ||
-    game.actors?.contents.find((a: any) =>
-      a.name?.toLowerCase().includes(identifier.toLowerCase())
-    );
-  if (worldActor) return worldActor;
-
-  for (const scene of game.scenes?.contents ?? []) {
-    const token = scene.tokens?.get(identifier);
-    if (token?.actor) return token.actor;
-  }
-  return undefined;
-}
 
 /** A non-GM user's effective level: the explicit entry when there is one, else the actor default. */
 function effectiveLevel(actor: any, user: any): number {

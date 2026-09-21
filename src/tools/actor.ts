@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from './_targets.js';
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
 import type { FoundryBridge } from '../foundry.js';
@@ -17,20 +18,11 @@ import { extractActorStats, extractActorBasicInfo } from './dnd5e/actor-stats.js
 // enforced contracts cannot drift.
 
 const GetActorSchema = z.object({
-  identifier: z
-    .string()
-    .min(1, 'Character identifier cannot be empty')
-    .describe(
-      'Character name or ID to look up. Also accepts a placed TOKEN id (from list-tokens) to read that ' +
-        "token INSTANCE's live state — an unlinked NPC token can differ from its base actor."
-    ),
+  identifier: actorTarget,
 });
 
 const GetActorEntitySchema = z.object({
-  characterIdentifier: z
-    .string()
-    .min(1, 'Character identifier cannot be empty')
-    .describe('Character name or ID'),
+  characterIdentifier: actorTarget,
   entityIdentifier: z
     .string()
     .min(1, 'Entity identifier cannot be empty')
@@ -38,13 +30,7 @@ const GetActorEntitySchema = z.object({
 });
 
 const ExportActorSchema = z.object({
-  identifier: z
-    .string()
-    .min(1, 'Character identifier cannot be empty')
-    .describe(
-      'Actor name or ID to export. Also accepts a placed TOKEN id (from list-tokens) to export that ' +
-        "token INSTANCE's live state — an unlinked token can differ from its base actor."
-    ),
+  identifier: actorTarget,
   localPath: z
     .string()
     .min(1, 'localPath cannot be empty')
@@ -64,10 +50,7 @@ const ListActorsSchema = z.object({
 });
 
 const SearchActorContentsSchema = z.object({
-  characterIdentifier: z
-    .string()
-    .min(1, 'Character identifier cannot be empty')
-    .describe('Character name or ID to search within'),
+  characterIdentifier: actorTarget,
   query: z
     .string()
     .optional()

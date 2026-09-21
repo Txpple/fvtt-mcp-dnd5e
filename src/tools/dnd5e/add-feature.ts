@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -84,13 +85,7 @@ const HEAL_TYPE_ENUM = ['healing', 'temphp'] as const;
 
 // Shared per-mode field fragments (reused zod instances — safe across multiple z.object() parents).
 const featureHeaderFields = {
-  actorIdentifier: z
-    .string()
-    .min(1, 'actorIdentifier cannot be empty')
-    .describe(
-      'Actor name or id. Also accepts a placed TOKEN id (from list-tokens) — the feature then lands ' +
-        "on that token INSTANCE's own delta, not the base actor."
-    ),
+  actorIdentifier: actorTarget,
   featureName: z.string().min(1, 'featureName cannot be empty'),
   description: z.string().default(''),
   img: z.string().optional(),
@@ -204,11 +199,7 @@ export const AddFeatureSchema = z.object({
     ),
 
   // ── Common ────────────────────────────────────────────────────────
-  actorIdentifier: z
-    .string()
-    .describe(
-      'Name or ID of the target actor (partial name match supported). Required for all featureTypes.'
-    ),
+  actorIdentifier: actorTarget.describe(`${ACTOR_TARGET} Required for every featureType.`),
   featureName: z
     .string()
     .optional()
@@ -595,7 +586,7 @@ export type AuraFeatureArgs = z.output<typeof AuraSchema>;
 
 const SpellcastingSchema = z.object({
   featureType: z.literal('spellcasting'),
-  actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
+  actorIdentifier: actorTarget,
   spellcastingClass: z.enum(SPELLCASTING_CLASS_ENUM),
   spellcastingLevel: z.number().int().min(1).max(20),
   spellcastingAbility: z.enum(ABILITY_ENUM).optional(),
@@ -605,7 +596,7 @@ export type SpellcastingFeatureArgs = z.output<typeof SpellcastingSchema>;
 
 const SpellsSchema = z.object({
   featureType: z.literal('spells'),
-  actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
+  actorIdentifier: actorTarget,
   spellNames: z.array(z.string().min(1)).min(1).max(50),
   compendiumPacks: z.array(z.string().min(1)).default([...DEFAULT_SPELL_PACKS]),
 });

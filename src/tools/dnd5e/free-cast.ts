@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -16,13 +17,7 @@ import { toInputSchema } from '../../utils/schema.js';
  */
 
 const AddFreeCastSchema = z.object({
-  actorIdentifier: z
-    .string()
-    .min(1)
-    .describe(
-      'Name or id of the actor (partial name match supported). Also accepts a placed TOKEN id ' +
-        "(from list-tokens): the edit then lands on that token INSTANCE's own delta."
-    ),
+  actorIdentifier: actorTarget,
   spellIdentifier: z
     .string()
     .min(1)

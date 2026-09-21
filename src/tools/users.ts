@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, actorTarget } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -31,14 +32,7 @@ const UpdateUserSchema = z
       .optional()
       .describe('Player color as #rrggbb — used for cursors, targeting, and chat borders.'),
     pronouns: z.string().optional().describe('Pronouns shown next to the user name.'),
-    character: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        "Actor id or name to assign as the user's character (their default speaker / PC). " +
-          'Pass "none" to clear the assignment.'
-      ),
+    character: actorTarget.optional().describe(`${ACTOR_TARGET} "none" clears.`),
   })
   .refine(
     o => o.role !== undefined || o.name || o.color || o.pronouns !== undefined || o.character,

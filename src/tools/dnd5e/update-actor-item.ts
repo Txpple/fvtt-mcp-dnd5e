@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget, itemTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -13,19 +14,8 @@ import { toInputSchema } from '../../utils/schema.js';
  */
 
 const UpdateActorItemSchema = z.object({
-  actorIdentifier: z
-    .string()
-    .min(1)
-    .describe(
-      'Name or id of the actor that owns the item (partial name match supported). Also accepts a placed ' +
-        "TOKEN id (from list-tokens): the edit then lands on that token INSTANCE's own delta, not the base " +
-        'actor — the way to re-gear ONE placed copy of an unlinked NPC (base-actor edits never reach ' +
-        'tokens already on a scene).'
-    ),
-  itemIdentifier: z
-    .string()
-    .min(1)
-    .describe('Name or id of the embedded item to edit (id, exact name, then substring).'),
+  actorIdentifier: actorTarget,
+  itemIdentifier: itemTarget,
   type: z
     .string()
     .optional()

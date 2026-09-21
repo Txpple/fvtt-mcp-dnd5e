@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -47,14 +48,7 @@ const AddItemSchema = z.object({
     ),
 
   // ── Target ────────────────────────────────────────────────────────
-  actorIdentifier: z
-    .string()
-    .optional()
-    .describe(
-      'Target actor (name or id) to attach the item to (partial match). Also accepts a placed TOKEN id ' +
-        "(from list-tokens) — the item is then added to that token INSTANCE's own delta, not the base " +
-        'actor. Omit to create a reusable world Item in the Items sidebar instead.'
-    ),
+  actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world Item.`),
   folder: z
     .string()
     .optional()

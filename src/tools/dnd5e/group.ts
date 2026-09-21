@@ -77,10 +77,7 @@ const CreateGroupSchema = z.object({
 
 const ManageGroupMembersSchema = z
   .object({
-    groupIdentifier: z
-      .string()
-      .min(1)
-      .describe('The group actor to edit (name or id; partial name match supported).'),
+    groupIdentifier: z.string().min(1).describe('Group actor id or name (substring ok).'),
     add: z
       .array(z.string().min(1))
       .default([])
@@ -98,10 +95,7 @@ const ManageGroupMembersSchema = z
   });
 
 const GetGroupSchema = z.object({
-  groupIdentifier: z
-    .string()
-    .min(1)
-    .describe('The group actor to read (name or id; partial name match supported).'),
+  groupIdentifier: z.string().min(1).describe('Group actor id or name (substring ok).'),
 });
 
 const SetPrimaryPartySchema = z
@@ -110,7 +104,7 @@ const SetPrimaryPartySchema = z
       .string()
       .min(1)
       .optional()
-      .describe('Group actor to crown as the primary party (name or id).'),
+      .describe('Group actor id or name (substring ok).'),
     clear: z.boolean().default(false).describe('Unset the primary party instead.'),
   })
   .refine(a => !(a.groupIdentifier && a.clear), {

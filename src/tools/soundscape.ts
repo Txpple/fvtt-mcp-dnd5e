@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SCENE_TARGET, sceneTarget } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -33,13 +34,9 @@ const ConfigureSoundscapeSchema = z.object({
       "list = the scene's sound sets (with what would be playing right now); library = browse the " +
         'prebaked template catalog; add/update/remove = author them.'
     ),
-  sceneIdentifier: z
-    .string()
-    .optional()
-    .describe(
-      'Scene id or exact name. STRICT — no fuzzy matching. Omit to target the ACTIVE scene. ' +
-        'Ignored by action "library" (the catalog is world-wide).'
-    ),
+  sceneIdentifier: sceneTarget.describe(
+    `${SCENE_TARGET}; omit for the ACTIVE scene. Ignored by "library" (world-wide).`
+  ),
   setIdentifier: z
     .string()
     .optional()

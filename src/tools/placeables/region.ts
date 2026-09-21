@@ -6,6 +6,7 @@
 // underneath.
 
 import { z } from 'zod';
+import { SCENE_TARGET, sceneTargetRequired } from '../_targets.js';
 import {
   ACTOR_SIZES,
   BEHAVIOR_DISPOSITIONS,
@@ -120,7 +121,7 @@ const DeleteRegionSchema = z.object({
 });
 
 const TeleporterEndpointSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name.'),
+  sceneIdentifier: sceneTargetRequired,
   x: z
     .number()
     .describe(
@@ -269,7 +270,7 @@ const AddRegionBehaviorSchema = z.object({
     ),
   teleportTo: z
     .object({
-      sceneIdentifier: z.string().min(1).describe('Destination scene id or exact name.'),
+      sceneIdentifier: sceneTargetRequired.describe(`${SCENE_TARGET} of the destination.`),
       regionIdentifier: z
         .string()
         .min(1)

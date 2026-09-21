@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -45,15 +46,7 @@ const setField = (what: string, supportsCustom = true) =>
 export type UpdateActorArgs = z.output<typeof UpdateActorSchema>;
 
 const UpdateActorSchema = z.object({
-  actorIdentifier: z
-    .string()
-    .min(1)
-    .describe(
-      'Name or id of the actor to edit (partial name match supported). Also accepts a placed TOKEN id ' +
-        "(from list-tokens): the edit then lands on that token INSTANCE's own actor (its delta), not the " +
-        'base actor — the way to edit ONE placed copy of an unlinked NPC, since base-actor edits never ' +
-        'reach tokens already on a scene.'
-    ),
+  actorIdentifier: actorTarget,
 
   // identity
   name: z.string().min(1).optional().describe('Rename the actor.'),

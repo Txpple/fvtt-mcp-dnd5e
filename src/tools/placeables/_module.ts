@@ -7,7 +7,6 @@
 // page-side descriptor (src/page/placeables/<type>.ts); judgment lives in the skills.
 
 import type { FoundryBridge } from '../../foundry.js';
-import { z } from 'zod';
 
 export interface PlaceableToolModule {
   /** Advertised tool definitions ({name, description, inputSchema}). */
@@ -18,14 +17,5 @@ export interface PlaceableToolModule {
 
 export type PlaceableModuleFactory = (foundry: FoundryBridge) => PlaceableToolModule;
 
-/**
- * The one scene-target base every placeable schema composes. Optional: omitted, the page resolves
- * `game.scenes.active` — the ONE world-wide active scene, a fact, not a guess (never the bridge's
- * viewed scene). No active scene is an error, not an empty list. The scene-document tools
- * (update-scene, activate-scene, screenshot-scene …) keep theirs required.
- */
-export const sceneTarget = z
-  .string()
-  .min(1)
-  .optional()
-  .describe('Scene id or exact name; omit for the ACTIVE scene.');
+/** The one scene-target base every placeable schema composes (src/tools/_targets.ts). */
+export { sceneTarget } from '../_targets.js';

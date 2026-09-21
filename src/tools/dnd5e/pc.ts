@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { toInputSchema } from '../../utils/schema.js';
@@ -117,7 +118,7 @@ const InspectPcAdvancementSchema = z
   });
 
 const LevelUpPcSchema = z.object({
-  actorIdentifier: z.string().min(1, 'actorIdentifier cannot be empty'),
+  actorIdentifier: actorTarget,
   className: z.string().min(1, 'className cannot be empty'),
   // choices for the NEW level (keyed level → advancement-id → data) — e.g. a subclass at the class's
   // level 3 → choices: { "3": { "<subclass-adv-id>": { uuid } } }.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -28,14 +29,7 @@ const ImportItemSchema = z.object({
     .string()
     .min(1, 'itemId cannot be empty')
     .describe('Entry id within the pack (from search-compendium / get-compendium-entry results).'),
-  actorIdentifier: z
-    .string()
-    .optional()
-    .describe(
-      'Target actor (name or id, partial match) to copy the item onto. Also accepts a placed TOKEN id ' +
-        "(from list-tokens) — the copy then lands on that token INSTANCE's own delta, not the base actor. " +
-        'Omit to copy into the world Items sidebar instead.'
-    ),
+  actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world Item.`),
   name: z
     .string()
     .min(1)

@@ -4,6 +4,7 @@
 // batch machinery underneath.
 
 import { z } from 'zod';
+import { SCENE_TARGET, sceneTargetRequired } from '../_targets.js';
 import { toInputSchema } from '../../utils/schema.js';
 import {
   formatCreatePlaceables,
@@ -13,7 +14,7 @@ import {
 import { sceneTarget, type PlaceableModuleFactory } from './_module.js';
 
 const CreateSceneNotesSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name to place the notes on.'),
+  sceneIdentifier: sceneTargetRequired,
   notes: z
     .array(
       z.object({
@@ -53,7 +54,7 @@ const ListNotesSchema = z.object({ sceneIdentifier: sceneTarget });
 
 const UpdateNoteSchema = z
   .object({
-    sceneIdentifier: z.string().min(1).describe('Scene id or exact name holding the pin.'),
+    sceneIdentifier: sceneTargetRequired.describe(`${SCENE_TARGET} holding the pin.`),
     noteId: z
       .string()
       .min(1)
@@ -92,7 +93,7 @@ const UpdateNoteSchema = z
   );
 
 const DeleteNoteSchema = z.object({
-  sceneIdentifier: z.string().min(1).describe('Scene id or exact name holding the pins.'),
+  sceneIdentifier: sceneTargetRequired.describe(`${SCENE_TARGET} holding the pins.`),
   noteIds: z
     .array(z.string().min(1))
     .min(1)

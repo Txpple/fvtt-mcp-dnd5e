@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, actorTarget } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { FormattedToolError } from '../utils/error-handler.js';
@@ -26,11 +27,7 @@ const ownershipLevelSchema = z.enum(['NONE', 'LIMITED', 'OBSERVER', 'OWNER', 'IN
 // Single source of truth for each tool's input contract: the handler parses with these
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
 const SetActorOwnershipSchema = z.object({
-  actorIdentifier: z
-    .string()
-    .describe(
-      'Actor name, ID, or "all friendly NPCs" for bulk operations. Use "party characters" for all player-owned actors.'
-    ),
+  actorIdentifier: actorTarget.describe(`${ACTOR_TARGET} Or a bulk phrase (description).`),
   playerIdentifier: z
     .string()
     .describe(
@@ -46,10 +43,9 @@ const SetActorOwnershipSchema = z.object({
 });
 
 const ListActorOwnershipSchema = z.object({
-  actorIdentifier: z
-    .string()
+  actorIdentifier: actorTarget
     .optional()
-    .describe('Optional: specific actor name/ID to check, or "all" for all actors'),
+    .describe(`${ACTOR_TARGET} Omit or "all" for every actor.`),
   playerIdentifier: z
     .string()
     .optional()

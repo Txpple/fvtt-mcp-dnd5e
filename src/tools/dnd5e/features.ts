@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from '../_targets.js';
 import type { FoundryBridge } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
@@ -10,10 +11,7 @@ import { DEFAULT_FEATURE_PACKS, assertNoSrdPacks } from '../../utils/compendium-
 // the 'compendium-features' mode params, so the advertised and enforced contracts cannot drift.
 // (Not advertised as a standalone tool — add-feature is the one MCP entry.)
 export const AddFeaturesFromCompendiumSchema = z.object({
-  actorIdentifier: z
-    .string()
-    .min(1, 'actorIdentifier cannot be empty')
-    .describe('Name or ID of the target actor (partial name match supported)'),
+  actorIdentifier: actorTarget,
   featureNames: z
     .array(z.string().min(1))
     .min(1)

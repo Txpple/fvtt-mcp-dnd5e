@@ -21,6 +21,7 @@ import {
   totalSkillDescriptionChars,
 } from './measure.js';
 import { buildToolRegistry } from './registry.js';
+import { ACTOR_TARGET, ACTOR_TARGET_STRICT, ITEM_TARGET, SCENE_TARGET } from './tools/_targets.js';
 import { makeFoundry, makeLogger } from './tools/test-helpers.js';
 import { ALWAYS_ON, type ToolsetName, toolsetOf } from './toolsets.js';
 
@@ -140,6 +141,50 @@ describe('context budgets (docs/plan-3.0-consolidation.md)', () => {
         true
       );
     }
+  });
+
+  it('every target leaf advertises the rule its page handler implements (F22)', () => {
+    // The page resolves an actor two ways (src/tools/_targets.ts): fuzzy everywhere except the
+    // three tools below, where a substring hit would be the wrong actor. A leaf may append a note,
+    // but the rule's text comes first, verbatim — so a tool cannot say "exact" and resolve fuzzy.
+    const STRICT_ACTOR_TOOLS = new Set(['set-actor-art', 'delete-actor', 'duplicate-actor']);
+    const ACTOR_LEAVES = new Set(['actorIdentifier', 'actorIdentifiers', 'characterIdentifier']);
+    // The same rule under another property name (renamed in M8; the rule is the contract today).
+    const ACTOR_ALIASES: Record<string, string[]> = {
+      identifier: ['get-actor', 'export-actor'],
+      actor: ['post-item-card'],
+      character: ['update-user'],
+    };
+    const leafText = (schema: Record<string, unknown>): string => {
+      const items = schema.items as Record<string, unknown> | undefined;
+      return String((schema.type === 'array' ? items?.description : schema.description) ?? '');
+    };
+    const bad: string[] = [];
+    for (const tool of tools) {
+      const props = (tool.inputSchema as { properties: Record<string, Record<string, unknown>> })
+        .properties;
+      for (const [key, schema] of Object.entries(props)) {
+        const text = leafText(schema);
+        const isActor = ACTOR_LEAVES.has(key) || ACTOR_ALIASES[key]?.includes(tool.name);
+        const want = isActor
+          ? STRICT_ACTOR_TOOLS.has(tool.name)
+            ? ACTOR_TARGET_STRICT
+            : ACTOR_TARGET
+          : key === 'sceneIdentifier'
+            ? SCENE_TARGET
+            : key === 'itemIdentifier'
+              ? ITEM_TARGET
+              : undefined;
+        if (want && !text.startsWith(want)) bad.push(`${tool.name}.${key}: "${text}"`);
+      }
+    }
+    expect(bad, bad.join('\n')).toEqual([]);
+    // the strict set is exactly those three (a new actor tool is fuzzy unless listed here)
+    for (const name of STRICT_ACTOR_TOOLS)
+      expect(
+        tools.some(t => t.name === name),
+        name
+      ).toBe(true);
   });
 
   it('the decomposition accounts for every byte of every tool', () => {

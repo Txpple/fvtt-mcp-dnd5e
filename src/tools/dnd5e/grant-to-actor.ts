@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTarget } from '../_targets.js';
 import { toInputSchema } from '../../utils/schema.js';
 import { AddToActorItemsSchema } from '../items.js';
 import { AddFeatureSchema } from './add-feature.js';
@@ -18,26 +19,30 @@ import { AddFeaturesFromCompendiumSchema } from './features.js';
  * `grant-to-actor`; renamed to match how the skills/docs refer to it. The filename is kept to avoid
  * churn.)
  *
- * NOTE on actorIdentifier: it is required at the top level (the dispatch merges it into each mode's
- * args). The `feature`/`compendiumFeatures` sub-schemas also carry their own actorIdentifier — a
- * harmless redundancy the descriptions paper over, preserved from the prior hand-written schema.
+ * actorIdentifier is required ONCE, at the top level (the dispatch merges it into each mode's args);
+ * the `feature` / `compendiumFeatures` sub-schemas carry their own for their handlers' parse, and
+ * the wrapper omits those copies from the advertised contract (one field, one description — F22).
  */
 const AddFeatureWrapperSchema = z.object({
-  actorIdentifier: z.string().min(1).describe('Target actor (exact name or ID).'),
+  actorIdentifier: actorTarget,
   mode: z
     .enum(['compendium-features', 'feature', 'items'])
     .describe(
       "Which granting path to use. 'compendium-features' (preferred) imports named features from a " +
         "pack; 'feature' authors one from scratch; 'items' attaches world items."
     ),
-  feature: AddFeatureSchema.optional().describe(
-    "Parameters when mode='feature' — author a feature/attack/spellcasting/spells. Select " +
-      'feature.featureType; actorIdentifier is taken from the top level.'
-  ),
-  compendiumFeatures: AddFeaturesFromCompendiumSchema.optional().describe(
-    "Parameters when mode='compendium-features' — import named features from a compendium pack. " +
-      'actorIdentifier is taken from the top level.'
-  ),
+  feature: AddFeatureSchema.omit({ actorIdentifier: true })
+    .optional()
+    .describe(
+      "Parameters when mode='feature' — author a feature/attack/spellcasting/spells. Select " +
+        'feature.featureType; actorIdentifier is taken from the top level.'
+    ),
+  compendiumFeatures: AddFeaturesFromCompendiumSchema.omit({ actorIdentifier: true })
+    .optional()
+    .describe(
+      "Parameters when mode='compendium-features' — import named features from a compendium pack. " +
+        'actorIdentifier is taken from the top level.'
+    ),
   items: AddToActorItemsSchema.optional().describe(
     "World items to attach when mode='items'. Each needs a name and a valid dnd5e item type (e.g. " +
       "'weapon', 'equipment', 'consumable', 'feat'); pass system-specific data via system."

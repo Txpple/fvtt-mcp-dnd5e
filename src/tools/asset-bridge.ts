@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTargetStrict } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -34,7 +35,7 @@ const RelinkAssetSchema = z.object({
 });
 
 const SetActorArtSchema = z.object({
-  actorIdentifier: z.string().min(1).describe('Actor id or exact name.'),
+  actorIdentifier: actorTargetStrict,
   imagePath: z
     .string()
     .min(1)

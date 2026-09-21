@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTOR_TARGET, ITEM_TARGET, actorTarget, itemTarget } from '../_targets.js';
 import type { FoundryBridge, PageArgs } from '../../foundry.js';
 import { Logger } from '../../logger.js';
 import {
@@ -107,21 +108,10 @@ const ManageEffectSchema = z.object({
   action: z
     .enum(['create', 'edit', 'delete', 'list'])
     .describe('create a new effect, edit/delete one by effectId, or list effects.'),
-  actorIdentifier: z
-    .string()
+  actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Owns the effects / the item.`),
+  itemIdentifier: itemTarget
     .optional()
-    .describe(
-      'Actor that owns the effects (or owns the item when itemIdentifier is also set). Also accepts a ' +
-        "placed TOKEN id (from list-tokens) — the effect then lands on that token INSTANCE's own delta, " +
-        'not the base actor.'
-    ),
-  itemIdentifier: z
-    .string()
-    .optional()
-    .describe(
-      'Item to target: embedded on the actor (with actorIdentifier) or a world item (alone). ' +
-        'Omit to target the actor itself.'
-    ),
+    .describe(`${ITEM_TARGET}; on the actor, else a world item. Omit: the actor itself.`),
   effectId: z
     .string()
     .optional()

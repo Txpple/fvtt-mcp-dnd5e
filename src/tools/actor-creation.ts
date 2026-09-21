@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { actorTargetStrict } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -105,14 +106,7 @@ const DUPLICATE_OWNERSHIP_LEVELS = {
 
 const DuplicateActorSchema = z
   .object({
-    actorIdentifiers: z
-      .array(z.string().min(1))
-      .min(1, 'At least one actor identifier is required')
-      .describe(
-        'Source actors to duplicate — exact actor names or IDs (e.g., ["Gren"] or ' +
-          '["5GRD8GE7GJUWEbB2"]). Resolution is STRICT (exact id, then exact name — no fuzzy ' +
-          'matching), so look up the precise name/ID with list-actors first.'
-      ),
+    actorIdentifiers: z.array(actorTargetStrict).min(1).describe('The source actors.'),
     newNames: z
       .array(z.string().min(1))
       .optional()
@@ -165,12 +159,7 @@ const DuplicateActorSchema = z
   });
 
 const DeleteActorSchema = z.object({
-  identifiers: z
-    .array(z.string().min(1))
-    .min(1, 'At least one actor identifier is required')
-    .describe(
-      'Exact actor names or IDs to delete (e.g., ["ZZ MCP Smoke Test NPC"] or ["5GRD8GE7GJUWEbB2"])'
-    ),
+  identifiers: z.array(actorTargetStrict).min(1).describe('The actors to delete.'),
   removeEmptyFolder: z
     .boolean()
     .default(true)
