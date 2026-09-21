@@ -1,5 +1,4 @@
-# Development Files (Private)
-CLAUDE.md
+# This machine's real per-instance values (private; CLAUDE.md is tracked and points at CONTRIBUTING.md)
 LOCAL.md
 
 # Local Claude Code settings (machine-specific; never commit) — EXCEPT skills/,
