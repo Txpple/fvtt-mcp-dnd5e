@@ -4,12 +4,19 @@ import { Logger } from '../logger.js';
 import { detectGameSystem, type GameSystem } from '../utils/system-detection.js';
 import { assertNoSrdPacks, isHiddenFromEnumeration } from '../utils/compendium-sources.js';
 import { toInputSchema } from '../utils/schema.js';
+import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 // Single source of truth for each tool's input contract: the handlers parse with these schemas
 // and getToolDefinitions() advertises toInputSchema(...) of the same schema, so the advertised
 // and enforced contracts cannot drift (e.g. the limit default that previously said 500 but
 // enforced 100). The lenient coercion unions below are deliberate — they recover stringified
 // argument shapes some MCP clients send — and `io: 'input'` advertises that accepted input side.
+//
+// The four searches are ONE tool, `search-compendium`, selected by `type` (any / creatures /
+// spells / items; src/tools/_union.ts — M8 of the 3.0 plan): the name search across every pack
+// and the three faceted searches over the one page-side engine.
+
+export const SEARCH_COMPENDIUM = 'search-compendium';
 
 const SearchCompendiumSchema = z.object({
   query: z
@@ -30,7 +37,7 @@ const GetCompendiumEntrySchema = z.object({
 });
 
 const ListCreaturesByCriteriaSchema = z.object({
-  name: z.string().optional().describe('Case-insensitive name substring.'),
+  name: z.string().optional(),
   // D&D 5e: challengeRating
   challengeRating: z
     .union([
@@ -128,7 +135,7 @@ const ListCompendiumPacksSchema = z.object({
 // contract"). Lenient string/number unions mirror the other compendium schemas — they recover the
 // stringified argument shapes some MCP clients send.
 const SearchCompendiumSpellsSchema = z.object({
-  name: z.string().optional().describe('Case-insensitive name substring.'),
+  name: z.string().optional(),
   spellLevel: z
     .union([
       z
@@ -195,7 +202,7 @@ const SearchCompendiumItemsSchema = z.object({
     .enum(['gear', 'weapon', 'armor', 'consumable'])
     .default('gear')
     .describe('gear = every physical item; or one family.'),
-  name: z.string().optional().describe('Case-insensitive name substring.'),
+  name: z.string().optional(),
   rarity: z
     .union([z.string(), z.array(z.string())])
     .optional()
@@ -285,10 +292,53 @@ export class CompendiumTools {
   private foundry: FoundryBridge;
   private logger: Logger;
   private gameSystem: GameSystem | null = null;
+  private search: UnionTool;
 
   constructor({ foundry, logger }: CompendiumToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'CompendiumTools' });
+    this.search = unionTool({
+      name: SEARCH_COMPENDIUM,
+      description:
+        'Search the premium compendium packs (SRD packs are never searched), premium-first: type ' +
+        'any = a name search over every document type; creatures / spells / items = facets on real ' +
+        'system data. Hits are {id, name, type, uuid, pack, img, facets} with totalFound.',
+      discriminators: ['type'],
+      shared: { name: z.string().describe('Case-insensitive name substring.') },
+      members: [
+        unionMember({
+          select: { type: 'any' },
+          description: 'Name terms across every pack and document type, exact-name first.',
+          schema: SearchCompendiumSchema,
+          handler: parsed => this.searchByName(parsed),
+        }),
+        unionMember({
+          select: { type: 'creatures' },
+          description:
+            'Creatures by CR, creature type, size, spellcasting, legendary actions across the ' +
+            'Actor packs.',
+          schema: ListCreaturesByCriteriaSchema,
+          handler: parsed => this.searchCreatures(parsed),
+        }),
+        unionMember({
+          select: { type: 'spells' },
+          description: 'Spells by level, school, damage type.',
+          schema: SearchCompendiumSpellsSchema,
+          handler: parsed => this.searchSpells(parsed),
+        }),
+        unionMember({
+          select: { type: 'items' },
+          description: 'Gear by family, rarity, subtype, properties, magical.',
+          schema: SearchCompendiumItemsSchema,
+          handler: parsed => this.searchItems(parsed),
+        }),
+      ],
+    });
+  }
+
+  /** The search union (registry-facing). */
+  async handleSearchCompendium(args: unknown): Promise<unknown> {
+    return this.search.handle(args);
   }
 
   /**
@@ -306,44 +356,13 @@ export class CompendiumTools {
    */
   getToolDefinitions() {
     return [
-      {
-        name: 'search-compendium',
-        description:
-          'Name search across the premium compendium packs, any document type (SRD packs are never ' +
-          'searched). Exact-name first, premium-first; hits are {id, name, type, uuid, pack, img} with ' +
-          'totalFound. Facets (CR, level, rarity …): the search-compendium-* tools.',
-        inputSchema: toInputSchema(SearchCompendiumSchema),
-      },
+      this.search.def,
       {
         name: 'get-compendium-entry',
         description:
           'One compendium entry in full (items, spells, abilities, effects, system data), or compact. ' +
           'An SRD pack id is refused.',
         inputSchema: toInputSchema(GetCompendiumEntrySchema),
-      },
-      {
-        name: 'search-compendium-creatures',
-        description:
-          'Creatures by facet (CR, type, size, spellcasting, legendary actions) across the premium ' +
-          'Actor packs, on real system data. Hits are {id, name, type, uuid, pack, img, facets}, ' +
-          'premium-first, with totalFound.',
-        inputSchema: toInputSchema(ListCreaturesByCriteriaSchema),
-      },
-      {
-        name: 'search-compendium-spells',
-        description:
-          'Spells by facet (level, school, damage type, name) across the premium packs, on real ' +
-          'system data. Hits are {id, name, type, uuid, pack, img, facets}, premium-first, with ' +
-          'totalFound.',
-        inputSchema: toInputSchema(SearchCompendiumSpellsSchema),
-      },
-      {
-        name: 'search-compendium-items',
-        description:
-          'Gear by facet (family, rarity, subtype, properties, magical, name) across the premium ' +
-          'packs, on real system data. Hits are {id, name, type, uuid, pack, img, facets}, ' +
-          'premium-first, with totalFound.',
-        inputSchema: toInputSchema(SearchCompendiumItemsSchema),
       },
       {
         name: 'list-compendium-packs',
@@ -353,11 +372,13 @@ export class CompendiumTools {
     ];
   }
 
-  async handleSearchCompendium(args: any): Promise<any> {
+  private async searchByName({
+    query,
+    packType,
+    limit,
+  }: z.output<typeof SearchCompendiumSchema>): Promise<Record<string, unknown>> {
     // Detect game system for appropriate filtering
     const gameSystem = await this.getGameSystem();
-
-    const { query, packType, limit } = SearchCompendiumSchema.parse(args);
 
     this.logger.info('Compendium name search', { gameSystem, query, packType });
 
@@ -436,23 +457,9 @@ export class CompendiumTools {
     }
   }
 
-  async handleListCreaturesByCriteria(args: any): Promise<any> {
-    let params: z.infer<typeof ListCreaturesByCriteriaSchema>;
-    try {
-      params = ListCreaturesByCriteriaSchema.parse(args);
-    } catch (parseError) {
-      this.logger.error('Failed to parse creature criteria parameters', { args, parseError });
-      if (parseError instanceof z.ZodError) {
-        const errorDetails = parseError.issues
-          .map(err => `${err.path.join('.')}: ${err.message}`)
-          .join('; ');
-        throw new Error(
-          `Parameter validation failed: ${errorDetails}. Received args: ${JSON.stringify(args)}`
-        );
-      }
-      throw parseError;
-    }
-
+  private async searchCreatures(
+    params: z.output<typeof ListCreaturesByCriteriaSchema>
+  ): Promise<Record<string, unknown>> {
     const criteriaDescription = this.describeCriteria(params);
     this.logger.info('Creature faceted search', { criteria: criteriaDescription });
 
@@ -506,22 +513,9 @@ export class CompendiumTools {
     };
   }
 
-  async handleSearchCompendiumSpells(args: any): Promise<any> {
-    let params: z.infer<typeof SearchCompendiumSpellsSchema>;
-    try {
-      params = SearchCompendiumSpellsSchema.parse(args);
-    } catch (parseError) {
-      if (parseError instanceof z.ZodError) {
-        const details = parseError.issues
-          .map(err => `${err.path.join('.')}: ${err.message}`)
-          .join('; ');
-        throw new Error(
-          `Parameter validation failed: ${details}. Received args: ${JSON.stringify(args)}`
-        );
-      }
-      throw parseError;
-    }
-
+  private async searchSpells(
+    params: z.output<typeof SearchCompendiumSpellsSchema>
+  ): Promise<Record<string, unknown>> {
     const criteriaDescription = this.describeSpellCriteria(params);
     this.logger.info('Spell faceted search', { criteria: criteriaDescription });
 
@@ -538,22 +532,9 @@ export class CompendiumTools {
     return facetedBody('spell', criteriaDescription, found);
   }
 
-  async handleSearchCompendiumItems(args: any): Promise<any> {
-    let params: z.infer<typeof SearchCompendiumItemsSchema>;
-    try {
-      params = SearchCompendiumItemsSchema.parse(args);
-    } catch (parseError) {
-      if (parseError instanceof z.ZodError) {
-        const details = parseError.issues
-          .map(err => `${err.path.join('.')}: ${err.message}`)
-          .join('; ');
-        throw new Error(
-          `Parameter validation failed: ${details}. Received args: ${JSON.stringify(args)}`
-        );
-      }
-      throw parseError;
-    }
-
+  private async searchItems(
+    params: z.output<typeof SearchCompendiumItemsSchema>
+  ): Promise<Record<string, unknown>> {
     const criteriaDescription = this.describeItemCriteria(params);
     this.logger.info('Item faceted search', {
       documentType: params.documentType,

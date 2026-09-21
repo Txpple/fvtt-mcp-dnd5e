@@ -1,6 +1,6 @@
 /**
- * Unit tests for CompendiumTools (search-compendium, get-compendium-entry,
- * search-compendium-creatures, list-compendium-packs).
+ * Unit tests for CompendiumTools — search-compendium (the M8 union: type any / creatures / spells
+ * / items over the one faceted engine), get-compendium-entry, list-compendium-packs.
  *
  * These handlers own three things before/around the bridge call:
  *   1. zod input validation — required fields, min-length strings, enum
@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CompendiumTools } from './compendium.js';
+import { CompendiumTools, SEARCH_COMPENDIUM } from './compendium.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
@@ -49,14 +49,34 @@ describe('CompendiumTools.getToolDefinitions', () => {
       .getToolDefinitions()
       .map(t => t.name)
       .sort();
-    expect(names).toEqual([
-      'get-compendium-entry',
-      'list-compendium-packs',
-      'search-compendium',
-      'search-compendium-creatures',
-      'search-compendium-items',
-      'search-compendium-spells',
-    ]);
+    expect(names).toEqual(['get-compendium-entry', 'list-compendium-packs', SEARCH_COMPENDIUM]);
+  });
+
+  it('search-compendium: the type enum, the shared name leaf, closed members', () => {
+    const def = build()
+      .tools.getToolDefinitions()
+      .find(t => t.name === SEARCH_COMPENDIUM)!;
+    const schema = def.inputSchema as any;
+    expect(schema.properties.type.enum).toEqual(['any', 'creatures', 'spells', 'items']);
+    expect(schema.properties.name.description).toBe('Case-insensitive name substring.');
+    const byType = Object.fromEntries(schema.anyOf.map((m: any) => [m.properties.type.const, m]));
+    for (const m of schema.anyOf) expect(m.additionalProperties).toBe(false);
+    expect(byType.any.required).toEqual(['type', 'query']);
+    expect(byType.any.properties.name).toBeUndefined();
+    expect(byType.creatures.properties.name).toEqual({ type: 'string' });
+    expect(byType.creatures.required).toEqual(['type']);
+    expect(byType.spells.required).toEqual(['type']);
+    expect(byType.items.required).toEqual(['type']);
+  });
+
+  it('refuses an unknown type and an unknown key by name against the selected member', async () => {
+    const { tools } = build();
+    await expect(tools.handleSearchCompendium({ type: 'monsters' })).rejects.toThrow(
+      'search-compendium: type must be one of "any", "creatures", "spells", "items" (got "monsters").'
+    );
+    await expect(tools.handleSearchCompendium({ type: 'spells', query: 'fire' })).rejects.toThrow(
+      'search-compendium (type "spells"): unknown argument "query" — it takes: type, name, spellLevel, spellSchool, damageType, limit.'
+    );
   });
 
   it('every definition has an object inputSchema', () => {
@@ -69,11 +89,8 @@ describe('CompendiumTools.getToolDefinitions', () => {
   it('marks the expected required fields per tool', () => {
     const { tools } = build();
     const byName = Object.fromEntries(tools.getToolDefinitions().map(d => [d.name, d]));
-    expect(byName['search-compendium'].inputSchema.required).toEqual(['query']);
+    expect(byName[SEARCH_COMPENDIUM].inputSchema.required).toEqual(['type']);
     expect(byName['get-compendium-entry'].inputSchema.required).toEqual(['packId', 'itemId']);
-    expect(byName['search-compendium-creatures'].inputSchema.required).toEqual([]);
-    expect(byName['search-compendium-spells'].inputSchema.required).toEqual([]);
-    expect(byName['search-compendium-items'].inputSchema.required).toEqual([]);
   });
 });
 
@@ -94,6 +111,7 @@ describe('handleSearchCompendium', () => {
     });
 
     const out = await tools.handleSearchCompendium({
+      type: 'any',
       query: 'goblin',
       packType: 'Actor',
     });
@@ -131,7 +149,7 @@ describe('handleSearchCompendium', () => {
 
   it('reports an empty result set cleanly', async () => {
     const { tools } = build('dnd5e', { results: [], totalFound: 0 });
-    const out = await tools.handleSearchCompendium({ query: 'zzzznothing' });
+    const out = await tools.handleSearchCompendium({ type: 'any', query: 'zzzznothing' });
     expect(out.totalFound).toBe(0);
     expect(out.showing).toBe(0);
     expect(out.results).toEqual([]);
@@ -142,7 +160,7 @@ describe('handleSearchCompendium', () => {
       results: [hit('a', 'Sword A'), hit('b', 'Sword B')],
       totalFound: 5,
     });
-    const out = await tools.handleSearchCompendium({ query: 'sword', limit: 2 });
+    const out = await tools.handleSearchCompendium({ type: 'any', query: 'sword', limit: 2 });
     expect(calls.find(c => c[0] === 'searchCompendium')![1].limit).toBe(2);
     expect(out.totalFound).toBe(5);
     expect(out.showing).toBe(2);
@@ -151,22 +169,26 @@ describe('handleSearchCompendium', () => {
 
   it('rejects a query shorter than 2 characters', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({ query: 'a' })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'any', query: 'a' })).rejects.toThrow();
   });
 
   it('rejects a missing query', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({})).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'any' })).rejects.toThrow();
   });
 
   it('rejects a limit above the maximum of 50', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({ query: 'dragon', limit: 51 })).rejects.toThrow();
+    await expect(
+      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 51 })
+    ).rejects.toThrow();
   });
 
   it('rejects a limit below the minimum of 1', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({ query: 'dragon', limit: 0 })).rejects.toThrow();
+    await expect(
+      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 0 })
+    ).rejects.toThrow();
   });
 
   it('drops SRD (dnd5e.*) hits and counts only book results (enforced backstop)', async () => {
@@ -179,7 +201,7 @@ describe('handleSearchCompendium', () => {
       totalFound: 3,
     });
 
-    const out = await tools.handleSearchCompendium({ query: 'goblin' });
+    const out = await tools.handleSearchCompendium({ type: 'any', query: 'goblin' });
 
     // Only the premium-book hit survives as a result (the page already excludes SRD packs; this
     // is the backstop).
@@ -310,7 +332,8 @@ describe('handleListCreaturesByCriteria', () => {
   it('forwards documentType:creature + facets to searchCompendiumFaceted and shapes the result', async () => {
     const { tools, calls } = build('dnd5e', [hit()]);
 
-    const out = await tools.handleListCreaturesByCriteria({
+    const out = await tools.handleSearchCompendium({
+      type: 'creatures',
       challengeRating: 17,
       creatureType: 'dragon',
     });
@@ -343,7 +366,7 @@ describe('handleListCreaturesByCriteria', () => {
 
   it("forwards the name facet and reports the page's full match count on a capped survey", async () => {
     const { tools, calls } = build('dnd5e', { results: [hit()], totalFound: 493 });
-    const out = await tools.handleListCreaturesByCriteria({ name: 'goblin' });
+    const out = await tools.handleSearchCompendium({ type: 'creatures', name: 'goblin' });
     expect(calls.find(c => c[0] === 'searchCompendiumFaceted')![1]).toMatchObject({
       name: 'goblin',
     });
@@ -354,7 +377,8 @@ describe('handleListCreaturesByCriteria', () => {
 
   it('describes a CR range and defaults the limit', async () => {
     const { tools, calls } = build('dnd5e', []);
-    const out = await tools.handleListCreaturesByCriteria({
+    const out = await tools.handleSearchCompendium({
+      type: 'creatures',
       challengeRating: { min: 10, max: 15 },
     });
     expect(out.criteria).toBe('CR 10-15');
@@ -367,18 +391,20 @@ describe('handleListCreaturesByCriteria', () => {
 
   it('reports "no criteria" when called with no filters', async () => {
     const { tools } = build('dnd5e', []);
-    const out = await tools.handleListCreaturesByCriteria({});
+    const out = await tools.handleSearchCompendium({ type: 'creatures' });
     expect(out.criteria).toBe('no criteria');
   });
 
   it('rejects an invalid size enum value', async () => {
     const { tools } = build();
-    await expect(tools.handleListCreaturesByCriteria({ size: 'colossal' })).rejects.toThrow();
+    await expect(
+      tools.handleSearchCompendium({ type: 'creatures', size: 'colossal' })
+    ).rejects.toThrow();
   });
 
   it('rejects a limit above the maximum of 500', async () => {
     const { tools } = build();
-    await expect(tools.handleListCreaturesByCriteria({ limit: 501 })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'creatures', limit: 501 })).rejects.toThrow();
   });
 
   it('drops SRD (dnd5e.*) creatures and counts only book results (enforced backstop)', async () => {
@@ -386,7 +412,7 @@ describe('handleListCreaturesByCriteria', () => {
       hit(),
       hit({ id: 's1', pack: 'dnd5e.monsters', packLabel: 'SRD' }),
     ]);
-    const out = await tools.handleListCreaturesByCriteria({ creatureType: 'dragon' });
+    const out = await tools.handleSearchCompendium({ type: 'creatures', creatureType: 'dragon' });
     expect(out.totalFound).toBe(1);
     expect(out.results).toHaveLength(1);
     expect(out.results[0]).toMatchObject({ id: 'c1', pack: 'dnd-monster-manual.actors' });
@@ -410,7 +436,8 @@ describe('handleSearchCompendiumSpells', () => {
   it('forwards documentType:spell + facets to searchCompendiumFaceted and shapes the result', async () => {
     const { tools, calls } = build('dnd5e', [hit()]);
 
-    const out = await tools.handleSearchCompendiumSpells({
+    const out = await tools.handleSearchCompendium({
+      type: 'spells',
       spellLevel: 3,
       spellSchool: 'evocation',
       damageType: 'fire',
@@ -437,15 +464,18 @@ describe('handleSearchCompendiumSpells', () => {
 
   it('describes a cantrip and a level range', async () => {
     const { tools } = build('dnd5e', []);
-    expect((await tools.handleSearchCompendiumSpells({ spellLevel: 0 })).criteria).toBe('cantrip');
+    expect((await tools.handleSearchCompendium({ type: 'spells', spellLevel: 0 })).criteria).toBe(
+      'cantrip'
+    );
     expect(
-      (await tools.handleSearchCompendiumSpells({ spellLevel: { min: 1, max: 3 } })).criteria
+      (await tools.handleSearchCompendium({ type: 'spells', spellLevel: { min: 1, max: 3 } }))
+        .criteria
     ).toBe('level 1-3');
   });
 
   it('coerces a stringified level (lenient client shape)', async () => {
     const { tools, calls } = build('dnd5e', []);
-    await tools.handleSearchCompendiumSpells({ spellLevel: '5' });
+    await tools.handleSearchCompendium({ type: 'spells', spellLevel: '5' });
     const call = calls.find(c => c[0] === 'searchCompendiumFaceted');
     expect(call![1].spellLevel).toBe(5);
   });
@@ -455,7 +485,7 @@ describe('handleSearchCompendiumSpells', () => {
       hit(),
       hit({ id: 'srd1', pack: 'dnd5e.spells24', packLabel: 'SRD Spells' }),
     ]);
-    const out = await tools.handleSearchCompendiumSpells({ spellSchool: 'evo' });
+    const out = await tools.handleSearchCompendium({ type: 'spells', spellSchool: 'evo' });
     expect(out.totalFound).toBe(1);
     expect(out.results).toHaveLength(1);
     expect(out.results[0]).toMatchObject({ id: 's1' });
@@ -463,7 +493,7 @@ describe('handleSearchCompendiumSpells', () => {
 
   it('reports an empty result set cleanly', async () => {
     const { tools } = build('dnd5e', []);
-    const out = await tools.handleSearchCompendiumSpells({ spellLevel: 9 });
+    const out = await tools.handleSearchCompendium({ type: 'spells', spellLevel: 9 });
     expect(out.totalFound).toBe(0);
     expect(out.results).toEqual([]);
     expect(out.criteria).toBe('level 9');
@@ -471,12 +501,14 @@ describe('handleSearchCompendiumSpells', () => {
 
   it('rejects a spell level above 9', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendiumSpells({ spellLevel: 10 })).rejects.toThrow();
+    await expect(
+      tools.handleSearchCompendium({ type: 'spells', spellLevel: 10 })
+    ).rejects.toThrow();
   });
 
   it('rejects a limit above the maximum of 200', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendiumSpells({ limit: 201 })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'spells', limit: 201 })).rejects.toThrow();
   });
 });
 
@@ -496,7 +528,8 @@ describe('handleSearchCompendiumItems', () => {
   it('defaults documentType to gear and forwards facets to searchCompendiumFaceted', async () => {
     const { tools, calls } = build('dnd5e', [hit()]);
 
-    const out = await tools.handleSearchCompendiumItems({
+    const out = await tools.handleSearchCompendium({
+      type: 'items',
       rarity: 'very rare',
       itemType: 'wondrous',
       magical: true,
@@ -523,7 +556,8 @@ describe('handleSearchCompendiumItems', () => {
 
   it('narrows the family via documentType', async () => {
     const { tools, calls } = build('dnd5e', []);
-    await tools.handleSearchCompendiumItems({
+    await tools.handleSearchCompendium({
+      type: 'items',
       documentType: 'weapon',
       rarity: ['rare', 'legendary'],
     });
@@ -534,7 +568,7 @@ describe('handleSearchCompendiumItems', () => {
 
   it('coerces a stringified magical flag (lenient client shape)', async () => {
     const { tools, calls } = build('dnd5e', []);
-    await tools.handleSearchCompendiumItems({ magical: 'true' });
+    await tools.handleSearchCompendium({ type: 'items', magical: 'true' });
     const call = calls.find(c => c[0] === 'searchCompendiumFaceted');
     expect(call![1].magical).toBe(true);
   });
@@ -544,7 +578,7 @@ describe('handleSearchCompendiumItems', () => {
       hit(),
       hit({ id: 'srd1', pack: 'dnd5e.items', packLabel: 'SRD Items' }),
     ]);
-    const out = await tools.handleSearchCompendiumItems({ rarity: 'rare' });
+    const out = await tools.handleSearchCompendium({ type: 'items', rarity: 'rare' });
     expect(out.totalFound).toBe(1);
     expect(out.results).toHaveLength(1);
     expect(out.results[0]).toMatchObject({ id: 'w1' });
@@ -552,7 +586,7 @@ describe('handleSearchCompendiumItems', () => {
 
   it('reports an empty result set cleanly', async () => {
     const { tools } = build('dnd5e', []);
-    const out = await tools.handleSearchCompendiumItems({ documentType: 'consumable' });
+    const out = await tools.handleSearchCompendium({ type: 'items', documentType: 'consumable' });
     expect(out.totalFound).toBe(0);
     expect(out.results).toEqual([]);
     expect(out.criteria).toBe('consumable (no facets)');
@@ -560,12 +594,14 @@ describe('handleSearchCompendiumItems', () => {
 
   it('rejects an invalid documentType', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendiumItems({ documentType: 'spell' })).rejects.toThrow();
+    await expect(
+      tools.handleSearchCompendium({ type: 'items', documentType: 'spell' })
+    ).rejects.toThrow();
   });
 
   it('rejects a limit above the maximum of 200', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendiumItems({ limit: 201 })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'items', limit: 201 })).rejects.toThrow();
   });
 });
 

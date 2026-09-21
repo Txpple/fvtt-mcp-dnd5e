@@ -69,7 +69,7 @@ Each entry is `{ text?, uuid?, name?, weight?, range? }`. Provide `text` **or** 
 | Field | Use it for |
 |---|---|
 | `text` | A literal result — a rumor, a name, coins (`"2d6 × 10 gp"`), an instruction (`"Roll twice on this table"`), flavor. HTML / `@UUID` enrichers allowed. |
-| `uuid` | Link a **REAL** item / monster / spell from a premium book. Get the uuid from `search-compendium-items` / `-creatures` / `-spells`. The tool resolves its name, refuses SRD / unresolvable refs, and renders the book-style `@UUID[…]{Name}` link. World-doc uuids (`Item.<id>`) are allowed too. |
+| `uuid` | Link a **REAL** item / monster / spell from a premium book. Get the uuid from `search-compendium` (`type` items / creatures / spells). The tool resolves its name, refuses SRD / unresolvable refs, and renders the book-style `@UUID[…]{Name}` link. World-doc uuids (`Item.<id>`) are allowed too. |
 | `name` | Optional display label for the `uuid` link (default: the resolved document name). |
 | `{{link}}` | A placeholder inside `text` that gets replaced by the `uuid` link — for **mixed loot**: `{ text:"A pouch holding {{link}} and 2d6 gp", uuid:"…Item.bagOfHolding" }`. Without a placeholder, the link is appended to the text. |
 | `weight` | Relative likelihood (default 1). The tool maps `weight` consecutive roll values to this entry. |
@@ -82,7 +82,7 @@ match exactly (e.g. a `d100` table with uneven bands).
 ## Table kinds — pick the contents + the shape
 
 - **Random encounter table** — entries are real monsters linked by `uuid` (from
-  `search-compendium-creatures`); `weight` the common foes higher than the rare ones. Optionally add
+  `search-compendium { type: "creatures" }`); `weight` the common foes higher than the rare ones. Optionally add
   `text` entries for non-combat events ("Tracks, a day old", "Distant horn"). One table per region/tier.
 - **Loot / treasure table** — the magic-item idiom: each entry links a **real** DMG/PHB item by `uuid`
   (mix-and-match the hoard from actual book items), with `text` coin/gem lines. A drawn entry is
@@ -121,7 +121,7 @@ This is the sanctioned path for "roll on the DMG treasure tables and give me the
 ## Workflow (building a NEW table)
 
 1. **Decide the contents.** Theme, entries, weights — your judgment. For loot/encounters, **find the
-   real documents first** with `search-compendium-items` / `-creatures` (premium-only, so you get
+   real documents first** with `search-compendium` (`type: "items"` / `"creatures"`; premium-only, so you get
    correct uuids) and reference them by `uuid`.
 2. **Create** with `manage-rolltables { action: "create" }` (weights, or explicit ranges to match a
    printed table).

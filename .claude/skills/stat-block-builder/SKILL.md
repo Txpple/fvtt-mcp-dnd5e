@@ -20,13 +20,13 @@ Tools used: `create-actor-from-compendium` (prefab copy · prefab-as-base via `m
 compendium-features / spells), **`manage-items { action: "import" }`** (COPY gear from a compendium — the default for
 inventory), `add-item` (author homebrew gear — last resort), `manage-activity`, `manage-effect`,
 `apply-condition`, `set-actor-art`, `set-actor-ownership`, `move-documents`, `update-actor-item`
-(per-item corrections), the faceted discovery tools `search-compendium-creatures` /
-`search-compendium-spells` / `search-compendium-items` (find things to copy by **type + facet** —
+(per-item corrections), the faceted discovery searches `search-compendium` with `type: "creatures"` /
+`"spells"` / `"items"` (find things to copy by **type + facet** —
 each searches the premium books only and never the SRD, so you don't reason about pack ids),
 `search-compendium` (broad **name** lookup) / `get-compendium-entry` (full entry), plus `manage-actors` `get` /
 `get-actor-entity` to read back. Defer item judgment to the [[physical-item-builder]] skill.
 
-> **Faceted discovery returns minimal hits.** `search-compendium-creatures` / `-spells` / `-items`
+> **Faceted discovery returns minimal hits.** `search-compendium` (`type` creatures / spells / items)
 > each return `results: [{ id, name, type, uuid, pack, img, facets }]` plus `totalFound` (the
 > full match count — raise `limit` for a survey), premium-first ranked. Pick a hit by name, then feed its **`pack` + `id`** straight into
 > `create-actor-from-compendium`, `manage-items` `import`, or `get-compendium-entry` — no pack-id guesswork.
@@ -66,7 +66,7 @@ with the actor-authoring tools.
 Decide HOW to create before building anything. Try the rungs **in order** — this is the spine, not a
 preference:
 
-1. **Prefab — the default.** Search the Monster Manual with `search-compendium-creatures`. If a
+1. **Prefab — the default.** Search the Monster Manual with `search-compendium { type: "creatures" }`. If a
    suitable actor exists and the user just wants it in the world, `create-actor-from-compendium`
    (feeding the hit's `pack` + `id`) and you're done — jump to the finishing pass (Step 10). Real stats
    *and* art, zero authoring.
@@ -182,7 +182,7 @@ Innate / homebrew → `add-feature` `homebrew-spell` (`spellMethod: "innate"`, c
 
 When the block names its spells you can import them straight by name. When you need to *find* spells —
 verify an exact name, or pick by criteria (e.g. "a CR-appropriate fire evocation") — use
-`search-compendium-spells` (facets: `spellLevel`, `spellSchool`, `damageType`, `name`); it searches the
+`search-compendium { type: "spells" }` (facets: `spellLevel`, `spellSchool`, `damageType`, `name`); it searches the
 premium books only, so no pack-id reasoning. Then import the confirmed names via `add-feature` `spells`.
 
 ## Step 7 — Effects and starting conditions
@@ -320,7 +320,7 @@ mode by how the block reads:
 
 Build the rest of what the creature carries and drops — COPY from the 2024 PHB/DMG compendiums first;
 defer item judgment to [[physical-item-builder]]:
-- **Find then copy:** discover gear with `search-compendium-items` (facets: `documentType`
+- **Find then copy:** discover gear with `search-compendium { type: "items" }` (facets: `documentType`
   gear|weapon|armor|consumable, `rarity`, `itemType`, `magical`, `name` — premium books only, never the
   `dnd5e.*` SRD, so no pack-id reasoning) → `manage-items` `import` the chosen hit (`packId` = its `pack`,
   `itemId` = its `id`, plus `actorIdentifier`). Copies bring correct stats AND art.

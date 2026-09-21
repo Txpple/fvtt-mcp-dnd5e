@@ -24,7 +24,7 @@ don't author) · **never the SRD** · custom = copy a base → modify → rename
 **STOP and ASK** (never fall back to 2014/SRD, never invent a rarity/price/damage die) · authoring, not
 play. The **item-specific** shaping rules are in "House rules for shaping items" below.
 
-Tools: **`manage-items { action: "import" }`** (copy from a compendium — the default path), **`search-compendium-items`**
+Tools: **`manage-items { action: "import" }`** (copy from a compendium — the default path), **`search-compendium { type: "items" }`**
 (faceted discovery by rarity / subtype / magical — the default way to *find* gear), **`search-compendium`**
 (broad name lookup) / **`get-compendium-entry`** (confirm the entry; you copy by the hit's `pack` + `id`),
 **`add-item`** (author from scratch — homebrew last resort only), **`manage-actors` `update`** (actor
@@ -39,7 +39,7 @@ base into a custom item), **`manage-actors` `get` / `get-actor-entity`** (read b
 
 ## Step 0 — Find it in the compendium (the default path)
 
-Discover the item with **`search-compendium-items`** — faceted by `documentType`
+Discover the item with **`search-compendium { type: "items" }`** — faceted by `documentType`
 (gear|weapon|armor|consumable), `rarity`, `itemType` (subtype: wondrous / potion / ring / wand / …),
 `magical`, and `name`. It searches the **premium books ONLY** (never the `dnd5e.*` SRD, design.md §2.3)
 and ranks them first, so you don't reason about pack ids. (For a quick exact-name lookup,
@@ -101,7 +101,7 @@ menu but does **NOT** actually cast (no template pops). This is the #1 magic-ite
   explicit homebrew permission. NEVER fabricate a fake activity to stand in for an off-book spell (same
   rule as a monster's off-book feature — see `_shared/authoring-policy.md`, design.md §2.3).
 - **Build it with `manage-activity` `action:"add", type:"cast"` — ONE validated call** (mirrors the DMG
-  Wand of Fireballs `dmgWandOfFirebal`). Get the spell uuid from `search-compendium-spells` (it's
+  Wand of Fireballs `dmgWandOfFirebal`). Get the spell uuid from `search-compendium { type: "spells" }` (it's
   `Compendium.<pack>.Item.<id>`); pass it as `spellUuid`. The tool **resolves the spell for you** — it
   pulls the spell's level + V/S/M components + name, and **refuses an off-book or SRD uuid** (the
   STOP-and-ASK above is enforced at the tool boundary, not just by you). Params:
@@ -155,7 +155,7 @@ them — and **pull an approximating icon from the compendium** (see House rules
   it tries a live same-kind compendium match by name/baseItem (so a "Mace of the Long Dark" → a real
   mace icon), falling back to a verified core floor — a blank is impossible. So the floor is handled for
   you, but for a *specific* look still prefer passing `img` (or fixing it after with `manage-items` `update` /
-  `update-actor-item`): `search-compendium-items` for the closest thematic item (a *Mace of Terror* icon
+  `update-actor-item`): `search-compendium { type: "items" }` for the closest thematic item (a *Mace of Terror* icon
   for a dark mace, *Robe of Stars* for a night-veil, a *Dark Shard Amulet* for an unholy focus) and copy
   its `img`. `manage-items` `import` copies already carry real art.
 - **A custom item's MECHANICS must be real — never a "treat its X as Y" note.** If the item deals

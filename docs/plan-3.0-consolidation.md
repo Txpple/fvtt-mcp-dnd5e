@@ -558,3 +558,19 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   verify-item-tooling 24/24, verify-actor-export 9/9, verify-read-tools 7/7, integration 80 passed
   / 6 skipped (the split bundle under every one). Next: search-compendium ×4 → the actor
   projections.
+- 2026-09-21 — **M8 search-compendium ×4 → one with `type`** (`type`: any / creatures / spells /
+  items): 4 tools → 1, the union **4,447** against the four's **4,721** (−5.8%). The name search
+  keeps its `query` (name terms, all must appear); the three faceted searches share the root
+  `name` leaf (the substring facet) and their own facets; `limit` stays per member (the four
+  had different ceilings — 50 / 500 / 200 / 200 — and the lenient string unions). The search
+  bodies keep M2's one hit shape + `totalFound` (JSON; the §3 line rule is the list's — a search
+  hit carries a `facets` object and a uuid). The per-tool "Parameter validation failed …
+  Received args" wrappers are gone — the union parses with the member's zod and the central
+  mapper renders a ZodError like everywhere else. tools/list **201,746**, names **83** (6,299
+  chars). Re-pointed: stat-block-builder (6 lines), physical-item-builder (4), table-builder
+  (3), pc-builder (2), authoring-policy (2), journal-builder (1), the manage-activity page hint,
+  two source comments, README (counts + the CRUD paragraph), tools-reads.int.test +
+  verify-read-tools (three faceted checks added: CR-¼ goblins, level-3 fire spells finding
+  Fireball, rare wands), tool-results, the error-handler test, the registry tests (86 → 83);
+  skills-matrix 0 / 0; siblings 0. Live: verify-read-tools **10/10**, integration 80 passed /
+  6 skipped. Next: the actor projections (get-actor-entity / export-actor into manage-actors).

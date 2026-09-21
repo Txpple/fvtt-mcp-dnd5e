@@ -65,7 +65,7 @@ async function resolveTransformActor(ref: string): Promise<{ uuid: string; name:
   if (best) return { uuid: best.uuid, name: best.name };
   throw invalid(
     `transform profile actor "${r}" is not a premium-book creature (searched the MM / premium Actor ` +
-      'packs by exact name) — pass an Actor uuid, or check the name with search-compendium-creatures.'
+      'packs by exact name) — pass an Actor uuid, or check the name with search-compendium type creatures.'
   );
 }
 

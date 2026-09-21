@@ -59,7 +59,7 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
       'effect "Bless" is missing a change for system.bonuses.abilities.save',
     ],
     [
-      'search-compendium-spells',
+      'search-compendium',
       'searchCompendium',
       'not-found',
       'pack dnd-players-handbook.spells not found — is the PHB installed?',

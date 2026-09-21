@@ -62,7 +62,9 @@ describe.skipIf(!LIVE)('read-tool spine (live)', () => {
   });
 
   it('search-compendium(goblin)', async () => {
-    await expect(compendium.handleSearchCompendium({ query: 'goblin' })).resolves.not.toBeNull();
+    await expect(
+      compendium.handleSearchCompendium({ type: 'any', query: 'goblin' })
+    ).resolves.not.toBeNull();
   });
 
   it('manage-scenes list', async () => {

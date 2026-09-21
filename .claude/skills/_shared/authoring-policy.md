@@ -14,7 +14,7 @@
    premium books). For a creature, its traits, its spells, AND its gear: find the real entry in a
    compendium and **COPY it** (correct stats + artwork) before building anything. Mixing and matching
    copied entries is the *normal* way to create. Discover with the faceted tools
-   (`search-compendium-creatures` / `-spells` / `-items`) — they search the premium books only and rank
+   (`search-compendium` with `type` creatures / spells / items) — they search the premium books only and rank
    them first, so you never reason about pack ids.
 
 3. **NEVER the SRD.** The SRD packs — both `dnd5e.*24` and the older `dnd5e.*` — are **never** a source;
@@ -50,7 +50,7 @@
    verified core floor), `add-feature` fills a real feature/attack/spell icon **and accepts an `img`**,
    and `author-npc` fills a real creatureType portrait + token. So a blank is off the table — but for a
    *specific* look, still pass `img` (to `add-item` / `add-feature`) or set it afterward from the
-   compendium feature/item you are emulating (`search-compendium-*` → copy its `img` via `manage-items` `update` /
+   compendium feature/item you are emulating (`search-compendium` → copy its `img` via `manage-items` `update` /
    `update-actor-item` / `set-actor-art`). Copied documents (`manage-items` `import` / `create-actor-from-compendium`)
    already carry real art. Confirm with `content-audit` before you finish.
 

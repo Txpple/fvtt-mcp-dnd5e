@@ -89,7 +89,7 @@ const candidateRows = uniq(candidates);
 // cards → manage-cards; the six table CRUD tools → manage-rolltables, roll-on-table staying; the
 // six item tools → manage-items, remove-from-actor staying; the five generic journal tools →
 // manage-journals; the four scene-document CRUD tools → manage-scenes; the four actor CRUD tools →
-// manage-actors).
+// manage-actors; the three faceted searches → search-compendium with `type`).
 const FAMILIES = {
   placeables: ['manage-placeables'],
   items: ['manage-items'],

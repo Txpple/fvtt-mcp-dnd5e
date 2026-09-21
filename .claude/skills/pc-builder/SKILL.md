@@ -30,7 +30,7 @@ Tools used: **`create-pc`** (build + persist the PC, running advancement), **`cr
 **`inspect-pc-advancement`**
 (read-only: what choices a class needs at a level + the legal options), `search-compendium`
 (name lookup to confirm a class/species/background/spell exists in the premium books),
-`search-compendium-spells` (find spells by facet for casters), **`manage-items { action: "import" }`** (starting equipment —
+`search-compendium { type: "spells" }` (find spells by facet for casters), **`manage-items { action: "import" }`** (starting equipment —
 copy real gear from the PHB), `add-feature` (a feat taken at an ASI tier), `set-actor-art`,
 `set-actor-ownership` (assign the *player* as owner), `move-documents` (file the PC), `manage-actors` `get` /
 `get-actor-entity` (read back). Defer gear judgment to [[physical-item-builder]].
@@ -179,7 +179,7 @@ features, the chosen skills/feats, correct HP, and **resolved @scale** (empty `u
 Slots are automatic — a caster class sets up its own spell slots through advancement (a Wizard gets its
 slots and INT casting with no extra step; the count scales with `level`). You only choose **which
 spells**: pass `spells: { cantrips: [names], prepared: [names] }` to `create-pc` (names from the premium
-PHB). Use `search-compendium-spells` (facets: `spellLevel`, `spellSchool`, `damageType`) to find or
+PHB). Use `search-compendium { type: "spells" }` (facets: `spellLevel`, `spellSchool`, `damageType`) to find or
 confirm spells. Pick the class's loadout for the level (e.g. a level-1 Wizard's 3 cantrips + 6 spellbook
 spells; more at higher levels); ask the player for signature picks. A name not in the books is reported
 in `warnings` — fix or ask, don't invent a spell.

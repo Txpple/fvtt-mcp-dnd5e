@@ -5,7 +5,7 @@ import { z } from 'zod';
  *
  * Every MCP tool's input contract used to be hand-written twice: once as a JSON Schema in the
  * tool's getToolDefinitions() and again as a zod schema inside the handler. The two drifted
- * silently (e.g. search-compendium-creatures advertised default:500 but enforced 100). This
+ * silently (e.g. the creature search advertised default:500 but enforced 100). This
  * collapses the duplication: each tool declares its contract ONCE as a zod schema (used by the
  * handler to parse/validate), and this helper derives the advertised JSON Schema from that same
  * schema — so the advertised and enforced contracts cannot diverge.

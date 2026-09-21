@@ -130,7 +130,7 @@ house convention — keep it consistent so the sidebar stays trustworthy at a gl
 - A world **NPC** the quest involves → `link-quest-to-npc` (a clickable `@UUID[Actor.id]` in a GM note).
   The actor must exist first (build it with `stat-block-builder`); the tool refuses a dead name.
 - A **compendium/world item, spell, or monster** the journal references → write a Foundry
-  `@UUID[…]{Label}` link in a `paragraph`/`html` block (get the uuid from `search-compendium-*`). Link
+  `@UUID[…]{Label}` link in a `paragraph`/`html` block (get the uuid from `search-compendium`). Link
   the real document; don't transcribe its stats into the prose.
 
 ## Session recaps & logs

@@ -118,7 +118,8 @@ describe('tool registry', () => {
     //   (action; list-journals' journalId / pageId modes are its `get`).
     // − 3 (M8): create / list / update / delete-scene → manage-scenes (action).
     // − 3 (M8): list / get / update / delete-actor → manage-actors (action).
-    expect(names.length).toBe(86);
+    // − 3 (M8): search-compendium-creatures / -spells / -items → search-compendium (type).
+    expect(names.length).toBe(83);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -381,8 +382,10 @@ describe('tool registry', () => {
       }
     }
     // The F6 case: a facet the tool does not have must not be stripped into an unfiltered survey.
-    await expect(dispatch('search-compendium-creatures', { query: 'goblin' })).rejects.toThrow(
-      /search-compendium-creatures: unknown argument "query" — it takes: name, challengeRating/
+    await expect(
+      dispatch('search-compendium', { type: 'creatures', query: 'goblin' })
+    ).rejects.toThrow(
+      /search-compendium \(type "creatures"\): unknown argument "query" — it takes: type, name, challengeRating/
     );
     await expect(dispatch('get-world-info', { verbose: true, x: 1 })).rejects.toThrow(
       /unknown arguments "verbose", "x" — it takes: no arguments/
@@ -547,7 +550,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(86);
+    expect(tools.length).toBe(83);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {

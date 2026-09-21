@@ -96,7 +96,7 @@ export function warmCompendiumIndexes(): Promise<{ packs: number; built: number;
 /**
  * Search every (non-Scene) premium compendium pack's index for entries whose NAME matches all
  * whitespace-separated terms in the query. Name-only matching — descriptions/traits are not
- * indexed, and there is no faceted/heuristic filtering (use search-compendium-creatures/-spells/
+ * indexed, and there is no faceted/heuristic filtering (use search-compendium type creatures/spells/
  * -items for real-system-data facets). Every match is ranked (premium-first, exact-name, then
  * alphabetical); the first `limit` (default 50) come back with the full match count.
  */

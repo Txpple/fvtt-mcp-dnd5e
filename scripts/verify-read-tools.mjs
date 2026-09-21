@@ -88,9 +88,29 @@ try {
     );
   }
   await check(
-    'search-compendium("goblin")',
-    () => compendium.handleSearchCompendium({ query: 'goblin' }),
-    o => o != null
+    'search-compendium type any ("goblin")',
+    () => compendium.handleSearchCompendium({ type: 'any', query: 'goblin' }),
+    o => o && Array.isArray(o.results) && typeof o.totalFound === 'number'
+  );
+  await check(
+    'search-compendium type creatures (CR 1/4 goblins)',
+    () =>
+      compendium.handleSearchCompendium({
+        type: 'creatures',
+        name: 'goblin',
+        challengeRating: 0.25,
+      }),
+    o => o && o.documentType === 'creature' && Array.isArray(o.results)
+  );
+  await check(
+    'search-compendium type spells (level 3 fire)',
+    () => compendium.handleSearchCompendium({ type: 'spells', spellLevel: 3, damageType: 'fire' }),
+    o => o && o.documentType === 'spell' && o.results?.some(h => /fireball/i.test(h.name))
+  );
+  await check(
+    'search-compendium type items (rare wands)',
+    () => compendium.handleSearchCompendium({ type: 'items', rarity: 'rare', itemType: 'wand' }),
+    o => o && o.documentType === 'gear' && Array.isArray(o.results)
   );
   await check(
     'manage-scenes list',

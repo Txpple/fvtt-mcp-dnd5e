@@ -54,15 +54,7 @@ export const TOOLSETS = {
   /** World (sidebar) Items — and the compendium copy onto an actor (`import`, formerly in actors). */
   items: ['manage-items'],
   /** The premium-book library and pack readers. */
-  compendium: [
-    'search-compendium',
-    'get-compendium-entry',
-    'search-compendium-creatures',
-    'search-compendium-spells',
-    'search-compendium-items',
-    'list-compendium-packs',
-    'read-pack',
-  ],
+  compendium: ['search-compendium', 'get-compendium-entry', 'list-compendium-packs', 'read-pack'],
   /** Scenes, who-sees-what routing, and every placeable kind. */
   scenes: [
     'manage-scenes',
