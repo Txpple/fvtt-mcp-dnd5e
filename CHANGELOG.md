@@ -6,7 +6,7 @@ What changed for a user of the tools and skills, release by release. The measure
 ## Unreleased — 3.0 (the dnd5e MCP: cheaper in context, official 6.x, hosts as endpoints)
 
 Tracked in [`docs/plan-3.0-consolidation.md`](docs/plan-3.0-consolidation.md); measured in
-[`docs/architecture-review-2026-09.md`](docs/architecture-review-2026-09.md). The last feature
+[`docs/history/architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md). The last feature
 line — after it the project is in maintenance (compatibility events, bug fixes, premium books).
 
 - **Context.** `tools/list` 283,948 → 201,562 chars; the two-registration name list 11,147 →

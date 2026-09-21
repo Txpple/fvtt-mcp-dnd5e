@@ -2,7 +2,8 @@
 
 Read [`design.md`](design.md) (binding) before changing tool behaviour; while the 3.0 line is open,
 [`docs/plan-3.0-consolidation.md`](docs/plan-3.0-consolidation.md) is the tracker and
-[`docs/architecture-review-2026-09.md`](docs/architecture-review-2026-09.md) its measured basis.
+[`docs/history/architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md)
+its measured basis.
 [`docs/RELEASE.md`](docs/RELEASE.md) is the release gate. A gitignored `LOCAL.md` holds the real
 per-instance values (hosts, worlds, registration names) — nothing in a tracked file names them.
 

@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/*.bundle.cjs", "!package-lock.json", "!docs/review-2026-09/**"]
+    "includes": ["**", "!**/*.bundle.cjs", "!package-lock.json", "!docs/history/review-2026-09/**"]
   },
   "assist": {
     "enabled": false

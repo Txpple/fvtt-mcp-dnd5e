@@ -9,7 +9,7 @@ checking the current design.
 
 | Document | What it was | Closed |
 | --- | --- | --- |
-| [`architecture-review.md`](architecture-review.md) | the 2026-06 multi-agent review (superseded by `docs/architecture-review-2026-09.md`) | 2026-06-24 |
+| [`architecture-review.md`](architecture-review.md) | the 2026-06 multi-agent review (superseded by the 2026-09 one below) | 2026-06-24 |
 | [`alignment-plan.md`](alignment-plan.md) | the post-review alignment plan (foundations, NPCs, journals, tables, cards, playlists) | 2026-07 |
 | [`compendium-lookup-plan.md`](compendium-lookup-plan.md) | the faceted compendium search engine + the four search tools | 2026-07 |
 | [`scene-placeables-architecture.md`](scene-placeables-architecture.md) | the placeables kernel (`src/page/_placeables.ts`) and the eight placeable tool families | 2026-08 |
@@ -17,3 +17,5 @@ checking the current design.
 | [`dnd5e-6.0-compat-review.md`](dnd5e-6.0-compat-review.md) | the 2.0 pass that made the tools speak dnd5e 6.x | 2026-09 |
 | [`plan-2.1-dnd5e-6-features.md`](plan-2.1-dnd5e-6-features.md) | 2.1 — tools for what dnd5e 6.0 introduced; the 14.368 and 6.0.3 compatibility passes | 2026-09-20 |
 | [`plan-2.2-hosts.md`](plan-2.2-hosts.md) | 2.2 — the host seam, toolsets, the rename to `fvtt-mcp-dnd5e` | 2026-09-20 |
+| [`architecture-review-2026-09.md`](architecture-review-2026-09.md) | the 2026-09 multi-agent review that measured 3.0's baselines (findings F1–F50; its evidence under [`review-2026-09/`](review-2026-09/README.md)) | 2026-09-20 |
+| `spikes/` | the one-off probes that established the data-model facts the tools were written against | — |

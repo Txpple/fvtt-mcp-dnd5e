@@ -1,4 +1,4 @@
-# Evidence for `docs/architecture-review-2026-09.md`
+# Evidence for `docs/history/architecture-review-2026-09.md`
 
 The review cites `scratch/…` paths (the orchestrator's gitignored working directory). This folder
 is the tracked mirror so the numbers can be reproduced from a clone:

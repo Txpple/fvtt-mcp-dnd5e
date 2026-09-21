@@ -29,7 +29,7 @@ function pageThrow(fn: string, code: PageErrorCode, text: string): BridgeError {
 
 describe('ErrorHandler.toUserMessage — the original words survive, the code adds one hint', () => {
   // The 12 realistic page/tool errors the 2026-09 review ran through the 2.x mapper
-  // (docs/review-2026-09/scripts/arch-seams-error-mangle.mjs): 11 of 12 lost their text to a
+  // (docs/history/review-2026-09/scripts/arch-seams-error-mangle.mjs): 11 of 12 lost their text to a
   // substring heuristic. Each now arrives with the code its handler attaches.
   const cases: Array<[string, string, PageErrorCode, string]> = [
     [

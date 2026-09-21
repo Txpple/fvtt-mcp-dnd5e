@@ -179,7 +179,7 @@ This is the architectural backbone that makes principle #1 real.
 | | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | ✅ done 2.2 |
 | | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | ✅ done 2.2 |
 | | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/plan-3.0-consolidation.md` M1) |
-| | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `op`, every skill re-pointed in the same commit), owner content out, the user-facing docs | 🔨 active (`docs/plan-3.0-consolidation.md`; measured in `docs/architecture-review-2026-09.md`) |
+| | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `op`, every skill re-pointed in the same commit), owner content out, the user-facing docs | 🔨 active (`docs/plan-3.0-consolidation.md`; measured in `docs/history/architecture-review-2026-09.md`) |
 
 Legend: ✅ done · 🔨 active (the 3.0 line — the last one).
 
@@ -357,6 +357,10 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
   `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-scribe`,
   `session-audit`, `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
+  The campaign-facing ones (`session-scribe`, the two audits, the bestiary, the scene-pack
+  import's standing mode) read one DM's facts and taste from a **campaign repo** of their own —
+  `campaign.json` + `STYLE.md`, laid out by `.claude/skills/_shared/campaign-repo.md` — so no
+  campaign, player or house-style ruling lives in this repo (3.0 M9).
 - **Target stack.** Foundry v14 (14.368 verified), dnd5e 6.x (6.0.3 verified; the 2.x/3.x line —
   1.x = dnd5e 5.3.x), on any host (§2.6). D&D-5e-only by design.
 - **Quality gate.** biome · `tsc --noEmit` · vitest · build · knip, all green before any commit. No

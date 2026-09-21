@@ -1,7 +1,7 @@
 # 3.0 — the dnd5e MCP: the token fix, official 6.x, hosts as endpoints · plan & tracker
 
 > Checkbox-driven tracker, aligned to [`design.md`](../design.md) and built from
-> [`docs/architecture-review-2026-09.md`](architecture-review-2026-09.md) (every number below is
+> [`docs/history/architecture-review-2026-09.md`](history/architecture-review-2026-09.md) (every number below is
 > measured there; finding ids `F1`–`F50` refer to it). **3.0 is the last feature line.** After it the
 > project is in maintenance: Foundry / dnd5e compatibility events, bug fixes, premium books brought
 > into scope. There is no roadmap beyond 3.0 and no document should imply one.
@@ -66,12 +66,12 @@ diet and must land **after** the prose diet, or a deferred client loads a family
 | **M6** | **Error contract + seam typing** ✅ 2026-09-20 (2 commits, `094848f` + the seam) — the page throws a coded `PageError` (`not-found` / `ambiguous` / `invalid` / `permission` / `unsupported` / `rolled-back`) whose code rides in the Error's `name` (the channel measured to survive `page.evaluate`); `BridgeError` (`code` / `fn` / `detail` / `pageStack`) on the Node side, `connection` for the connect path; the mapper appends one hint per code and the substring classifier is gone; 359 of 393 page throws coded, 25 catch-and-rewrap shells deleted. The seam: 93 untyped returns (92 `unknown`, 1 `any` — the checker's count, not the review's regex 74) and 9 `any` args typed (85 by inference once the `Promise<unknown>` annotations came off; 8 explicit shapes; 9 args as the tools' zod output by type-only import, `addSpellsToActor` page-declared because create-pc calls it with `alwaysPrepared` the tool never exposes); `foundry.call<N>(name, ...PageArgs<N>): Promise<PageResult<N>>`; 744 + 156 page-side optionals widened to `T \| undefined` (what arrives); the `SeamGuard` type in `src/page/index.ts` refuses an `any` / `unknown` result or arg at `tsc`; the 446 tool-side errors behind the flip fixed (13 dead `result.error` checks in journal.ts, 5 `call<Shape>` casts in the bridge plane, 6 `call('x', {})` on argless handlers, 31 placeable wrappers that still said `sceneIdentifier: string` after M2 made it optional, literal discriminants on the miss unions) | F5 F24 | 12/12 review cases keep their text with their own hint (unit test); **0** `any` / `unknown` results and **0** `any` args across 156 handlers (`SeamGuard`, proven to name an offender); **0** explicit `call<T>` casts left; live: verify-error-contract 15/15, integration 80 passed / 6 skipped |
 | **M7** | **Schema prose diet + toolsets** ✅ 2026-09-20 (8 commits, `49f2108`…`a12bdf8`) — `world` → always-on `session` + opt-in `settings`; the prose budget (leaf ≤ 120, description ≤ 400) as a test over every tool (`proseOffenders` in `src/measure.ts`, landed with a per-family pending set that each family commit shrank and the last deleted); `src/tools/_targets.ts` (`actorTarget` fuzzy / `actorTargetStrict` for the three destructive-or-art tools, `sceneTarget` / `sceneTargetRequired`, `itemTarget`) wired into 38 leaves with a test that every `*Identifier` leaf starts with its rule's text (add-feature had advertised "exact" and resolved fuzzy; its sub-schemas no longer re-advertise `actorIdentifier`), the page's duplicate ownership resolver folded; all 151 tools rewritten family by family (actors, scenes, compendium + items, journals + tables + cards, audio + chat + combat, assets + organization) to contract-only — the §6 ladder, "PREFER" / "LAST-RESORT" / "ask first", the design.md section numbers, the house-pattern glosses, the sibling-tool tours and the Foundry-internals asides gone (the skills already carry them; one stale claim in authoring-policy.md rule 12 corrected: content-audit DOES scan item descriptions); 11 verify scripts outside the release set still on the pre-M2 array shape re-pointed to `.results` | F10 F22 F23 | done — `tools/list` **205,248** (was 287,838; ratchet 288,200 → 230,000); leaf prose 124,311 → 81,791, descriptions 66,596 → 26,538, structural unchanged; **0** tools over the budget (longest leaf 120); always-on **1,578** (was 10,814 as `world`); `chat,combat` 23,045 → 9,860; live: the release set + integration 80 passed / 6 skipped per family commit |
 | **M8** | **CRUD consolidation — one family per commit** ✅ 2026-09-21 (16 commits, `535796d`…`36fd4ad`; the ratchets lowered in the one after) — the lossless `op` union (+ `kind` for placeables; the key is spelled `action`, the surface's existing discriminator — manage-effect, manage-activity, configure-soundscape, post-item-card — not a second convention), member descriptions kept, top-level `type:"object"` (`src/tools/_union.ts`); the family's list result moves to the design.md §3 line shape in the same commit (F20); the family's skill lines re-pointed (185 SKILL.md lines name a CRUD tool), its verify script re-pointed, the sibling checklist entries; `actors.ts` split rides the actor commit. Order: tiles / lights / walls / drawings (skill-cheap) → sounds → notes → tokens → regions → macros → folders → playlists → cards → tables → items → journals → scenes → actors → `search-compendium` ×4 → one with `type` → the actor projections (`get-actor` / `get-actor-entity` / `export-actor`) | F11 F20 F44 F45 F49 | done — every family under its own before (placeables −2.9%, macros −0.05%, folders −14.2%, playlists −1.3%, cards −0.1%, tables −1.2%, items −1.4%, journals −0.8%, scenes −12.6%, actors −0.2%, search −5.8%, the projections −1.3%); names **151 → 81**; two-registration name chars **11,147 → 6,153**; tools/list **205,248 → 201,562**; `src/page/actors.ts` split (F45); **0** unresolved / **0** stale tool names in `.claude/skills` (`skills-matrix`); every family's verify counts in its commit; integration 80 passed / 6 skipped on every commit |
-| **M9** | **Owner content out, docs in** — start-session / chat-and-narration host-neutral; session-scribe / soundscape-builder / tom-cartos-import per the decisions below; `_shared/campaign-repo.md`; owner strings scrubbed; design.md (already scrubbed here) re-checked; README rewritten (the owner's "git-friendly page, plain English, describes the project"); `CHANGELOG.md`; `CONTRIBUTING.md` (today's CLAUDE.md, tracked); `docs/hosts.md`; `docs/contracts.md`; the 8 done trackers → `docs/history/` | F13 F14 F33 F34 F35 F37 F39 F47 | Phase-2 grep (`phase[ -]?2\|wait-for-events\|event bridge\|session-assist\|next phase\|§8\|NUC`) → **0** outside `docs/history/`; owner-string grep (`greenrest\|broken-heart\|DM Assistant\|eoh-test\|foundry-molten5e`) → **0** outside `.env.example` and `docs/history/`; README ≤ 250 lines with the 60-second start before line 40 and a skills install step; `.claude/skills` carry **0** server prefixes |
+| **M9** | **Owner content out, docs in** ✅ 2026-09-21 (10 commits, `fcaf85d`…) — start-session rewritten against `get-world-info`'s host block, tools named bare, the documented registration pair (`foundry` / `foundry-sandbox`); session-scribe genericized in place (decision 16): the campaign facts → `campaign.json`, the house style → `STYLE.md`, both in the campaign repo, the toolchain stated Windows-only; `_shared/campaign-repo.md` — the convention (finding the repo, the layout, the `campaign.json` keys per skill) that session-audit / plot-drift-check / bestiary-builder / tom-cartos-import now read; tom-cartos-import pack-faithful by default, maps-only + born-explored as options or a standing `scenePacks` key (decision 19); soundscape-builder kept, its module and library named (decision 17); the owner strings out of src / tests / scripts (F47) and every skill; `CONTRIBUTING.md` (the house rules, tracked) with `CLAUDE.md` a tracked 3-line pointer (decision 13); `docs/RELEASE.md` naming the release set; `CHANGELOG.md` (1.5.2 → 2.2.0 + the 3.0 entry); `docs/hosts.md`; `docs/contracts.md` (the tool surface, the library, the five flag wire formats, the campaign repo, the `.env`); `docs/local-sandbox.md` split generic / hosted-mirror ops (F37); README rewritten (decision 5) + `scripts/install-skills.mjs` (F13); the 2026-09 review and its evidence → `docs/history/` beside the 8 done trackers | F13 F14 F33 F34 F35 F37 F39 F47 | done — Phase-2 grep → **0** outside `docs/history/` and this tracker (which spells the grep; archived at M10); owner-string grep → **0** outside `.env.example`, `docs/history/` and this tracker; README **217** lines (was 509), the 60-second start at line **16**, the skills step at line 23, all **81** tools named, 12 relative links resolving; `.claude/skills` carry **0** `mcp__` prefixes and **0** owner strings; skills-matrix 0 unresolved / 0 stale; descriptions 7,986; tools/list 201,562 / names 6,153 (unchanged — no tool change) |
 | **M10** | **Release 3.0** — full offline gate, the release set, integration, the measurement scripts' numbers in the release notes; tag; the prod upgrade path documented (Foundry ≥ 14.367 first, then dnd5e 6.x) | — | every M0–M9 number restated and met |
 
 Sequence: M0 → M2 → M3 (the largest per-prompt savings, no renames) → M4 → M5 (a stranger can run
 it; the siblings are whole) → M6 → M7 (name-neutral hardening; the prose diet) → M8 (the only
-renaming milestone) → M9 → M10. M0–M7 done 2026-09-20; M8 done 2026-09-21.
+renaming milestone) → M9 → M10. M0–M7 done 2026-09-20; M8 and M9 done 2026-09-21.
 
 ## Decisions
 
@@ -92,13 +92,13 @@ are defaults the owner can overturn before the milestone that depends on them st
 | 10 | List output format | default: **one line per record** in a documented field order with a header `<N> <noun>(s) [of M]`; `get-*` = JSON with a `fields` selector; mutations = one-line confirmation; a miss is `isError`. |
 | 11 | Active-scene default for placeable tools | default: **yes** — `game.scenes.active` is one world-wide document, echoed in the result; the 6 scene-document tools stay explicit. |
 | 12 | Release scripts → `tests/integration` | default: (a) the gate fix now (M5); (b) promotion optional, not a 3.0 requirement. |
-| 13 | CLAUDE.md | default: tracked as `CONTRIBUTING.md` in M9 with a 3-line pointer; LOCAL.md stays gitignored. |
+| 13 | CLAUDE.md | default: tracked as `CONTRIBUTING.md` in M9 with a 3-line pointer; LOCAL.md stays gitignored. **Done M9** (`fe5fb71`): CONTRIBUTING.md holds the rules, CLAUDE.md is the tracked pointer. |
 | 14 | Premium set | default: `PREMIUM_BOOK_PREFIXES` stays the five; `dnd-arcana-unleashed` / `dnd-deadfall` added when the owner installs them; design.md §2.3 names MM/PHB/DMG as required for authoring and the rest as optional extensions. |
 | 15 | Error contract | default: both — the 3-line raw-message fix in M2's first commit, the coded contract in M6. |
-| 16 | session-scribe | **genericize in place** (owner, 2026-09-20) — per-campaign `STYLE.md` + `campaign.json`, a Windows-only note. |
-| 17 | soundscape-builder + `configure-soundscape` | **keep here** (owner, 2026-09-20) under a README "tools that need a companion module" section (same for `get-combat-stats`, `set-landing-scene`). |
+| 16 | session-scribe | **genericize in place** (owner, 2026-09-20) — per-campaign `STYLE.md` + `campaign.json`, a Windows-only note. **Done M9** (`3f903d0`; the campaign repo's `5b3e81a`). |
+| 17 | soundscape-builder + `configure-soundscape` | **keep here** (owner, 2026-09-20) under a README "tools that need a companion module" section (same for `get-combat-stats`, `set-landing-scene`). **Done M9** (`593e5c0`, the README section in `ca3cfae`). |
 | 18 | bestiary-builder | default: land the page-targeted compendium-journal read + page sort (tool side) and delete `bestiary-entry.mjs`; the 2-line `bridgeConfig` fix first (M2). |
-| 19 | tom-cartos-import defaults | default: pack-faithful import as the default; maps-only and the autoexplore stamp as asked-for options. |
+| 19 | tom-cartos-import defaults | default: pack-faithful import as the default; maps-only and the autoexplore stamp as asked-for options. **Done M9** (`c358388`; the standing mode is `campaign.json` → `scenePacks`). |
 | 20 | Tools no skill names (51) | decided per tool in M8's family commit: plain feature (documented) or dropped. |
 
 ## Verification
@@ -122,16 +122,16 @@ Every `SKILL.md` line that names a CRUD-family tool is re-pointed in the family'
 scene-builder 32, tom-cartos-import 22, stat-block-builder 21, physical-item-builder 18,
 plot-drift-check 15, table-builder 15 …; by family: actors 39, scenes 36, items 32, journals 27,
 tables 19, regions 17, cards 14, playlists 14, tokens 9, sounds / notes / folders 4 each, tiles /
-walls / lights 1 each (`docs/review-2026-09/data/skills-tool-matrix.md`). Beyond this repo: the
+walls / lights 1 each (`docs/history/review-2026-09/data/skills-tool-matrix.md`). Beyond this repo: the
 artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 — the checklist is
 `grep -rn "<old-tool-name>" .claude/skills scripts tests ../fvtt-mod-*/tools ../fvtt-mcp-artificer
-../fvtt-campaign-greenrest`.
+<the campaign repo>`.
 
 ## Progress
 
 - 2026-09-20 — owner decisions recorded (3.0 terminal; Phase 2 removed; user-facing; siblings as
   consumers; no 2.3; README last; prod stays 5.3.3); the review
-  (`docs/architecture-review-2026-09.md`, `c327ac6`) measured the baselines; **M1 done**
+  (`docs/history/architecture-review-2026-09.md`, `c327ac6`) measured the baselines; **M1 done**
   (`c53c2de`) with the launcher / verify-wake fix (`96ed726`); this tracker opened; design.md
   scrubbed of Phase 2 and its §4 updated; HANDOFF.md retired; owner decisions #2, #8, #9, #16, #17
   answered (`d42dd93`). **M0 done** (measure & guard): `scripts/measure/` + `npm run measure`,
@@ -597,3 +597,31 @@ artificer names 11 tools (10 tracked files); battleflow 5; the campaign repo 21 
   non-family tools (assets, chat, users, groups, the quest journals, the PC creators); 0
   unresolved / 0 stale names in the skills; 16 commits `535796d`…`36fd4ad`. The ratchets in
   `src/measure.test.ts` lowered to what M8 landed: tools/list ≤ 205,000, names ≤ 7,000.
+- 2026-09-21 — **M9 done** (10 commits, `fcaf85d`…). In order: the owner strings out of src /
+  tests / scripts (`fcaf85d`: eoh-test, greenrest, "DM Assistant", the combat-stats ruling
+  stamp, the two §8 homonyms — 15 substitutions, no behaviour change); start-session +
+  chat-and-narration host-neutral (`77607fb`: the skill reads `host` / `bridgeUser` /
+  `library` / `automation` as proven live on the sandbox, names tools bare, picks the user's
+  registration or the non-sandbox one; `.mcp.json.example` carries the `foundry` /
+  `foundry-sandbox` pair); session-scribe genericized (`3f903d0`: 243 → 166 lines, the
+  campaign facts → `campaign.json`, the seven dated style rulings + the combat-log format + the
+  diary page + the snapshot roster → `STYLE.md`, both in the campaign repo at `5b3e81a`;
+  `_shared/campaign-repo.md` written — how a skill finds the repo, the layout, the keys and
+  which skill reads each, what never goes in the MCP repo); the three audit skills on the
+  convention (`16337a9`: the effort mode as a client feature, the campaign half reading
+  `plot/` / `plans/` / `sessions/` / `party-snapshots/`, the "owner rule" boundaries kept
+  as rules); tom-cartos-import pack-faithful by default (`c358388`: maps-only and born-explored
+  as per-import asks or the standing `scenePacks` key — the owner's repo sets `maps-only` /
+  `bornExplored: true` at `592eebd`); soundscape-builder (`593e5c0`: the module and its
+  library named, the sandbox trap host-neutral; authoring-policy's two "Owner" stamps);
+  CONTRIBUTING.md + the CLAUDE.md pointer + RELEASE.md + CHANGELOG.md (`fe5fb71`); hosts.md +
+  contracts.md + the sandbox doc split (`ec7ed9b`, with the 14.368 shutdown route corrected in
+  the doc); the README (`ca3cfae`: 509 → 217, start at line 16, all 81 tools named, checked
+  against the registry) + `install-skills.mjs` (18 linked / 18 kept / the source untouched on
+  a scratch target); the 2026-09 review and `review-2026-09/` → `docs/history/` with the
+  index rows, every reference re-pointed (this commit). **Gates:** Phase-2 grep 0 and
+  owner-string grep 0 outside `docs/history/`, `.env.example` and this tracker (it spells
+  both greps and records decisions #2 / #6 by the private registration names; it is archived
+  at M10); README 217 ≤ 250, the start before line 40, the skills step present;
+  `.claude/skills` 0 `mcp__` prefixes; skills-matrix 0 / 0; descriptions 7,986; tools/list
+  201,562 / names 6,153 unchanged (no tool changed). Next: **M10** — the release.
