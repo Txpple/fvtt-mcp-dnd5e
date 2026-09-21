@@ -106,7 +106,7 @@
 
 13. **Feature-granted FREE CASTS = TWO entries: a normal repertoire spell + a cast activity ON the
     granting feature — use `add-free-cast`, never a tracker feat, never a forward on the spell.**
-    (Owner-revised 2026-07-05; supersedes the earlier forward-on-the-spell shape.) When a
+    (Revised 2026-07-05; supersedes the earlier forward-on-the-spell shape.) When a
     feat/feature lets an actor cast a spell **without a spell slot N times per rest** — Magic
     Initiate, a 2024 lineage grant, Favored Enemy, a magic item's "cast X 1/day" — the sheet gets:
     1. **The repertoire copy** — the spell as a normal **always-prepared** entry (rule 14), castable
@@ -127,7 +127,7 @@
     thing must read as a regular spell plus one separately-tracked Additional Spells row.
 
 14. **Known casters' spells are ALWAYS PREPARED — cantrips and leveled spells, `prepared: 2`.**
-    (Owner house rule, 2026-07-05.) For the 2024 "known"-style casters who swap spells only on
+    (House rule, 2026-07-05.) For the 2024 "known"-style casters who swap spells only on
     level-up — **sorcerer, bard, ranger, warlock** — every spell on the sheet is set to *always
     prepared* (`system.prepared: 2`), cantrips included: no prepared-toggle state, no unprepared
     spells lingering in the book. Feature-granted spells (rule 13's repertoire copies, subclass

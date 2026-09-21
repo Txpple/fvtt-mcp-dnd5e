@@ -11,8 +11,12 @@ description: >-
 
 # Soundscape builder
 
-The judgment layer over **`configure-soundscape`** — house module **#6, `fvtt-mod-soundscape`**. The
-module fills a hole core Foundry has no shape for: AmbientSound placeables are *positional* single-file
+The judgment layer over **`configure-soundscape`**, the tool for the companion module
+**[`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape)** — the world must run it,
+and the template library the catalog below describes is its sister package
+`fvtt-mod-soundscape-sfx` (a `library.json` + the audio under `soundscape-sfx/` in `Data/`). With
+another library, or none, `action: "library"` is still the only source of truth (it says so when
+there is none). The module fills a hole core Foundry has no shape for: AmbientSound placeables are *positional* single-file
 loops and Playlists have no concept of **silence with variation**, so neither can do "a crow, then
 quiet, then a distant dog." A **sound set** is a *pool* of files plus a play style; a scene carries
 several, stacked and independent.
@@ -301,21 +305,20 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
    gets you the paths (`soundscape-sfx/interval-sounds/<category-slug>/<set-slug>/*`,
    `soundscape-sfx/ambient-loops/<category-slug>/<name>.ogg`).
 
-2. **On the local SANDBOX, expect a 404 warning on nearly every pool.** `soundscape-sfx/` is a
-   Data-**root** sibling of the folders the prod→local mirror copies (`worlds/<id>`, `systems`,
-   `modules`, `assets`), so it is **never mirrored** — whatever is there was hand-seeded for testing.
-   The seeded sandbox carries the **full 400-template `library.json` but only a couple of audio
-   files**, which means:
-   - `action: "library"` works normally and lists all 400.
+2. **On a sandbox mirrored from another instance, expect 404 warnings.** `soundscape-sfx/` is a
+   Data-**root** folder, outside `worlds/<id>` / `systems` / `modules` / `assets`, so a world mirror
+   usually leaves it behind; a sandbox with the `library.json` but not the audio then behaves like
+   this:
+   - `action: "library"` works normally and lists every template.
    - `action: "add"` from a template **succeeds** — and every file in the pool warns as missing.
      That is the KEEP+WARN policy working as designed: an audio track has no sensible substitute, so
      a 404 is authored faithfully and reported, never swapped.
-   - On a sandbox with **no** seed at all, `library` reports none and a template `add` throws
-     ("Cannot add from template: no library at …") before any 404 check.
+   - With no library at all, `library` reports none and a template `add` throws ("Cannot add from
+     template: no library at …") before any 404 check.
 
-   So **author soundscapes against prod**, and use the sandbox to exercise the *shape* (add / update
-   / remove / list), reading past the file warnings. Never "fix" a sandbox 404 by swapping in a path
-   that resolves — you'd be authoring the wrong file into prod.
+   So **author soundscapes on the instance that has the audio**, and use a sandbox to exercise the
+   *shape* (add / update / remove / list), reading past the file warnings. Never "fix" a 404 by
+   swapping in a path that resolves — you'd be authoring the wrong file.
 
 3. **`update` with `files` REPLACES the whole pool.** There is no append. To extend a set, `list` it,
    take its `files`, and pass the full new array.
@@ -336,7 +339,8 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
 7. **`remove` with `setIdentifier: "all"` clears the entire scene.** Only on an explicit ask, and say
    what you're about to delete first.
 
-8. **If the library files ever move**, existing scene sets break. `fvtt-mod-soundscape-sfx/tools/remap-soundscape-scene-paths.mjs`
+8. **If the library files ever move**, existing scene sets break. The library repo's
+   `tools/remap-soundscape-scene-paths.mjs`
    (`--dry` first) repoints every scene by basename — that's a maintenance script, not something to
    run mid-authoring.
 
