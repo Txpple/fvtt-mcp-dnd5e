@@ -5,6 +5,26 @@
 export type Visibility = 'public' | 'gm' | 'blind' | 'self';
 export type StyleName = 'ooc' | 'ic' | 'emote' | 'other';
 
+/** A chat speaker: the four fields ChatMessage's `speaker` schema carries. */
+export interface SpeakerData {
+  scene: string | null;
+  actor: string | null;
+  token: string | null;
+  alias: string;
+}
+
+/**
+ * The speaker for a message no character speaks — a narrator line, a hoard announcement. Built
+ * EXPLICITLY, never through `ChatMessage.getSpeaker()`: with no arguments that infers a speaker
+ * from whatever token the bridge's headless page has controlled (or the user's character), and
+ * a Session 8 hoard announcement (2026-09-22) posted under Gren's name that way. A blank alias
+ * falls back to the given default (the bridge user's name).
+ */
+export function narratorSpeaker(alias: string | undefined, fallback: string): SpeakerData {
+  const name = (alias ?? '').trim() || fallback;
+  return { scene: null, actor: null, token: null, alias: name };
+}
+
 /** Resolve the presentation style name: explicit wins, else IC when there's a speaker, else OOC. */
 export function resolveStyleName(styleName: StyleName | undefined, hasSpeaker: boolean): StyleName {
   if (styleName) return styleName;

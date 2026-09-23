@@ -3,6 +3,14 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **`send-chat-message` never speaks as a selected token.** With no `speakerActor` the speaker
+  was left to `ChatMessage.getSpeaker()`, which infers one from whatever token the bridge's
+  headless page has controlled — the Session 8 hoard announcement (2026-09-22) posted under
+  Gren's name. It now speaks as the bridge user, or as the new `speakerAlias` ("Narrator", "The
+  Innkeeper"); with `speakerActor`, `speakerAlias` renames that character's line.
+
 ## 3.0.0 — 2026-09-21 — the dnd5e MCP: cheaper in context, official 6.x, hosts as endpoints
 
 Tracked in [`docs/history/plan-3.0-consolidation.md`](docs/history/plan-3.0-consolidation.md);

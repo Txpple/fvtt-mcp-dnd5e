@@ -7,6 +7,7 @@ import {
   buildHtmlTranscript,
   buildPlaintextTranscript,
   buildRollRequestExpression,
+  narratorSpeaker,
   type RawMessageFields,
 } from './chat-helpers.js';
 
@@ -22,6 +23,21 @@ describe('resolveStyleName', () => {
   it('honors an explicit style', () => {
     expect(resolveStyleName('emote', false)).toBe('emote');
     expect(resolveStyleName('other', true)).toBe('other');
+  });
+});
+
+describe('narratorSpeaker', () => {
+  it('speaks as nobody on the map: no scene, actor or token', () => {
+    expect(narratorSpeaker('Narrator', 'DM Assistant')).toEqual({
+      scene: null,
+      actor: null,
+      token: null,
+      alias: 'Narrator',
+    });
+  });
+  it('falls back to the given name when no alias (or a blank one) is passed', () => {
+    expect(narratorSpeaker(undefined, 'DM Assistant').alias).toBe('DM Assistant');
+    expect(narratorSpeaker('   ', 'DM Assistant').alias).toBe('DM Assistant');
   });
 });
 

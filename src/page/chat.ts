@@ -24,6 +24,7 @@ import {
   buildHtmlTranscript,
   buildPlaintextTranscript,
   buildRollRequestExpression,
+  narratorSpeaker,
   type MessageRecord,
   type RawMessageFields,
   type Visibility,
@@ -123,6 +124,7 @@ export async function postChatMessage(args: {
   content: string;
   visibility?: Visibility | undefined;
   speakerActor?: string | undefined;
+  speakerAlias?: string | undefined;
   flavor?: string | undefined;
   style?: StyleName | undefined;
   enrich?: boolean | undefined;
@@ -135,12 +137,14 @@ export async function postChatMessage(args: {
 
   let actorDoc: any;
   let speaker: any;
+  const aliasArg = (args.speakerAlias ?? '').trim();
   if (args.speakerActor) {
     actorDoc = resolveActorFuzzy(args.speakerActor);
     if (!actorDoc) throw notFound(`speakerActor "${args.speakerActor}" not found`);
-    speaker = Cls.getSpeaker({ actor: actorDoc });
+    speaker = Cls.getSpeaker({ actor: actorDoc, ...(aliasArg ? { alias: aliasArg } : {}) });
   } else {
-    speaker = Cls.getSpeaker();
+    // Never a bare getSpeaker(): it infers from the headless page's controlled token.
+    speaker = narratorSpeaker(aliasArg, game.user?.name ?? 'Narrator');
   }
   const alias = speaker?.alias ?? actorDoc?.name ?? game.user?.name ?? '';
 

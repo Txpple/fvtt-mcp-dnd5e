@@ -63,6 +63,12 @@ const SendChatMessageSchema = z.object({
     .describe(
       'Actor id or name (substring ok), or a token id: the message speaks as that character.'
     ),
+  speakerAlias: z
+    .string()
+    .optional()
+    .describe(
+      'The speaker name shown (e.g. "Narrator"). Without speakerActor: default the bridge user, never a selected token.'
+    ),
   flavor: z.string().optional().describe('A secondary header line.'),
   style: z
     .enum(['ooc', 'ic', 'emote', 'other'])
@@ -282,6 +288,7 @@ export class ChatTools {
       content,
       visibility: parsed.visibility,
       speakerActor: parsed.speakerActor,
+      speakerAlias: parsed.speakerAlias,
       flavor: parsed.flavor,
       style: parsed.style,
       enrich: parsed.enrich,
