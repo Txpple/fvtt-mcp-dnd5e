@@ -18,6 +18,10 @@
 //    when it changes — that is the lever. toggleStatusEffect must NOT be used for it: in 6.0 a
 //    leveled status routes to ConditionData._applyDelta(+1) regardless of `active`, so a
 //    "remove" call would ADD a level.
+//  - The delta is taken against the DERIVED `attributes.exhaustion`, whose source moved in 6.0.4
+//    (dnd5e #7492): up to 6.0.3 it was `conditions.exhaustion` (0 while the effect is suppressed —
+//    an exhaustion-immune creature); from 6.0.4 it is the effect's own `system.level`, suppressed
+//    or not. setExhaustion keys off the derived value itself, so it is right on both.
 
 import { resolveActorFuzzy } from '../_shared.js';
 import { invalid, notFound, unsupported } from '../errors.js';
@@ -90,6 +94,17 @@ function findExhaustionEffect(actor: any): any {
 const sleep = (ms: number) => new Promise(r => (globalThis as any).setTimeout(r, ms));
 
 /**
+ * Whether the persisted `attributes.exhaustion` may be brought to `lvl` after the effect's own level
+ * was set. dnd5e syncs the effect by `lvl − derived`, so the write is a no-op delta only when the
+ * derived level already reads `lvl`. Up to 6.0.3 a suppressed effect (exhaustion immunity) derives
+ * 0, and the write would apply a SECOND level; from 6.0.4 it derives the effect's level, and
+ * skipping the write would leave the persisted field stale.
+ */
+export function canSyncSourceExhaustion(derived: unknown, source: number, lvl: number): boolean {
+  return derived === lvl && source !== lvl;
+}
+
+/**
  * Set an actor's exhaustion to `lvl` (0 removes). Drives the persisted `system.attributes.exhaustion`
  * field so dnd5e's own delta sync creates/removes the condition effect; an EXISTING effect's level is
  * set directly (deterministic, no dependence on the un-awaited sync).
@@ -120,19 +135,16 @@ async function setExhaustion(actor: any, lvl: number, warnings: string[]): Promi
   if (eff) {
     const previous = readExhaustionLevel(eff);
     if (previous !== lvl) {
-      // ⚠️ dnd5e 6.0.1 ConditionData#_onUpdate reads `options.dnd5e?.originalLevel ?? Infinite` —
-      // `Infinite` is an undefined identifier, so a level write WITHOUT that option throws a
-      // ReferenceError after the update lands and everything after it is skipped. Supplying the
-      // option (as condition.mjs's own increase/decrease do) keeps the delta finite and the
-      // handler on its happy path.
+      // ⚠️ dnd5e ConditionData#_onUpdate (6.0.1, still in 6.0.5) reads
+      // `options.dnd5e?.originalLevel ?? Infinite` — `Infinite` is an undefined identifier, so a
+      // level write WITHOUT that option throws a ReferenceError after the update lands and
+      // everything after it is skipped. Supplying the option (as condition.mjs's own
+      // increase/decrease do) keeps the delta finite and the handler on its happy path.
       await eff.update({ 'system.level': lvl }, { dnd5e: { originalLevel: previous } });
     }
-    // Keep the persisted field in step. dnd5e's delta sync compares against the DERIVED level —
-    // which only equals `lvl` while the effect is ACTIVE. A suppressed/disabled effect (immunity,
-    // a disabled condition) leaves the derived value at 0, so the same write would look like a
-    // 0 → lvl delta and dnd5e would apply a SECOND level. Skip the bookkeeping write there.
-    const effectActive = eff.active !== false;
-    if (effectActive && sourceLevel !== lvl) {
+    // Keep the persisted field in step — only when dnd5e will read the write as a zero delta
+    // (see canSyncSourceExhaustion: a suppressed effect on ≤ 6.0.3 would gain a second level).
+    if (canSyncSourceExhaustion(actor.system?.attributes?.exhaustion, sourceLevel, lvl)) {
       await actor.update({ 'system.attributes.exhaustion': lvl });
     }
     return;

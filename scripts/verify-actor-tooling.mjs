@@ -311,6 +311,57 @@ try {
           JSON.stringify(exhOff2)
         );
 
+    // Exhaustion on an exhaustion-IMMUNE creature: the effect exists but is suppressed. dnd5e
+    // syncs by `new − derived`, and the derived level changed source in 6.0.4 (#7492): ≤ 6.0.3 it
+    // read 0 while suppressed (a bookkeeping write would add a SECOND level), from 6.0.4 it reads the
+    // effect's own level (skipping the write leaves _source stale). Never a doubled level; on
+    // ≥ 6.0.4 the persisted and derived fields must also track the effect.
+    const immune = await makeTempNpc('ZZ-MCP-AT-COND-IMMUNE');
+    await foundry.call('updateActor', {
+      actorIdentifier: immune.id,
+      conditionImmunities: { values: ['exhaustion'] },
+    });
+    const derivesSuppressed = await foundry.evaluate(
+      () => globalThis.foundry.utils.isNewerVersion(globalThis.game.system.version, '6.0.3'),
+      null
+    );
+    for (const lvl of [3, 5]) {
+      await foundry.call('applyCondition', {
+        actorIdentifier: immune.id,
+        conditions: ['exhaustion'],
+        exhaustionLevel: lvl,
+      });
+      const s = await foundry.evaluate(id => {
+        const a = game.actors.get(id);
+        const eff = a.effects.find(e => e.statuses?.has?.('exhaustion'));
+        return {
+          sys: a.system?.attributes?.exhaustion,
+          src: a._source?.system?.attributes?.exhaustion ?? null,
+          level: eff?.system?.level ?? null,
+          suppressed: eff?.isSuppressed ?? null,
+        };
+      }, immune.id);
+      const ok =
+        s.level === lvl &&
+        s.suppressed === true &&
+        (!derivesSuppressed || (s.src === lvl && s.sys === lvl));
+      ok
+        ? pass(
+            `apply-condition exhaustion → ${lvl} on an immune creature`,
+            `effect=${s.level} (suppressed), _source=${s.src}, derived=${s.sys}`
+          )
+        : fail(`apply-condition exhaustion → ${lvl} on an immune creature`, JSON.stringify(s));
+    }
+    await foundry.call('applyCondition', {
+      actorIdentifier: immune.id,
+      conditions: ['exhaustion'],
+      active: false,
+    });
+    const immuneOff = await foundry.evaluate(readExh, immune.id);
+    immuneOff?.src === 0 && immuneOff?.name === null
+      ? pass('apply-condition exhaustion remove on an immune creature', 'effect gone, _source=0')
+      : fail('apply-condition exhaustion remove on an immune creature', JSON.stringify(immuneOff));
+
     // dnd5e 6.0 camelCase status ids must validate whatever case the caller typed — the old
     // blanket toLowerCase() rejected every one of them as "unknown".
     const cover = await foundry.call('applyCondition', {

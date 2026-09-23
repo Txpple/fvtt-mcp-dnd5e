@@ -2,13 +2,15 @@
  * Offline unit tests for the pure parts of apply-condition (src/page/dnd5e/conditions.ts). They lock
  * the dnd5e 6.0.1 facts the live path depends on: CONFIG.statusEffects is an OBJECT keyed by id
  * (5.x was an array — `.map` on it threw), and the exhaustion level lives in `system.level` on the
- * condition effect, not in a flag. The live toggle/sync sequence is covered by the acceptance
+ * condition effect, not in a flag; and when the persisted exhaustion may follow a level change
+ * (the derived level's 6.0.4 change). The live toggle/sync sequence is covered by the acceptance
  * script (scripts/verify-actor-tooling.mjs).
  */
 
 import { describe, it, expect } from 'vitest';
 import {
   canonicalStatusId,
+  canSyncSourceExhaustion,
   collectStatusIds,
   readExhaustionLevel,
   resolveExhaustionLevel,
@@ -96,5 +98,20 @@ describe('readExhaustionLevel', () => {
     expect(readExhaustionLevel({ flags: { dnd5e: { exhaustionLevel: 2 } } })).toBe(2);
     expect(readExhaustionLevel({ system: {} })).toBe(1);
     expect(readExhaustionLevel(undefined)).toBe(1);
+  });
+});
+
+describe('canSyncSourceExhaustion', () => {
+  it('writes when the derived level already reads the target (active effect; any effect ≥ 6.0.4)', () => {
+    expect(canSyncSourceExhaustion(5, 3, 5)).toBe(true);
+  });
+
+  it('skips a suppressed effect on ≤ 6.0.3, where the derived level reads 0 — no second level', () => {
+    expect(canSyncSourceExhaustion(0, 3, 5)).toBe(false);
+  });
+
+  it('skips when the persisted field is already in step, or the derived value is missing', () => {
+    expect(canSyncSourceExhaustion(5, 5, 5)).toBe(false);
+    expect(canSyncSourceExhaustion(undefined, 3, 5)).toBe(false);
   });
 });

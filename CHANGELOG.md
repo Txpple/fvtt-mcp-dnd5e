@@ -10,6 +10,10 @@ What changed for a user of the tools and skills, release by release. The measure
   headless page has controlled — the Session 8 hoard announcement (2026-09-22) posted under
   Gren's name. It now speaks as the bridge user, or as the new `speakerAlias` ("Narrator", "The
   Innkeeper"); with `speakerActor`, `speakerAlias` renames that character's line.
+- **`apply-condition` keeps exhaustion in step on an exhaustion-immune creature.** From dnd5e
+  6.0.4 a level change on the suppressed effect left the actor's stored
+  `attributes.exhaustion` at the old level; it now follows the effect (and still never adds a
+  second level on 6.0.0–6.0.3).
 
 ## 3.0.0 — 2026-09-21 — the dnd5e MCP: cheaper in context, official 6.x, hosts as endpoints
 
