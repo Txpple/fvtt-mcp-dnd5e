@@ -6,7 +6,7 @@ stat block becomes a complete NPC with its loot; a map image becomes a walled, l
 adventure becomes journals, tables and handouts; a Discord recording becomes the session recap.
 Everything is built from the **2024 premium books** you own, never the SRD.
 
-Targets **dnd5e 6.0.3+ on Foundry 14.368+**, on any host — a hosting provider, this machine, a URL.
+Targets **dnd5e 6.0.5+ on Foundry 14.368+**, on any host — a hosting provider, this machine, a URL.
 
 ## Setup
 
@@ -23,8 +23,9 @@ In Foundry, create the user the server joins as (Gamemaster or Assistant GM; def
 it sleeps, launches the world if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the
 host, its role and which premium books it found. Then ask for content.
 
-**Requirements:** Node.js 22+ · Foundry 14.368+ with dnd5e 6.0.3+ (the tools refuse a pre-6.0
-world; an older world is upgraded Foundry-first, then dnd5e —
+**Requirements:** Node.js 22+ · Foundry 14.368+ with dnd5e 6.0.5+ (6.0.0–6.0.3 delete every
+effect without an expiry on a rest; the tools refuse a pre-6.0 world; an older world is upgraded
+Foundry-first, then dnd5e —
 [`docs/hosts.md`](docs/hosts.md#bringing-a-world-up-to-the-30-line)) · the *Monster Manual*,
 *Player's Handbook* and *Dungeon Master's Guide* modules for authoring (*Heroes of Faerûn* and
 *Ravenloft: The Horrors Within* are optional).

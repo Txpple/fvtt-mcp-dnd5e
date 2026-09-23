@@ -162,24 +162,34 @@ try {
     bSrc.dispositions
   );
 
-  const moveTo = (x, y) =>
+  // Region enter/exit handlers run AFTER token.update resolves (dnd5e's behavior pauses the
+  // movement, creates or deletes the effect, then resumes). Poll for the expected state, bounded,
+  // instead of sleeping a fixed beat: 400 ms held through 3.0.0, but on the 2026-09-23 sandbox
+  // (dnd5e 6.0.5; the behavior's source is identical to 6.0.3's) both edges landed at ~1 s.
+  const moveTo = (x, y, wantPoisoned) =>
     f.evaluate(
-      async ({ sceneId, tokenId, x, y }) => {
+      async ({ sceneId, tokenId, x, y, wantPoisoned }) => {
         const token = globalThis.game.scenes.get(sceneId).tokens.get(tokenId);
+        const t0 = performance.now();
         await token.update({ x, y });
-        // region events resolve after the update round-trips; give the client a beat
-        await new Promise(r => setTimeout(r, 400));
-        const actor = token.actor;
-        return actor.effects.map(e => ({
-          name: e.name,
-          origin: e.origin,
-          statuses: Array.from(e.statuses),
-        }));
+        const has = () => token.actor.effects.some(e => e.name === 'Poisoned');
+        for (let i = 0; i < 50 && has() !== wantPoisoned; i++) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+        return {
+          ms: Math.round(performance.now() - t0),
+          effects: token.actor.effects.map(e => ({
+            name: e.name,
+            origin: e.origin,
+            statuses: Array.from(e.statuses),
+          })),
+        };
       },
-      { sceneId, tokenId: lab.tokenId, x, y }
+      { sceneId, tokenId: lab.tokenId, x, y, wantPoisoned }
     );
 
-  const inside = await moveTo(600, 600);
+  const { ms: enterMs, effects: inside } = await moveTo(600, 600, true);
+  console.log(`  (enter settled in ${enterMs} ms)`);
   const applied = inside.find(e => e.name === 'Poisoned');
   assert(
     !!applied,
@@ -197,7 +207,8 @@ try {
     applied
   );
 
-  const outside = await moveTo(100, 100);
+  const { ms: exitMs, effects: outside } = await moveTo(100, 100, false);
+  console.log(`  (exit settled in ${exitMs} ms)`);
   assert(
     !outside.find(e => e.name === 'Poisoned'),
     'token LEAVES the region → the effect is removed',

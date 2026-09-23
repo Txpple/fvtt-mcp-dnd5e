@@ -85,6 +85,14 @@ the scripted launch. On record:
   `POST /setup {action:"worldShutdown", adminPassword}` → 302 `/setup`.
 - **dnd5e 6.0.2 → 6.0.3**: bug fixes only, no data-model change — but the release notes
   under-report; read the tag-to-tag diff, not the bullets.
+- **dnd5e 6.0.3 → 6.0.5** (6.0.4 regressed activity check/save rolls; 6.0.5 is that one-line
+  fix — never stop on 6.0.4): the derived `attributes.exhaustion` now reads the exhaustion
+  effect's level even while immunity suppresses it, which left `apply-condition`'s persisted
+  field stale on an immune creature until it keyed off the derived value; rests no longer delete
+  every actor effect without an expiry (6.0.0–6.0.3 did — `manage-effect`'s "permanent" was not);
+  an effect created without an `_id` is no longer reclassified as a condition (not in the notes).
+  The same refresh also slowed the region enter/exit edges from under 400 ms to ~1 s with the
+  behavior's source unchanged — verify scripts poll for a state, bounded, never sleep a beat.
 
 So when a new Foundry or dnd5e version lands, in this order — and never call it "verified" on the
 offline gate alone:

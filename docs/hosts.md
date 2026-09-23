@@ -106,10 +106,11 @@ The 3.0 tools refuse to author against a pre-6.0 dnd5e world, and dnd5e 6.x decl
    input at 14.367 (the bridge joins either shape) and every POST must look same-origin from
    14.368 (the launcher sends `Origin`) — so a 14.36x server and a 14.368 server are both
    reachable; only the dnd5e install below needs the newer one.
-2. **Then dnd5e, to 6.x** (6.0.3 verified): update the system from Foundry's Setup screen, then
-   launch the world and let dnd5e run its migration to completion before anything else joins —
-   the migration rewrites every actor and item once, and a bridge that joins mid-migration reads
-   half-converted documents.
+2. **Then dnd5e, to 6.x** (6.0.5 verified — take the latest 6.0.x: 6.0.0–6.0.3 delete every
+   actor effect that has no expiry on a short or long rest): update the system from Foundry's
+   Setup screen, then launch the world and let dnd5e run its migration to completion before
+   anything else joins — the migration rewrites every actor and item once, and a bridge that
+   joins mid-migration reads half-converted documents.
 3. **Then this server:** `get-world-info` reports `system.version` and `foundry.version`; the
    writing tools gate on the dnd5e version they detect at the first call (a refusal names the
    version it saw), so nothing is configured on this side. Existing world content is untouched

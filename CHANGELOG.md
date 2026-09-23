@@ -10,6 +10,10 @@ What changed for a user of the tools and skills, release by release. The measure
   headless page has controlled — the Session 8 hoard announcement (2026-09-22) posted under
   Gren's name. It now speaks as the bridge user, or as the new `speakerAlias` ("Narrator", "The
   Innkeeper"); with `speakerActor`, `speakerAlias` renames that character's line.
+- **dnd5e 6.0.5 is the verified system** (Foundry 14.368). Update past 6.0.3: dnd5e 6.0.0–6.0.3
+  delete every actor effect without an expiry on a short or long rest — `apply-condition`'s
+  conditions and exhaustion, and `manage-effect` effects created without a duration. Skip 6.0.4:
+  rolling an activity's check or save from its chat card can throw there.
 - **`apply-condition` keeps exhaustion in step on an exhaustion-immune creature.** From dnd5e
   6.0.4 a level change on the suppressed effect left the actor's stored
   `attributes.exhaustion` at the old level; it now follows the effect (and still never adds a

@@ -363,7 +363,7 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   import's standing mode) read one DM's facts and taste from a **campaign repo** of their own —
   `campaign.json` + `STYLE.md`, laid out by `.claude/skills/_shared/campaign-repo.md` — so no
   campaign, player or house-style ruling lives in this repo (3.0 M9).
-- **Target stack.** Foundry v14 (14.368 verified), dnd5e 6.x (6.0.3 verified; the 2.x/3.x line —
+- **Target stack.** Foundry v14 (14.368 verified), dnd5e 6.x (6.0.5 verified; the 2.x/3.x line —
   1.x = dnd5e 5.3.x), on any host (§2.6). D&D-5e-only by design.
 - **Quality gate.** biome · `tsc --noEmit` · vitest · build · knip, all green before any commit. No
   pre-commit hook — run `biome check --write .` manually.
