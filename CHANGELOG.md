@@ -3,7 +3,9 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 3.0.1 — 2026-09-23 — dnd5e 6.0.5, exhaustion on immune creatures, a narrator speaker
+
+A maintenance release: one compatibility event (dnd5e 6.0.3 → 6.0.5) and two bug fixes.
 
 - **`send-chat-message` never speaks as a selected token.** With no `speakerActor` the speaker
   was left to `ChatMessage.getSpeaker()`, which infers one from whatever token the bridge's
@@ -18,6 +20,32 @@ What changed for a user of the tools and skills, release by release. The measure
   6.0.4 a level change on the suppressed effect left the actor's stored
   `attributes.exhaustion` at the old level; it now follows the effect (and still never adds a
   second level on 6.0.0–6.0.3).
+
+**Verified** (2026-09-23, the local sandbox mirrored from prod that day: Foundry 14.368, dnd5e
+6.0.5, one world-driver at a time — the gate is [`docs/RELEASE.md`](docs/RELEASE.md)):
+
+- offline: biome · `tsc --noEmit` · vitest **98 files, 1,804 tests** (3 skipped) · build (page
+  bundle 530.5 kB) · knip — green on `main`;
+- the cold bring-up (`verify-wake`): the bridge relaunched the world and joined in 13 s;
+- the release set, **12 / 12 scripts, 493 / 493** assertions (3.0.0: 490 — the three new
+  immune-exhaustion checks), a `ZZ-*` sweep afterwards finding nothing: effects-6 51 ·
+  region-effects 37 · activities-6 37 · settings-calendar 52 · item-tooling 24 · actor-tooling 51 ·
+  pc-build 70 · teleporter-scene-fields 13 · placeables-tooling 87 · scene-tools 24 ·
+  cast-activity 25 · region-tooling 22;
+- the live integration suite, **7 suites ran, 80 passed / 6 skipped** (the same six) in 215 s;
+- the MCP smoke after a restart: `get-world-info`; a Fighter 3 / Rogue 1 in one `create-pc` call
+  (`success`, HP 35, 39 advancements, **0 unresolved `@scale`**); a bad subclass uuid answers
+  `success:false` + `errors[1]` with **no actor persisted**; `apply-condition` exhaustion 3 → 5 on a
+  Monster Manual Zombie (immune): stored 5, derived 5, the effect at 5 and suppressed;
+- prod, read-only over its own registration: `get-world-info` reports Foundry 14.368 / dnd5e
+  6.0.5 and the premium books; `search-compendium` answers;
+- the numbers: `tools/list` **201,726** chars ≈ 56,035 tokens for 81 tools (leaf prose 77,106 ·
+  descriptions 24,993 · structural 81,985; longest leaf 120; 0 over budget) — +164 over 3.0.0, the
+  `speakerAlias` leaf; names ×2 **6,153** (3,117 + 3,036); skill descriptions **7,986** (17
+  skills); always-on `session` **1,578**; the seam 156 handlers, 0 `any`; the 24-call live
+  baseline **87,895** chars ≈ 24,415 tokens, 1 capped (the walls list), 0 errors — the growth is
+  the world's, not the code's: the sandbox is today's prod, and 3.0.0's 73,492 was measured on
+  the 2026-09-21 mirror.
 
 ## 3.0.0 — 2026-09-21 — the dnd5e MCP: cheaper in context, official 6.x, hosts as endpoints
 
