@@ -458,6 +458,20 @@ try {
       console.log(`cleanup FAILED: ${e?.message || e}`);
     }
   }
+  // The item tools create the named "ZZ-MCP-ITEM Loot" folder on demand; the item deletes above
+  // leave it behind empty. Drop it too (only while empty — never a folder with real content).
+  try {
+    const dropped = await foundry.evaluate(async () => {
+      const zz = globalThis.game.folders.filter(
+        f => f.type === 'Item' && f.name === 'ZZ-MCP-ITEM Loot' && f.contents.length === 0
+      );
+      for (const f of zz) await f.delete();
+      return zz.length;
+    }, null);
+    if (dropped) console.log(`cleanup -> deleted ${dropped} temp folder(s)`);
+  } catch (e) {
+    console.log(`folder cleanup FAILED: ${e?.message || e}`);
+  }
   await foundry.dispose?.();
   const failed = results.filter(r => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
