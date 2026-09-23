@@ -15,7 +15,7 @@ what `.claude/skills/**` and any sibling's skills or `CLAUDE.md` write down. The
   `node scripts/measure/skills-matrix.mjs` must report **0 unresolved** names (it also treats a
   union's discriminator values as names a skill may write beside the tool). Beyond this repo the
   checklist is a grep — `grep -rn "<old-tool-name>" .claude/skills scripts tests ../fvtt-mod-*/tools
-  ../fvtt-mcp-artificer <campaign repo>` — because sibling skills name tools too (the artificer's
+  ../fvtt-app-artificer <campaign repo>` — because sibling skills name tools too (the artificer's
   illustration-builder names 11; a campaign repo's notes may name 20).
 - **Tool names are bare.** A skill never writes `mcp__<registration>__<tool>`; the registration
   name is the user's ([hosts.md](hosts.md)).

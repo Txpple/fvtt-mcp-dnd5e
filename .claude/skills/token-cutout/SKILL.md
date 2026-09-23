@@ -9,11 +9,11 @@ description: >-
 
 # Token cutout (Foundry install half)
 
-**The cutout itself moved to `fvtt-mcp-artificer` on 2026-09-19.** Call `cutout-image` there
+**The cutout itself moved to `fvtt-app-artificer` on 2026-09-19.** Call `cutout-image` there
 (chroma key for flat plates, rembg AI matte fallback, 512 square, magenta preview). Tokens
 generated or edited with `generate-image` / `edit-image` in `kind: "token"` arrive already cut.
 There is no script in this folder any more; `token_cutout.py` lives at
-`fvtt-mcp-artificer/scripts/token_cutout.py` and the tool is its only caller.
+`fvtt-app-artificer/scripts/token_cutout.py` and the tool is its only caller.
 
 Read the `*_preview.png` the tool reports before trusting the edge: a colour halo means a fringe
 survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade means over-cut
