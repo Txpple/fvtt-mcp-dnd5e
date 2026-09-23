@@ -3,7 +3,9 @@
      PLAYER-SAFE BY CONSTRUCTION: nothing from gm-notes.md may appear here.
      DEFAULT STYLE (the campaign repo's STYLE.md overrides): dice woven as narrative, never
      numerals — the words carry crit/fail/near-death magnitude. In-character endmatter (Quotable
-     Quotes + Deeds of the Day) goes after Spoils. No meta, no player names, no technical-issues talk. -->
+     Quotes + Deeds of the Day) goes after Spoils. No meta, no player names, no technical-issues talk.
+     THIS IS THE EMAIL VERSION. recap.pdf is rendered from templates/recap-print.html (same text, block
+     layout) — never print this file: Chrome splits text inside its table cells across pages. -->
 <div style="margin:0;padding:24px 8px;background-color:#f4f1ea;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"
          style="max-width:640px;width:100%;margin:0 auto;background-color:#fffdf8;border:1px solid #d8cfc0;border-radius:8px;">
@@ -36,6 +38,16 @@
         <p style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.65;color:#4a3f30;">
           {{SECTION_PROSE}}
         </p>
+        <!-- Optional illustration (sessions.illustrations) — place it after the paragraph it shows.
+             Relative path: it renders in the browser; an email paste needs the image attached. -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:6px 0 14px 0;">
+          <tr><td style="padding:0;">
+            <img src="img/{{NN}}-{{slug}}.jpg" width="576" alt="{{WHAT_IT_SHOWS}}" style="display:block;width:100%;max-width:576px;height:auto;border:1px solid #d8cfc0;border-radius:4px;">
+          </td></tr>
+          <tr><td style="padding:6px 2px 0 2px;">
+            <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.5;color:#8a7a5c;font-style:italic;">{{IN_WORLD_CAPTION}}</p>
+          </td></tr>
+        </table>
       </td>
     </tr>
     <!-- End repeated block -->

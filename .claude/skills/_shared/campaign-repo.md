@@ -49,7 +49,8 @@ asks, it does not invent one.
     "dir": "sessions",
     "outputs": ["recap", "combat-log", "gm-notes-story", "gm-notes-mechanics"],
     "pdf": true,
-    "skewSeconds": 0
+    "skewSeconds": 0,
+    "illustrations": true
   },
   "snapshots": { "dir": "party-snapshots" },
   "scenePacks": { "mode": "pack-faithful", "bornExplored": false }
@@ -68,6 +69,7 @@ asks, it does not invent one.
 | `sessions.outputs` | session-scribe | which documents a session produces (any of `recap`, `combat-log`, `gm-notes`, `gm-notes-story`, `gm-notes-mechanics`) |
 | `sessions.pdf` | session-scribe | also render each HTML output to PDF |
 | `sessions.skewSeconds` | session-scribe | the measured Craig ↔ Foundry clock skew (`--skew-seconds`), 0 until measured |
+| `sessions.illustrations` | session-scribe | illustrate the player recap (key scenes across the session, via illustration-builder); absent = false. How many and in what taste is `STYLE.md`'s call |
 | `scenePacks` | tom-cartos-import | the standing import mode — `mode`: `pack-faithful` (default) or `maps-only`; `bornExplored`: stamp town maps for the autoexplore module (optional; absent = ask) |
 
 ## `STYLE.md`

@@ -61,13 +61,22 @@
   blockquote p{margin:0}
   blockquote .who{display:block;margin-top:4px;font-size:13px;color:var(--muted)}
   footer{padding:14px 32px 22px;border-top:1px solid var(--rule);font-size:12px;color:#9c8f78}
+  /* Print: nothing splits across a page, headings and intro lines travel with what they
+     introduce, pages numbered. Look at every page of the PDF before shipping. */
+  @page{margin:0.6in 0.6in 0.7in;
+    @bottom-center{content:"Session {{SESSION_NO}} \00B7  GM Notes \00B7  {{STORY_OR_MECHANICS}} \00B7  " counter(page);
+      font-family:Georgia,serif;font-size:8pt;color:#9c8f78}}
+  @page :first{@bottom-center{content:none}}
   @media print{
     body{background:#fff}
     .wrap{padding:0}
     .sheet{border:none;border-radius:0}
     section,header{padding-left:0;padding-right:0}
-    h2,h3{page-break-after:avoid}
-    tr,.callout,blockquote,li{page-break-inside:avoid}
+    .scroll{overflow:visible}
+    h2,h3{page-break-after:avoid;break-after:avoid}
+    p,li,tr,.callout,blockquote,table.data,.scroll{page-break-inside:avoid;break-inside:avoid}
+    h2 + p,h3 + p,p:has(+ .scroll),p:has(+ ul),p:has(+ ol){page-break-after:avoid;break-after:avoid}
+    p{orphans:3;widows:3}
   }
   @media (max-width:560px){
     section,header,footer{padding-left:18px;padding-right:18px}

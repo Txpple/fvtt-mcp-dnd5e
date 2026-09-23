@@ -25,7 +25,7 @@ Every campaign fact this skill needs comes from the campaign repo
 ([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)) — locate it, **pull it**, and read:
 
 - `campaign.json` — `name`, `worldId` (refuse to write when `get-world-info` reports another
-  world), `party` (the snapshot roster — nothing else is a PC; `excludedActors` never), `journals.sessionDiary`, `sessions.dir` / `outputs` / `pdf` / `skewSeconds`, `snapshots.dir`.
+  world), `party` (the snapshot roster — nothing else is a PC; `excludedActors` never), `journals.sessionDiary`, `sessions.dir` / `outputs` / `pdf` / `skewSeconds` / `illustrations`, `snapshots.dir`.
 - `STYLE.md` — the house style, in full, before writing a word. What it does not cover falls to
   the defaults under "Judgment notes" below.
 
@@ -92,6 +92,21 @@ Let `PY = %USERPROFILE%\.session-scribe\venv\Scripts\python.exe`,
      construction**: written ONLY from what the players saw at the table; nothing that appears
      solely in the GM notes or GM whispers may appear here. The user pastes this into an email —
      it must render in Gmail / Outlook (keep the inline-style table structure intact).
+   - `recap-print.html` — from `templates/recap-print.html`: the SAME text as recap.html in a block
+     layout with page-break rules and page numbers. **`recap.pdf` is rendered from this file, never
+     from recap.html** — Chrome fragments text inside table cells across printed pages. Keep the
+     template's `.keep` groups: each heading with its first block (and a picture that follows it),
+     endmatter as one `.entry` per item.
+   - **Illustrations** — when `sessions.illustrations` is true. Pick the night's most memorable
+     beats across the WHOLE session (roleplay and town moments as well as the big fight — roughly
+     one per story section) and make each one with the **illustration-builder** skill (the artificer
+     tools): canon from the transcript (who was there, where it happened — check the location
+     before prompting), the battlemap / scene for terrain, the campaign's `art/SHELF.md` anchors for
+     the party, the world's tokens and portraits for NPCs and monsters, handout art for buildings.
+     Run its full loop — canon check, then the flaw pass at zoom — on every image. Finals go to the
+     campaign's art staging folder; 1600-px JPEG copies to `<SDIR>\img\NN-slug.jpg`, numbered in
+     reading order, woven into both recap.html and recap-print.html with in-world captions. Nothing
+     goes into Foundry until the owner approves it.
    - `combat-stats.md` + `combat-log.html` — the combat report, from the `get-combat-stats` MCP
      tool (a world running the companion battleflow module; otherwise say so and skip it);
      template `templates/combat-log.html`. GM-facing: exact numerals wanted.
@@ -100,9 +115,13 @@ Let `PY = %USERPROFILE%\.session-scribe\venv\Scripts\python.exe`,
      and `gm-notes-mechanics` (bookkeeping checklist to apply to the live world — levels, items,
      coin, renames; automation that cost time; rulings to keep consistent; table observations).
      Both from `templates/gm-notes.html`.
-   - PDFs: render each HTML with a headless browser honouring the templates' print CSS (Edge on
-     Windows: `msedge.exe --headless=new --disable-gpu --no-pdf-header-footer
-     --print-to-pdf=<out> file:///<html>`); a ~1 KB PDF means the page didn't load.
+   - PDFs: render with a headless browser honouring the templates' print CSS (Edge on Windows:
+     `msedge.exe --headless=new --disable-gpu --no-pdf-header-footer --print-to-pdf=<out>
+     file:///<html>`) — `recap.pdf` from `recap-print.html`, the rest from their own HTML. A ~1 KB
+     PDF means the page didn't load. **Then look at every page**: `scripts/pdf-preview.mjs <pdf>`
+     writes a pdf.js page grid; serve its folder on localhost and page through it in the Browser
+     pane. Fix and re-render on a heading alone at a page foot, a picture pushed off its section, a
+     split table or entry, or a near-empty page.
 6. **Snapshot the party** — two artifacts per session date, both committed, for the `party` in
    `campaign.json` and no one else:
    - **Full JSON backup (the durable record):** for EACH PC, `manage-actors` `export` →
@@ -121,8 +140,9 @@ Let `PY = %USERPROFILE%\.session-scribe\venv\Scripts\python.exe`,
    text page to that journal (`manage-journals` `update` with `newPageName` + `playerVisible:
    true`), named `Session N — <title>`, the date in the body; the same player-safe boundary and
    register as recap.html. Never a journal per session.
-8. **Commit** — in the campaign repo: `git add <sessions.dir>/<date> <snapshots.dir>` → commit
-   (`session: <date> — <short title>`) → push. `audio/` is gitignored (bulky; the transcript is the
+8. **Commit** — in the campaign repo: `git add <sessions.dir>/<date> <snapshots.dir>` (and the
+   staged illustration finals, when there are any) → commit (`session: <date> — <short title>`) →
+   push. `audio/` is gitignored (bulky; the transcript is the
    durable artifact); tell the user audio stays local and can be deleted once they're happy with
    the transcript.
 
@@ -148,7 +168,10 @@ Let `PY = %USERPROFILE%\.session-scribe\venv\Scripts\python.exe`,
   features actually bought" section (damage added / prevented, misses converted, saves flipped —
   the duds named as plainly as the winners). When the party gets wrecked, work the probability
   back off the sheets before calling it a balance problem. Charts: single-series bars, one hue,
-  direct-labeled; render the page and look at it before shipping.
+  direct-labeled; render the page and look at it before shipping. A buff that measured zero
+  because of a *suspected* automation fault is not a dud — that goes to the mechanics notes.
+- **The PDFs are what get read away from the desk.** Nothing splits across a page, pages are
+  numbered, and every page is looked at before the files go out (step 5).
 - **Monsters the party fought go in the Bestiary** — after the recap, hand off to the
   `bestiary-builder` skill for anything newly killed.
 - **Attribution is per-speaker-track and trustworthy** — quote players verbatim when it's good
