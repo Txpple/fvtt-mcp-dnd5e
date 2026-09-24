@@ -12,8 +12,10 @@
 **`fvtt-mcp-dnd5e` is a Dungeon Master's content assistant for Foundry VTT (D&D 5e, 2024 rules).**
 It builds and maintains the content of a campaign in a live Foundry world, driven through Claude —
 scenes, NPCs and PCs, items, journals, tables, cards, playlists — table-ready, edition-correct and
-art-bearing, sourced from the premium books; and it records what happened at the table afterwards
-(chat export, combat analytics, session recaps written into the journal). It is a Foundry MCP
+art-bearing, sourced from the premium books; and it keeps the table's chat (post, list, export).
+Session summaries and analytics are a sibling's job: [`fvtt-app-sessionscribe`](https://github.com/Txpple/fvtt-app-sessionscribe)
+covers the transcript, the recap, the combat report and the GM notes (owner, 2026-09-23). It reads
+the world and writes the session diary through this MCP. It is a Foundry MCP
 **first**: it drives any live Foundry world — on Molten Hosting, on this machine, at a URL — and
 *where* that world runs is a **host**, an option chosen per registration (§2.6), never the product.
 It is user-facing: anyone can clone it and point it at their own world.
@@ -175,15 +177,15 @@ This is the architectural backbone that makes principle #1 real.
 | | **dnd5e 6.0 features** — conditional / rules-type effects, expiry events, region + activity behaviors, teleport / transform activities, rarities | ✅ done 2.1.0–2.1.1 (`manage-effect`, `manage-activity`, `add-region-behavior`; `docs/history/plan-2.1-dnd5e-6-features.md`) |
 | | **System automation settings + calendar** | ✅ done 2.1.1 (`configure-dnd5e-settings` read + allow-listed set; `manage-calendar` read / advance / set) |
 | **Session record** | Chat: post, list, export (`send-chat-message`, `export-chat-log` …) | ✅ done (`chat-and-narration`) |
-| | Combat analytics (`get-combat-stats`) | ✅ done (reads the house module's stamps) |
-| | Audio → text → recap (`session-scribe`: per-track Whisper, chat-aligned, recaps filed as journals) | ✅ done |
+| | Combat analytics (`get-combat-stats`) | ➡️ **moved out in 4.0.0**: now `fvtt-app-sessionscribe`'s `analyze-combat`, proven at parity on the sandbox first (owner, 2026-09-23; reverses 3.0 decision #17 for this tool) |
+| | Audio → text → recap (`session-scribe`) | ➡️ **moved out in 4.0.0**: the skill and its Python now live in `fvtt-app-sessionscribe`, as that repo's tools (owner, 2026-09-23; reverses 3.0 decision #16). The session diary is still filed through `manage-journals` |
 | **Platform** | **Hosts** — one seam for where Foundry runs (`molten` / `local` / `generic`), the file plane per host | ✅ done 2.2 (§2.6; `docs/history/plan-2.2-hosts.md`) |
 | | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | ✅ done 2.2 |
 | | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | ✅ done 2.2 |
 | | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/history/plan-3.0-consolidation.md` M1) |
 | | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `action`, every skill re-pointed in the same commit), owner content out, the user-facing docs | ✅ done 3.0.0, 2026-09-21 (`docs/history/plan-3.0-consolidation.md`; measured in `docs/history/architecture-review-2026-09.md`; `tools/list` 283,948 → 201,562, names ×2 11,147 → 6,153, 151 tools → 81) |
 
-Legend: ✅ done. There is no active line.
+Legend: ✅ done · ➡️ moved to a sibling repo. There is no active line.
 
 Every content building block is built, and they compose into **end-to-end adventures** (§1, §5) —
 from "here's a map, make me a module" to "here's my module, put it in the VTT." 3.0 made it cheap
@@ -205,7 +207,8 @@ or as little as they like (§1).
   built. This split is the most important structural decision in the content surface.
 - **Journals** — the written layer of an adventure: handouts, lore/gazetteer entries, read-aloud
   (boxed) text, quest logs, and the GM's own notes. Includes quest journals and linking quests to the
-  NPCs that give them. This is also where session recaps are filed (`session-scribe`).
+  NPCs that give them. The session diary is filed here too, by `fvtt-app-sessionscribe`'s
+  `session-scribe` skill through `manage-journals`.
 - **Tables** — roll tables for loot, encounters, rumors, wild magic, etc.
 - **Playable cards** — Foundry card decks/hands/piles for in-play use.
 - **Playlists** — audio ambiences and tracks, attachable to scenes.
@@ -357,12 +360,13 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 - **Skills ship in-repo.** `.claude/skills/**` is a tracked deliverable, committed alongside the
   tools. Current skills: `start-session`, `scene-builder`, `stat-block-builder`,
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
-  `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-scribe`,
-  `session-audit`, `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
-  The campaign-facing ones (`session-scribe`, the two audits, the bestiary, the scene-pack
-  import's standing mode) read one DM's facts and taste from a **campaign repo** of their own —
-  `campaign.json` + `STYLE.md`, laid out by `.claude/skills/_shared/campaign-repo.md` — so no
-  campaign, player or house-style ruling lives in this repo (3.0 M9).
+  `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-audit`,
+  `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
+  The campaign-facing ones (the two audits, the bestiary, the scene-pack import's standing mode)
+  read one DM's facts and taste from a **campaign repo** of their own. That is `campaign.json` +
+  `STYLE.md`, laid out by `.claude/skills/_shared/campaign-repo.md`, so no campaign, player or
+  house-style ruling lives in this repo (3.0 M9). `fvtt-app-sessionscribe`'s `session-scribe`
+  reads the same layout, and it writes the record into it.
 - **Target stack.** Foundry v14 (14.368 verified), dnd5e 6.x (6.0.5 verified; the 2.x/3.x line —
   1.x = dnd5e 5.3.x), on any host (§2.6). D&D-5e-only by design.
 - **Quality gate.** biome · `tsc --noEmit` · vitest · build · knip, all green before any commit. No
