@@ -47,8 +47,11 @@ Say it in plain words; the matching skill calls the tools.
 | `tom-cartos-import` | a scene-pack module into your world: scenes, walls, lights, teleporters, legend |
 | `token-cutout` | a cut-out token image onto an actor |
 | `chat-and-narration` | narration, NPC dialogue, whispers, roll requests, item cards; export or prune the log |
-| `session-scribe` | a Craig (Discord) recording → transcript aligned with the chat log → recap, combat report, GM notes |
 | `session-audit` · `plot-drift-check` · `bestiary-builder` | audit next session's encounters; diff the world against the plot; log what the party fought |
+
+Session summaries and analytics moved out in 4.0.0, to the sibling `fvtt-app-sessionscribe`. That
+covers turning a Craig (Discord) recording and the chat log into the transcript, recap, combat
+report and GM notes. It files the session diary through `manage-journals` here.
 
 The campaign-facing skills keep your campaign's facts and house style in a repo of your own
 (`campaign.json` + `STYLE.md` — [`campaign-repo.md`](.claude/skills/_shared/campaign-repo.md));
@@ -56,7 +59,7 @@ nothing about one table lives here.
 
 ## Tools
 
-**81 tools.** One family tool per document type, selected by `action`: `manage-actors`,
+**80 tools.** One family tool per document type, selected by `action`: `manage-actors`,
 `manage-scenes`, `manage-placeables` (with a `kind`: walls, lights, tokens, regions, sounds,
 tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`, `manage-cards`,
 `manage-playlists`, `manage-folders`, `manage-macros`. Around them:
@@ -76,11 +79,10 @@ tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`,
 
 A list answers one line per record, a `get` answers JSON, a miss is an error, an unknown argument
 is refused by name. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
-lets a registration advertise a subset (`chat,combat` is 12 tools instead of 81).
+lets a registration advertise a subset (`chat,combat` is 11 tools instead of 80).
 
-Three tools need a companion module and warn when it is absent: `configure-soundscape`
-([fvtt-mod-soundscape](https://github.com/Txpple/fvtt-mod-soundscape)), `get-combat-stats`
-([fvtt-mod-battleflow](https://github.com/Txpple/fvtt-mod-battleflow)), `set-landing-scene`
+Two tools need a companion module and warn when it is absent: `configure-soundscape`
+([fvtt-mod-soundscape](https://github.com/Txpple/fvtt-mod-soundscape)) and `set-landing-scene`
 ([fvtt-mod-openserver](https://github.com/Txpple/fvtt-mod-openserver)).
 
 ## Hosts

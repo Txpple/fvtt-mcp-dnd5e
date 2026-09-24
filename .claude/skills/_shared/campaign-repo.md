@@ -1,8 +1,12 @@
 # The campaign repo — one convention for the skills that read or write a campaign
 
-Five skills work against a **campaign**, not just a world: `session-scribe` (writes the session
-record), `session-audit` and `plot-drift-check` (read the plot and the record), `bestiary-builder`
-(reads the record for what the party fought), `tom-cartos-import` (the standing import mode).
+Four skills here work against a **campaign**, not just a world:
+- `session-audit` and `plot-drift-check` read the plot and the record.
+- `bestiary-builder` reads the record for what the party fought.
+- `tom-cartos-import` uses it for the standing import mode.
+
+A fifth skill, `session-scribe`, writes the session record and reads this same contract. It moved to
+the sibling `fvtt-app-sessionscribe` in 4.0.0.
 None of them carries campaign facts — names, the party, house style, where the files go. Those live in a **campaign repo**: a private git repo (or
 plain folder) per campaign, beside the world, that the DM owns. This file is the contract between
 the skills and that repo.
@@ -25,7 +29,9 @@ across machines, **pull before reading and push after writing** — the skills a
                          when there are several
   plans/                 run-of-show for an upcoming session, one file each (session-audit)
   sessions/YYYY-MM-DD/   the session record: transcript, recap, GM notes … (session-scribe writes;
-                         session-audit and bestiary-builder read the recaps)
+                         session-audit and bestiary-builder read the recaps). transcript.md
+                         carries every whisper and blind roll (🤫); transcript-public.md
+                         withholds them and is the only source for anything players see
   party-snapshots/       the per-session PC sheet snapshots (session-scribe writes, session-audit reads)
   world-state.md         a hand-kept manifest of what exists in the world (optional)
 ```
@@ -50,7 +56,8 @@ asks, it does not invent one.
     "outputs": ["recap", "combat-log", "gm-notes-story", "gm-notes-mechanics"],
     "pdf": true,
     "skewSeconds": 0,
-    "illustrations": true
+    "illustrations": true,
+    "speakers": { "112233445566778899": "Aldric Stone", "dm_username": "DM" }
   },
   "snapshots": { "dir": "party-snapshots" },
   "scenePacks": { "mode": "pack-faithful", "bornExplored": false }
@@ -68,7 +75,8 @@ asks, it does not invent one.
 | `sessions.dir`, `snapshots.dir` | session-scribe, session-audit, bestiary-builder | where the record lives, relative to the repo |
 | `sessions.outputs` | session-scribe | which documents a session produces (any of `recap`, `combat-log`, `gm-notes`, `gm-notes-story`, `gm-notes-mechanics`) |
 | `sessions.pdf` | session-scribe | also render each HTML output to PDF |
-| `sessions.skewSeconds` | session-scribe | the measured Craig ↔ Foundry clock skew (`--skew-seconds`), 0 until measured |
+| `sessions.skewSeconds` | session-scribe | the measured Craig ↔ Foundry clock skew in seconds, 0 until measured |
+| `sessions.speakers` | session-scribe | Discord id (or username) → the transcript's speaker label, usually the character's name. The recording's track order differs from one recording to the next, so the id is the key. Optional; an unmapped speaker keeps their Discord name |
 | `sessions.illustrations` | session-scribe | illustrate the player recap (key scenes across the session, via illustration-builder); absent = false. How many and in what taste is `STYLE.md`'s call |
 | `scenePacks` | tom-cartos-import | the standing import mode — `mode`: `pack-faithful` (default) or `maps-only`; `bornExplored`: stamp town maps for the autoexplore module (optional; absent = ask) |
 

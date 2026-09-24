@@ -112,7 +112,7 @@ console.log(
   check(names.includes('get-world-info'), 'session is always advertised');
   check(!names.includes('configure-dnd5e-settings'), 'settings is opt-in (M7)');
   check(
-    names.includes('send-chat-message') && names.includes('get-combat-stats'),
+    names.includes('send-chat-message') && names.includes('configure-combat-tracker'),
     'the selected toolsets are advertised'
   );
   check(!names.includes('manage-scenes') && !names.includes('get-actor'), 'the others are not');

@@ -7,7 +7,7 @@ re-point the consumer in the same commit, or version the change. The package ver
 
 ## 1. The tool surface (skills and sibling instructions call tools by name)
 
-The 81 tool names, their `action` / `kind` / `type` discriminators and their argument leaves are
+The 80 tool names, their `action` / `kind` / `type` discriminators and their argument leaves are
 what `.claude/skills/**` and any sibling's skills or `CLAUDE.md` write down. The registry
 (`src/registry.ts`) is the source of truth; `npm test` fails on a handler without a definition.
 
@@ -51,15 +51,15 @@ flag. Each row names the writer, the reader and where the shape is documented.
 
 | Flag | Document | Written by | Read by | Shape lives in |
 | --- | --- | --- | --- | --- |
-| `flags["fvtt-mod-battleflow"]` — the stat stamps (`combat`, `sourceUuid`, `reverted`, the roll / damage / heal families) | ChatMessage | [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) | `get-combat-stats` (read-only scan, `src/page/combat-stats.ts`) | battleflow `ARCHITECTURE.md` §4 "The data plane — stat stamps"; the read essentials are the file header here |
+| `flags["fvtt-mod-battleflow"]` — the stat stamps (`combat`, `sourceUuid`, `reverted`, the roll / damage / heal families) | ChatMessage | [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) | nothing here since 4.0.0; `fvtt-app-sessionscribe`'s `analyze-combat` (read-only scan) | battleflow `ARCHITECTURE.md` §4 "The data plane — stat stamps"; the read essentials are the header of the scribe's `src/page/combat-stats.ts` |
 | `flags["fvtt-mod-soundscape"].sets` — the scene's sound sets | Scene | `configure-soundscape` (`src/page/soundscape.ts` owns the set schema, the clamps, the KEEP+WARN file check) | [`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape) at scene load | the module's design doc; the tool warns when the module is absent or disabled |
 | `flags["fvtt-mod-openserver"].landingScene` — a scene id | User | `set-landing-scene` (`src/page/scenes.ts`) | [`fvtt-mod-openserver`](https://github.com/Txpple/fvtt-mod-openserver) at login; `list-users` reports it | this repo (the tool is the writer); the tool warns when the module is absent or disabled |
 | `flags["fvtt-mod-autoexplore"].enabled` — render the scene born-explored | Scene | `manage-scenes` `create` / `update` `flags` (the `tom-cartos-import` skill's born-explored option; any scene by hand) | `fvtt-mod-autoexplore` at canvas draw | the module |
 | `flags["tom-cartos-import"]` — `sourceModule`, `sourceId` provenance | Scene, Region, JournalEntry | `manage-scenes` `create` + `manage-placeables` `{ kind: "regions" }` (`src/page/scenes.ts`) | `manage-placeables` `remap-teleporters` (old → new id maps), `manage-scenes` `list` with `flagScope` (dedup) | this repo — `TOM_CARTOS_FLAG_SCOPE` |
 
 Tools that need a companion module say so in their description and **warn instead of claiming
-success** when the module is missing: `get-combat-stats` (battleflow), `configure-soundscape`
-(soundscape), `set-landing-scene` (openserver). Everything else is core Foundry + dnd5e.
+success** when the module is missing: `configure-soundscape` (soundscape) and
+`set-landing-scene` (openserver). Everything else is core Foundry + dnd5e.
 
 ## 4. The campaign repo
 

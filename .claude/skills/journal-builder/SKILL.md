@@ -12,7 +12,7 @@ description: >-
 
 The judgment + prose layer for the **written** side of an adventure (design.md §5): handouts, lore,
 read-aloud (boxed) text, quest logs, GM notes — and **session recaps / campaign logs** (where
-`session-scribe` files its output). This is the deliberate inverse of the old behaviour, where the *tool* fabricated quest prose
+`fvtt-app-sessionscribe`'s `session-scribe` files its session diary). This is the deliberate inverse of the old behaviour, where the *tool* fabricated quest prose
 (read-aloud, NPC dialogue, hooks). Now **you write the words; the tools only structure + style them.**
 
 ## The line that matters — yours vs the tool's
@@ -135,8 +135,9 @@ house convention — keep it consistent so the sidebar stays trustworthy at a gl
 
 ## Session recaps & logs
 
-Session output (`session-scribe`: chat + Craig/Whisper transcripts → recaps) is **authored as
-journals** — this skill's structures are where it lands. The same shapes, by hand:
+Session output is **authored as journals**, and this skill's structures are where it lands. The
+sibling `fvtt-app-sessionscribe` (its `session-scribe` skill: chat plus the Craig transcript →
+recaps) writes the session diary through `manage-journals`. The same shapes, by hand:
 
 - A **"Campaign Log"** journal; each session is a `update-quest-journal` append (`heading "Session N —
   <date>"` + `paragraph` recap) onto one log page, OR a new page per session (`newPageName`).

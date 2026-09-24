@@ -3,6 +3,50 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.0.0 — 2026-09-23 — session summaries and analytics move to fvtt-app-sessionscribe
+
+**Breaking:** one tool and one skill leave this MCP, by the owner's ruling of 2026-09-23. It
+reverses 3.0 decisions #16 and #17 for them; see design.md §4.
+
+- **`get-combat-stats` is removed** (81 → 80 tools). Its successor is `analyze-combat` in the
+  sibling `fvtt-app-sessionscribe`, which reads Battle Flow's stat stamps from its own Foundry
+  user. The `combat` toolset is now just `configure-combat-tracker`.
+- **The `session-scribe` skill is removed**, along with its Python (`session_scribe.py`), setup
+  script and templates. It now lives in `fvtt-app-sessionscribe`, rewritten to that repo's tools.
+  The session diary is still written through `manage-journals`.
+- **`export-chat-log` stays** as the general chat exporter.
+- **The campaign-repo contract** (`.claude/skills/_shared/campaign-repo.md`) documents
+  `sessions.speakers` (Discord id → transcript label) and the record's `transcript-public.md`
+  (the spoiler-free transcript).
+- **The docs follow:**
+  - README: 80 tools; `chat,combat` is 11; two companion-module tools, not three.
+  - `docs/contracts.md`: the stat-stamp row's reader is now the sibling. `get-combat-stats`
+    never warned when Battle Flow was absent, so it is gone from the list of tools that do.
+  - `docs/hosts.md`, `journal-builder`.
+
+**Parity before removal** (fvtt-app-sessionscribe 3e2b493), on the sandbox (Foundry 14.368,
+dnd5e 6.0.5, Battle Flow 2.0.5):
+- `analyze-combat` vs `get-combat-stats`: 10/10 windows deep-equal, report text identical.
+- `export-session-chat` vs `export-chat-log`: 10/10.
+- `snapshot-party` vs `manage-actors export`: 4/4 PCs byte-identical.
+
+**Verified** (2026-09-23):
+- offline: biome · `tsc --noEmit` · vitest **96 files, 1,774 tests** (3 skipped; the four
+  combat-stats test files' 30 went with them) · build (page bundle 524.0 kB, from 530.5) · knip;
+- `node scripts/measure/skills-matrix.mjs`: 0 unresolved, 0 stale;
+- `verify-toolsets` **10 / 10** (80 tools; `chat,combat` 11);
+- the live integration suite on the sandbox: **7 suites ran, 80 passed / 6 skipped** (the same
+  six) in 279 s;
+- The release set was not re-run: no page write path changed since 3.0.1, which ran 12/12 on
+  the same sandbox mirror that afternoon.
+
+**Budgets** (`npm test`), 3.0.1 → 4.0.0:
+- tools/list 201,726 → **200,702** chars (−1,024);
+- names ×2 6,153 → **6,076**;
+- skill descriptions 7,986 → **7,526** (17 → 16 skills);
+- always-on 1,578 (unchanged).
+- The ceilings stay where they are.
+
 ## 3.0.1 — 2026-09-23 — dnd5e 6.0.5, exhaustion on immune creatures, a narrator speaker
 
 A maintenance release: one compatibility event (dnd5e 6.0.3 → 6.0.5) and two bug fixes.

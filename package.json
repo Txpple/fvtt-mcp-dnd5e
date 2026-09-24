@@ -1,6 +1,6 @@
 {
   "name": "fvtt-mcp-dnd5e",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "A D&D 5e Dungeon Master's assistant for Foundry VTT — an MCP server that drives any live Foundry world (Molten Hosting, a local install, a URL) through Claude Code.",
   "private": true,
   "type": "module",

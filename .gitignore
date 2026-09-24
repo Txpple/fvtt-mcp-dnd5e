@@ -89,7 +89,3 @@ test-results/
 
 # Session scratch (extracted system source, probes) — never committed
 /scratch/
-
-# Python bytecode (session-scribe scripts)
-__pycache__/
-*.pyc

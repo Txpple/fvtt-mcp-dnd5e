@@ -99,7 +99,8 @@ describe('tool registry', () => {
     // + get-combat-stats (2026-08-27: per-combat analytics folded from Battle Flow's stat
     //   stamps — damage/healing/flips/spend economy/Bless margins; read-only, GM-facing,
     //   filtered at call time. The stamps are an external wire format (battleflow ARCH §4),
-    //   never a code dependency.)
+    //   never a code dependency.) − 1 (4.0.0, 2026-09-23): moved to fvtt-app-sessionscribe as
+    //   analyze-combat, at parity on the sandbox first (owner's ruling; design.md §4).
     // + configure-dnd5e-settings (dnd5e 6.0 automation switches — allow-listed read + set, the
     //   owner's 2026-09-15 decision) + manage-calendar (read / advance / set the in-world date)
     // − 15 (M8, 2026-09-21): the tiles / lights / walls / drawings CRUD (16 tools) became the
@@ -120,7 +121,7 @@ describe('tool registry', () => {
     // − 3 (M8): list / get / update / delete-actor → manage-actors (action).
     // − 3 (M8): search-compendium-creatures / -spells / -items → search-compendium (type).
     // − 2 (M8): get-actor-entity / export-actor → manage-actors get-entity / export.
-    expect(names.length).toBe(81);
+    expect(names.length).toBe(80);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -551,7 +552,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(81);
+    expect(tools.length).toBe(80);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {
