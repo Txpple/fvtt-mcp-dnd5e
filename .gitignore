@@ -20,8 +20,10 @@ scripts/*.png
 # script is committed; its large JSON output is regenerable and stays local.
 /scratch-*.json
 
-# Environment Files
+# Environment Files — one per Foundry box (.env.greenrest, .env.halruaa, …); only the example is tracked
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
