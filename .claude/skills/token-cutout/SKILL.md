@@ -21,8 +21,9 @@ survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade m
 
 ## Put it in Foundry
 
-1. `upload-asset` the PNG to `worlds/<world>/assets/tokens/<name>.png` (get `<world>` from
-   `get-world-info`).
+1. `upload-asset` the PNG to `worlds/<world>/assets/tokens/<kind>/<slug>.png` (get `<world>` from
+   `get-world-info`; `<kind>` is `pcs`, `npcs`, `monsters` or `objects` — the campaign repo's
+   `conventions/assets.md`; a variant of an existing token is `<slug>-2.png`, not a new name).
 2. Assign it. **`set-actor-art` sets the portrait AND the prototype token in one call** — `imagePath`
    is the portrait and doubles as the token texture unless `tokenImagePath` overrides it. So by default
    **both** get set; say so plainly before you run it. Find the actor with `manage-actors` `list` / `manage-actors` `get`.

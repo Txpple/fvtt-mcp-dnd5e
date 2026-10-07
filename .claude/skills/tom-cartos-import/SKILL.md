@@ -74,7 +74,7 @@ asset comes back with a ready-to-use rewrite hint:
 
 ```
 read-pack { modulePath: "<abs module folder>",
-            destRoot: "worlds/<world>/assets/tom-cartos/<module-id>" }
+            destRoot: "worlds/<world>/assets/packs/<module-id>" }
 ```
 
 It returns `{ module, descriptor, scenes[], totalScenes, nextOffset, journals[], assets[] }`:
@@ -123,7 +123,7 @@ like `01 Iris` collide across packs.
 
 ## Step 4 — Upload the assets
 
-Default destination root: **`worlds/<world>/assets/tom-cartos/<module-id>/`** (world-scoped, namespaced
+Default destination root: **`worlds/<world>/assets/packs/<module-id>/`** (world-scoped, namespaced
 per module so two packs can't collide). For each entry in `assets[]` you actually need (the backgrounds
 + thumbnails of the chosen scenes, plus the journal key images):
 
@@ -139,7 +139,7 @@ pack's `images/` folder, or its tiles folder (Step 4b) — use **`upload-asset-t
 one call instead of N `upload-asset`s, preserving the layout:
 
 ```
-upload-asset-tree { localRoot: <module-dir>/images, remoteRoot: worlds/<world>/assets/tom-cartos/<id>/images, overwrite: true, includeExt: ["webp","png","jpg"] }
+upload-asset-tree { localRoot: <module-dir>/images, remoteRoot: worlds/<world>/assets/packs/<id>/images, overwrite: true, includeExt: ["webp","png","jpg"] }
 ```
 
 It walks `localRoot` recursively, skips existing files (unless `overwrite`), and reports
@@ -162,7 +162,7 @@ file picker?"* If yes:
 - Upload the whole tile folder in one call — `read-pack` already gives you the shared `localDir`:
 
   ```
-  upload-asset-tree { localRoot: <tiles.localDir>, remoteRoot: worlds/<world>/assets/tom-cartos/<id>/tiles, overwrite: true, includeExt: ["webp","png","jpg"] }
+  upload-asset-tree { localRoot: <tiles.localDir>, remoteRoot: worlds/<world>/assets/packs/<id>/tiles, overwrite: true, includeExt: ["webp","png","jpg"] }
   ```
 
   (If `tiles.localDir` is absent — tiles spread across dirs — fall back to a per-file `upload-asset`

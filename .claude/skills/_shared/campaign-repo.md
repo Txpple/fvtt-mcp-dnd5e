@@ -22,6 +22,8 @@ across machines, **pull before reading and push after writing** — the skills a
 
 ```
 <campaign-repo>/
+  conventions/assets.md  where uploads go — one folder per kind under worlds/<world>/assets/
+                         (every skill that uploads: the defaults in the skills match it)
   campaign.json          the facts the skills need — see below (session-scribe, bestiary-builder,
                          session-audit)
   STYLE.md               the house style session-scribe applies (optional — its defaults otherwise)

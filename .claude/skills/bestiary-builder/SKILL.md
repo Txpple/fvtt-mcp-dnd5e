@@ -64,8 +64,8 @@ has one ("Left to Right: Vine Blight, Tree Blight, and Needle Blight").
 
 Override when the DM has their own scan or a higher-res plate:
 
-1. `upload-asset` it to `worlds/<world>/assets/journal/<slug>.png` first;
-2. pass `--art "worlds/<world>/assets/journal/<slug>.png::Optional caption"` (repeatable — a
+1. `upload-asset` it to `worlds/<world>/assets/journal/bestiary/<slug>.png` first (one subfolder per journal — the campaign repo's `conventions/assets.md`);
+2. pass `--art "worlds/<world>/assets/journal/bestiary/<slug>.png::Optional caption"` (repeatable — a
    multi-creature page like Blights takes two, in the order you want them).
 
 `--no-art` for a text-only page.
