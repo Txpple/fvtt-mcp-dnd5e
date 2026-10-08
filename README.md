@@ -49,7 +49,7 @@ Say it in plain words; the matching skill calls the tools.
 | `chat-and-narration` | narration, NPC dialogue, whispers, roll requests, item cards; export or prune the log |
 | `session-audit` · `plot-drift-check` · `bestiary-builder` | audit next session's encounters; diff the world against the plot; log what the party fought |
 
-Session summaries and analytics moved out in 4.0.0, to the sibling `fvtt-app-sessionscribe`. That
+Session summaries and analytics moved out in 4.0.0, to the sibling `fvtt-mcp-sessionscribe`. That
 covers turning a Craig (Discord) recording and the chat log into the transcript, recap, combat
 report and GM notes. It files the session diary through `manage-journals` here.
 

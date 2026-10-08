@@ -6,7 +6,7 @@ Four skills here work against a **campaign**, not just a world:
 - `tom-cartos-import` uses it for the standing import mode.
 
 A fifth skill, `session-scribe`, writes the session record and reads this same contract. It moved to
-the sibling `fvtt-app-sessionscribe` in 4.0.0.
+the sibling `fvtt-mcp-sessionscribe` in 4.0.0.
 None of them carries campaign facts — names, the party, house style, where the files go. Those live in a **campaign repo**: a private git repo (or
 plain folder) per campaign, beside the world, that the DM owns. This file is the contract between
 the skills and that repo.

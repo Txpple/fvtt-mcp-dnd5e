@@ -88,7 +88,7 @@ export const TOOLSETS = {
     'post-item-card',
     'request-roll',
   ],
-  /** Combat tracker configuration (the analytics moved to fvtt-app-sessionscribe in 4.0.0). */
+  /** Combat tracker configuration (the analytics moved to fvtt-mcp-sessionscribe in 4.0.0). */
   combat: ['configure-combat-tracker'],
   /** The asset file library (Plane B) and asset reference integrity. */
   assets: [

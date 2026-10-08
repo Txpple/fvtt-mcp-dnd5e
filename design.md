@@ -13,7 +13,7 @@
 It builds and maintains the content of a campaign in a live Foundry world, driven through Claude —
 scenes, NPCs and PCs, items, journals, tables, cards, playlists — table-ready, edition-correct and
 art-bearing, sourced from the premium books; and it keeps the table's chat (post, list, export).
-Session summaries and analytics are a sibling's job: [`fvtt-app-sessionscribe`](https://github.com/Txpple/fvtt-app-sessionscribe)
+Session summaries and analytics are a sibling's job: [`fvtt-mcp-sessionscribe`](https://github.com/Txpple/fvtt-mcp-sessionscribe)
 covers the transcript, the recap, the combat report and the GM notes (owner, 2026-09-23). It reads
 the world and writes the session diary through this MCP. It is a Foundry MCP
 **first**: it drives any live Foundry world — on Molten Hosting, on this machine, at a URL — and
@@ -177,8 +177,8 @@ This is the architectural backbone that makes principle #1 real.
 | | **dnd5e 6.0 features** — conditional / rules-type effects, expiry events, region + activity behaviors, teleport / transform activities, rarities | ✅ done 2.1.0–2.1.1 (`manage-effect`, `manage-activity`, `add-region-behavior`; `docs/history/plan-2.1-dnd5e-6-features.md`) |
 | | **System automation settings + calendar** | ✅ done 2.1.1 (`configure-dnd5e-settings` read + allow-listed set; `manage-calendar` read / advance / set) |
 | **Session record** | Chat: post, list, export (`send-chat-message`, `export-chat-log` …) | ✅ done (`chat-and-narration`) |
-| | Combat analytics (`get-combat-stats`) | ➡️ **moved out in 4.0.0**: now `fvtt-app-sessionscribe`'s `analyze-combat`, proven at parity on the sandbox first (owner, 2026-09-23; reverses 3.0 decision #17 for this tool) |
-| | Audio → text → recap (`session-scribe`) | ➡️ **moved out in 4.0.0**: the skill and its Python now live in `fvtt-app-sessionscribe`, as that repo's tools (owner, 2026-09-23; reverses 3.0 decision #16). The session diary is still filed through `manage-journals` |
+| | Combat analytics (`get-combat-stats`) | ➡️ **moved out in 4.0.0**: now `fvtt-mcp-sessionscribe`'s `analyze-combat`, proven at parity on the sandbox first (owner, 2026-09-23; reverses 3.0 decision #17 for this tool) |
+| | Audio → text → recap (`session-scribe`) | ➡️ **moved out in 4.0.0**: the skill and its Python now live in `fvtt-mcp-sessionscribe`, as that repo's tools (owner, 2026-09-23; reverses 3.0 decision #16). The session diary is still filed through `manage-journals` |
 | **Platform** | **Hosts** — one seam for where Foundry runs (`molten` / `local` / `generic`), the file plane per host | ✅ done 2.2 (§2.6; `docs/history/plan-2.2-hosts.md`) |
 | | **Toolsets** — a registration advertises a subset of the surface (`FOUNDRY_TOOLSETS`) | ✅ done 2.2 |
 | | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | ✅ done 2.2 |
@@ -207,7 +207,7 @@ or as little as they like (§1).
   built. This split is the most important structural decision in the content surface.
 - **Journals** — the written layer of an adventure: handouts, lore/gazetteer entries, read-aloud
   (boxed) text, quest logs, and the GM's own notes. Includes quest journals and linking quests to the
-  NPCs that give them. The session diary is filed here too, by `fvtt-app-sessionscribe`'s
+  NPCs that give them. The session diary is filed here too, by `fvtt-mcp-sessionscribe`'s
   `session-scribe` skill through `manage-journals`.
 - **Tables** — roll tables for loot, encounters, rumors, wild magic, etc.
 - **Playable cards** — Foundry card decks/hands/piles for in-play use.
@@ -365,7 +365,7 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   The campaign-facing ones (the two audits, the bestiary, the scene-pack import's standing mode)
   read one DM's facts and taste from a **campaign repo** of their own. That is `campaign.json` +
   `STYLE.md`, laid out by `.claude/skills/_shared/campaign-repo.md`, so no campaign, player or
-  house-style ruling lives in this repo (3.0 M9). `fvtt-app-sessionscribe`'s `session-scribe`
+  house-style ruling lives in this repo (3.0 M9). `fvtt-mcp-sessionscribe`'s `session-scribe`
   reads the same layout, and it writes the record into it.
 - **Target stack.** Foundry v14 (14.368 verified), dnd5e 6.x (6.0.5 verified; the 2.x–4.x line —
   1.x = dnd5e 5.3.x), on any host (§2.6). D&D-5e-only by design.

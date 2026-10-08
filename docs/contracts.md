@@ -15,7 +15,7 @@ what `.claude/skills/**` and any sibling's skills or `CLAUDE.md` write down. The
   `node scripts/measure/skills-matrix.mjs` must report **0 unresolved** names (it also treats a
   union's discriminator values as names a skill may write beside the tool). Beyond this repo the
   checklist is a grep — `grep -rn "<old-tool-name>" .claude/skills scripts tests ../fvtt-mod-*/tools
-  ../fvtt-app-artificer <campaign repo>` — because sibling skills name tools too (the artificer's
+  ../fvtt-mcp-imagegen <campaign repo>` — because sibling skills name tools too (the artificer's
   illustration-builder names 11; a campaign repo's notes may name 20).
 - **Tool names are bare.** A skill never writes `mcp__<registration>__<tool>`; the registration
   name is the user's ([hosts.md](hosts.md)).
@@ -51,7 +51,7 @@ flag. Each row names the writer, the reader and where the shape is documented.
 
 | Flag | Document | Written by | Read by | Shape lives in |
 | --- | --- | --- | --- | --- |
-| `flags["fvtt-mod-battleflow"]` — the stat stamps (`combat`, `sourceUuid`, `reverted`, the roll / damage / heal families) | ChatMessage | [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) | nothing here since 4.0.0; `fvtt-app-sessionscribe`'s `analyze-combat` (read-only scan) | battleflow `ARCHITECTURE.md` §4 "The data plane — stat stamps"; the read essentials are the header of the scribe's `src/page/combat-stats.ts` |
+| `flags["fvtt-mod-battleflow"]` — the stat stamps (`combat`, `sourceUuid`, `reverted`, the roll / damage / heal families) | ChatMessage | [`fvtt-mod-battleflow`](https://github.com/Txpple/fvtt-mod-battleflow) | nothing here since 4.0.0; `fvtt-mcp-sessionscribe`'s `analyze-combat` (read-only scan) | battleflow `ARCHITECTURE.md` §4 "The data plane — stat stamps"; the read essentials are the header of the scribe's `src/page/combat-stats.ts` |
 | `flags["fvtt-mod-soundscape"].sets` — the scene's sound sets | Scene | `configure-soundscape` (`src/page/soundscape.ts` owns the set schema, the clamps, the KEEP+WARN file check) | [`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape) at scene load | the module's design doc; the tool warns when the module is absent or disabled |
 | `flags["fvtt-mod-openserver"].landingScene` — a scene id | User | `set-landing-scene` (`src/page/scenes.ts`) | [`fvtt-mod-openserver`](https://github.com/Txpple/fvtt-mod-openserver) at login; `list-users` reports it | this repo (the tool is the writer); the tool warns when the module is absent or disabled |
 | `flags["fvtt-mod-autoexplore"].enabled` — render the scene born-explored | Scene | `manage-scenes` `create` / `update` `flags` (the `tom-cartos-import` skill's born-explored option; any scene by hand) | `fvtt-mod-autoexplore` at canvas draw | the module |
