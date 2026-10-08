@@ -3,7 +3,7 @@ name: token-cutout
 description: >-
   Put a cut-out token image into the world — upload, set-actor-art, the facing check. Use when the
   user wants a cut-out token assigned to an actor, or asks to "remove the background" / "make it
-  transparent" for a token; the pixel work is the artificer server's cutout-image tool (automatic
+  transparent" for a token; the pixel work is the imagegen server's cutout-image tool (automatic
   for every kind: "token" render), not this skill.
 ---
 
@@ -48,4 +48,4 @@ survived (ask for `erode: 1` or `method: "rembg"`); eaten hair or a thin blade m
 
 ## What this skill does NOT do
 
-Cut, retouch, redraw, upscale, or recolor. Pixels are the artificer's job.
+Cut, retouch, redraw, upscale, or recolor. Pixels are imagegen's job.

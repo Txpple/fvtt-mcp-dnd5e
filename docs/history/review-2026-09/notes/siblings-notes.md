@@ -91,7 +91,7 @@ the old repo; 8 name tools), campaign 22 (7 name the old repo; 15 name tools).
 - `cd fvtt-mod-battleflow && node tools/smoke-saves.mjs --list` (the offline path — exits before any
   connect) → `ERR_MODULE_NOT_FOUND` at `harness.mjs:36`. Every one of the 56 harness importers and
   the 20 direct importers is dead; 21 battleflow files carry the absolute path
-  (`file:///D:/Workbench/FVTT/Repos/fvtt-mcp-molten5e/dist/foundry.js` and `const MCP = ...`).
+  (`file:///<repos>/fvtt-mcp-molten5e/dist/foundry.js` and `const MCP = ...`).
 - fxstudio `tools/lib/env.mjs:15` default `join(REPO,'..','fvtt-mcp-molten5e')` → `MCP_REPO` resolves
   to a non-existent dir; `classicLevel()` throws "classic-level is not installed under …molten5e";
   `connectSandbox()` would fail at the dynamic import. Override exists (`FXS_MCP_REPO`) but nothing
@@ -172,7 +172,7 @@ same fix on both sides of the seam.
 ### How siblings reference the package
 | option | pro | con |
 |---|---|---|
-| `"fvtt-mcp-dnd5e": "file:../fvtt-mcp-dnd5e"` in each sibling's `package.json` | npm symlinks the dir (npm ≥ 7 default; no copy), `import from 'fvtt-mcp-dnd5e/client'` resolves through `exports`, node resolves `playwright` via the real path; the relative path IS the family's stated layout (campaign BOOTSTRAP.md: "Repo root — UNIVERSAL: D:\Workbench\FVTT\Repos") | siblings that have no `package.json` today (miscpatches: 10 files, plain ESM, no build) gain one + a `node_modules` symlink; a sibling checked out elsewhere needs the same parent |
+| `"fvtt-mcp-dnd5e": "file:../fvtt-mcp-dnd5e"` in each sibling's `package.json` | npm symlinks the dir (npm ≥ 7 default; no copy), `import from 'fvtt-mcp-dnd5e/client'` resolves through `exports`, node resolves `playwright` via the real path; the relative path IS the family's stated layout (campaign BOOTSTRAP.md: "Repo root — UNIVERSAL: <repos>") | siblings that have no `package.json` today (miscpatches: 10 files, plain ESM, no build) gain one + a `node_modules` symlink; a sibling checked out elsewhere needs the same parent |
 | absolute path (today) | zero setup | broke today; per-machine; 32 files |
 | env var (`FXS_MCP_REPO` pattern) | one knob | nothing sets it; every tool prologue re-resolves it |
 

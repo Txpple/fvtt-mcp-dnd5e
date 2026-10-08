@@ -7,7 +7,7 @@ const logger = { debug() {}, info() {}, warn() {}, error() {}, child() { return 
 const fake = new Proxy({}, { get: () => async () => { throw new Error('offline'); } });
 const host = { kind: 'generic', label: 'x', files: null, filesNotConfigured: () => '', publicUrl: p => p, vars: { serverUrl: '', adminKey: '', worldId: '' }, unreachableHint: '', redact: s => s };
 const names = buildToolRegistry({ foundry: fake, logger, host }).tools.map(t => t.name);
-const ROOT = 'D:/Workbench/FVTT/Repos';
+const ROOT = '<repos>';
 const REPOS = ['fvtt-mod-autoexplore','fvtt-mod-battleflow','fvtt-mod-combatplus','fvtt-mod-fxstudio','fvtt-mod-lootshelf','fvtt-mod-miscpatches','fvtt-mod-openserver','fvtt-mod-partystash','fvtt-mod-soundscape','fvtt-mod-soundscape-sfx','fvtt-mcp-artificer','fvtt-campaign-greenrest'];
 const out = {};
 for (const repo of REPOS) {

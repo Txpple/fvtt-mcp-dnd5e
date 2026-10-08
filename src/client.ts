@@ -1,7 +1,7 @@
 // The library surface — `import { … } from 'fvtt-mcp-dnd5e/client'` (also the package's `.`).
 //
 // This is what the sibling repos consume: the house modules' `tools/` harnesses and the
-// artificer drive a live world through the same headless bridge the MCP server uses, never
+// imagegen drive a live world through the same headless bridge the MCP server uses, never
 // through the server itself. Before 3.0 they reached `dist/foundry.js` by absolute path and
 // parsed this repo's .env by hand (design.md §2.6; the review's §7) — and the rename broke every
 // one of them. The contract, declared:

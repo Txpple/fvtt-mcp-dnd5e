@@ -15,7 +15,7 @@ what `.claude/skills/**` and any sibling's skills or `CLAUDE.md` write down. The
   `node scripts/measure/skills-matrix.mjs` must report **0 unresolved** names (it also treats a
   union's discriminator values as names a skill may write beside the tool). Beyond this repo the
   checklist is a grep — `grep -rn "<old-tool-name>" .claude/skills scripts tests ../fvtt-mod-*/tools
-  ../fvtt-mcp-imagegen <campaign repo>` — because sibling skills name tools too (the artificer's
+  ../fvtt-mcp-imagegen <campaign repo>` — because sibling skills name tools too (imagegen's
   illustration-builder names 11; a campaign repo's notes may name 20).
 - **Tool names are bare.** A skill never writes `mcp__<registration>__<tool>`; the registration
   name is the user's ([hosts.md](hosts.md)).
@@ -25,7 +25,7 @@ what `.claude/skills/**` and any sibling's skills or `CLAUDE.md` write down. The
 
 ## 2. The library surface (`fvtt-mcp-dnd5e/client`)
 
-The house modules' `tools/` harnesses and the artificer drive a live world through the same
+The house modules' `tools/` harnesses and imagegen drive a live world through the same
 headless bridge, never through the MCP process. The package's `exports` declare it; the sibling
 depends with `"fvtt-mcp-dnd5e": "file:../fvtt-mcp-dnd5e"` (the family is cloned side by side) and
 imports:

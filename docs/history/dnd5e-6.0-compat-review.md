@@ -249,7 +249,7 @@ needs its own 6.0 pass. Not touched here.
 
 ## Sandbox smoke plan (blocked until the all-clear)
 
-Run against `foundry-local5e` only; DESKTOP-NY; check no other session is driving it first.
+Run against `foundry-local5e` only; the desktop machine; check no other session is driving it first.
 
 1. `node scripts/prove-bridge.mjs`-style sanity (bridge joins 14.367, world reads).
 2. `FOUNDRY_PROFILE=local node scripts/verify-actor-tooling.mjs` then

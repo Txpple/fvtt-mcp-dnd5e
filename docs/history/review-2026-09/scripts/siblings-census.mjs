@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOT = 'D:/Workbench/FVTT/Repos';
+const ROOT = '<repos>';
 const REPOS = ['fvtt-mod-autoexplore','fvtt-mod-battleflow','fvtt-mod-combatplus','fvtt-mod-fxstudio','fvtt-mod-lootshelf','fvtt-mod-miscpatches','fvtt-mod-openserver','fvtt-mod-partystash','fvtt-mod-soundscape','fvtt-mod-soundscape-sfx','fvtt-mcp-artificer','fvtt-campaign-greenrest'];
 
 const SEP = '[/\\\\]';

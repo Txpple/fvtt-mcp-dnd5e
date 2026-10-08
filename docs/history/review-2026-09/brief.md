@@ -53,14 +53,14 @@ Molten origin — names, env vars, assumptions, scripts, docs, defaults — is a
 4. **User-facing repo.** Other users clone it and run it against their own world. Nothing
    campaign-specific (the owner's world "Greenrest" / `the-broken-heart-of-greenrest`, world ids,
    "DM Assistant", the owner's registration names `foundry-molten5e` / `foundry-local5e`, Craig
-   recordings, the campaign repo `../fvtt-campaign-greenrest`, absolute `D:/Workbench/...` paths)
+   recordings, the campaign repo `../fvtt-campaign-greenrest`, absolute `<repos>/...` paths)
    may stay in tracked files except as configuration or examples.
 5. **Sister to the `fvtt-mod-*` families.** Separate repos, but this MCP is often the core
    component when AI is used for Foundry module dev and world dev. The house modules
    (`../fvtt-mod-battleflow`, `../fvtt-mod-fxstudio`, `../fvtt-mod-miscpatches`,
    `../fvtt-mod-soundscape-sfx`, `../fvtt-mcp-artificer`) are first-class consumers. Known today:
    battleflow (26 files) and miscpatches import the `Foundry` class from
-   `file:///D:/Workbench/FVTT/Repos/fvtt-mcp-molten5e/dist/foundry.js` — an absolute path to the
+   `file:///<repos>/fvtt-mcp-molten5e/dist/foundry.js` — an absolute path to the
    OLD directory name, so the rename broke them; fxstudio resolves `../fvtt-mcp-molten5e` by
    default (`tools/lib/env.mjs`, overridable by `FXS_MCP_REPO`) and reads this repo's `.env` by
    hand; they also call `scripts/local-foundry.mjs`, `scripts/deploy-house-module.mjs`,
