@@ -3,6 +3,15 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.0.1 — 2026-10-09 — Foundry 14.369 compatibility
+
+- **The bridge joins a 14.369 world again.** 14.369 renders the /join user list as
+  `<select name="userId">` (14.368 and earlier: `userid`); the bridge matched only the old
+  spelling, never saw the form, and spent its ten-minute boot budget "waiting" on a world that
+  was already live. The user field is now matched case-insensitively, in the bridge and in
+  `scripts/register-module.mjs` / `scripts/uninstall-modules.mjs`. No `.env` change.
+- Verified on the local sandbox: Foundry 14.369, dnd5e 6.0.6. Older 14.x builds still join.
+
 ## 4.0.0 — 2026-09-23 — session summaries and analytics move to fvtt-app-sessionscribe
 
 **Breaking:** one tool and one skill leave this MCP, by the owner's ruling of 2026-09-23. It
