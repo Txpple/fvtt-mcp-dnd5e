@@ -432,6 +432,20 @@ for (const { dir: moduleDir, manifest } of modules) {
       extractedAt,
     };
     if (bgAbs && fs.existsSync(bgAbs)) {
+      // A full-quality copy of the map beside the document (the shared assets/ tree stays the
+      // source the import uploads); other levels' backgrounds get their own copy too.
+      const mapFile = `map${path.extname(bgAbs).toLowerCase()}`;
+      fs.copyFileSync(bgAbs, path.join(sceneDir, mapFile));
+      meta.files.map = mapFile;
+      for (const l of levels) {
+        const src = l.background?.src;
+        if (!src || src === bgRel || !src.startsWith('assets/')) continue;
+        const from = path.join(packDir, src);
+        if (!fs.existsSync(from)) continue;
+        const file = `map-${slug(l.name ?? l._id)}${path.extname(from).toLowerCase()}`;
+        fs.copyFileSync(from, path.join(sceneDir, file));
+        (meta.files.levelMaps ??= {})[l._id] = file;
+      }
       const sz = await imageSize(bgAbs);
       if (sz) meta.map.imagePixels = sz;
       if (wantPreview && (await makePreview(bgAbs, path.join(sceneDir, 'preview.jpg'), previewPx)))
