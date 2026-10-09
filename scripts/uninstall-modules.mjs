@@ -233,7 +233,7 @@ try {
 
   console.log('[register] waiting for /join form…');
   await page.goto(`${BASE}/join`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await page.waitForSelector('select[name="userid"], input[name="username"]', {
+  await page.waitForSelector('select[name="userid" i], input[name="username"]', {
     timeout: 150_000,
   });
   console.log('[register] world is up and joinable');

@@ -28,10 +28,11 @@ import { clearSystemCache } from './utils/system-detection.js';
 
 /**
  * The /join user field. Foundry ≤14.365 renders a <select name="userid"> listing the world's
- * users; 14.367+ renders a free-text <input name="username"> (with suggestions, not a list).
+ * users; 14.367+ renders a free-text <input name="username"> (with suggestions, not a list);
+ * 14.369 is back to a <select>, now named "userId" — hence the case-insensitive match.
  * The bridge must join either shape — prod and the sandbox can straddle a core patch release.
  */
-const JOIN_USER_FIELD = 'select[name="userid"], input[name="username"]';
+const JOIN_USER_FIELD = 'select[name="userid" i], input[name="username"]';
 
 /**
  * The seam the rest of the codebase depends on. Tools import THIS (a type),
@@ -483,10 +484,10 @@ export class Foundry implements FoundryBridge {
     // Two form shapes (see JOIN_USER_FIELD). The <select> exposes the user list, so a wrong
     // FOUNDRY_USER fails fast with the real names; the free-text <input> exposes nothing, so a
     // wrong name surfaces only as the server's join error below.
-    const isSelect = (await page.locator('select[name="userid"]').count()) > 0;
+    const isSelect = (await page.locator('select[name="userid" i]').count()) > 0;
     if (isSelect) {
       const users: string[] = await page.evaluate(() => {
-        const sel = document.querySelector<HTMLSelectElement>('select[name="userid"]');
+        const sel = document.querySelector<HTMLSelectElement>('select[name="userid" i]');
         return sel ? [...sel.options].map(o => o.textContent?.trim() ?? '') : [];
       });
       if (!users.includes(this.cfg.user)) {
@@ -496,7 +497,7 @@ export class Foundry implements FoundryBridge {
       }
       // Select the user, force-enabling the option if Foundry disabled it (stale active flag).
       await page.evaluate(label => {
-        const sel = document.querySelector('select[name="userid"]') as HTMLSelectElement;
+        const sel = document.querySelector('select[name="userid" i]') as HTMLSelectElement;
         const opt = [...sel.options].find(o => o.textContent?.trim() === label);
         if (!opt) throw new Error('user option vanished');
         opt.disabled = false;
