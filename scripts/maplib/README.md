@@ -18,6 +18,7 @@ Maps_MC/                                  one library per creator (the folder na
     docs/                                 the pack's other documents as JSON (journals, Mass Edit prefabs)
     06-desert-spa/                        one folder per scene: <NN>-<name>[-<variant>]
       meta.json                           the compact sidecar for scanning (below)
+      map.webp                            the full-quality map, a copy (a multi-level scene also gets map-<level>.webp)
       preview.jpg                         the map at ≤1024 px, for a quick look
       scene.json                          the whole Foundry scene document, paths rewritten to assets/…
       placeables.json                     {walls, lights, regions, sounds, tiles, notes, drawings}
