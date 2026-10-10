@@ -93,5 +93,9 @@
     "ai",
     "tabletop",
     "rpg"
-  ]
+  ],
+  "allowScripts": {
+    "classic-level": true,
+    "esbuild": true
+  }
 }

@@ -3,6 +3,15 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **`allowScripts`** in `package.json` approves the two dependencies with install scripts, so
+  `npm ci` on npm 11 no longer lists them as unreviewed. `classic-level` (through
+  `@foundryvtt/foundryvtt-cli`) is the LevelDB binding `read-pack` uses for v11+ compendium
+  packs; its `node-gyp-build` step does nothing where a prebuilt binary ships (Windows, macOS,
+  Linux x64/arm64) and compiles one elsewhere. `esbuild` (the page bundle's build, a dev
+  dependency, also under Vitest's Vite) checks its platform binary in `postinstall`.
+
 ## 4.1.0 — 2026-10-10 — GM notes are Foundry secrets; a missing bridge user fails at once
 
 - **A `gmnote` block is a real Foundry secret** (`create-quest-journal`, `update-quest-journal`,
