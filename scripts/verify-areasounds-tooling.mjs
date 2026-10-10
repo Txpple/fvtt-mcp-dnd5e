@@ -213,32 +213,22 @@ try {
   const loopId = /\(([a-z0-9]{4,12})\)/.exec(addLoop)?.[1];
   check('add reports the new set id', !!loopId, addLoop);
 
-  /* --- 4. KEEP+WARN: a template whose audio is absent ---------------------------------------- */
-  const absent = await f.evaluate(
-    async ({ resolving }) => {
-      const res = await fetch(foundry.utils.getRoute('areasounds-sfx/library.json'));
-      const sets = (await res.json()).sets;
-      // Any template other than the seeded one — the sandbox only carries audio for that one.
-      return sets.find(s => s.name !== resolving && s.files?.length === 1)?.name ?? null;
-    },
-    { resolving: RESOLVING_TEMPLATE }
+  /* --- 4. KEEP+WARN: a pool path that is not on the server ----------------------------------- */
+  // A path no library ships, so the probe does not depend on which audio this world carries
+  // (a sandbox may hold the whole library or none of it). The set stays for verifyFiles (8).
+  const MISSING = 'areasounds-sfx/zz-verify/not-on-the-server.ogg';
+  const addMissing = await call({
+    action: 'add',
+    sceneIdentifier: scene,
+    name: 'VERIFY Missing',
+    files: [MISSING],
+  });
+  contains(
+    'a 404 audio path is KEPT and warned about, never swapped',
+    addMissing,
+    'was not found on the server',
+    MISSING
   );
-
-  if (absent) {
-    const addMissing = await call({ action: 'add', sceneIdentifier: scene, template: absent });
-    contains(
-      'a 404 audio path is KEPT and warned about, never swapped',
-      addMissing,
-      'was not found on the server',
-      `from library template "${absent}"`
-    );
-  } else {
-    check(
-      'KEEP+WARN probe found a template to test with',
-      false,
-      'no single-file template available'
-    );
-  }
 
   /* --- 5. add from explicit files ------------------------------------------------------------ */
   console.log('\n— add (explicit files) —');

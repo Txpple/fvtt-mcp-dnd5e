@@ -25,8 +25,18 @@ What changed for a user of the tools and skills, release by release. The measure
   shows `only the OLD module (fvtt-mod-soundscape v…)` instead of `module NOT INSTALLED`.
 - `scripts/verify-soundscape-tooling.mjs` is `scripts/verify-areasounds-tooling.mjs`; it snapshots
   and restores the old scope too, so an unmigrated scene is handed back unmigrated.
-- Budgets (`npm test`): tools/list 203,262 → 203,259 chars, names ×2 6,076 → 6,078, skill
-  descriptions 7,525 → 7,534.
+- `verify-areasounds-tooling`'s keep-and-warn probe adds a path no library ships instead of
+  looking for a template whose audio the world lacks, so it no longer depends on how much of the
+  library a sandbox carries: 32/32.
+- Budgets (`npm test`): tools/list 203,262 → 203,259 chars ≈ 56,461 tokens (80 tools), names ×2
+  6,076 → 6,078, skill descriptions 7,525 → 7,534 (16 skills), always-on 1,578.
+- Release set on the sandbox (Foundry 14.369, dnd5e 6.0.6): effects-6 51/51, region-effects
+  37/37, activities-6 37/37, settings-calendar 52/52, item-tooling 24/24, actor-tooling 51/51,
+  pc-build 70/70, teleporter-scene-fields 13/13, placeables-tooling 87/87, scene-tools 23/23,
+  cast-activity 25/25, region-tooling 22/22. Live integration: 7 suites, 78 passed, 8 skipped.
+  Over MCP: a Fighter 2 / Wizard 1 built with zero unresolved `@scale`; a bad subclass uuid
+  returned `success:false` with `errors[]` and created nothing. Prod runs Area Sounds 2.0.0 and
+  `configure-area-sounds` reads its migrated scene and the 400-template library.
 
 ## 4.2.0 — 2026-10-10 — dnd5e's journal block kit; npm run doctor
 
