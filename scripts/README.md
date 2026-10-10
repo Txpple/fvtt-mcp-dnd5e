@@ -60,7 +60,6 @@ tool proofs:
 | `register-module` | install a module on the running server through Foundry's own `/setup` package installer (the box scans `Data/modules` at process start only) |
 | `configure-modules` | enable / disable world modules (`core.moduleConfiguration`) through the bridge |
 | `uninstall-modules` | the mirror of `register-module` |
-| `maplib/extract`, `maplib/import` | a creator's scene-pack modules (installed, or unzipped) as a plain folder library on disk, one folder per scene with the whole document, a scanning sidecar and a preview; and one scene back into any host's world through the bridge, assets uploaded, everything embedded intact ([`maplib/README.md`](maplib/README.md)) |
 
 ## Measurements — `scripts/measure/`
 
