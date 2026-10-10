@@ -46,6 +46,7 @@
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:integration": "npm run build && vitest run --config vitest.integration.config.ts",
+    "smoke:bridge": "node scripts/smoke-bridge.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint ./src",
     "lint:fix": "biome lint --write ./src",

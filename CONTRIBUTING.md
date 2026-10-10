@@ -108,8 +108,10 @@ offline gate alone:
    (the DOM after the form draws, trimmed to the form and the version watermark, world title and
    user names replaced; see the 14.369 file) and run `npm test`. A red `src/join-form.test.ts`
    is the join break, found before any live world hangs on it.
-3. Bridge connect: `FOUNDRY_HOST=local node scripts/verify-wake.mjs` (destructive — see above) and
-   a real MCP `get-world-info` on the sandbox registration.
+3. Bridge connect: `FOUNDRY_HOST=local npm run smoke:bridge` (read-only: joins as the bridge user,
+   reads the versions, leaves; its one line goes into the fvtt-mcp-dnd5e row of the suite's
+   upgrade review issue), `FOUNDRY_HOST=local node scripts/verify-wake.mjs` (destructive — see
+   above) and a real MCP `get-world-info` on the sandbox registration.
 4. Targeted live verify scripts for every noted item, then the release set (the list is in
    [`docs/RELEASE.md`](docs/RELEASE.md)) and `FOUNDRY_HOST=local RUN_LIVE=1 npm run test:integration`.
 5. Update the version pins (README, `LOCAL.md`, design.md §8, `CHANGELOG.md`) and record what the
