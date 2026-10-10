@@ -63,7 +63,12 @@ export const blockSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('gmnote'),
-    html: z.string().min(1).describe('GM-only callout box. Pass <p>…</p> for multi-paragraph.'),
+    html: z
+      .string()
+      .min(1)
+      .describe(
+        'A Foundry secret: hidden from players even on a shared page; the GM can Reveal it.'
+      ),
   }),
   z.object({
     type: z.literal('list'),
@@ -94,6 +99,23 @@ function clean(html: string): string {
   return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
 }
 
+const ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+/**
+ * A 16-character id in the alphabet of Foundry's `foundry.utils.randomID()` (unbiased, as there).
+ * Foundry's reveal button finds a secret by its id, so each secret needs its own.
+ */
+export function randomID(length = 16): string {
+  const cutoff = 0x100000000 - (0x100000000 % ID_CHARS.length);
+  const random = new Uint32Array(length);
+  do {
+    crypto.getRandomValues(random);
+  } while (random.some(x => x >= cutoff));
+  let id = '';
+  for (let i = 0; i < length; i++) id += ID_CHARS[random[i] % ID_CHARS.length];
+  return id;
+}
+
 /** Render one block to its `.mcp-journal` HTML fragment. */
 export function renderBlock(block: Block): string {
   switch (block.type) {
@@ -106,7 +128,9 @@ export function renderBlock(block: Block): string {
     case 'readaloud':
       return `<div class="readaloud">${clean(block.html)}</div>`;
     case 'gmnote':
-      return `<div class="gmnote">${clean(block.html)}</div>`;
+      // Core Foundry secret markup (the ProseMirror secret node's): enrichHTML drops it for anyone
+      // who does not own the page, and the GM's sheet gets the Reveal / Hide button.
+      return `<section class="secret" id="secret-${randomID()}">${clean(block.html)}</section>`;
     case 'list':
       return `<ul>${block.items.map(i => `<li>${clean(i)}</li>`).join('')}</ul>`;
     case 'grid':

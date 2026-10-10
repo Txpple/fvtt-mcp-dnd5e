@@ -3,6 +3,20 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **A `gmnote` block is a real Foundry secret** (`create-quest-journal`, `update-quest-journal`,
+  and the note `link-quest-to-npc` appends). It renders as core Foundry's
+  `<section class="secret" id="secret-<randomID>">`, the markup the editor's own Secret button
+  writes: players who can observe the page never see it, even when the page is shared, and the
+  GM's sheet shows it with a Reveal button. Before, it was a grey `<div class="gmnote">` that
+  showed its text to anyone who could open the page. Each secret gets its own 16-character id;
+  an update appends to the page as before, so secrets already on it keep theirs. Every other
+  block and the `.mcp-journal` wrapper are unchanged. Issue #1 (the GM-note part).
+- Budgets: tools/list 200,702 → 200,756 chars (the `gmnote` leaf). Sandbox:
+  `verify-journal-tooling` 35/35, including the secret persisting with its id and
+  `enrichHTML` dropping it for a non-owner.
+
 ## 4.0.2 — 2026-10-10 — the bridge draws on the GPU
 
 - **The headless bridge renders Foundry's canvas on the GPU.** Chromium is launched with

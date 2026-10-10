@@ -63,18 +63,20 @@ Each page's `blocks` is an ordered list. Every `text`/`html`/`items` value is **
 | `lead` | A one-line summary / intro (muted) | `{type:"lead", html}` |
 | `paragraph` | Body prose | `{type:"paragraph", html}` |
 | `readaloud` | **Boxed read-aloud / player-facing text** | `{type:"readaloud", html}` (pass `<p>…</p>`) |
-| `gmnote` | **GM-only callout box** | `{type:"gmnote", html}` (pass `<p>…</p>`) |
+| `gmnote` | **GM secret** (Foundry's secret block) | `{type:"gmnote", html}` (pass `<p>…</p>`) |
 | `list` | Bulleted items (objectives, clues) | `{type:"list", items:[…]}` |
 | `grid` | Two columns of headed lists (a details box) | `{type:"grid", columns:[{heading?, items:[…]}, …]}` |
 | `html` | Escape hatch — a table, anything custom | `{type:"html", html}` |
 
-`readaloud`/`gmnote` are visual boxes on the page; they are **not** access control. To actually hide a
-page from players, use `playerVisible` (below).
+`readaloud` is a visual box, not access control. `gmnote` is a core Foundry secret: players who can
+observe the page never see it, even when the page is shared; the GM sees it and gets a **Reveal**
+button on the sheet. To hide a whole page from players, use `playerVisible` (below).
 
 ## Page kinds — pick the blocks + the visibility
 
 - **Player handout** — `playerVisible: true`. Clean prose + `readaloud` for the in-world text; no
-  `gmnote` (that box leaks GM info even on a player page — keep secrets on a separate GM page).
+  `gmnote` (it would stay hidden, but a handout is only the in-world text — keep the GM's notes on a
+  separate GM page).
 - **Lore / gazetteer** — `heading` + `paragraph` (+ `readaloud` for an in-world excerpt). GM-only unless
   it's meant as player reading.
 - **Read-aloud / boxed text** — a `readaloud` block (optionally `playerVisible` as a handout).
@@ -102,8 +104,8 @@ in-world text only — no GM notes). Track progress with `update-quest-journal` 
 ## Visibility — player-facing vs GM-only (per page)
 
 - `playerVisible: true` → players can **observe** that page (a handout). Omit → **GM-only** (default).
-- Keep secrets out of player-visible pages entirely — split into a GM page + a handout page rather than
-  relying on a `gmnote` box, which still renders its text to anyone who can open the page.
+- A `gmnote` on a player-visible page stays hidden from the players until the GM reveals it — use that
+  for a clue the GM means to reveal in play. GM material as such still goes on a GM page.
 
 ## Player handouts vs GM keys — separate entries, separate folders
 
@@ -111,8 +113,8 @@ A player handout and a GM key are **two different journal entries**, never two p
 house convention — keep it consistent so the sidebar stays trustworthy at a glance:
 
 - **Player handouts** live in a **`Player Handouts`** folder and hold **only** player-facing pages —
-  never a GM-only page, never a `gmnote` block. A `gmnote` renders its text to anyone who can open the
-  page, so it leaks even on a page you thought was safe; if a journal contains anything the players
+  never a GM-only page, never a `gmnote` block. A `gmnote` is hidden from players, but anyone who owns
+  the entry sees it, and one Reveal shows it to the table; if a journal contains anything the players
   shouldn't read, it does not belong in Player Handouts. A handout is only what you'd physically hand the
   table.
 - **GM material** lives in a **`GM Notes`** folder and each entry is named **`<Name> — GM Key`** (e.g.

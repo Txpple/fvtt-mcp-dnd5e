@@ -125,6 +125,21 @@ try {
   assert(handoutContent.includes('WANTED: whoever cursed'), 'page carries the caller words');
   assert(handoutContent.includes('class="readaloud"'), 'readaloud box rendered');
   assert(!handoutContent.includes('approaches the party'), 'no fabricated prose present');
+  const gmContent =
+    (await f.call('getJournalPageContent', { journalId, pageId: gmPage.id }))?.content || '';
+  assert(
+    /<section class="secret" id="secret-[A-Za-z0-9]{16}">/.test(gmContent),
+    'gmnote persisted as a core secret section with its id'
+  );
+  const enriched = await f.evaluate(async html => {
+    const TE = foundry.applications.ux.TextEditor.implementation;
+    return {
+      owner: await TE.enrichHTML(html, { secrets: true }),
+      player: await TE.enrichHTML(html, { secrets: false }),
+    };
+  }, gmContent);
+  assert(enriched.owner.includes('green hag'), 'secret text shown to an owner (secrets: true)');
+  assert(!enriched.player.includes('green hag'), 'secret text removed for a non-owner');
 
   // --- 3. NPC-link primitives ---------------------------------------------
   console.log('\n# NPC @UUID link primitives');

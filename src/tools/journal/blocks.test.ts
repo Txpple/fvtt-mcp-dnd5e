@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { renderBlock, renderBlocks, renderStyledHtml, blockSchema, type Block } from './blocks.js';
+import {
+  renderBlock,
+  renderBlocks,
+  renderStyledHtml,
+  blockSchema,
+  randomID,
+  type Block,
+} from './blocks.js';
 
 describe('renderBlock — exact per-type HTML', () => {
   it('heading defaults to h2.spaced, level 3 -> h3', () => {
@@ -23,13 +30,33 @@ describe('renderBlock — exact per-type HTML', () => {
     expect(renderBlock({ type: 'paragraph', html: 'Plain body.' })).toBe('<p>Plain body.</p>');
   });
 
-  it('readaloud / gmnote wrap in the styled boxes', () => {
+  it('readaloud wraps in the styled box', () => {
     expect(renderBlock({ type: 'readaloud', html: '<p>Cold air bites.</p>' })).toBe(
       '<div class="readaloud"><p>Cold air bites.</p></div>'
     );
-    expect(renderBlock({ type: 'gmnote', html: '<p>The druid is charmed.</p>' })).toBe(
-      '<div class="gmnote"><p>The druid is charmed.</p></div>'
+  });
+
+  it('gmnote is a core Foundry secret with a unique secret-<randomID> id', () => {
+    const block: Block = { type: 'gmnote', html: '<p>The druid is charmed.</p>' };
+    const a = renderBlock(block);
+    expect(a).toMatch(
+      /^<section class="secret" id="secret-[A-Za-z0-9]{16}"><p>The druid is charmed\.<\/p><\/section>$/
     );
+    // Foundry's toggleRevealed() matches `<section[^i]+id="<id>"` — no "i" may precede the id.
+    expect(a.slice('<section'.length, a.indexOf(' id='))).not.toContain('i');
+    expect(renderBlock(block)).not.toBe(a);
+  });
+
+  it('every secret on a page gets its own id', () => {
+    const html = renderStyledHtml([
+      { type: 'gmnote', html: '<p>One.</p>' },
+      { type: 'readaloud', html: '<p>Boxed.</p>' },
+      { type: 'gmnote', html: '<p>Two.</p>' },
+    ]);
+    const ids = [...html.matchAll(/id="(secret-[A-Za-z0-9]{16})"/g)].map(m => m[1]);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    expect(html).toContain('<div class="wrap"><section class="secret"');
   });
 
   it('list', () => {
@@ -102,6 +129,13 @@ describe('renderBlocks / renderStyledHtml', () => {
     ]) {
       expect(html).not.toContain(fabricated);
     }
+  });
+});
+
+describe('randomID', () => {
+  it('is 16 characters of the Foundry id alphabet by default', () => {
+    expect(randomID()).toMatch(/^[A-Za-z0-9]{16}$/);
+    expect(randomID(8)).toHaveLength(8);
   });
 });
 
