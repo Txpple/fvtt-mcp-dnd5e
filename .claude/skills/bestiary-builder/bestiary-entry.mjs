@@ -6,7 +6,8 @@
 //   3. harvests the MM journal ART embedded in that lore page (modules/… path, no upload needed);
 //   4. strips the non-narrative bits — habitat/treasure line, nested art embeds, rollable-table
 //      embeds and their lead-in/footnote — leaving the narrative the players can read;
-//   5. upserts it as a page of the Bestiary journal, house-styled, and re-sorts every page
+//   5. upserts it as a page of the Bestiary journal (plain markup plus dnd5e's pull-quote class, no
+//      wrapper), and re-sorts every page
 //      ALPHABETICALLY;
 //   6. keeps the ownership contract: journal entry = players OBSERVE, page = player-visible unless
 //      --gm-only (an unrevealed monster stays GM-only even though the entry is open).
@@ -158,23 +159,19 @@ const work = async o => {
         continue;
       }
     }
-    // the italic epithet under the art -> the house lead line
+    // the italic epithet under the art -> a plain paragraph (its <em> carries the look)
     if (el.classList.contains('creature-flavor') && el.querySelector('em')) {
-      el.className = 'lead';
+      el.removeAttribute('class');
       continue;
     }
-    // pull-quotes -> a plain blockquote (the MM's own classes have no styling in-world)
-    if (el.tagName === 'ASIDE' && el.classList.contains('quote')) {
-      const bq = doc.createElement('blockquote');
-      for (const p of [...el.children]) {
-        if (p.classList.contains('quote-author')) {
-          p.removeAttribute('class');
-          p.setAttribute('style', 'text-align:right');
-          p.innerHTML = `<em>${p.innerHTML}</em>`;
-        }
-        bq.appendChild(p);
-      }
-      el.replaceWith(bq);
+    // pull-quotes -> dnd5e's own pull quote (aside.quote-lg, p.quote-author; the System-HTML page of
+    // the dnd5e wiki), which the system stylesheet draws; the MM's book classes (`quote`,
+    // `quote-left size-two`, …) have no styling in-world. A left-hand book quote floats left.
+    const quoteClass = [...el.classList].find(c => /^quote(-|$)/.test(c));
+    if (el.tagName === 'ASIDE' && quoteClass) {
+      el.className = `quote-lg ${quoteClass === 'quote-left' ? 'float-left' : 'float-right'}`;
+      for (const p of [...el.children])
+        if (!p.classList.contains('quote-author')) p.removeAttribute('class');
       continue;
     }
     el.removeAttribute('class'); // MM book classes don't exist in the world stylesheet
@@ -182,11 +179,7 @@ const work = async o => {
 
   const arts = o.noArt ? [] : o.arts.length ? o.arts : mmArt;
   const body = root.innerHTML.trim();
-  const html =
-    `<section class="mcp-journal"><div class="wrap">` +
-    arts.map(a => figure(a.src, a.caption)).join('') +
-    body +
-    `</div></section>`;
+  const html = arts.map(a => figure(a.src, a.caption)).join('') + body;
 
   const pageName = o.pageName || lore.name;
   if (o.dryRun)

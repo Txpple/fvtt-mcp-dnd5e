@@ -208,6 +208,44 @@ describe('manage-journals create', () => {
     });
   });
 
+  it('forwards a dnd5e page type (kind rule / map / …) with its system data and body', async () => {
+    const { calls, run } = build({ id: 'j5', name: 'Keep', pageCount: 3, pages: [] });
+    await run({
+      action: 'create',
+      name: 'Keep',
+      pages: [
+        { name: 'Gatehouse', kind: 'map', content: '<p>Two guards.</p>', system: { code: 'A1' } },
+        {
+          name: 'Cover',
+          kind: 'rule',
+          content: '<p>Half cover: +2.</p>',
+          system: { tooltip: 'x' },
+        },
+        { name: 'Wizard Spells', kind: 'spells', system: { type: 'class', identifier: 'wizard' } },
+      ],
+    });
+    expect(calls[0][1].pages).toEqual([
+      { name: 'Gatehouse', content: '<p>Two guards.</p>', kind: 'map', system: { code: 'A1' } },
+      { name: 'Cover', content: '<p>Half cover: +2.</p>', kind: 'rule', system: { tooltip: 'x' } },
+      {
+        name: 'Wizard Spells',
+        content: '',
+        kind: 'spells',
+        system: { type: 'class', identifier: 'wizard' },
+      },
+    ]);
+  });
+
+  it('refuses system data on a plain text or image page, and an unknown page kind', async () => {
+    const { run } = build();
+    await expect(
+      run({ action: 'create', name: 'J', pages: [{ name: 'P', system: { code: 'A1' } }] })
+    ).rejects.toThrow(/dnd5e page type/);
+    await expect(
+      run({ action: 'create', name: 'J', pages: [{ name: 'P', kind: 'statblock' }] })
+    ).rejects.toThrow();
+  });
+
   it('forwards an explicit sort key when given', async () => {
     const { calls, run } = build({ id: 'j', name: 'J', pageCount: 1, pages: [] });
     await run({ action: 'create', name: 'J', pages: [{ name: 'P', content: 'x', sort: 200 }] });
@@ -333,7 +371,10 @@ describe('handleCreateQuestJournal (structuring — blocks -> styled HTML, no pr
     // page 1: GM-only (no ownership), styled content carrying ONLY the caller's words
     expect(pages[0].name).toBe('Overview');
     expect(pages[0].ownership).toBeUndefined();
-    expect(pages[0].content).toContain('class="mcp-journal"');
+    expect(pages[0].content).toBe(
+      '<p>A cursed grove.</p><div class="fvtt narrative"><p>Cold air bites.</p></div>' +
+        '<ul><li>Find the druid</li></ul>'
+    );
     expect(pages[0].content).toContain('A cursed grove.');
     expect(pages[0].content).toContain('Cold air bites.');
     expect(pages[0].content).toContain('Find the druid');
@@ -347,6 +388,32 @@ describe('handleCreateQuestJournal (structuring — blocks -> styled HTML, no pr
       journalName: 'The Grove',
       pageCount: 2,
     });
+  });
+
+  it('passes dnd5e enrichers and @UUID links through unescaped', async () => {
+    const { tools, calls } = build({ id: 'j', name: 'X', pageCount: 1, pages: [] });
+    const prose =
+      'Climb: [[/check ath 15]]; the fumes call for [[/save con dc=13]] or ' +
+      '[[/damage 2d6 poison average]] and &Reference[poisoned]; the key is ' +
+      '@UUID[Compendium.dnd5e.items.Item.abc]{Iron Key}.';
+    await tools.handleCreateQuestJournal({
+      title: 'X',
+      pages: [
+        {
+          name: 'P',
+          blocks: [
+            { type: 'paragraph', html: prose },
+            { type: 'notable', title: 'Fumes', html: '[[/concentration 12]]' },
+            { type: 'list', items: ['[[/skill DC 15 passive Perception]]'] },
+          ],
+        },
+      ],
+    });
+    const content = calls[0][1].pages[0].content;
+    expect(content).toContain(`<p>${prose}</p>`);
+    expect(content).toContain('<p>[[/concentration 12]]</p>');
+    expect(content).toContain('<li>[[/skill DC 15 passive Perception]]</li>');
+    expect(content).not.toContain('&amp;');
   });
 
   it('never invents prose — the page HTML contains only the caller words', async () => {
@@ -468,12 +535,16 @@ describe('handleUpdateQuestJournal (append a styled section from blocks)', () =>
     expect(calls[0][0]).toBe('updateJournalContent');
     expect(calls[0][1].newPageName).toBe('Session 2');
     expect(calls[0][1].content).toContain('The party reached the keep.');
-    expect(calls[0][1].content).toContain('class="mcp-journal"');
+    expect(calls[0][1].content).toBe('<h2>Session 2</h2><p>The party reached the keep.</p>');
     expect(out).toMatchObject({ success: true, pageId: 'p9', pageName: 'Session 2' });
   });
 
   it('appends a styled section to the first text page (read then write)', async () => {
-    let stored = '<section class="mcp-journal"><div>old</div></section>';
+    // A page written before 4.2 still carries the old wrapper: the new section goes after it.
+    const legacy =
+      '<section class="mcp-journal"><style>.mcp-journal{}</style><div class="wrap">' +
+      '<div class="readaloud"><p>old</p></div></div></section>';
+    let stored = legacy;
     const { tools, calls } = build((method: string, data: any) => {
       if (method === 'getJournalContent') return { content: stored };
       if (method === 'updateJournalContent') {
@@ -490,8 +561,8 @@ describe('handleUpdateQuestJournal (append a styled section from blocks)', () =>
 
     expect(calls.map(c => c[0])).toEqual(['getJournalContent', 'updateJournalContent']);
     const writeCall = calls[1];
-    expect(writeCall[1].content).toContain('old'); // existing content preserved
-    expect(writeCall[1].content).toContain('New milestone reached.'); // appended
+    // existing content preserved byte for byte; the append sits after the wrapper, not inside it
+    expect(writeCall[1].content).toBe(`${legacy}<p>New milestone reached.</p>`);
   });
 
   it('appends to a specific page when pageId is supplied', async () => {

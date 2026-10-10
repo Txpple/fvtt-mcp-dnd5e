@@ -5,10 +5,10 @@ import { FormattedToolError } from '../utils/error-handler.js';
 import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
 import { unionMember, unionTool, type UnionTool } from './_union.js';
-// Journal STRUCTURING (typed blocks -> styled HTML) lives in ./journal/blocks (pure). The skill
-// supplies the words as blocks; this class arranges/styles them. No prose is generated here — the
+// Journal STRUCTURING (typed blocks -> dnd5e block-kit HTML) lives in ./journal/blocks (pure). The
+// skill supplies the words as blocks; this class arranges them. No prose is generated here — the
 // former quest/quest-content.ts prose generators were deleted (design.md §2.1 / Invariant 1).
-import { renderStyledHtml, blockSchema, type Block } from './journal/blocks.js';
+import { renderBlocks, blockSchema, type Block } from './journal/blocks.js';
 
 // Single source of truth for each tool's input contract: the handler parses with these
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema. The generic
@@ -19,19 +19,14 @@ import { renderStyledHtml, blockSchema, type Block } from './journal/blocks.js';
 export const MANAGE_JOURNALS = 'manage-journals';
 
 // A journal page = a name + ordered typed blocks (the skill's words) + optional player visibility.
-// The tool renders the blocks into the `.mcp-journal` house style; it NEVER generates the words.
+// The tool renders the blocks into dnd5e's journal block kit; it NEVER generates the words.
 const journalPageSchema = z.object({
   name: z.string().min(1).describe('Page title (the tab name in the journal).'),
   playerVisible: z
     .boolean()
     .optional()
     .describe('Players can observe the page (a handout); default GM-only.'),
-  blocks: z
-    .array(blockSchema)
-    .min(1)
-    .describe(
-      'The page body, in order: heading / lead / paragraph / readaloud / gmnote / list / grid / html.'
-    ),
+  blocks: z.array(blockSchema).min(1).describe('The page body, in order.'),
 });
 
 const CreateQuestJournalSchema = z.object({
@@ -86,11 +81,18 @@ const SearchJournalsSchema = z.object({
 // Both kinds carry per-page `playerVisible` (handout) and an optional explicit `sort` for ordering.
 // This lets an image-only journal (e.g. a Tom-Cartos legend pack) build in ONE call instead of
 // create-journal + N add-journal-image (which also leaves a spurious leading text page).
+/** dnd5e's own JournalEntryPage types (system.json documentTypes), created with their system data. */
+const SYSTEM_PAGE_TYPES = ['rule', 'map', 'spells', 'class', 'subclass'] as const;
+
 const createJournalPageSchema = z
   .object({
     name: z.string().min(1).describe('Page title.'),
-    kind: z.enum(['text', 'image']).default('text'),
-    content: z.string().optional().default('').describe('text: the HTML body.'),
+    kind: z.enum(['text', 'image', ...SYSTEM_PAGE_TYPES]).default('text'),
+    content: z.string().optional().default('').describe('text (and rule / map): the HTML body.'),
+    system: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('A dnd5e page type: its system data, e.g. map {code:"A1"}, rule {tooltip}.'),
     src: z.string().optional().describe('image: the Data-relative path.'),
     caption: z.string().optional().describe('image: the caption.'),
     sort: z.number().optional().describe('Sort key; default the array order.'),
@@ -101,6 +103,9 @@ const createJournalPageSchema = z
   })
   .refine(p => p.kind !== 'image' || (typeof p.src === 'string' && p.src.trim().length > 0), {
     message: 'An image page requires "src" (a Data-relative image path).',
+  })
+  .refine(p => p.system === undefined || (p.kind !== 'text' && p.kind !== 'image'), {
+    message: '"system" is for a dnd5e page type (kind rule / map / spells / class / subclass).',
   });
 
 const CreateJournalSchema = z.object({
@@ -179,7 +184,7 @@ export class JournalTools {
     this.union = unionTool({
       name: MANAGE_JOURNALS,
       description:
-        'JournalEntries (HTML / image pages), by exact id or name: create / list / get / update / ' +
+        'JournalEntries (HTML / image / dnd5e-type pages), by exact id or name: create / list / get / update / ' +
         'delete / delete-page; styled blocks are the quest-journal tools. GM-only writes.',
       discriminators: ['action'],
       shared: { journalId: z.string().describe('Journal entry id or exact name.') },
@@ -201,7 +206,11 @@ export class JournalTools {
                     src: p.src,
                     ...(p.caption ? { caption: p.caption } : {}),
                   }
-                : { content: p.content }),
+                : {
+                    content: p.content,
+                    ...(p.kind !== 'text' ? { kind: p.kind } : {}),
+                    ...(p.system ? { system: p.system } : {}),
+                  }),
               ...(typeof p.sort === 'number' ? { sort: p.sort } : {}),
               ...(p.playerVisible ? { ownership: { default: 2 } } : {}),
             }));
@@ -317,8 +326,8 @@ export class JournalTools {
         name: 'create-quest-journal',
         description:
           'Create a multi-page journal from typed blocks (heading / lead / paragraph / readaloud / ' +
-          'gmnote / list / grid / html), rendered in the house style, with per-page visibility. ' +
-          'Raw HTML pages: manage-journals create.',
+          "gmnote / list / grid / notable / advice / quest / quote / html), rendered in dnd5e's " +
+          'journal block kit, with per-page visibility. Raw HTML pages: manage-journals create.',
         inputSchema: toInputSchema(CreateQuestJournalSchema),
       },
       {
@@ -331,7 +340,7 @@ export class JournalTools {
       {
         name: 'update-quest-journal',
         description:
-          'Append a styled section of typed blocks to a journal page (the first text page, pageId, ' +
+          'Append a section of typed blocks to a journal page (the first text page, pageId, ' +
           'or a new page via newPageName).',
         inputSchema: toInputSchema(UpdateQuestJournalSchema),
       },
@@ -357,11 +366,11 @@ export class JournalTools {
   async handleCreateQuestJournal(args: any): Promise<any> {
     const request = CreateQuestJournalSchema.parse(args);
 
-    // STRUCTURE the caller's blocks into styled HTML; map playerVisible -> per-page ownership
+    // STRUCTURE the caller's blocks into block-kit HTML; map playerVisible -> per-page ownership
     // (2 = players observe a handout). The words are the caller's blocks — no prose generated here.
     const pages = request.pages.map(p => ({
       name: p.name,
-      content: renderStyledHtml(p.blocks),
+      content: renderBlocks(p.blocks),
       ...(p.playerVisible ? { ownership: { default: 2 } } : {}),
     }));
 
@@ -416,7 +425,7 @@ export class JournalTools {
     const current = await this.readPageContent(request.journalId, request.pageId);
     await this.foundry.call('updateJournalContent', {
       journalId: request.journalId,
-      content: current + renderStyledHtml(linkBlocks),
+      content: current + renderBlocks(linkBlocks),
       ...(request.pageId ? { pageId: request.pageId } : {}),
     });
 
@@ -434,7 +443,7 @@ export class JournalTools {
    */
   async handleUpdateQuestJournal(args: any): Promise<any> {
     const request = UpdateQuestJournalSchema.parse(args);
-    const sectionHtml = renderStyledHtml(request.blocks);
+    const sectionHtml = renderBlocks(request.blocks);
     const ownership = ownershipFor(request.playerVisible);
 
     // New page: set its content directly (nothing to append to).

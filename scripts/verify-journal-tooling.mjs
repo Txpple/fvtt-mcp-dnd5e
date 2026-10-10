@@ -6,7 +6,9 @@
 // compose, against the live `sandbox` world. It asserts:
 //   1. DE-RISK per-page ownership — a journal with a playerVisible handout page + a GM-only page;
 //      read back the visibility (proves Foundry v14 persists per-page JournalEntryPage ownership);
-//   2. the pure block renderer's house-styled HTML round-trips as page content;
+//   2. the pure block renderer's dnd5e block-kit HTML round-trips as page content, and dnd5e's own
+//      stylesheet draws every block class (computed style inside a .dnd5e2-journal container);
+//      dnd5e enrichers in the prose are enriched, not left as text;
 //   3. NPC-link primitives — findActor resolves a real actor; an appended @UUID[Actor.id] link
 //      round-trips and preserves existing content;
 //   4. findActor refuses an unknown NPC (the basis of link-quest-to-npc's dead-link guard);
@@ -15,7 +17,11 @@
 //      src/tools/journal.ts) through buildToolRegistry().dispatch: the five per-op tools are gone;
 //      create answers one line with each page id; list is the §3 line shape (header + one row per
 //      journal); get is the JSON read (the entry, then one page); update / delete-page / delete are
-//      one line; an unknown action / key is refused by name; a page miss is an error.
+//      one line; an unknown action / key is refused by name; a page miss is an error;
+//   7. manage-journals create makes dnd5e page types (map with a location code, rule) with their
+//      system data;
+//   8. update-quest-journal appends after a page still carrying the pre-4.2 `.mcp-journal` wrapper,
+//      never inside it.
 // Everything created is namespaced ZZ-JOURNAL-IT and cleaned up.
 //
 // Build first: npm run build. Run: node scripts/verify-journal-tooling.mjs
@@ -24,7 +30,7 @@ import { Foundry } from '../dist/foundry.js';
 import { Logger } from '../dist/logger.js';
 import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
-import { renderStyledHtml } from '../dist/tools/journal/blocks.js';
+import { renderBlocks } from '../dist/tools/journal/blocks.js';
 
 const env = loadEnv();
 
@@ -46,6 +52,7 @@ const f = new Foundry(cfg);
 
 let journalId;
 let unionId;
+let typedId;
 
 try {
   console.log('[verify-journal] connecting to sandbox…');
@@ -54,11 +61,20 @@ try {
 
   // --- 1. DE-RISK per-page ownership ---------------------------------------
   console.log('# create: handout (player-visible) + GM-only page');
-  const handoutHtml = renderStyledHtml([
+  const handoutHtml = renderBlocks([
     { type: 'lead', html: 'A note nailed to the tavern door.' },
     { type: 'readaloud', html: '<p>WANTED: whoever cursed the Thorned Grove.</p>' },
+    { type: 'notable', title: 'Bounty', html: '50 gp, paid at the Stag.' },
+    { type: 'advice', title: 'Pacing', html: 'Let them haggle.', img: 'icons/svg/book.svg' },
+    { type: 'quest', title: 'Find the Hag', html: 'In the grove.' },
+    { type: 'quote', html: 'The grove remembers.', author: 'Old Tam' },
+    { type: 'grid', columns: [{ heading: 'Details', items: ['Type: Side'] }] },
+    {
+      type: 'paragraph',
+      html: 'Thorns: [[/save dex 13]], [[/damage 1d6 piercing]] and &Reference[restrained].',
+    },
   ]);
-  const gmHtml = renderStyledHtml([
+  const gmHtml = renderBlocks([
     { type: 'gmnote', html: '<p>The druid IS the green hag in disguise.</p>' },
     { type: 'list', items: ['DC 15 Insight to notice the glamour'] },
   ]);
@@ -121,9 +137,60 @@ try {
   console.log('\n# block renderer round-trip');
   const handoutContent =
     (await f.call('getJournalPageContent', { journalId, pageId: handout.id }))?.content || '';
-  assert(handoutContent.includes('class="mcp-journal"'), 'house style present on the page');
+  assert(!handoutContent.includes('mcp-journal'), 'no house wrapper on the page');
   assert(handoutContent.includes('WANTED: whoever cursed'), 'page carries the caller words');
-  assert(handoutContent.includes('class="readaloud"'), 'readaloud box rendered');
+  for (const cls of [
+    'fvtt narrative',
+    'notable',
+    'fvtt advice',
+    'fvtt quest',
+    'quote-lg float-right',
+    'quote-author',
+  ]) {
+    assert(handoutContent.includes(`class="${cls}"`), `block class "${cls}" round-trips`);
+  }
+  // dnd5e's stylesheet scopes the kit to its journal sheet (.dnd5e2-journal; the colour tokens the
+  // borders use live on .dnd5e2, which the sheet also carries): mount the stored HTML in such a
+  // container and read the computed style each block class gets from the system's CSS.
+  const styled = await f.evaluate(async html => {
+    const TE = foundry.applications.ux.TextEditor.implementation;
+    const host = document.createElement('div');
+    host.className = 'dnd5e2 dnd5e2-journal';
+    host.innerHTML = await TE.enrichHTML(html, { secrets: false });
+    document.body.appendChild(host);
+    const cs = sel => {
+      const el = host.querySelector(sel);
+      return el ? getComputedStyle(el) : null;
+    };
+    const out = {
+      narrative: cs('.narrative')?.borderLeftStyle,
+      notable: cs('.notable')?.borderTopStyle,
+      advice: cs('.advice')?.borderTopStyle,
+      quest: cs('.quest')?.borderTopStyle,
+      icon: cs('.advice > figure')?.position,
+      quote: cs('.quote-lg')?.display,
+      float: cs('.quote-lg')?.float,
+      enriched: host.innerHTML,
+    };
+    host.remove();
+    return out;
+  }, handoutContent);
+  assert(styled.narrative === 'solid', `dnd5e draws the narrative box (${styled.narrative})`);
+  assert(styled.notable === 'solid', `dnd5e draws the notable callout (${styled.notable})`);
+  assert(
+    styled.advice === 'solid' && styled.quest === 'solid' && styled.icon === 'absolute',
+    `dnd5e draws the advice / quest cards and the icon (${styled.advice}/${styled.quest}/${styled.icon})`
+  );
+  assert(
+    styled.quote === 'grid' && styled.float === 'right',
+    `dnd5e draws the pull quote, floated (${styled.quote}/${styled.float})`
+  );
+  assert(
+    !styled.enriched.includes('[[/save') &&
+      !styled.enriched.includes('[[/damage') &&
+      !styled.enriched.includes('Reference['),
+    'dnd5e enrichers in the prose were enriched'
+  );
   assert(!handoutContent.includes('approaches the party'), 'no fabricated prose present');
   const gmContent =
     (await f.call('getJournalPageContent', { journalId, pageId: gmPage.id }))?.content || '';
@@ -156,7 +223,7 @@ try {
       pageId: gmPage.id,
       content:
         before +
-        renderStyledHtml([
+        renderBlocks([
           { type: 'gmnote', html: `<p><strong>Related NPC:</strong> ${link} — quest giver</p>` },
         ]),
     });
@@ -180,7 +247,7 @@ try {
   console.log('\n# session-recap append (new page from blocks)');
   const recap = await f.call('updateJournalContent', {
     journalId,
-    content: renderStyledHtml([
+    content: renderBlocks([
       { type: 'heading', text: 'Session 1' },
       { type: 'paragraph', html: 'The party found the note and set out for the grove.' },
     ]),
@@ -291,6 +358,70 @@ try {
     }
     assert(msg.includes(want), `6 — refused by name / a miss is an error: ${want.slice(0, 60)}`);
   }
+  // --- 7. dnd5e page types through manage-journals create ----------------
+  console.log('\n# 7) dnd5e page types (map location, rule)');
+  const typed = String(
+    await mj({
+      action: 'create',
+      name: `${TAG} Typed`,
+      pages: [
+        { name: 'Gatehouse', kind: 'map', content: '<p>Two guards.</p>', system: { code: 'A1' } },
+        {
+          name: 'Thorns',
+          kind: 'rule',
+          content: '<p>Thorns cut.</p>',
+          system: { tooltip: '<p>Cut.</p>' },
+        },
+      ],
+    })
+  );
+  typedId = /\((\w{16})\): 2 page/.exec(typed)?.[1];
+  const typedPages = await f.evaluate(id => {
+    const j = game.journal.get(id);
+    return [...(j?.pages ?? [])].map(p => ({
+      name: p.name,
+      type: p.type,
+      code: p.system?.code,
+      tooltip: p.system?.tooltip,
+      ruleType: p.system?.type,
+      text: p.text?.content,
+    }));
+  }, typedId);
+  const gate = typedPages.find(p => p.name === 'Gatehouse');
+  const rule = typedPages.find(p => p.name === 'Thorns');
+  assert(
+    gate?.type === 'map' && gate?.code === 'A1' && gate?.text === '<p>Two guards.</p>',
+    `7 — a Map Location page with its code and body (${JSON.stringify(gate)})`
+  );
+  assert(
+    rule?.type === 'rule' && rule?.tooltip === '<p>Cut.</p>' && rule?.ruleType === 'rule',
+    `7 — a Rule page with its tooltip (${JSON.stringify(rule)})`
+  );
+
+  // --- 8. append after legacy markup ------------------------------------
+  console.log('\n# 8) update-quest-journal on a page with the pre-4.2 wrapper');
+  const legacy =
+    '<section class="mcp-journal"><div class="wrap"><div class="readaloud"><p>Old words.</p></div></div></section>';
+  const legacyPage = await f.call('updateJournalContent', {
+    journalId: typedId,
+    content: legacy,
+    newPageName: 'Legacy',
+  });
+  await dispatch('update-quest-journal', {
+    journalId: typedId,
+    pageId: legacyPage.pageId,
+    blocks: [{ type: 'readaloud', html: 'New words.' }],
+  });
+  const appended =
+    (await f.call('getJournalPageContent', { journalId: typedId, pageId: legacyPage.pageId }))
+      ?.content || '';
+  const legacyEnd = appended.lastIndexOf('</section>');
+  const newAt = appended.indexOf('<div class="fvtt narrative"><p>New words.</p></div>');
+  assert(
+    appended.includes('Old words.') && newAt > legacyEnd && legacyEnd > 0,
+    `8 — the new section sits after the old wrapper, not inside it (${appended.slice(-120)})`
+  );
+
   const del = String(await mj({ action: 'delete', identifiers: [unionId, 'ZZ-NOPE-JOURNAL'] }));
   assert(
     del === `Deleted 1 journal(s): "${TAG} Union 2" (${unionId}) (1 not found: ZZ-NOPE-JOURNAL)`,
@@ -301,7 +432,7 @@ try {
   fails++;
   console.log(`\n[verify-journal] FATAL: ${e?.message || String(e)}`);
 } finally {
-  const strays = [journalId, unionId].filter(Boolean);
+  const strays = [journalId, unionId, typedId].filter(Boolean);
   if (strays.length) {
     try {
       await f.call('deleteJournals', { identifiers: strays });
