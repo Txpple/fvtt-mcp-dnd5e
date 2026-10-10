@@ -96,8 +96,9 @@ What the script guarantees, so you don't have to check it by hand:
 
 - narrative only — it drops the **habitat/treasure** line, nested art embeds, and any **rollable
   table** the MM hangs off the entry (plus its "Roll on or choose a result…" lead-in and footnote);
-- the MM's pull-quotes survive as blockquotes, the italic epithet becomes the house `lead` line, and
-  book-only CSS classes are stripped;
+- the MM's pull-quotes become dnd5e's own pull quote (`aside.quote-lg`, drawn by the system's
+  stylesheet), the italic epithet stays a plain italic paragraph, book-only CSS classes are stripped,
+  and the page has no wrapper;
 - the page is **upserted by name** (safe to re-run) and **every page is re-sorted alphabetically**;
 - **ownership**: the journal entry is set to players-OBSERVE, and each page gets an *explicit*
   ownership default. That explicitness matters — a page created without one **inherits** the open

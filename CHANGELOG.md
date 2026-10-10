@@ -27,6 +27,11 @@ What changed for a user of the tools and skills, release by release. The measure
 - **journal-builder skill:** the block table with what each renders as, dnd5e's enricher syntax
   (`[[/check …]]`, `[[/save …]]`, `[[/damage …]]`, `[[/heal …]]`, `[[/attack …]]`,
   `&Reference[…]`, `[[language …]]`), which the tools store as written, and the page types.
+- **bestiary-builder:** a Bestiary page has no `mcp-journal` wrapper and no `lead` class (the
+  epithet is a plain italic paragraph); the Monster Manual's pull quotes, in all their book
+  variants (`quote`, `quote-left size-two`, …), become dnd5e's `<aside class="quote-lg
+  float-right|float-left">` instead of a bare blockquote or aside. Sandbox dry runs: Aboleth
+  (right) and Basilisk (left).
 - Budgets: tools/list 200,756 → 203,262 chars (four blocks, carried by both block tools, and the
   page `system` leaf). Sandbox: `verify-journal-tooling` 48/48 (was 35), now holding every block
   class against the computed style dnd5e's stylesheet gives it, the enrichers enriched, a map and
