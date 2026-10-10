@@ -25,6 +25,7 @@
 import { chromium } from 'playwright';
 import { loadEnv } from '../dist/env.js';
 import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
+import { JOIN_USER_FIELD } from '../dist/join-form.js';
 
 const env = loadEnv();
 const HOST = resolveHostConfig(env, hostKindFromEnv(process.env));
@@ -233,9 +234,7 @@ try {
 
   console.log('[register] waiting for /join form…');
   await page.goto(`${BASE}/join`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await page.waitForSelector('select[name="userid" i], input[name="username"]', {
-    timeout: 150_000,
-  });
+  await page.waitForSelector(JOIN_USER_FIELD, { timeout: 150_000 });
   console.log('[register] world is up and joinable');
   ok = true;
 } catch (e) {

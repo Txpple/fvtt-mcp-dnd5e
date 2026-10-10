@@ -1,0 +1,58 @@
+<!--
+  Foundry 14.365 /join, REBUILT, not captured: no copy of the 14.365 page was kept. It is the 14.369
+  capture with the user field changed to the shape the bridge joined on 14.365 (commit 184d33b: <select name="userid">).
+  Replace it with a real capture if a 14.365 host is ever reachable again.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Fixture World</title></head>
+<body class="auth join flexcol background theme-dark join-theme-default">
+    <div id="join-game"><form name="join" class="application standard-form framed" data-application-part="form" id="join-game-form">
+    <h2 class="divider">Join Game Session</h2>
+    <div class="form-group">
+        <label class="icon" for="join-username" data-tooltip="" aria-label="Select User"><i class="fa-solid fa-user" inert=""></i></label>
+        <div class="form-fields">
+            <select id="join-username" name="userid" autocomplete="off">
+                <option value=""></option>
+                <option value="aaaaaaaaaaaaaaa1">Gamemaster</option>
+                <option value="aaaaaaaaaaaaaaa2">MCP-Claude</option>
+                <option value="aaaaaaaaaaaaaaa3">Player One</option>
+                <option value="aaaaaaaaaaaaaaa4">Player Two</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="icon" for="join-password" data-tooltip="" aria-label="User Password"><i class="fa-solid fa-key" inert=""></i></label>
+        <div class="form-fields">
+            <input type="password" id="join-password" name="password" placeholder="Password" autocomplete="one-time-code">
+        </div>
+    </div>
+    <footer class="form-footer">
+        <button type="submit" name="join" class="bright">
+            <i class="fa-solid fa-check" inert=""></i>
+            Join Game Session
+        </button>
+    </footer>
+</form><form class="application standard-form framed" method="post" action="setup" data-application-part="setup" id="join-game-setup">
+    <input type="hidden" name="action" value="worldShutdown">
+    <h2 class="divider">Return to Setup</h2>
+        <div class="form-group">
+            <label class="icon" for="auth-password" data-tooltip="" aria-label="Administrator Password">
+                <i class="fa-solid fa-key" inert=""></i>
+            </label>
+            <div class="form-fields">
+                <input type="password" name="adminPassword" id="auth-password" autocomplete="one-time-code" placeholder="Administrator Password">
+            </div>
+        </div>
+    <footer class="form-footer">
+        <button type="submit" class="bright">
+            <i class="fa-solid fa-lock"></i>
+            <label>Return to Setup</label>
+        </button>
+    </footer>
+</form></div>
+    <footer id="watermark" class="flexcol">
+        <p id="software-version">Version 14 Build 365</p>
+    </footer>
+</body>
+</html>

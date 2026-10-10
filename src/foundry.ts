@@ -24,15 +24,14 @@ export type { PageApi, PageArgs, PageResult };
 import { asCallError, asConnectError } from './bridge-error.js';
 import type { Host } from './hosts/types.js';
 import { hostConfigProblem } from './hosts/env.js';
+import {
+  JOIN_PASSWORD,
+  JOIN_SUBMIT,
+  JOIN_USER_FIELD,
+  JOIN_USER_INPUT,
+  JOIN_USER_SELECT,
+} from './join-form.js';
 import { clearSystemCache } from './utils/system-detection.js';
-
-/**
- * The /join user field. Foundry ≤14.365 renders a <select name="userid"> listing the world's
- * users; 14.367+ renders a free-text <input name="username"> (with suggestions, not a list);
- * 14.369 is back to a <select>, now named "userId" — hence the case-insensitive match.
- * The bridge must join either shape — prod and the sandbox can straddle a core patch release.
- */
-const JOIN_USER_FIELD = 'select[name="userid" i], input[name="username"]';
 
 /**
  * Chromium flags that put the page's WebGL on the GPU. Headless Chromium defaults to software
@@ -498,38 +497,41 @@ export class Foundry implements FoundryBridge {
       );
     }
 
-    // Two form shapes (see JOIN_USER_FIELD). The <select> exposes the user list, so a wrong
+    // Two form shapes (src/join-form.ts). The <select> exposes the user list, so a wrong
     // FOUNDRY_USER fails fast with the real names; the free-text <input> exposes nothing, so a
     // wrong name surfaces only as the server's join error below.
-    const isSelect = (await page.locator('select[name="userid" i]').count()) > 0;
+    const isSelect = (await page.locator(JOIN_USER_SELECT).count()) > 0;
     if (isSelect) {
-      const users: string[] = await page.evaluate(() => {
-        const sel = document.querySelector<HTMLSelectElement>('select[name="userid" i]');
+      const users: string[] = await page.evaluate(selector => {
+        const sel = document.querySelector<HTMLSelectElement>(selector);
         return sel ? [...sel.options].map(o => o.textContent?.trim() ?? '') : [];
-      });
+      }, JOIN_USER_SELECT);
       if (!users.includes(this.cfg.user)) {
         throw new Error(
           `User "${this.cfg.user}" not on /join. Available: ${JSON.stringify(users)}`
         );
       }
       // Select the user, force-enabling the option if Foundry disabled it (stale active flag).
-      await page.evaluate(label => {
-        const sel = document.querySelector('select[name="userid" i]') as HTMLSelectElement;
-        const opt = [...sel.options].find(o => o.textContent?.trim() === label);
-        if (!opt) throw new Error('user option vanished');
-        opt.disabled = false;
-        sel.value = opt.value;
-        sel.dispatchEvent(new Event('change', { bubbles: true }));
-      }, this.cfg.user);
+      await page.evaluate(
+        ({ selector, label }) => {
+          const sel = document.querySelector(selector) as HTMLSelectElement;
+          const opt = [...sel.options].find(o => o.textContent?.trim() === label);
+          if (!opt) throw new Error('user option vanished');
+          opt.disabled = false;
+          sel.value = opt.value;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+        { selector: JOIN_USER_SELECT, label: this.cfg.user }
+      );
     } else {
-      await page.fill('input[name="username"]', this.cfg.user);
+      await page.fill(JOIN_USER_INPUT, this.cfg.user);
     }
 
     if (this.cfg.password) {
-      await page.fill('input[name="password"]', this.cfg.password);
+      await page.fill(JOIN_PASSWORD, this.cfg.password);
     }
 
-    await page.locator('button[name="join"], button[type="submit"]').first().click();
+    await page.locator(JOIN_SUBMIT).first().click();
 
     const timeout = this.readyTimeout;
     const outcome = await Promise.race([

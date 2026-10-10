@@ -76,13 +76,16 @@ Point releases — even "minor" stable ones — have repeatedly broken the bridg
 the scripted launch. On record:
 
 - **Foundry 14.365 → 14.367**: the `/join` user field changed from a `<select>` to a free-text
-  input (`src/foundry.ts` header) — the Playwright join broke.
+  input (`src/join-form.ts`) — the Playwright join broke.
 - **Foundry 14.368**: every POST must look same-origin (`Sec-Fetch-Site: same-origin` or a
   matching `Origin` header) or it gets 400 "The request could not be processed." — the launcher
   broke until it sent `Origin`. The same release stores Teleport Token destinations as RELATIVE
   uuids (`…<sceneId>.Region.<regionId>`), which broke the teleporter read-back / remap, and moved
   world shutdown: `POST /join {action:"shutdown"}` now answers `{}` (a silent no-op); it is
   `POST /setup {action:"worldShutdown", adminPassword}` → 302 `/setup`.
+- **Foundry 14.369**: the user field is a `<select>` again, now `name="userId"`; the bridge
+  matched only `userid` and waited out its whole boot budget on a live world. Since then the
+  join selectors are held against a saved page per build (`test/fixtures/join/`) in `npm test`.
 - **dnd5e 6.0.2 → 6.0.3**: bug fixes only, no data-model change — but the release notes
   under-report; read the tag-to-tag diff, not the bullets.
 - **dnd5e 6.0.3 → 6.0.5** (6.0.4 regressed activity check/save rolls; 6.0.5 is that one-line
@@ -101,6 +104,10 @@ offline gate alone:
    and `/setup` pages, document schemas (ActiveEffect, Region, Scene placeables, Combat, Calendar,
    ChatMessage), uuid handling, Levels.
 2. Sandbox launch: `node scripts/local-foundry.mjs start` (`FOUNDRY_HOST=local`).
+   For a Foundry release, save its rendered `/join` page as `test/fixtures/join/<version>.html`
+   (the DOM after the form draws, trimmed to the form and the version watermark, world title and
+   user names replaced; see the 14.369 file) and run `npm test`. A red `src/join-form.test.ts`
+   is the join break, found before any live world hangs on it.
 3. Bridge connect: `FOUNDRY_HOST=local node scripts/verify-wake.mjs` (destructive — see above) and
    a real MCP `get-world-info` on the sandbox registration.
 4. Targeted live verify scripts for every noted item, then the release set (the list is in
