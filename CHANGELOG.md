@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.1.0 — 2026-10-10 — GM notes are Foundry secrets; a missing bridge user fails at once
 
 - **A `gmnote` block is a real Foundry secret** (`create-quest-journal`, `update-quest-journal`,
   and the note `link-quest-to-npc` appends). It renders as core Foundry's
