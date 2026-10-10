@@ -121,6 +121,17 @@ describe('ErrorHandler.toUserMessage — the original words survive, the code ad
     expect(other).not.toContain('use search-compendium first');
   });
 
+  it('adds no hint to a connection error that already names its fix (a ConnectProblem)', () => {
+    const err = new BridgeError({
+      code: 'connection',
+      detail: 'No world is running at http://x and FOUNDRY_ADMIN_KEY is not set. Fix: …',
+      explained: true,
+    });
+    expect(eh.toUserMessage(err, 'get-world-info')).toBe(
+      'No world is running at http://x and FOUNDRY_ADMIN_KEY is not set. Fix: … [connection]'
+    );
+  });
+
   it('gives a connection error the wake / launch guidance', () => {
     const err = new BridgeError({
       code: 'connection',

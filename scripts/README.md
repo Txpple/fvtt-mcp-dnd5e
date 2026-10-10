@@ -42,6 +42,10 @@ tool proofs:
 - `smoke-bridge` (`npm run smoke:bridge`) — the upgrade review's live check: joins as the bridge
   user, prints one PASS/FAIL line with the host kind and its Foundry and dnd5e versions (no URL, no
   world name, so it can go in a public issue). Read-only.
+- `doctor` (`npm run doctor`) — the setup check, one line per item, exit 1 on any ✗: Node, the
+  build, Playwright's Chromium, the `.env`, the Foundry app (local), Foundry, the admin key (only
+  with no world running), the world, a login as `FOUNDRY_USER` with its role. Read-only; it never
+  launches a world (the admin key is withheld from its login) and does not wake a sleeping box.
 - `verify-error-contract` — the error contract end to end (read-only): a page-side `PageError`
   code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
   appends one hint per code, a dead URL is `connection`.

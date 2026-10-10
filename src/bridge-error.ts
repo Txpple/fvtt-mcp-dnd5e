@@ -20,12 +20,18 @@ export class BridgeError extends Error {
   readonly detail: string;
   /** The in-page stack Chromium reported, for logs; never part of the message. */
   readonly pageStack: string | undefined;
+  /**
+   * The detail already names the one thing to fix and how (a `ConnectProblem`), so the error
+   * mapper adds no generic hint after it.
+   */
+  readonly explained: boolean;
 
   constructor(opts: {
     code?: BridgeErrorCode | undefined;
     fn?: string | undefined;
     detail: string;
     pageStack?: string | undefined;
+    explained?: boolean | undefined;
     cause?: unknown;
   }) {
     // The message keeps the 2.x shape the sibling harnesses print (`foundry.call(<fn>) failed: …`),
@@ -38,6 +44,20 @@ export class BridgeError extends Error {
     this.fn = opts.fn;
     this.detail = opts.detail;
     this.pageStack = opts.pageStack;
+    this.explained = opts.explained ?? false;
+  }
+}
+
+/**
+ * A connect failure whose message is the whole answer: it names the one missing or wrong thing
+ * (an unset FOUNDRY_ADMIN_KEY with no world running, a FOUNDRY_USER the world lacks, a rejected
+ * admin key) and the command or key that fixes it. The bridge throws it where it knows the cause;
+ * the error mapper then prints it alone, without the generic `connection` hint.
+ */
+export class ConnectProblem extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConnectProblem';
   }
 }
 
@@ -89,5 +109,10 @@ export function asCallError(fn: string, err: unknown): BridgeError {
 export function asConnectError(err: unknown): BridgeError {
   if (err instanceof BridgeError) return err;
   const detail = err instanceof Error ? err.message : String(err);
-  return new BridgeError({ code: 'connection', detail, cause: err });
+  return new BridgeError({
+    code: 'connection',
+    detail,
+    explained: err instanceof ConnectProblem,
+    cause: err,
+  });
 }

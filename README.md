@@ -17,8 +17,15 @@ git clone https://github.com/Txpple/fvtt-mcp-dnd5e && cd fvtt-mcp-dnd5e
 npm install && npx playwright install chromium && npm run build
 cp .env.example .env              # or just the minimal local / Molten block at its top
 cp .mcp.json.example .mcp.json    # absolute paths; one registration per Foundry instance
+FOUNDRY_HOST=local npm run doctor # checks the setup, one line per item (the host as registered)
 node scripts/install-skills.mjs ~/my-campaign   # optional: link the skills into another project
 ```
+
+`npm run doctor` checks, in order: Node, the build, Playwright's Chromium, the `.env` (as the
+server reads it), the Foundry app (local host), that Foundry answers, the admin key (when no world
+is running), the world, and a login as `FOUNDRY_USER` with its role. Every ✗ line names its fix,
+and any ✗ exits non-zero. It never launches or stops a world; the login is the same short join a
+tool call makes, so it is safe against a live instance.
 
 Registration (`.mcp.json`, or `mcpServers` in `~/.claude.json` for every project) names the
 full Node path, `"command": "C:/Program Files/nodejs/node.exe"` on Windows, since the client

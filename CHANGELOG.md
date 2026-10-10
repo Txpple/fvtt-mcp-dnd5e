@@ -5,12 +5,36 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **`npm run doctor`** (`scripts/doctor.mjs`) checks a setup in order, one line each (✓, ✗
+  with its fix, ! worth a look, - skipped), and exits non-zero on any ✗: Node against
+  `engines`, `dist/` built and not older than `src/`, Playwright's Chromium, the `.env` read
+  as the server reads it (`FVTT_MCP_ENV`, `FOUNDRY_HOST`, the process environment over the
+  file; commented-out keys and legacy names flagged), the Foundry app (local host), Foundry
+  answering `/api/status`, the admin key (tested against `/auth` only when no world is running),
+  the world (dnd5e 6+), and a login as `FOUNDRY_USER` with its role, then a disconnect. It never
+  launches or stops a world (the admin key is withheld from its login) and does not wake a
+  sleeping box, so it is safe against prod.
+- **No world and no admin key: the error leads with the cause and the fix.** `No world is
+  running at <url> and FOUNDRY_ADMIN_KEY is not set, so the bridge cannot launch one`, then the
+  host's fix: locally, set the key and run `node scripts/local-foundry.mjs start`, or click
+  Launch World on `<url>/setup`. A connect failure that already names its fix (this one, a
+  `FOUNDRY_USER` the world lacks, a rejected admin key, a world /setup does not list) no longer
+  gets the generic `[connection]` hint appended; `BridgeError.explained` marks it.
+- **The server refuses to start without Playwright's Chromium**, naming
+  `npx playwright install chromium` (it checks for the headless shell a headless launch runs),
+  instead of failing at the first tool call.
+- **`connectFoundry` cleans up a refused connect**: it closes the browser and clears its
+  watchdog before rethrowing. A missing bridge user used to leave a script (`smoke:bridge`,
+  a sibling harness) sitting until the watchdog aborted it with exit 3.
 - **`allowScripts`** in `package.json` approves the two dependencies with install scripts, so
   `npm ci` on npm 11 no longer lists them as unreviewed. `classic-level` (through
   `@foundryvtt/foundryvtt-cli`) is the LevelDB binding `read-pack` uses for v11+ compendium
   packs; its `node-gyp-build` step does nothing where a prebuilt binary ships (Windows, macOS,
   Linux x64/arm64) and compiles one elsewhere. `esbuild` (the page bundle's build, a dev
   dependency, also under Vitest's Vite) checks its platform binary in `postinstall`.
+- `scripts/local-foundry.mjs` and the doctor share one Foundry app probe
+  (`scripts/lib/foundry-app.mjs`).
+- Issue #3, the rest: items 7, 9 and 10 and the doctor.
 
 ## 4.1.0 — 2026-10-10 — GM notes are Foundry secrets; a missing bridge user fails at once
 

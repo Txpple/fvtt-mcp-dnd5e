@@ -242,7 +242,19 @@ export async function connectFoundry(opts: ConnectOptions = {}): Promise<Connect
   }
 
   const f = new Foundry(cfg, opts.logger ?? silentFoundryLogger);
-  await f.connect();
+  try {
+    await f.connect();
+  } catch (err) {
+    // A refused connect (a missing user, no world) must not leave the browser open and the
+    // watchdog armed: the caller has no `dispose` to call, and the process would sit until the
+    // watchdog aborted it with exit 3 instead of reporting the refusal.
+    if (watchdog) clearTimeout(watchdog);
+    await Promise.race([
+      f.dispose().catch(() => {}),
+      new Promise<void>(r => setTimeout(r, DISPOSE_CEILING_MS).unref()),
+    ]);
+    throw err;
+  }
 
   let hungUp = false;
   const dispose = async (): Promise<void> => {

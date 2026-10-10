@@ -12,7 +12,7 @@
 // Everything else in the tree calls foundry.call() and never sees a Page. The irreducible
 // "Foundry is a live, locked DB" complexity lives here and nowhere else.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
@@ -21,7 +21,7 @@ import type { PageApi, PageArgs, PageResult } from './page/index.js';
 // The seam's types, re-exported so a tool (or a sibling) names a handler's argument or result
 // without reaching into src/page: `PageArgs<'manageEffect'>[0]`, `PageResult<'listUsers'>`.
 export type { PageApi, PageArgs, PageResult };
-import { asCallError, asConnectError } from './bridge-error.js';
+import { asCallError, asConnectError, ConnectProblem } from './bridge-error.js';
 import type { Host } from './hosts/types.js';
 import { hostConfigProblem } from './hosts/env.js';
 import {
@@ -48,6 +48,29 @@ const GPU_ARGS = [
   '--ignore-gpu-blocklist',
   ...(process.platform === 'win32' ? ['--use-angle=d3d11'] : []),
 ];
+
+/**
+ * Why the bridge's browser cannot launch, or `undefined`. A headless launch runs Playwright's
+ * headless shell, which `npx playwright install chromium` puts beside the full build under the same
+ * revision (`…/chromium-1228/…` and `…/chromium_headless_shell-1228`); a fresh clone has neither,
+ * and the first tool call used to be where that surfaced. The server checks at startup, the doctor
+ * too. `exists` is injectable for the unit test.
+ */
+export function chromiumProblem(
+  exists: (path: string) => boolean = existsSync
+): string | undefined {
+  const fix = 'run `npx playwright install chromium` in the fvtt-mcp-dnd5e folder';
+  let full: string;
+  try {
+    full = chromium.executablePath();
+  } catch (err) {
+    return `Playwright cannot locate its Chromium (${(err as Error).message}) — ${fix}.`;
+  }
+  const rev = /^(.*[\\/])chromium-(\d+)[\\/]/.exec(full);
+  const needed = rev ? `${rev[1]}chromium_headless_shell-${rev[2]}` : full;
+  if (exists(needed)) return undefined;
+  return `Playwright's Chromium is not installed (${needed} is missing) — ${fix}.`;
+}
 
 /**
  * The seam the rest of the codebase depends on. Tools import THIS (a type),
@@ -291,17 +314,20 @@ export class Foundry implements FoundryBridge {
               const msg = (err as Error).message;
               // Misconfiguration (bad admin key / wrong or ambiguous world id) won't self-heal —
               // fail fast.
-              if (/authentication failed|found on \/setup|\/setup lists/i.test(msg)) throw err;
+              if (err instanceof ConnectProblem) throw err;
               // Otherwise it may be a transient /setup hiccup; keep retrying within the budget.
               this.log.warn(`launch attempt failed (retrying within budget): ${msg}`);
             }
             continue; // re-probe; the world should now be booting (or retry after the grace)
           }
         } else {
-          throw new Error(
-            'Foundry world is not launched and no admin key is configured to launch it. ' +
-              'Launch the world (Setup → Launch World), or set FOUNDRY_ADMIN_KEY (and ' +
-              'FOUNDRY_WORLD_ID when /setup lists more than one world).'
+          // The one missing thing first, then this host's fix (issue #3, item 7).
+          throw new ConnectProblem(
+            `No world is running at ${this.base} and FOUNDRY_ADMIN_KEY is not set, so the ` +
+              `bridge cannot launch one. ${
+                this.cfg.host?.launchHint ??
+                `Set FOUNDRY_ADMIN_KEY, or click Launch World on ${this.base}/setup.`
+              }`
           );
         }
       }
@@ -378,9 +404,10 @@ export class Foundry implements FoundryBridge {
         .locator('input[name="adminPassword"]')
         .count()
         .catch(() => 0);
-      throw new Error(
+      throw new ConnectProblem(
         stillGated
-          ? 'Foundry admin authentication failed — check FOUNDRY_ADMIN_KEY'
+          ? "Foundry admin authentication failed — check FOUNDRY_ADMIN_KEY (the Setup screen's " +
+              'Administrator Password, not the license key)'
           : 'no world found on /setup — create one, or check FOUNDRY_WORLD_ID'
       );
     }
@@ -392,7 +419,7 @@ export class Foundry implements FoundryBridge {
         .count()
         .catch(() => 0)) === 0
     ) {
-      throw new Error(`world "${world}" not found on /setup — check FOUNDRY_WORLD_ID`);
+      throw new ConnectProblem(`world "${world}" not found on /setup — check FOUNDRY_WORLD_ID`);
     }
     // Prefer Foundry's own setup POST helper: the "Launch World" button calls
     // game.post({action:'launchWorld', world}) internally. It's robust (no hover/visibility
@@ -456,9 +483,9 @@ export class Foundry implements FoundryBridge {
       return ids[0] as string;
     }
     if (ids.length === 0) {
-      throw new Error('no world found on /setup — create one, or check FOUNDRY_WORLD_ID');
+      throw new ConnectProblem('no world found on /setup — create one, or check FOUNDRY_WORLD_ID');
     }
-    throw new Error(
+    throw new ConnectProblem(
       `/setup lists ${ids.length} worlds (${ids.join(', ')}) — set FOUNDRY_WORLD_ID to the one to launch`
     );
   }
@@ -506,7 +533,7 @@ export class Foundry implements FoundryBridge {
     // next call tries again (the user may have been created meanwhile), never a retry loop.
     const form = await page.evaluate(readJoinForm, JOIN_USER_SELECT);
     const missing = missingUserProblem(this.cfg.user, form);
-    if (missing) throw new Error(missing);
+    if (missing) throw new ConnectProblem(missing);
     if (form.users) {
       // Select the user, force-enabling the option if Foundry disabled it (stale active flag).
       await page.evaluate(

@@ -96,6 +96,11 @@ export interface Host {
   readonly wake: ((ctx: WakeContext) => Promise<void>) | undefined;
   /** Appended to the bridge's "never became joinable" error — names this host's own knobs. */
   readonly unreachableHint: string;
+  /**
+   * The fix when the instance is up with no world launched and FOUNDRY_ADMIN_KEY is unset: the
+   * command (or the one key) that gets a world running on this host.
+   */
+  readonly launchHint: string;
   /** Strip this host's secrets (the wake token) out of a message before it reaches a log. */
   redact(msg: string): string;
   /**

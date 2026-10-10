@@ -58,6 +58,7 @@ import {
 import { dirname, join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
 import { resolveHostConfig } from '../dist/hosts/index.js';
+import { foundryApp } from './lib/foundry-app.mjs';
 
 const env = loadEnv();
 const HOST = resolveHostConfig(env, 'local');
@@ -79,29 +80,8 @@ if (!dataRoot) die("FOUNDRY_DATA_DIR missing from .env (the local install's Data
 const dataPath = dirname(dataRoot); // .../FoundryVTT/Data -> .../FoundryVTT (what --dataPath wants)
 const baseUrl = HOST.serverUrl.replace(/\/+$/, '');
 const adminKey = HOST.adminKey ?? '';
-// The installer's two Windows targets: all users (Program Files) and per user (%LOCALAPPDATA%).
-const appCandidates =
-  process.platform === 'win32'
-    ? [
-        'C:\\Program Files\\Foundry Virtual Tabletop\\resources\\app\\main.js',
-        ...(process.env.LOCALAPPDATA
-          ? [
-              join(
-                process.env.LOCALAPPDATA,
-                'Programs',
-                'Foundry Virtual Tabletop',
-                'resources',
-                'app',
-                'main.js'
-              ),
-            ]
-          : []),
-      ]
-    : process.platform === 'darwin'
-      ? ['/Applications/Foundry Virtual Tabletop.app/Contents/Resources/app/main.js']
-      : ['/opt/foundryvtt/resources/app/main.js'];
-const appOverride = env.FOUNDRY_APP || env.LOCAL_FOUNDRY_APP;
-const appMain = appOverride || appCandidates.find(p => existsSync(p)) || appCandidates[0];
+const app = foundryApp(env);
+const appMain = app.main;
 
 /**
  * The world to launch: FOUNDRY_WORLD_ID, else the one world under Data/worlds — the same rule
@@ -262,9 +242,8 @@ async function start() {
   if (status) {
     console.log('already running.');
   } else {
-    if (!existsSync(appMain)) {
-      const tried = appOverride ? [appMain] : appCandidates;
-      die(`Foundry app not found (tried ${tried.join(', ')}) — set FOUNDRY_APP in .env`);
+    if (!app.found) {
+      die(`Foundry app not found (tried ${app.tried.join(', ')}) — set FOUNDRY_APP in .env`);
     }
     if (!existsSync(dataRoot)) die(`local Data dir not found: ${dataRoot}`);
     let pid = spawnServer();

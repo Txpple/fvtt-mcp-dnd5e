@@ -124,13 +124,17 @@ The line before this one, 1.5.2, is the last release that speaks dnd5e 5.3.x.
 
 ## When it cannot connect
 
+`npm run doctor` checks the whole path in order (the browser, the `.env`, Foundry, the world, a
+login as `FOUNDRY_USER`) and names the fix for each failure. Read-only; safe against prod.
+
 The error names the variable or the step, and the host adds its own hint:
 
 - `local` — "Is the local Foundry running? Start it with `node scripts/local-foundry.mjs start`."
 - a host with a wake URL — "Check `FOUNDRY_URL` / `FOUNDRY_WAKE_URL`, and that the instance
   actually woke." A cold managed box can take 30–60 s; retry once before concluding anything.
-- any other — "Check `FOUNDRY_URL` and that the world is launched on that server." Without
-  `FOUNDRY_ADMIN_KEY` the bridge cannot launch a world; launch it from `/setup`.
+- any other — "Check `FOUNDRY_URL` and that the world is launched on that server."
+- no world running and no `FOUNDRY_ADMIN_KEY` — the error says exactly that, then the host's fix:
+  set the key (locally, then `node scripts/local-foundry.mjs start`), or Launch World on `/setup`.
 - a join that fails naming users — `FOUNDRY_USER` does not exist on that world (Foundry's `/join`
   form exposes nothing, so the bridge fails fast with the real names).
 

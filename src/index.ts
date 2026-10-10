@@ -17,13 +17,18 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 
 import { config } from './config.js';
 import { Logger } from './logger.js';
-import { Foundry } from './foundry.js';
+import { chromiumProblem, Foundry } from './foundry.js';
 import { bridgeConfigOf, createHost } from './hosts/index.js';
 import { capResult } from './utils/cap.js';
 import { ErrorHandler, FormattedToolError } from './utils/error-handler.js';
 import { buildToolRegistry } from './registry.js';
 
 async function main(): Promise<void> {
+  // No browser = no bridge: refuse here, naming the install command, rather than at the first
+  // tool call as Playwright's own launch error (issue #3, item 9).
+  const noBrowser = chromiumProblem();
+  if (noBrowser) throw new Error(noBrowser);
+
   // File-only logging: stdout is the JSON-RPC channel and must stay clean.
   const logger = new Logger({
     level: config.logLevel,

@@ -299,6 +299,8 @@ describe('createHost', () => {
     expect(host.redact('GET /x?s=abc123 failed')).toBe('GET /x?s=<redacted> failed');
     expect(host.publicUrl('worlds/w/a.png')).toBe('https://box.moltenhosting.com/worlds/w/a.png');
     expect(host.unreachableHint).toMatch(/FOUNDRY_WAKE_URL/);
+    expect(host.launchHint).toContain("the panel's Default Administrator Password");
+    expect(host.launchHint).toContain('https://box.moltenhosting.com/setup');
   });
 
   it('molten: no password → no direct plane; the tools then get the bridge plane', () => {
@@ -332,6 +334,10 @@ describe('createHost', () => {
     expect(host.files?.label).toBe('local filesystem');
     expect(host.publicUrl('worlds/w/a.png')).toBe('http://localhost:30000/worlds/w/a.png');
     expect(host.unreachableHint).toMatch(/local-foundry\.mjs/);
+    // No world and no admin key: the key to set and the command that launches it.
+    expect(host.launchHint).toMatch(/^Set FOUNDRY_ADMIN_KEY/);
+    expect(host.launchHint).toContain('`node scripts/local-foundry.mjs start`');
+    expect(host.launchHint).toContain('http://localhost:30000/setup');
   });
 
   it('local: no FOUNDRY_DATA_DIR → no direct plane (the bridge plane serves)', () => {
@@ -352,6 +358,8 @@ describe('createHost', () => {
     expect(bare.files).toBeNull();
     expect(filePlaneFor(bare, { call: async () => null }).label).toBe('bridge (FilePicker)');
     expect(bare.unreachableHint).toMatch(/FOUNDRY_URL/);
+    expect(bare.launchHint).toContain('https://vtt.example.org/setup');
+    expect(bare.launchHint).toContain('not the license key');
 
     const woken = createHost(resolveHostConfig(canonicalEnv), noopLogger);
     expect(woken.wake).toBeDefined();

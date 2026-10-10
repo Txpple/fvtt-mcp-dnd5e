@@ -12,7 +12,8 @@ import { Logger } from '../logger.js';
 //
 // What `toUserMessage` adds is decided by the error's CODE, never by a word in its message:
 //   • a BridgeError with a code (the page threw a PageError — src/page/errors.ts — or the bridge
-//     never reached a joinable world) = the page's own words, then `[code]` and one hint;
+//     never reached a joinable world) = the page's own words, then `[code]` and one hint — no
+//     hint when the bridge's words already name the fix (`explained`, a ConnectProblem);
 //   • a BridgeError without a code (Foundry's own TypeError, a plain `new Error` in a handler),
 //     a ZodError, any other throw = its raw message, nothing added.
 // The 2.x mapper classified by substring and replaced the message with canned text — 11 of 12
@@ -71,6 +72,9 @@ export class ErrorHandler {
     if (error instanceof BridgeError) {
       this.log(error, toolName);
       if (!error.code) return error.detail;
+      // A connect failure that already names its fix (ConnectProblem) is the whole answer: the
+      // generic hint after it only buried the one line that mattered (issue #3, item 7).
+      if (error.explained) return `${error.detail} [${error.code}]`;
       let message = `${error.detail} [${error.code}] ${HINTS[error.code]}`;
       if (error.code === 'not-found' && ACTOR_CREATION_TOOLS.has(toolName)) {
         message += ' Tip: use search-compendium first to see available creatures.';

@@ -4,7 +4,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { BridgeError, asCallError, asConnectError, parsePageThrow } from './bridge-error.js';
+import {
+  BridgeError,
+  asCallError,
+  asConnectError,
+  parsePageThrow,
+  ConnectProblem,
+} from './bridge-error.js';
 
 describe('parsePageThrow — the header Chromium reports is the code channel', () => {
   it('reads a PageError code back from the name and drops the in-page stack', () => {
@@ -82,5 +88,15 @@ describe('asCallError / asConnectError', () => {
     expect(conn.fn).toBeUndefined();
     expect(conn.message).toBe('net::ERR_CONNECTION_REFUSED at http://x/join');
     expect(asConnectError(conn)).toBe(conn);
+  });
+});
+
+describe('ConnectProblem — a connect failure that names its own fix', () => {
+  it('rides asConnectError as an explained connection error; a plain throw is not explained', () => {
+    const named = asConnectError(new ConnectProblem("user 'X' not found in world 'W'"));
+    expect(named.code).toBe('connection');
+    expect(named.explained).toBe(true);
+    expect(named.detail).toBe("user 'X' not found in world 'W'");
+    expect(asConnectError(new Error('net::ERR_CONNECTION_REFUSED')).explained).toBe(false);
   });
 });

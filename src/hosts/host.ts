@@ -44,6 +44,7 @@ export class FoundryHost implements Host {
   readonly kind: HostKind;
   readonly label: string;
   readonly unreachableHint: string;
+  readonly launchHint: string;
   readonly files: FilePlane | null;
   readonly wake: ((ctx: WakeContext) => Promise<void>) | undefined;
 
@@ -60,6 +61,17 @@ export class FoundryHost implements Host {
         : cfg.wakeUrl
           ? 'Check FOUNDRY_URL / FOUNDRY_WAKE_URL, and that the instance actually woke.'
           : 'Check FOUNDRY_URL and that the world is launched on that server.';
+    const setup = `${cfg.serverUrl.replace(/\/+$/, '')}/setup`;
+    this.launchHint =
+      cfg.kind === 'local'
+        ? 'Set FOUNDRY_ADMIN_KEY in the .env to the Administrator Password from the Setup screen ' +
+          '(not the license key), then run `node scripts/local-foundry.mjs start`. Or click ' +
+          `Launch World on ${setup}.`
+        : `Set FOUNDRY_ADMIN_KEY to ${
+            cfg.kind === 'molten'
+              ? "the panel's Default Administrator Password"
+              : 'the Administrator Password from the Setup screen (not the license key)'
+          } so the bridge launches the world itself, or click Launch World on ${setup}.`;
     // The direct plane: the filesystem when the install is on this machine, else WebDAV, else
     // none — and then the tools use the bridge plane (filePlaneFor).
     this.files = cfg.dataDir
