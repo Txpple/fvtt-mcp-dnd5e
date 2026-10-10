@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.2.0 — 2026-10-10 — dnd5e's journal block kit; npm run doctor
 
 - **`npm run doctor`** (`scripts/doctor.mjs`) checks a setup in order, one line each (✓, ✗
   with its fix, ! worth a look, - skipped), and exits non-zero on any ✗: Node against
