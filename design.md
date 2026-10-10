@@ -323,7 +323,8 @@ player's choices, never as a data source.
 
 This is *how* the contract in §3 is realized today. (Mechanism, not mission — update as it evolves.)
 
-- **Headless bridge.** Playwright drives a real headless-Chromium Foundry session. `src/foundry.ts` is
+- **Headless bridge.** Playwright drives a real headless-Chromium Foundry session, its canvas on
+  the GPU (launch flags in `src/foundry.ts`; Chromium falls back to software rendering itself). `src/foundry.ts` is
   the `foundry.call()` seam; `src/index.ts` is the stdio MCP entry; page-side logic lives in
   `src/page/**` and is bundled into the browser context. The seam is typed end to end from the
   page's own signatures: `foundry.call(name, args)` takes `PageArgs<name>` and resolves to

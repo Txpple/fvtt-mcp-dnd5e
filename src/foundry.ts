@@ -35,6 +35,20 @@ import { clearSystemCache } from './utils/system-detection.js';
 const JOIN_USER_FIELD = 'select[name="userid" i], input[name="username"]';
 
 /**
+ * Chromium flags that put the page's WebGL on the GPU. Headless Chromium defaults to software
+ * rendering (SwiftShader): Foundry's canvas then draws at ~4 fps, a screenshot takes ~3.3 s and
+ * carries Foundry's "hardware acceleration not enabled" banner. On the GPU a screenshot takes
+ * ~0.9 s and the banner is gone (measured 2026-10-01, Chromium 149, Intel integrated graphics;
+ * issue #2). ANGLE's D3D11 backend exists only on Windows; elsewhere ANGLE picks its own. There
+ * is no off switch: when the GPU process fails, Chromium falls back to software rendering itself.
+ */
+const GPU_ARGS = [
+  '--enable-gpu',
+  '--ignore-gpu-blocklist',
+  ...(process.platform === 'win32' ? ['--use-angle=d3d11'] : []),
+];
+
+/**
  * The seam the rest of the codebase depends on. Tools import THIS (a type),
  * never the Playwright-backed `Foundry` class, so nothing outside foundry.ts
  * pulls in Playwright. `call(name, args)` mirrors the legacy
@@ -179,7 +193,10 @@ export class Foundry implements FoundryBridge {
     // world, so drop the process-lifetime system-detection cache — it must re-detect, not trust a stale
     // answer (harmless no-op on the first connect).
     clearSystemCache();
-    this.browser ??= await chromium.launch({ headless: this.cfg.headless ?? true });
+    this.browser ??= await chromium.launch({
+      headless: this.cfg.headless ?? true,
+      args: GPU_ARGS,
+    });
     this.context ??= await this.browser.newContext({ viewport: { width: 1920, height: 1080 } });
 
     this.page = await this.context.newPage();

@@ -3,6 +3,25 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.0.2 — 2026-10-10 — the bridge draws on the GPU
+
+- **The headless bridge renders Foundry's canvas on the GPU.** Chromium is launched with
+  `--enable-gpu --ignore-gpu-blocklist` (and `--use-angle=d3d11` on Windows) instead of
+  falling back to SwiftShader. `screenshot-scene` is about 2.8× faster and its PNGs no longer
+  carry Foundry's "hardware acceleration not enabled" banner. Data-only tools are unchanged.
+  No setting and no `.env` change: when the GPU process fails, Chromium falls back to software
+  rendering by itself. Closes #2.
+- Measured on the local sandbox (Foundry 14.369, dnd5e 6.0.6, Chromium 149, Windows, NVIDIA),
+  over real MCP stdio, two runs each, five screenshots per run:
+
+  | | WebGL renderer | Connect | Screenshot median | Foundry FPS |
+  | --- | --- | --- | --- | --- |
+  | 4.0.1 | SwiftShader | 6.2 s | 2.55 s | 4 |
+  | 4.0.2 | D3D11 on the GPU | 5.2 s | 0.89 s | 48 |
+
+- Offline gate green, budgets unmoved (tools/list 200,702 chars). Sandbox: `prove-bridge` OK,
+  `verify-scene-tools` 23/23, `verify-scene-view-tooling` 4/4.
+
 ## 4.0.1 — 2026-10-09 — Foundry 14.369 compatibility
 
 - **The bridge joins a 14.369 world again.** 14.369 renders the /join user list as
