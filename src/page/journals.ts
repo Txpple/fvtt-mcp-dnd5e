@@ -335,8 +335,10 @@ export async function createJournal(params: {
   name: string;
   pages: Array<{
     name: string;
-    kind?: 'image' | undefined;
+    /** 'image', or one of dnd5e's own page types (rule / map / spells / class / subclass). */
+    kind?: string | undefined;
     content?: string | undefined;
+    system?: Record<string, unknown> | undefined;
     src?: string | undefined;
     caption?: string | undefined;
     sort?: number | undefined;
@@ -389,11 +391,14 @@ export async function createJournal(params: {
         };
       }
 
-      // Text page (default): HTML content body.
+      // Text page (default): HTML content body. A dnd5e page type (rule / map / spells / class /
+      // subclass) is the same shape with its own type and system data; the system's data model
+      // validates that data on create (rule and map pages draw their body from text.content too).
       return {
-        type: 'text',
+        type: p.kind && p.kind !== 'text' ? p.kind : 'text',
         name: p.name,
         text: { content: typeof p.content === 'string' ? p.content : '' },
+        ...(p.system ? { system: p.system } : {}),
         ...sortField,
         ...ownershipField,
       };

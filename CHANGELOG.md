@@ -3,6 +3,35 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **Typed-block journals use dnd5e's own block kit** (`create-quest-journal`,
+  `update-quest-journal`, `link-quest-to-npc`). The `<section class="mcp-journal"><div
+  class="wrap">` wrapper and its inline stylesheet are gone, and so are the classes nothing in a
+  world styled (`lead`, `readaloud`, `grid-2`, `spaced`): pages written through these tools
+  rendered as plain text. Now `readaloud` is `<div class="fvtt narrative">`, `lead` is a plain
+  `<p>` (scene-setting text is a `readaloud`), `heading` is a bare `<h2>` / `<h3>`, and `grid`
+  draws each headed list as an `<aside class="notable">` (dnd5e has no column layout and a page
+  cannot carry a stylesheet). The markup is the dnd5e wiki's System-HTML page; the system's
+  stylesheet draws it in its journal sheet. Issue #1.
+- **New blocks:** `notable` (`<aside class="notable">`, optional `title`), `advice` and `quest`
+  (`<div class="fvtt advice|quest">`, optional `title` and round icon `img`; without one the card
+  keeps an empty inset where the icon would sit), and `quote` (`<aside class="quote-lg
+  float-right">`, optional `author` as `<p class="quote-author">`). Bare text in a box block is
+  wrapped in one `<p>`, since dnd5e draws a box's lower corners on its last child.
+- **Appending to a page written before this release** puts the new section after the old
+  `mcp-journal` section, never inside it; the old part keeps its (unstyled) markup.
+- **`manage-journals` create makes dnd5e's page types:** `kind` `rule`, `map` (Map Location),
+  `spells`, `class` or `subclass`, with that type's `system` data (e.g. `{code:"A1"}` for a map
+  location); `system` on a text or image page is refused.
+- **journal-builder skill:** the block table with what each renders as, dnd5e's enricher syntax
+  (`[[/check …]]`, `[[/save …]]`, `[[/damage …]]`, `[[/heal …]]`, `[[/attack …]]`,
+  `&Reference[…]`, `[[language …]]`), which the tools store as written, and the page types.
+- Budgets: tools/list 200,756 → 203,262 chars (four blocks, carried by both block tools, and the
+  page `system` leaf). Sandbox: `verify-journal-tooling` 48/48 (was 35), now holding every block
+  class against the computed style dnd5e's stylesheet gives it, the enrichers enriched, a map and
+  a rule page with their system data, and an append after the old wrapper.
+
 ## 4.1.0 — 2026-10-10 — GM notes are Foundry secrets; a missing bridge user fails at once
 
 - **A `gmnote` block is a real Foundry secret** (`create-quest-journal`, `update-quest-journal`,
