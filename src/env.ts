@@ -47,5 +47,45 @@ export function loadEnv(path: string = envPath()): Env {
   } catch {
     return {};
   }
-  return dotenv.parse(text);
+  const env = dotenv.parse(text);
+  if (!warned.has(path)) {
+    warned.add(path);
+    for (const w of envFileWarnings(text, env, process.env)) console.warn(`[env] ${w}`);
+  }
+  return env;
+}
+
+const warned = new Set<string>();
+
+/** A Foundry license key's shape (`XXXX-XXXX-XXXX-…`): pasted where the admin password goes. */
+const LICENSE_KEY = /^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3,}$/i;
+
+/**
+ * The two .env slips that fail far from their cause. A key filled in but left commented
+ * (`# FOUNDRY_ADMIN_KEY=secret`) is unset, and the first symptom is a "missing" key; a license
+ * key in FOUNDRY_ADMIN_KEY fails as a rejected admin password. One line per slip; none when the
+ * key is defined in the file or the process environment.
+ */
+export function envFileWarnings(text: string, parsed: Env, processEnv: Env = {}): string[] {
+  const out: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^#\s?(FOUNDRY_[A-Z0-9_]+)\s*=(.*)$/.exec(line);
+    if (!m) continue;
+    const key = m[1] as string;
+    const value = (m[2] as string).replace(/\s+#.*$/, '').trim();
+    if (!value || parsed[key] !== undefined || processEnv[key] !== undefined) continue;
+    // Never echo the value: it may be a password.
+    out.push(
+      `${key} has a value but is commented out, so it is unset — delete the "# " to set it.`
+    );
+  }
+  for (const key of ['FOUNDRY_ADMIN_KEY', 'LOCAL_ADMIN_KEY', 'MOLTEN_ADMIN_KEY']) {
+    if (LICENSE_KEY.test(parsed[key]?.trim() ?? '')) {
+      out.push(
+        `${key} looks like a Foundry license key. It is the Administrator Password you type on ` +
+          "Foundry's Setup screen, not the license key."
+      );
+    }
+  }
+  return out;
 }

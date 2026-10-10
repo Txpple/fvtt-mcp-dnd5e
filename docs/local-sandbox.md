@@ -20,15 +20,30 @@ There are two ways to have one:
 2. Launch it once so the data directory exists (`%LOCALAPPDATA%\FoundryVTT\{Config,Data}` on
    Windows; `~/.local/share/FoundryVTT` on Linux; `~/Library/Application Support/FoundryVTT` on
    macOS), then quit.
-3. In the repo `.env` (see `.env.example`): `FOUNDRY_DATA_DIR=<that Data dir>` — the `local`
-   host's direct file plane — and `FOUNDRY_ADMIN_KEY=<the admin password>` (world launch and
-   world stop are admin-gated). `FOUNDRY_URL` defaults to `http://localhost:30000`; set
-   `FOUNDRY_APP` only if the app is not at the platform's default install path.
+3. In the repo `.env` (the minimal local block at the top of `.env.example`):
+   `FOUNDRY_DATA_DIR=<that Data dir>` — the `local` host's direct file plane — and
+   `FOUNDRY_ADMIN_KEY=<the admin password>` (world launch and world stop are admin-gated): the
+   Administrator Password you type on the Setup screen, not the license key. Leave `FOUNDRY_URL`
+   unset (it defaults to `http://localhost:30000`); set `FOUNDRY_APP` only if the app is in
+   neither default place (on Windows: Program Files, or the per-user `%LOCALAPPDATA%\Programs`).
 4. Create or import a world, and in it the user the bridge joins as (`FOUNDRY_USER`, default
-   `MCP-Claude`, role Gamemaster or Assistant GM). A world imported from a backup already carries
-   its users and their passwords.
-5. Register the server as `foundry-sandbox` with `"env": { "FOUNDRY_HOST": "local" }`
-   ([`.mcp.json.example`](../.mcp.json.example)). `get-world-info` on it should answer
+   `MCP-Claude`, role Gamemaster or Assistant GM), or point `FOUNDRY_USER` at an existing one. A
+   world imported from a backup already carries its users and their passwords.
+5. Register the server as `foundry-local5e` with `"env": { "FOUNDRY_HOST": "local" }`
+   ([`.mcp.json.example`](../.mcp.json.example)), in the project's `.mcp.json` or under
+   `mcpServers` in `~/.claude.json`:
+
+   ```json
+   "foundry-local5e": {
+     "command": "C:/Program Files/nodejs/node.exe",
+     "args": ["<absolute path to>/fvtt-mcp-dnd5e/dist/index.js"],
+     "env": { "FOUNDRY_HOST": "local" }
+   }
+   ```
+
+   The full `node.exe` path matters: the client that starts the server may not have Node on PATH.
+   A desktop-app install of Claude Code may not have `claude` on PATH either, so edit the file
+   rather than running `claude mcp add`. `get-world-info` on it should answer
    `host: { kind: "local", files: "local filesystem" }`.
 
 ## Running it headless (no desktop window)

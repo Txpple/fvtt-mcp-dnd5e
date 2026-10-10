@@ -30,6 +30,8 @@ import {
   JOIN_USER_FIELD,
   JOIN_USER_INPUT,
   JOIN_USER_SELECT,
+  missingUserProblem,
+  readJoinForm,
 } from './join-form.js';
 import { clearSystemCache } from './utils/system-detection.js';
 
@@ -500,17 +502,12 @@ export class Foundry implements FoundryBridge {
     // Two form shapes (src/join-form.ts). The <select> exposes the user list, so a wrong
     // FOUNDRY_USER fails fast with the real names; the free-text <input> exposes nothing, so a
     // wrong name surfaces only as the server's join error below.
-    const isSelect = (await page.locator(JOIN_USER_SELECT).count()) > 0;
-    if (isSelect) {
-      const users: string[] = await page.evaluate(selector => {
-        const sel = document.querySelector<HTMLSelectElement>(selector);
-        return sel ? [...sel.options].map(o => o.textContent?.trim() ?? '') : [];
-      }, JOIN_USER_SELECT);
-      if (!users.includes(this.cfg.user)) {
-        throw new Error(
-          `User "${this.cfg.user}" not on /join. Available: ${JSON.stringify(users)}`
-        );
-      }
+    // The refusal is thrown out of connect(), so the tool call that asked gets it at once; the
+    // next call tries again (the user may have been created meanwhile), never a retry loop.
+    const form = await page.evaluate(readJoinForm, JOIN_USER_SELECT);
+    const missing = missingUserProblem(this.cfg.user, form);
+    if (missing) throw new Error(missing);
+    if (form.users) {
       // Select the user, force-enabling the option if Foundry disabled it (stale active flag).
       await page.evaluate(
         ({ selector, label }) => {

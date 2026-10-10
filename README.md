@@ -15,15 +15,23 @@ Targets **dnd5e 6.0.5+ on Foundry 14.368+**, on any host: a hosting provider, th
 ```bash
 git clone https://github.com/Txpple/fvtt-mcp-dnd5e && cd fvtt-mcp-dnd5e
 npm install && npx playwright install chromium && npm run build
-cp .env.example .env              # FOUNDRY_URL, FOUNDRY_USER / FOUNDRY_PASSWORD
+cp .env.example .env              # or just the minimal local / Molten block at its top
 cp .mcp.json.example .mcp.json    # absolute paths; one registration per Foundry instance
 node scripts/install-skills.mjs ~/my-campaign   # optional: link the skills into another project
 ```
 
+Registration (`.mcp.json`, or `mcpServers` in `~/.claude.json` for every project) names the
+full Node path, `"command": "C:/Program Files/nodejs/node.exe"` on Windows, since the client
+that starts the server may not have Node on PATH. A desktop-app install of Claude Code may not put
+`claude` on PATH either, so register by editing one of those files rather than with
+`claude mcp add`.
+
 In Foundry, create the user the server joins as (Gamemaster or Assistant GM; default name
-`MCP-Claude`). Start Claude Code and say **"start the world"**: the server wakes the instance if
-it sleeps, launches the world if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the
-host, its role and which premium books it found. Then ask for content.
+`MCP-Claude`), or set `FOUNDRY_USER` to an existing Gamemaster or Assistant GM user; a name the
+world does not have is refused at the first tool call, with the users it does have. Start Claude
+Code and say **"start the world"**: the server wakes the instance if it sleeps, launches the world
+if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the host, its role and which premium
+books it found. Then ask for content.
 
 **Requirements:** Node.js 22+ · Foundry 14.368+ with dnd5e 6.0.5+ (6.0.0–6.0.3 delete every
 effect without an expiry on a rest; the tools refuse a pre-6.0 world; an older world is upgraded

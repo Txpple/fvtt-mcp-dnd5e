@@ -42,7 +42,8 @@
 // FOUNDRY_URL (default http://localhost:30000), FOUNDRY_ADMIN_KEY (required — see above), the
 // world id from FOUNDRY_WORLD_ID or, unset, the ONE world under Data/worlds (several = a refusal
 // naming them), and optionally FOUNDRY_APP (alias LOCAL_FOUNDRY_APP) to override the default app
-// install path. --adminPassword is passed at boot so Foundry (re)writes Config/admin.txt itself
+// install path (on Windows the first of Program Files and %LOCALAPPDATA%\Programs that has
+// it). `start` exits non-zero unless it leaves a world active (or --no-world). --adminPassword is passed at boot so Foundry (re)writes Config/admin.txt itself
 // and the installed hash can never drift from .env.
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -78,14 +79,29 @@ if (!dataRoot) die("FOUNDRY_DATA_DIR missing from .env (the local install's Data
 const dataPath = dirname(dataRoot); // .../FoundryVTT/Data -> .../FoundryVTT (what --dataPath wants)
 const baseUrl = HOST.serverUrl.replace(/\/+$/, '');
 const adminKey = HOST.adminKey ?? '';
-const appMain =
-  env.FOUNDRY_APP ||
-  env.LOCAL_FOUNDRY_APP ||
-  (process.platform === 'win32'
-    ? 'C:\\Program Files\\Foundry Virtual Tabletop\\resources\\app\\main.js'
+// The installer's two Windows targets: all users (Program Files) and per user (%LOCALAPPDATA%).
+const appCandidates =
+  process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\Foundry Virtual Tabletop\\resources\\app\\main.js',
+        ...(process.env.LOCALAPPDATA
+          ? [
+              join(
+                process.env.LOCALAPPDATA,
+                'Programs',
+                'Foundry Virtual Tabletop',
+                'resources',
+                'app',
+                'main.js'
+              ),
+            ]
+          : []),
+      ]
     : process.platform === 'darwin'
-      ? '/Applications/Foundry Virtual Tabletop.app/Contents/Resources/app/main.js'
-      : '/opt/foundryvtt/resources/app/main.js');
+      ? ['/Applications/Foundry Virtual Tabletop.app/Contents/Resources/app/main.js']
+      : ['/opt/foundryvtt/resources/app/main.js'];
+const appOverride = env.FOUNDRY_APP || env.LOCAL_FOUNDRY_APP;
+const appMain = appOverride || appCandidates.find(p => existsSync(p)) || appCandidates[0];
 
 /**
  * The world to launch: FOUNDRY_WORLD_ID, else the one world under Data/worlds — the same rule
@@ -246,7 +262,10 @@ async function start() {
   if (status) {
     console.log('already running.');
   } else {
-    if (!existsSync(appMain)) die(`Foundry app not found at ${appMain} — set FOUNDRY_APP in .env`);
+    if (!existsSync(appMain)) {
+      const tried = appOverride ? [appMain] : appCandidates;
+      die(`Foundry app not found (tried ${tried.join(', ')}) — set FOUNDRY_APP in .env`);
+    }
     if (!existsSync(dataRoot)) die(`local Data dir not found: ${dataRoot}`);
     let pid = spawnServer();
     status = await poll(apiStatus, 60_000);
@@ -265,6 +284,8 @@ async function start() {
   }
   if (!status.active && !noWorld) status = await launchWorld();
   printStatus(status);
+  // `start` promises a live world (unless --no-world): anything less is a failure for the caller.
+  if (!status?.active && !noWorld) die('the world is not active — see the lines above');
 }
 
 async function stop() {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import dotenv from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { envPath, repoRoot } from './env.js';
+import { envFileWarnings, envPath, repoRoot } from './env.js';
 import { hostConfigProblem, resolveHostConfig, type HostConfig } from './hosts/env.js';
 import { parseToolsetsEnv } from './toolsets.js';
 
@@ -79,6 +79,12 @@ const rawConfig = {
 
 const notes: string[] = [];
 const host = resolveHostConfig(process.env, undefined, { warn: m => notes.push(m) });
+try {
+  const text = readFileSync(envPath(), 'utf8');
+  notes.push(...envFileWarnings(text, dotenv.parse(text), process.env));
+} catch {
+  // no .env (or no envPath): nothing to warn about
+}
 
 // A config that can never connect is refused HERE, before the server answers anything: an unset
 // FOUNDRY_URL used to sit behind the bridge's 600 s cold-boot budget before the first error.

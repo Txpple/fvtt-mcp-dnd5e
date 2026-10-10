@@ -9,6 +9,8 @@ import {
   JOIN_USER_FIELD,
   JOIN_USER_INPUT,
   JOIN_USER_SELECT,
+  missingUserProblem,
+  readJoinForm,
 } from './join-form.js';
 
 // One saved /join page per Foundry version (test/fixtures/join/<version>.html). A new Foundry
@@ -46,6 +48,31 @@ describe('the /join form selectors', () => {
         expect(users).toContain('MCP-Claude');
       } else {
         expect(doc.querySelector<HTMLInputElement>(JOIN_USER_INPUT)?.type).toBe('text');
+      }
+    });
+
+    it('reads the user list (or none, for the free-text field) and the world title', () => {
+      const form = readJoinForm(JOIN_USER_SELECT, doc);
+      expect(form.worldTitle).toBe('Fixture World');
+      if (doc.querySelector(JOIN_USER_SELECT)) {
+        expect(form.users).toEqual(['Gamemaster', 'MCP-Claude', 'Player One', 'Player Two']);
+      } else {
+        expect(form.users).toBeNull();
+      }
+    });
+
+    it('refuses a bridge user the world does not have, before selecting anything', () => {
+      const form = readJoinForm(JOIN_USER_SELECT, doc);
+      expect(missingUserProblem('MCP-Claude', form)).toBeNull();
+      const problem = missingUserProblem('Nobody', form);
+      if (form.users) {
+        expect(problem).toBe(
+          "user 'Nobody' not found in world 'Fixture World'; users: Gamemaster, MCP-Claude, " +
+            'Player One, Player Two — set FOUNDRY_USER to an existing Gamemaster/Assistant GM ' +
+            "user or create 'Nobody' in the world"
+        );
+      } else {
+        expect(problem).toBeNull(); // the free-text field lists nobody: the server answers
       }
     });
 

@@ -46,7 +46,7 @@ A registration's `env` block beats the shared `.env`, so one `.env` serves every
 each registration sets only what differs — which instance (`FOUNDRY_URL`) and how it is reached
 (`FOUNDRY_HOST`). Which instance a tool call touches is fixed by which server it goes to; there is
 no runtime "switch instance" state. The documented pair is in [`.mcp.json.example`](../.mcp.json.example):
-`foundry` (your world) and `foundry-sandbox` (`FOUNDRY_HOST=local`). The skills name tools bare;
+`foundry` (your world) and `foundry-local5e` (`FOUNDRY_HOST=local`). The skills name tools bare;
 when more than one Foundry is registered they use the one you named.
 
 ## The two planes

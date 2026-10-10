@@ -16,6 +16,25 @@ What changed for a user of the tools and skills, release by release. The measure
 - Budgets: tools/list 200,702 → 200,756 chars (the `gmnote` leaf). Sandbox:
   `verify-journal-tooling` 35/35, including the secret persisting with its id and
   `enrichHTML` dropping it for a non-owner.
+- **A bridge user the world does not have is refused at once**, naming the world and its users:
+  `user 'X' not found in world 'Y'; users: A, B, C — set FOUNDRY_USER to an existing
+  Gamemaster/Assistant GM user or create 'X' in the world`. It reaches the tool call that asked
+  (a `connection` error) in about two seconds; the next call checks again. The list and the
+  world title are read off the /join form, held against the saved page of each Foundry build.
+  (The 14.367 free-text field lists nobody; there a wrong name is still the server's answer.)
+- **`.env` slips are named at startup** (server log, and stderr for scripts): a
+  `# FOUNDRY_*=<value>` line with no active definition of that key (the value is never printed),
+  and a license-key-shaped `FOUNDRY_ADMIN_KEY`.
+- **`.env.example` opens with a minimal local and a minimal Molten block**, says that
+  `FOUNDRY_ADMIN_KEY` is the Setup screen's Administrator Password and not the license key, and
+  that `FOUNDRY_URL` stays unset for a local install.
+- **Registration docs:** `.mcp.json.example`, the README and `docs/local-sandbox.md` give the full
+  `node.exe` path and the `~/.claude.json` `mcpServers` route (a desktop-app install may not have
+  `claude` on PATH); the sandbox registration is `foundry-local5e`, as across the family.
+- **`scripts/local-foundry.mjs`** finds a per-user Windows install
+  (`%LOCALAPPDATA%\Programs\Foundry Virtual Tabletop\`) as well as Program Files, and `start`
+  exits non-zero unless it leaves a world active (or `--no-world`).
+- Issue #3, the fail-fast part; the `doctor` script it suggests is not done.
 
 ## 4.0.2 — 2026-10-10 — the bridge draws on the GPU
 
