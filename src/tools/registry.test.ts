@@ -89,7 +89,7 @@ describe('tool registry', () => {
     // + set-landing-scene (where a user comes up at LOGIN — core has no per-user landing scene
     //   at all, so this writes a durable User flag the house module fvtt-mod-openserver acts
     //   on at ready; the OFFLINE counterpart to pull-users-to-scene)
-    // + configure-soundscape (per-scene sound sets for house module fvtt-mod-soundscape: a POOL of
+    // + configure-area-sounds (per-scene sound sets for house module fvtt-mod-areasounds: a POOL of
     //   files played at randomized intervals with silence between, or crossfaded into a seamless
     //   bed — the shape neither AmbientSound placeables nor Playlists can express)
     // (parse-ddb-character was built and REMOVED 2026-08-17: DDB exports strip the embedded

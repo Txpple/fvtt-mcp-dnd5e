@@ -3,6 +3,31 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
+
+- **The companion module is renamed** `fvtt-mod-soundscape` → `fvtt-mod-areasounds` (Open Roll 5e:
+  Area Sounds, 2.0.0), since another Foundry module already had the name. The tool follows it:
+  **`configure-soundscape` is `configure-area-sounds`**, with no alias for the old name (an alias
+  would cost every session a second tool description). The `audio` toolset lists the new name.
+- **The skill is `area-sounds-builder`** (was `soundscape-builder`); `playlist-builder` points at it.
+- **Sets are read from `flags["fvtt-mod-areasounds"].sets`**, and from the old
+  `flags["fvtt-mod-soundscape"].sets` when a scene has no sets under the new scope (a world whose
+  GM has not loaded Area Sounds 2.0.0 yet; `list` says so). Writes go only to the new scope, and a
+  write to a scene read from the old one unsets the old scope in the same update, so the two never
+  fork. File paths are copied unchanged: a `soundscape-sfx/…` path may be the user's own folder;
+  the library repo's `remap-areasounds-scene-paths.mjs` repoints the house library's. Writes are a
+  plain scene update now, not `setFlag`, which refuses a scope whose module is not active.
+- **The template library is `areasounds-sfx/library.json`.** When it is missing the tool reads
+  `soundscape-sfx/library.json` once (a box whose library has not been republished), uses its paths
+  as they are, and says so in a warning.
+- **A world still running the old module** gets a warning that names it, says it gets no more
+  updates and does not read sets written under the new scope, and points at Area Sounds; `list`
+  shows `only the OLD module (fvtt-mod-soundscape v…)` instead of `module NOT INSTALLED`.
+- `scripts/verify-soundscape-tooling.mjs` is `scripts/verify-areasounds-tooling.mjs`; it snapshots
+  and restores the old scope too, so an unmigrated scene is handed back unmigrated.
+- Budgets (`npm test`): tools/list 203,262 → 203,259 chars, names ×2 6,076 → 6,078, skill
+  descriptions 7,525 → 7,534.
+
 ## 4.2.0 — 2026-10-10 — dnd5e's journal block kit; npm run doctor
 
 - **`npm run doctor`** (`scripts/doctor.mjs`) checks a setup in order, one line each (✓, ✗

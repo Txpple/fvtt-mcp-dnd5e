@@ -78,8 +78,8 @@ is the live 24-call baseline of result sizes.
   (`import { Foundry, foundryConfig, loadEnv } from 'fvtt-mcp-dnd5e/client'`): `fvtt-mod-lootshelf/tools/`
   (`verify-lootshelf`, `verify-receipt-settings`), `fvtt-mod-partystash/tools/` (`verify-partystash`,
   `verify-partystash-coin`, `shot-partystash-coin`, `audit-partystash-coin-cleanup`,
-  `clean-stale-ownership`), `fvtt-mod-soundscape/tools/` (`verify-soundscape`),
-  `fvtt-mod-soundscape-sfx/tools/` (`upload-soundscape-library`, `remap-soundscape-scene-paths`).
+  `clean-stale-ownership`), `fvtt-mod-areasounds/tools/` (`verify-areasounds`),
+  `fvtt-mod-areasounds-sfx/tools/` (`upload-areasounds-library`, `remap-areasounds-scene-paths`).
 - The spikes that de-risked a design (`spike-*.mjs`) are archived under `docs/history/spikes/`
   — reading material, not runnable against today's `dist/`.
 - `reload-clients` (battleflow owns the used copy), `register-partystash` (generalized into

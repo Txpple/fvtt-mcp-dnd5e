@@ -5,7 +5,7 @@ description: >-
   music, exploration sets, SFX soundboards (uploaded files; no compendium). Use when the user wants
   to "make a playlist", "add background music", "battle music", "a theme for this place",
   "exploration music", "a soundboard of effects", or to attach audio to a scene. NOT for randomized
-  one-shots with silence between them or a crossfaded ambient bed — that is soundscape-builder; a
+  one-shots with silence between them or a crossfaded ambient bed — that is area-sounds-builder; a
   sound from one spot on the map is an AmbientSound placeable.
 ---
 
@@ -15,15 +15,15 @@ The judgment + curation layer for **audio** (design.md §5) — the ambience and
 mood: a crackling tavern, a howling blizzard, a boss fight, a soundboard of one-shot effects. As with
 every authoring skill: **you decide; the tool does.**
 
-## First: Playlist, Soundscape, or a placeable?
+## First: Playlist, Area Sounds, or a placeable?
 
 Three audio systems live side by side. Playlists own **music and whole tracks**; the other two are
 someone else's job:
 
 - **Randomized one-shots with silence between them** (a crow, quiet, a distant dog), or a crossfaded
-  **ambient bed** layered on one scene → **`soundscape-builder`** (house module `fvtt-mod-soundscape`).
+  **ambient bed** layered on one scene → **`area-sounds-builder`** (house module `fvtt-mod-areasounds`).
   Playlists have no concept of silence-with-variation, so a "soundscape" in that sense is not a
-  playlist. Soundscape's design.md makes playlist integration an explicit **non-goal** — the two
+  playlist. Area Sounds' design.md makes playlist integration an explicit **non-goal** — the two
   systems never touch, and a scene happily runs both.
 - **A sound coming from one SPOT on the map** (that waterfall, this hearth) → an AmbientSound
   placeable via **`manage-placeables`** `{ kind: "sounds", action: "create" }`.

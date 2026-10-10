@@ -1,34 +1,36 @@
 /**
- * Offline unit tests for the PURE soundscape helpers (src/page/soundscape.ts) — the set
+ * Offline unit tests for the PURE Area Sounds helpers (src/page/areasounds.ts) — the set
  * normalizer/clamps, the day/night gate, set resolution, and the template-library filter. These
  * run in Node with no Foundry globals; the page-coupled write paths (flag persistence, the asset
- * HEAD-check, module detection) are exercised by scripts/verify-soundscape-tooling.mjs.
+ * HEAD-check, module detection) are exercised by scripts/verify-areasounds-tooling.mjs.
  *
- * The normalizer here MIRRORS fvtt-mod-soundscape's own scripts/engine.js#normalizeSet. These
+ * The normalizer here MIRRORS fvtt-mod-areasounds' own scripts/engine.js#normalizeSet. These
  * tests pin the defaults and clamps to that contract, so a drift shows up here rather than as a
  * malformed set on a scene.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
-  normalizeSoundscapeSet,
+  normalizeAreaSoundsSet,
   gateAllows,
   describeTiming,
   resolveSet,
   matchTemplates,
   resolveTemplate,
   summarizeLibrary,
+  readSetsSource,
+  setsUpdate,
   NIGHT_DARKNESS,
-  type SoundscapeSet,
-  type SoundscapeTemplate,
-} from './soundscape.js';
+  type AreaSoundsSet,
+  type AreaSoundsTemplate,
+} from './areasounds.js';
 
-const set = (over: Partial<SoundscapeSet> = {}): SoundscapeSet =>
-  normalizeSoundscapeSet({ id: 'fixed', name: 'A Set', ...over }).set;
+const set = (over: Partial<AreaSoundsSet> = {}): AreaSoundsSet =>
+  normalizeAreaSoundsSet({ id: 'fixed', name: 'A Set', ...over }).set;
 
-describe('normalizeSoundscapeSet defaults', () => {
+describe('normalizeAreaSoundsSet defaults', () => {
   it('fills the module schema from an empty blob', () => {
-    const { set: s } = normalizeSoundscapeSet({ id: 'x' });
+    const { set: s } = normalizeAreaSoundsSet({ id: 'x' });
     expect(s).toEqual({
       id: 'x',
       name: 'New Sound Set',
@@ -46,38 +48,38 @@ describe('normalizeSoundscapeSet defaults', () => {
   });
 
   it('generates a module-shaped id when none is supplied', () => {
-    const { set: s } = normalizeSoundscapeSet({});
+    const { set: s } = normalizeAreaSoundsSet({});
     expect(s.id).toMatch(/^[a-z0-9]{1,10}$/);
-    expect(normalizeSoundscapeSet({}).set.id).not.toBe(s.id);
+    expect(normalizeAreaSoundsSet({}).set.id).not.toBe(s.id);
   });
 
   it('trims a name and falls back when it is blank', () => {
-    expect(normalizeSoundscapeSet({ name: '  Crows  ' }).set.name).toBe('Crows');
-    expect(normalizeSoundscapeSet({ name: '   ' }).set.name).toBe('New Sound Set');
+    expect(normalizeAreaSoundsSet({ name: '  Crows  ' }).set.name).toBe('Crows');
+    expect(normalizeAreaSoundsSet({ name: '   ' }).set.name).toBe('New Sound Set');
   });
 
   it('treats only an explicit false as inactive', () => {
-    expect(normalizeSoundscapeSet({ active: false }).set.active).toBe(false);
-    expect(normalizeSoundscapeSet({ active: undefined }).set.active).toBe(true);
+    expect(normalizeAreaSoundsSet({ active: false }).set.active).toBe(false);
+    expect(normalizeAreaSoundsSet({ active: undefined }).set.active).toBe(true);
   });
 
   it('drops non-string and empty file entries instead of storing them', () => {
-    const { set: s } = normalizeSoundscapeSet({ files: ['a.ogg', '', null, 7, 'b.ogg'] });
+    const { set: s } = normalizeAreaSoundsSet({ files: ['a.ogg', '', null, 7, 'b.ogg'] });
     expect(s.files).toEqual(['a.ogg', 'b.ogg']);
   });
 
   it('accepts only "loop" as the non-default play style', () => {
-    expect(normalizeSoundscapeSet({ playStyle: 'loop' }).set.playStyle).toBe('loop');
-    expect(normalizeSoundscapeSet({ playStyle: 'nonsense' }).set.playStyle).toBe('interval');
+    expect(normalizeAreaSoundsSet({ playStyle: 'loop' }).set.playStyle).toBe('loop');
+    expect(normalizeAreaSoundsSet({ playStyle: 'nonsense' }).set.playStyle).toBe('interval');
   });
 
   it('accepts only day/night as the non-default gate', () => {
-    expect(normalizeSoundscapeSet({ whenToPlay: 'night' }).set.whenToPlay).toBe('night');
-    expect(normalizeSoundscapeSet({ whenToPlay: 'dusk' }).set.whenToPlay).toBe('always');
+    expect(normalizeAreaSoundsSet({ whenToPlay: 'night' }).set.whenToPlay).toBe('night');
+    expect(normalizeAreaSoundsSet({ whenToPlay: 'dusk' }).set.whenToPlay).toBe('always');
   });
 
   it('repairs a genuinely non-numeric field to its default rather than throwing', () => {
-    const { set: s, clamped } = normalizeSoundscapeSet({ interval: 'soon', crossfade: undefined });
+    const { set: s, clamped } = normalizeAreaSoundsSet({ interval: 'soon', crossfade: undefined });
     expect(s.interval).toBe(25);
     expect(s.crossfade).toBe(4);
     expect(clamped).toEqual([]); // a repair is not a clamp — nothing numeric was asked for
@@ -89,15 +91,15 @@ describe('normalizeSoundscapeSet defaults', () => {
   // value the engine will not actually use. zod keeps null out of the tool path; this only bites a
   // set that was already malformed on the scene.
   it('coerces null/empty to zero exactly as the module does, not to the default', () => {
-    expect(normalizeSoundscapeSet({ volume: null }).set.volume).toBe(0);
-    expect(normalizeSoundscapeSet({ volume: '' }).set.volume).toBe(0);
-    expect(normalizeSoundscapeSet({ interval: null }).set.interval).toBe(1); // clamped to the floor
+    expect(normalizeAreaSoundsSet({ volume: null }).set.volume).toBe(0);
+    expect(normalizeAreaSoundsSet({ volume: '' }).set.volume).toBe(0);
+    expect(normalizeAreaSoundsSet({ interval: null }).set.interval).toBe(1); // clamped to the floor
   });
 });
 
-describe('normalizeSoundscapeSet clamps', () => {
+describe('normalizeAreaSoundsSet clamps', () => {
   it('clamps each field to the module range and reports what moved', () => {
-    const { set: s, clamped } = normalizeSoundscapeSet({
+    const { set: s, clamped } = normalizeAreaSoundsSet({
       interval: 9000,
       crossfade: 99,
       volume: 4,
@@ -121,13 +123,13 @@ describe('normalizeSoundscapeSet clamps', () => {
   // The trap this exists for: lowering `interval` on an existing set would otherwise leave a
   // larger `intervalVariation` behind and ask the scheduler for a negative gap.
   it('bounds intervalVariation BY the interval, not by a fixed ceiling', () => {
-    const { set: s, clamped } = normalizeSoundscapeSet({ interval: 10, intervalVariation: 20 });
+    const { set: s, clamped } = normalizeAreaSoundsSet({ interval: 10, intervalVariation: 20 });
     expect(s.intervalVariation).toBe(10);
     expect(clamped).toContain('intervalVariation 20 → 10');
   });
 
   it('leaves an in-range value alone and reports no clamp', () => {
-    const { clamped } = normalizeSoundscapeSet({ interval: 30, volume: 0.5 });
+    const { clamped } = normalizeAreaSoundsSet({ interval: 30, volume: 0.5 });
     expect(clamped).toEqual([]);
   });
 });
@@ -192,7 +194,7 @@ describe('resolveSet', () => {
 });
 
 describe('matchTemplates', () => {
-  const templates: SoundscapeTemplate[] = [
+  const templates: AreaSoundsTemplate[] = [
     { name: 'Tavern Crowd', section: 'Interval Sounds', category: 'Voices — Tavern' },
     { name: 'Busy Tavern', section: 'Ambient Loops', category: 'Interiors' },
     { name: 'Forest Day', section: 'Ambient Loops', category: 'Forest' },
@@ -233,7 +235,7 @@ describe('matchTemplates', () => {
 describe('resolveTemplate', () => {
   // Mirrors the shipped library's real collision shape: five names (Crow Caws, Owl Hoots, Rain
   // Light, Sea Surf Large/Small) name BOTH an Interval Sounds pool and an Ambient Loops bed.
-  const templates: SoundscapeTemplate[] = [
+  const templates: AreaSoundsTemplate[] = [
     { name: 'Crow Caws', section: 'Interval Sounds', category: 'Beasts & Birds' },
     { name: 'Crow Caws', section: 'Ambient Loops', category: 'Forests & Wilds' },
     { name: 'Crypt Small', section: 'Ambient Loops', category: 'Dungeons, Crypts & Ruins' },
@@ -308,5 +310,64 @@ describe('summarizeLibrary', () => {
     const summary = summarizeLibrary([{ name: 'a' }]);
     expect(summary[0].section).toBe('Interval Sounds');
     expect(summary[0].categories[0].category).toBe('Uncategorized');
+  });
+});
+
+// The 2.0.0 rename: the module moves fvtt-mod-soundscape's sets to fvtt-mod-areasounds on the
+// GM's first load. Until then the tool reads the old scope, and its first write moves them.
+describe('readSetsSource', () => {
+  const a = { id: 'a', name: 'Crows', files: ['soundscape-sfx/x.ogg'] };
+  const b = { id: 'b', name: 'Wind' };
+
+  it('reads the current scope', () => {
+    expect(readSetsSource({ 'fvtt-mod-areasounds': { sets: [a] } })).toEqual({
+      raw: [a],
+      legacy: false,
+    });
+  });
+
+  it('falls back to the pre-rename scope when the current one has no sets', () => {
+    expect(readSetsSource({ 'fvtt-mod-soundscape': { sets: [a] } })).toEqual({
+      raw: [a],
+      legacy: true,
+    });
+  });
+
+  it('prefers the current scope when both are present', () => {
+    const flags = { 'fvtt-mod-areasounds': { sets: [b] }, 'fvtt-mod-soundscape': { sets: [a] } };
+    expect(readSetsSource(flags)).toEqual({ raw: [b], legacy: false });
+  });
+
+  it('treats an empty current array as current, not as absent', () => {
+    const flags = { 'fvtt-mod-areasounds': { sets: [] }, 'fvtt-mod-soundscape': { sets: [a] } };
+    expect(readSetsSource(flags)).toEqual({ raw: [], legacy: false });
+  });
+
+  it('reads no flags as no sets', () => {
+    expect(readSetsSource(undefined)).toEqual({ raw: [], legacy: false });
+    expect(readSetsSource({})).toEqual({ raw: [], legacy: false });
+  });
+});
+
+describe('setsUpdate', () => {
+  const s = set({ files: ['soundscape-sfx/ambient-loops/forest/day.ogg'] });
+
+  it('writes only the current scope', () => {
+    expect(setsUpdate([s], false)).toEqual({ 'flags.fvtt-mod-areasounds.sets': [s] });
+  });
+
+  it('unsets the pre-rename scope in the same update when the sets came from it', () => {
+    expect(setsUpdate([s], true)).toEqual({
+      'flags.fvtt-mod-areasounds.sets': [s],
+      'flags.-=fvtt-mod-soundscape': null,
+    });
+  });
+
+  // A soundscape-sfx/ folder may be a user's own audio; only the library's remap script repoints.
+  it('copies file paths unchanged', () => {
+    const update = setsUpdate([s], true) as any;
+    expect(update['flags.fvtt-mod-areasounds.sets'][0].files).toEqual([
+      'soundscape-sfx/ambient-loops/forest/day.ogg',
+    ]);
   });
 });

@@ -46,7 +46,7 @@ import { buildAddFeatureTool } from './tools/dnd5e/grant-to-actor.js';
 import { AssetFileTools } from './tools/assets/index.js';
 import { AssetBridgeTools } from './tools/asset-bridge.js';
 import { PlaylistTools } from './tools/playlist.js';
-import { SoundscapeTools } from './tools/soundscape.js';
+import { AreaSoundsTools } from './tools/areasounds.js';
 import { TableTools } from './tools/tables.js';
 import { CardsTools } from './tools/cards.js';
 import { ChatTools } from './tools/chat.js';
@@ -126,8 +126,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const assetFileTools = new AssetFileTools({ logger, foundry, host });
   const assetBridgeTools = new AssetBridgeTools({ foundry, logger });
   const playlistTools = new PlaylistTools({ foundry, logger });
-  // House module #6 (fvtt-mod-soundscape): per-scene sound sets, authored as scene flags.
-  const soundscapeTools = new SoundscapeTools({ foundry, logger });
+  // House module #6 (fvtt-mod-areasounds): per-scene sound sets, authored as scene flags.
+  const areaSoundsTools = new AreaSoundsTools({ foundry, logger });
   const tableTools = new TableTools({ foundry, logger });
   const cardsTools = new CardsTools({ foundry, logger });
   const chatTools = new ChatTools({ foundry, logger, host });
@@ -176,7 +176,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     ...assetFileTools.getToolDefinitions(),
     ...assetBridgeTools.getToolDefinitions(),
     ...playlistTools.getToolDefinitions(),
-    ...soundscapeTools.getToolDefinitions(),
+    ...areaSoundsTools.getToolDefinitions(),
     ...tableTools.getToolDefinitions(),
     ...cardsTools.getToolDefinitions(),
     ...chatTools.getToolDefinitions(),
@@ -319,10 +319,10 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     // Playlists — ONE tool (action; M8)
     'manage-playlists': args => playlistTools.handle('manage-playlists', args),
 
-    // configure-soundscape: the per-scene sound sets of house module fvtt-mod-soundscape —
+    // configure-area-sounds: the per-scene sound sets of house module fvtt-mod-areasounds —
     // randomized one-shots with silence between, and crossfaded ambient beds. Playlists stay
     // the music system; this is the layer neither Playlists nor AmbientSound placeables cover.
-    'configure-soundscape': args => soundscapeTools.handleConfigureSoundscape(args),
+    'configure-area-sounds': args => areaSoundsTools.handleConfigureAreaSounds(args),
 
     // Roll tables — the CRUD as ONE tool (action; M8) + the play op
     'manage-rolltables': args => tableTools.handleManageRollTables(args),

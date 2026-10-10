@@ -1,20 +1,20 @@
 ---
-name: soundscape-builder
+name: area-sounds-builder
 description: >-
-  Give a Foundry scene ATMOSPHERIC SOUND (the Soundscape module) — an ambient bed plus randomized
+  Give a Foundry scene ATMOSPHERIC SOUND (the Area Sounds module) — an ambient bed plus randomized
   one-shots with silence between. Use when the user wants to "add ambience to this scene", "make
   this scene sound alive / creepy / busy", "sound for the crypt / tavern / forest", "random crows
   and wolf howls", "atmosphere for this map", "day and night sounds", "why is this scene silent", or
-  to tune / audit an existing soundscape. NOT for music — that is playlist-builder; a sound from ONE
+  to tune / audit a scene's existing sound sets. NOT for music — that is playlist-builder; a sound from ONE
   SPOT on the map is an AmbientSound placeable.
 ---
 
-# Soundscape builder
+# Area Sounds builder
 
-The judgment layer over **`configure-soundscape`**, the tool for the companion module
-**[`fvtt-mod-soundscape`](https://github.com/Txpple/fvtt-mod-soundscape)** — the world must run it,
+The judgment layer over **`configure-area-sounds`**, the tool for the companion module
+**[`fvtt-mod-areasounds`](https://github.com/Txpple/fvtt-mod-areasounds)** — the world must run it,
 and the template library the catalog below describes is its sister package
-`fvtt-mod-soundscape-sfx` (a `library.json` + the audio under `soundscape-sfx/` in `Data/`). With
+`fvtt-mod-areasounds-sfx` (a `library.json` + the audio under `areasounds-sfx/` in `Data/`). With
 another library, or none, `action: "library"` is still the only source of truth (it says so when
 there is none). The module fills a hole core Foundry has no shape for: AmbientSound placeables are *positional* single-file
 loops and Playlists have no concept of **silence with variation**, so neither can do "a crow, then
@@ -27,24 +27,24 @@ layers before it turns to mud, the timing, the mix, and the day/night gates. Rea
 [`_shared/authoring-policy.md`](../_shared/authoring-policy.md); the audio clarification from
 `playlist-builder` applies here too — **audio has no compendium**, so this is asset-driven work.
 
-## First: is this even Soundscape's job?
+## First: is this even Area Sounds' job?
 
 Three different audio systems, three owners. Getting this wrong is the most common failure.
 
 | The user wants | Owner | Why |
 |---|---|---|
-| Music — a theme, a track, a boss cue, exploration music, a soundboard | **`playlist-builder`** | Playlists stay the music system. Soundscape's design.md lists playlist integration as an explicit **non-goal** — it never touches them. |
+| Music — a theme, a track, a boss cue, exploration music, a soundboard | **`playlist-builder`** | Playlists stay the music system. Area Sounds' design.md lists playlist integration as an explicit **non-goal** — it never touches them. |
 | Ambience: a bed + random one-shots, "make it *sound* like a place" | **this skill** | Scene-global pools with randomized silence. Nothing else does it. |
-| A sound coming from **one spot** on the map — *that* waterfall, *this* hearth, the door at the end of the hall | **`manage-placeables`** `{ kind: "sounds", action: "create" }` (AmbientSound placeable) | Soundscape sets are scene-global **by design** ("no positional interval sounds" — non-goal). A point emitter with a radius is a placeable. |
+| A sound coming from **one spot** on the map — *that* waterfall, *this* hearth, the door at the end of the hall | **`manage-placeables`** `{ kind: "sounds", action: "create" }` (AmbientSound placeable) | Area Sounds sets are scene-global **by design** ("no positional interval sounds" — non-goal). A point emitter with a radius is a placeable. |
 
-They compose: a crypt can have a Soundscape bed, a positional AmbientSound at the fountain, and a
+They compose: a crypt can have an Area Sounds bed, a positional AmbientSound at the fountain, and a
 Playlist that starts when the fight does. Build each with its own owner.
 
 ## Step 0 — Look at the scene before you pick a single sound
 
 Never pick from a name. Find out what the place *is*:
 
-- **`configure-soundscape { action: "list" }`** — what it already has. If the scene is at 4+ sets,
+- **`configure-area-sounds { action: "list" }`** — what it already has. If the scene is at 4+ sets,
   you are **re-mixing**, not adding (see the budget below).
 - **`get-current-scene`** / **`manage-scenes` `list`** — the **darkness level** (`darkness` 0–1; this decides
   the day/night question), `weather`, and whether it's the active scene.
@@ -66,7 +66,7 @@ Answer these five before choosing anything:
 
 ## Step 1 — Browse the library; never guess a template name
 
-**`configure-soundscape { action: "library", query | section | category }`** is the only source of
+**`configure-area-sounds { action: "library", query | section | category }`** is the only source of
 exact names. `add` matches the template name **exactly**, so a half-remembered name is an error, not a
 near-miss.
 
@@ -231,7 +231,7 @@ If you gate a set on a fixed-darkness scene, the tool tells you plainly — `act
 
 ## Step 6 — Verify, then report honestly
 
-Finish with **`configure-soundscape { action: "list", verifyFiles: true }`** and actually read it:
+Finish with **`configure-area-sounds { action: "list", verifyFiles: true }`** and actually read it:
 
 - **`▶` vs `⏸`** — how many would be playing right now, and the `idle:` reason for each that isn't.
   A stack where three of five are idle is a bug in your gating, not a rich scene.
@@ -250,14 +250,14 @@ Looked at the map: interior, medium common room, hearth on the north wall, ~15 p
 Four sets: bed + texture + two life. Darkness is fixed, so no gates.
 
 ```
-configure-soundscape { action: "add", sceneIdentifier: "The Rusty Flagon",
+configure-area-sounds { action: "add", sceneIdentifier: "The Rusty Flagon",
   template: "Commoner Tavern Talk", volume: 0.45 }                        // 1. bed
-configure-soundscape { action: "add", sceneIdentifier: "The Rusty Flagon",
+configure-area-sounds { action: "add", sceneIdentifier: "The Rusty Flagon",
   template: "Fireplace", volume: 0.4 }                                    // 2. texture (the hearth)
-configure-soundscape { action: "add", sceneIdentifier: "The Rusty Flagon",
+configure-area-sounds { action: "add", sceneIdentifier: "The Rusty Flagon",
   template: "Tavern Glass Clinks", interval: 20, intervalVariation: 6,
   volume: 0.6, volumeVariation: 0.25, pitchVariation: 0.2 }               // 3. life (close work)
-configure-soundscape { action: "add", sceneIdentifier: "The Rusty Flagon",
+configure-area-sounds { action: "add", sceneIdentifier: "The Rusty Flagon",
   template: "Laughs Men", interval: 45, intervalVariation: 15,
   volume: 0.55, volumeVariation: 0.3, pitchVariation: 0.2 }               // 3. life (the patrons)
 ```
@@ -275,12 +275,12 @@ Looked at the map: small stone crypt, water damage, five wights placed. Three se
 — horror is mostly silence, and the punctuation has to land.
 
 ```
-configure-soundscape { action: "add", sceneIdentifier: "The Hollow — Crypt",
+configure-area-sounds { action: "add", sceneIdentifier: "The Hollow — Crypt",
   template: "Crypt Small", volume: 0.4 }                                  // 1. bed
-configure-soundscape { action: "add", sceneIdentifier: "The Hollow — Crypt",
+configure-area-sounds { action: "add", sceneIdentifier: "The Hollow — Crypt",
   template: "Water Drips", interval: 30, intervalVariation: 10,
   volume: 0.5, volumeVariation: 0.3 }                                     // 3. life (the wet stone)
-configure-soundscape { action: "add", sceneIdentifier: "The Hollow — Crypt",
+configure-area-sounds { action: "add", sceneIdentifier: "The Hollow — Crypt",
   template: "Crypt Moans", interval: 150, intervalVariation: 45,
   volume: 0.85, volumeVariation: 0.2, pitchVariation: 0.2 }               // 4. punctuation
 ```
@@ -296,16 +296,16 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
    `category`) narrows it:
 
    ```
-   configure-soundscape { action: "add", template: "Crow Caws",
+   configure-area-sounds { action: "add", template: "Crow Caws",
      section: "Ambient Loops", volume: 0.4 }        // the bed, not the interval pool
    ```
 
    Two escape hatches if a name is still ambiguous: pick a non-colliding sibling (`Crow Caws 2`,
    `Owl Hoots Night`), or add with explicit `files` — the library layout is stable, so `list-assets`
-   gets you the paths (`soundscape-sfx/interval-sounds/<category-slug>/<set-slug>/*`,
-   `soundscape-sfx/ambient-loops/<category-slug>/<name>.ogg`).
+   gets you the paths (`areasounds-sfx/interval-sounds/<category-slug>/<set-slug>/*`,
+   `areasounds-sfx/ambient-loops/<category-slug>/<name>.ogg`).
 
-2. **On a sandbox mirrored from another instance, expect 404 warnings.** `soundscape-sfx/` is a
+2. **On a sandbox mirrored from another instance, expect 404 warnings.** `areasounds-sfx/` is a
    Data-**root** folder, outside `worlds/<id>` / `systems` / `modules` / `assets`, so a world mirror
    usually leaves it behind; a sandbox with the `library.json` but not the audio then behaves like
    this:
@@ -332,7 +332,7 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
    Unrest loops are for combat happening **somewhere else** (a riot two streets over, a battle heard
    through a wall), which is exactly why they come in `muffled` and `outside` variants.
 
-6. **Sets are per-scene flags — nothing is inherited or shared.** There's no "copy soundscape to
+6. **Sets are per-scene flags — nothing is inherited or shared.** There's no "copy sound sets to
    scene B". To reuse one: `list` the source scene (its `files` arrays come back in full) and `add`
    each set on the target.
 
@@ -340,9 +340,11 @@ happens. Dropped to 25s it becomes wallpaper and the room stops being frightenin
    what you're about to delete first.
 
 8. **If the library files ever move**, existing scene sets break. The library repo's
-   `tools/remap-soundscape-scene-paths.mjs`
+   `tools/remap-areasounds-scene-paths.mjs`
    (`--dry` first) repoints every scene by basename — that's a maintenance script, not something to
-   run mid-authoring.
+   run mid-authoring. Sets written before the module's rename may still point at `soundscape-sfx/…`;
+   the tool keeps those paths as they are (it may be the user's own folder), and the remap script is
+   what repoints the house library's.
 
 ## Boundaries
 

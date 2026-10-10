@@ -1,20 +1,20 @@
-// LIVE acceptance for configure-soundscape (house module #6, fvtt-mod-soundscape).
+// LIVE acceptance for configure-area-sounds (house module #6, fvtt-mod-areasounds).
 //
 // Driven through the TOOL REGISTRY, not the page seam — the set-landing-scene lesson was that a
 // tool is not done when the page function returns the data, it is done when the FORMATTER shows
 // it (list-users returned `landingScene` and never printed it). So every check below asserts on
 // the string a caller actually reads back, with the zod parse in front of it.
 //
-// The load-bearing claim under test is the MIRROR: src/page/soundscape.ts re-implements the
+// The load-bearing claim under test is the MIRROR: src/page/areasounds.ts re-implements the
 // module's own scripts/engine.js#normalizeSet so the tool can report clamps. Check "mirror" reads
 // the sets back through the MODULE's api and asserts the module agrees field-for-field with what
 // the tool wrote — if that ever drifts, this is where it surfaces.
 //
-// SAFE: it snapshots the target scene's soundscape flag and restores it in `finally`, so the
+// SAFE: it snapshots the target scene's sound-set flag and restores it in `finally`, so the
 // scene ends exactly as it started. Defaults to the LOCAL sandbox; --prod targets Molten.
 //
 // Build first: npm run build.
-// Run: FOUNDRY_HOST=local node scripts/verify-soundscape-tooling.mjs [--prod] [--scene "<name>"]
+// Run: FOUNDRY_HOST=local node scripts/verify-areasounds-tooling.mjs [--prod] [--scene "<name>"]
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
@@ -29,7 +29,10 @@ const prod = argv.includes('--prod');
 const sceneIdx = argv.indexOf('--scene');
 const sceneArg = sceneIdx >= 0 ? argv[sceneIdx + 1] : null;
 
-const MODULE_ID = 'fvtt-mod-soundscape';
+const MODULE_ID = 'fvtt-mod-areasounds';
+// The pre-rename scope (Area Sounds 2.0.0 moves it on the GM's first load; a tool write moves it
+// too), snapshotted and restored alongside so an unmigrated scene is handed back unmigrated.
+const LEGACY_ID = 'fvtt-mod-soundscape';
 // Seeded in the sandbox's Data root; its audio resolves, so the clean-add path is provable.
 const RESOLVING_TEMPLATE = 'Combat Muffled 1';
 
@@ -67,13 +70,13 @@ const registry = buildToolRegistry({
   host: cfg.host,
   logger: new Logger({ level: 'error', format: 'simple' }),
 });
-const call = args => registry.dispatch('configure-soundscape', args);
+const call = args => registry.dispatch('configure-area-sounds', args);
 
 let scene = null;
 let snapshot;
 
 try {
-  console.log(`\n[verify-soundscape] connecting to ${prod ? 'PROD' : 'the LOCAL sandbox'}…`);
+  console.log(`\n[verify-areasounds] connecting to ${prod ? 'PROD' : 'the LOCAL sandbox'}…`);
   await f.connect();
 
   const world = await f.evaluate(
@@ -81,7 +84,7 @@ try {
       user: game.user.name,
       scene: game.scenes.active?.name ?? null,
       module: (() => {
-        const m = game.modules.get('fvtt-mod-soundscape');
+        const m = game.modules.get('fvtt-mod-areasounds');
         return m
           ? { installed: true, active: !!m.active, version: m.version }
           : { installed: false };
@@ -91,20 +94,24 @@ try {
   );
   scene = sceneArg || world.scene;
   console.log(
-    `[verify-soundscape] bridge=${world.user} · scene="${scene}" · module=${JSON.stringify(world.module)}\n`
+    `[verify-areasounds] bridge=${world.user} · scene="${scene}" · module=${JSON.stringify(world.module)}\n`
   );
   if (!scene) throw new Error('No target scene — pass --scene "<name>".');
 
   // Snapshot, so the scene is handed back exactly as it was found.
   snapshot = await f.evaluate(
-    ({ name, moduleId }) => {
+    ({ name, moduleId, legacyId }) => {
       const s = game.scenes.get(name) || game.scenes.getName(name);
-      return s ? (s.flags?.[moduleId]?.sets ?? null) : null;
+      return {
+        sets: s?.flags?.[moduleId]?.sets ?? null,
+        legacy: s?.flags?.[legacyId] ?? null,
+      };
     },
-    { name: scene, moduleId: MODULE_ID }
+    { name: scene, moduleId: MODULE_ID, legacyId: LEGACY_ID }
   );
   console.log(
-    `[verify-soundscape] snapshot: ${snapshot ? `${snapshot.length} set(s)` : 'no flag'}\n`
+    `[verify-areasounds] snapshot: ${snapshot.sets ? `${snapshot.sets.length} set(s)` : 'no flag'}` +
+      `${snapshot.legacy ? ` + the old ${LEGACY_ID} scope` : ''}\n`
   );
 
   /* --- 1. list ------------------------------------------------------------------------------ */
@@ -119,7 +126,7 @@ try {
   contains(
     'library prints the catalog and both sections',
     lib,
-    'Soundscape library',
+    'Area Sounds library',
     'Interval Sounds',
     'Ambient Loops',
     'Add one with action "add"'
@@ -148,7 +155,7 @@ try {
   // Large/Small). The pure resolver is unit-tested; what this proves is the WIRING — that the
   // caller's `section` actually reaches it instead of being read only by the library browse.
   const collision = await f.evaluate(async () => {
-    const res = await fetch(foundry.utils.getRoute('soundscape-sfx/library.json'));
+    const res = await fetch(foundry.utils.getRoute('areasounds-sfx/library.json'));
     const seen = new Map();
     for (const s of (await res.json()).sets) {
       const key = s.name.trim().toLowerCase();
@@ -209,7 +216,7 @@ try {
   /* --- 4. KEEP+WARN: a template whose audio is absent ---------------------------------------- */
   const absent = await f.evaluate(
     async ({ resolving }) => {
-      const res = await fetch(foundry.utils.getRoute('soundscape-sfx/library.json'));
+      const res = await fetch(foundry.utils.getRoute('areasounds-sfx/library.json'));
       const sets = (await res.json()).sets;
       // Any template other than the seeded one — the sandbox only carries audio for that one.
       return sets.find(s => s.name !== resolving && s.files?.length === 1)?.name ?? null;
@@ -239,7 +246,7 @@ try {
     action: 'add',
     sceneIdentifier: scene,
     name: 'VERIFY Crows',
-    files: ['soundscape-sfx/ambient-loops/battle-and-unrest/combat-muffled-1.ogg'],
+    files: ['areasounds-sfx/ambient-loops/battle-and-unrest/combat-muffled-1.ogg'],
     playStyle: 'interval',
     interval: 40,
     intervalVariation: 10,
@@ -329,7 +336,7 @@ try {
     action: 'add',
     sceneIdentifier: scene,
     name: 'VERIFY Crows',
-    files: ['soundscape-sfx/ambient-loops/battle-and-unrest/combat-muffled-1.ogg'],
+    files: ['areasounds-sfx/ambient-loops/battle-and-unrest/combat-muffled-1.ogg'],
   });
   await rejects(
     'a name matching two sets throws and names both ids',
@@ -421,21 +428,30 @@ try {
   if (scene) {
     try {
       await f.evaluate(
-        async ({ name, moduleId, sets }) => {
+        async ({ name, moduleId, legacyId, sets, legacy }) => {
           const s = game.scenes.get(name) || game.scenes.getName(name);
           if (!s) return;
-          if (sets === null) await s.unsetFlag(moduleId, 'sets');
-          else await s.setFlag(moduleId, 'sets', sets);
+          const update = {};
+          if (sets === null) update[`flags.${moduleId}.-=sets`] = null;
+          else update[`flags.${moduleId}.sets`] = sets;
+          if (legacy !== null) update[`flags.${legacyId}`] = legacy;
+          await s.update(update);
         },
-        { name: scene, moduleId: MODULE_ID, sets: snapshot ?? null }
+        {
+          name: scene,
+          moduleId: MODULE_ID,
+          legacyId: LEGACY_ID,
+          sets: snapshot?.sets ?? null,
+          legacy: snapshot?.legacy ?? null,
+        }
       );
-      console.log(`\n[verify-soundscape] restored "${scene}" to its snapshot.`);
+      console.log(`\n[verify-areasounds] restored "${scene}" to its snapshot.`);
     } catch (err) {
-      console.error(`\n[verify-soundscape] ⚠️ RESTORE FAILED for "${scene}": ${err.message}`);
+      console.error(`\n[verify-areasounds] ⚠️ RESTORE FAILED for "${scene}": ${err.message}`);
     }
   }
   await f.dispose();
-  console.log(`\n[verify-soundscape] ${pass} passed, ${fail} failed.`);
+  console.log(`\n[verify-areasounds] ${pass} passed, ${fail} failed.`);
   // The bridge holds a live browser; without this the script hangs instead of exiting.
   process.exit(fail === 0 ? 0 : 1);
 }

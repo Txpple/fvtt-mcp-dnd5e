@@ -361,7 +361,7 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 - **Skills ship in-repo.** `.claude/skills/**` is a tracked deliverable, committed alongside the
   tools. Current skills: `start-session`, `scene-builder`, `stat-block-builder`,
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
-  `playlist-builder`, `soundscape-builder`, `chat-and-narration`, `session-audit`,
+  `playlist-builder`, `area-sounds-builder`, `chat-and-narration`, `session-audit`,
   `bestiary-builder`, `tom-cartos-import`, `token-cutout`, `plot-drift-check`.
   The campaign-facing ones (the two audits, the bestiary, the scene-pack import's standing mode)
   read one DM's facts and taste from a **campaign repo** of their own. That is `campaign.json` +

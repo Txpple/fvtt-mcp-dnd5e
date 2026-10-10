@@ -77,8 +77,8 @@ export const TOOLSETS = {
   tables: ['manage-rolltables', 'roll-on-table'],
   /** Card decks. */
   cards: ['manage-cards'],
-  /** Playlists and the per-scene soundscape. */
-  audio: ['manage-playlists', 'configure-soundscape'],
+  /** Playlists and the per-scene Area Sounds sets. */
+  audio: ['manage-playlists', 'configure-area-sounds'],
   /** The chat log — narration, whispers, roll requests, cards, export. */
   chat: [
     'send-chat-message',

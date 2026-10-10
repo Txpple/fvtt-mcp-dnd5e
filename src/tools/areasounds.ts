@@ -5,29 +5,29 @@ import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
 
 /**
- * configure-soundscape — author the per-scene SOUND SETS of house module #6, fvtt-mod-soundscape.
+ * configure-area-sounds — author the per-scene SOUND SETS of house module #6, fvtt-mod-areasounds.
  *
- * Soundscape fills a gap core Foundry has no shape for: AmbientSound placeables are positional
+ * Area Sounds fills a gap core Foundry has no shape for: AmbientSound placeables are positional
  * single-file loops and Playlists have no concept of *silence with variation*, so neither can do "a
- * crow, then quiet, then a distant dog". A Soundscape set is a POOL of files plus a play style —
+ * crow, then quiet, then a distant dog". An Area Sounds set is a POOL of files plus a play style —
  * interval sets play a random member then wait `interval ± variation` seconds; loop sets overlap
  * members under an equal-power crossfade, which makes a single file a seamless bed with no
  * loop-point authoring. A scene carries any number of them, stacked.
  *
  * One action-based tool rather than a CRUD family: the whole surface is one flag array on one
  * document, and folding the template-library browse in beside it keeps a rarely-used authoring path
- * from costing a second tool description in every session. The page layer (configureSoundscape)
+ * from costing a second tool description in every session. The page layer (configureAreaSounds)
  * owns correctness — the set schema, its clamps, set resolution, and the KEEP+WARN asset check.
  */
 
-export interface SoundscapeToolsOptions {
+export interface AreaSoundsToolsOptions {
   foundry: FoundryBridge;
   logger: Logger;
 }
 
 // Single source of truth for the tool's input contract: the handler parses with this schema and
 // getToolDefinitions() advertises toInputSchema(...) of the same schema.
-const ConfigureSoundscapeSchema = z.object({
+const ConfigureAreaSoundsSchema = z.object({
   action: z
     .enum(['list', 'library', 'add', 'update', 'remove'])
     .describe("list = the scene's sets (and what plays now); library = the template catalog."),
@@ -107,37 +107,37 @@ const ConfigureSoundscapeSchema = z.object({
   active: z.boolean().optional().describe('Default true.'),
 });
 
-export class SoundscapeTools {
+export class AreaSoundsTools {
   private foundry: FoundryBridge;
   private logger: Logger;
 
-  constructor({ foundry, logger }: SoundscapeToolsOptions) {
+  constructor({ foundry, logger }: AreaSoundsToolsOptions) {
     this.foundry = foundry;
-    this.logger = logger.child({ component: 'SoundscapeTools' });
+    this.logger = logger.child({ component: 'AreaSoundsTools' });
   }
 
   getToolDefinitions() {
     return [
       {
-        name: 'configure-soundscape',
+        name: 'configure-area-sounds',
         description:
-          "A scene's soundscape sets (the soundscape companion module: pools of audio files played " +
+          "A scene's sound sets (the Area Sounds companion module: pools of audio files played " +
           'at randomized intervals with silence between, or as a crossfaded bed): list, library, ' +
           'add (from a template or files), update (named fields; files replaces the pool), remove ' +
           '(one or "all"). Out-of-range numbers are clamped and reported; a 404 path is kept and ' +
           'warned; warns when the module is absent. GM-only.',
-        inputSchema: toInputSchema(ConfigureSoundscapeSchema),
+        inputSchema: toInputSchema(ConfigureAreaSoundsSchema),
       },
     ];
   }
 
-  async handleConfigureSoundscape(args: any): Promise<string> {
-    const parsed = ConfigureSoundscapeSchema.parse(args ?? {});
-    this.logger.info('Configuring soundscape', {
+  async handleConfigureAreaSounds(args: any): Promise<string> {
+    const parsed = ConfigureAreaSoundsSchema.parse(args ?? {});
+    this.logger.info('Configuring area sounds', {
       action: parsed.action,
       scene: parsed.sceneIdentifier ?? '(active)',
     });
-    const result = await this.foundry.call('configureSoundscape', parsed);
+    const result = await this.foundry.call('configureAreaSounds', parsed);
 
     switch (result?.action) {
       case 'library':
@@ -161,11 +161,11 @@ const sceneLine = (scene: any): string =>
 
 function formatLibrary(result: any): string {
   if (!result.libraryFound) {
-    return `📚 No Soundscape template library on this world.${warningBlock(result.warnings)}`;
+    return `📚 No Area Sounds template library on this world.${warningBlock(result.warnings)}`;
   }
   const filtered = result.matched !== result.total;
   const head =
-    `📚 Soundscape library — ${result.total} template(s) at ${result.libraryPath}` +
+    `📚 Area Sounds library — ${result.total} template(s) at ${result.libraryPath}` +
     (filtered ? `, ${result.matched} matching` : '');
 
   const sections = result.sections
@@ -190,7 +190,10 @@ function formatLibrary(result: any): string {
     ? `\n  …and ${result.truncated} more — narrow with query/section/category, or raise limit.`
     : '';
 
-  return `${head}${sections}${matches}${more}\n\n  Add one with action "add" + template "<exact name>".`;
+  return (
+    `${head}${sections}${matches}${more}\n\n  Add one with action "add" + template "<exact name>".` +
+    warningBlock(result.warnings)
+  );
 }
 
 function formatList(result: any): string {
@@ -198,7 +201,9 @@ function formatList(result: any): string {
     ? result.module.enabled
       ? `module v${result.module.version ?? '?'} enabled`
       : 'module DISABLED'
-    : 'module NOT INSTALLED';
+    : result.module?.legacy
+      ? `only the OLD module (fvtt-mod-soundscape v${result.module.version ?? '?'})`
+      : 'module NOT INSTALLED';
 
   if (!result.sets.length) {
     return (

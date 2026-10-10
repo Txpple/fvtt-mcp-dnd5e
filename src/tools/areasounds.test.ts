@@ -1,20 +1,20 @@
 /**
- * Unit tests for SoundscapeTools (configure-soundscape).
+ * Unit tests for AreaSoundsTools (configure-area-sounds).
  *
  * The handler owns two things around the bridge call: zod parsing of a wide action-based schema,
  * and the per-action response shaping. The page layer owns the flag writes and is proved live by
- * scripts/verify-soundscape-tooling.mjs, so these tests feed it page-shaped payloads and assert
+ * scripts/verify-areasounds-tooling.mjs, so these tests feed it page-shaped payloads and assert
  * what a caller actually reads back — in particular that an inert set (no module, no files, a
  * closed day/night gate) never formats as a working soundscape.
  */
 
 import { describe, it, expect } from 'vitest';
-import { SoundscapeTools } from './soundscape.js';
+import { AreaSoundsTools } from './areasounds.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
-  const tools = new SoundscapeTools({ foundry, logger: makeLogger() });
+  const tools = new AreaSoundsTools({ foundry, logger: makeLogger() });
   return { tools, calls, foundry };
 }
 
@@ -35,11 +35,11 @@ const listSet = (over: any = {}) => ({
   ...over,
 });
 
-describe('SoundscapeTools.getToolDefinitions', () => {
+describe('AreaSoundsTools.getToolDefinitions', () => {
   it('exposes exactly one action-based tool', () => {
     const { tools } = build();
     const defs = tools.getToolDefinitions();
-    expect(defs.map(d => d.name)).toEqual(['configure-soundscape']);
+    expect(defs.map(d => d.name)).toEqual(['configure-area-sounds']);
     expect(defs[0].inputSchema).toMatchObject({ type: 'object' });
   });
 
@@ -52,36 +52,36 @@ describe('SoundscapeTools.getToolDefinitions', () => {
   });
 });
 
-describe('configure-soundscape input parsing', () => {
+describe('configure-area-sounds input parsing', () => {
   it('forwards the parsed args to the page function under its own name', async () => {
     const { tools, calls } = build({ action: 'list', scene, module: liveModule, sets: [] });
-    await tools.handleConfigureSoundscape({ action: 'list', sceneIdentifier: 'The Hollow' });
-    expect(calls[0][0]).toBe('configureSoundscape');
+    await tools.handleConfigureAreaSounds({ action: 'list', sceneIdentifier: 'The Hollow' });
+    expect(calls[0][0]).toBe('configureAreaSounds');
     expect(calls[0][1]).toMatchObject({ action: 'list', sceneIdentifier: 'The Hollow' });
   });
 
   it('applies the documented defaults', async () => {
     const { tools, calls } = build({ action: 'library', libraryFound: false, warnings: [] });
-    await tools.handleConfigureSoundscape({ action: 'library' });
+    await tools.handleConfigureAreaSounds({ action: 'library' });
     expect(calls[0][1]).toMatchObject({ limit: 40, verifyFiles: false });
   });
 
   it('rejects an unknown action rather than passing it through', async () => {
     const { tools } = build();
-    await expect(tools.handleConfigureSoundscape({ action: 'destroy' })).rejects.toThrow();
+    await expect(tools.handleConfigureAreaSounds({ action: 'destroy' })).rejects.toThrow();
   });
 
   it('rejects an out-of-range limit', async () => {
     const { tools } = build();
     await expect(
-      tools.handleConfigureSoundscape({ action: 'library', limit: 5000 })
+      tools.handleConfigureAreaSounds({ action: 'library', limit: 5000 })
     ).rejects.toThrow();
   });
 
   it('rejects a section outside the two library sections', async () => {
     const { tools } = build();
     await expect(
-      tools.handleConfigureSoundscape({ action: 'library', section: 'Music' })
+      tools.handleConfigureAreaSounds({ action: 'library', section: 'Music' })
     ).rejects.toThrow();
   });
 });
@@ -95,7 +95,7 @@ describe('action list', () => {
       sets: [listSet(), listSet({ id: 'set2', name: 'Wind', wouldPlayNow: false })],
       warnings: [],
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'list' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'list' });
     expect(out).toContain('2 sound set(s) on The Hollow (sc1) — the ACTIVE scene, darkness 0.9');
     expect(out).toContain('1 would be playing now');
     expect(out).toContain('▶ "Wolf Howls" (set1)');
@@ -117,7 +117,7 @@ describe('action list', () => {
       ],
       warnings: [],
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'list' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'list' });
     expect(out).toContain('day only');
     expect(out).toContain('idle: gated to day (scene darkness 0.9)');
   });
@@ -131,7 +131,7 @@ describe('action list', () => {
       sets: [listSet({ missingFiles: ['gone.ogg'] })],
       warnings: [],
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'list', verifyFiles: true });
+    const out = await tools.handleConfigureAreaSounds({ action: 'list', verifyFiles: true });
     expect(out).toContain('1 missing file(s): gone.ogg');
     expect(out).not.toContain('pass verifyFiles');
   });
@@ -145,7 +145,7 @@ describe('action list', () => {
       sets: [listSet()],
       warnings: [],
     });
-    expect(await tools.handleConfigureSoundscape({ action: 'list' })).toContain(
+    expect(await tools.handleConfigureAreaSounds({ action: 'list' })).toContain(
       'pass verifyFiles to HEAD-check the pools'
     );
   });
@@ -159,12 +159,12 @@ describe('action list', () => {
       sets: [listSet()],
       warnings: [],
     });
-    expect(await tools.handleConfigureSoundscape({ action: 'list' })).toContain('DUCKED');
+    expect(await tools.handleConfigureAreaSounds({ action: 'list' })).toContain('DUCKED');
   });
 
   it('points an empty scene at the library instead of reporting a bare zero', async () => {
     const { tools } = build({ action: 'list', scene, module: liveModule, sets: [], warnings: [] });
-    const out = await tools.handleConfigureSoundscape({ action: 'list' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'list' });
     expect(out).toContain('No sound sets on The Hollow');
     expect(out).toContain('action "library"');
   });
@@ -176,9 +176,9 @@ describe('action list', () => {
       scene,
       module: { installed: false, enabled: false, version: null },
       sets: [listSet()],
-      warnings: ['the "fvtt-mod-soundscape" module is NOT INSTALLED in this world'],
+      warnings: ['the "fvtt-mod-areasounds" module is NOT INSTALLED in this world'],
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'list' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'list' });
     expect(out).toContain('module NOT INSTALLED');
     expect(out).toContain('⚠️');
   });
@@ -191,14 +191,29 @@ describe('action list', () => {
       sets: [listSet()],
       warnings: [],
     });
-    expect(await tools.handleConfigureSoundscape({ action: 'list' })).toContain('module DISABLED');
+    expect(await tools.handleConfigureAreaSounds({ action: 'list' })).toContain('module DISABLED');
+  });
+
+  // The pre-rename module plays only the old flag scope, so it is not "installed" for these sets.
+  it('names the old module when only the pre-rename one runs', async () => {
+    const { tools } = build({
+      action: 'list',
+      scene,
+      module: { installed: false, enabled: false, version: '1.4.0', legacy: true },
+      sets: [listSet()],
+      warnings: ['this world still runs the module under its old name'],
+    });
+    const out = await tools.handleConfigureAreaSounds({ action: 'list' });
+    expect(out).toContain('only the OLD module (fvtt-mod-soundscape v1.4.0)');
+    expect(out).not.toContain('NOT INSTALLED');
+    expect(out).toContain('old name');
   });
 });
 
 describe('action library', () => {
   const libraryResult = {
     action: 'library',
-    libraryPath: 'soundscape-sfx/library.json',
+    libraryPath: 'areasounds-sfx/library.json',
     libraryFound: true,
     total: 398,
     matched: 2,
@@ -225,7 +240,7 @@ describe('action library', () => {
 
   it('prints the taxonomy, the matches, and how to use one', async () => {
     const { tools } = build(libraryResult);
-    const out = await tools.handleConfigureSoundscape({ action: 'library', query: 'tavern' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'library', query: 'tavern' });
     expect(out).toContain('398 template(s)');
     expect(out).toContain('2 matching');
     expect(out).toContain('Ambient Loops (112): Interiors 12');
@@ -237,22 +252,33 @@ describe('action library', () => {
 
   it('names the truncation instead of quietly cutting the list', async () => {
     const { tools } = build({ ...libraryResult, matched: 90, truncated: 50 });
-    expect(await tools.handleConfigureSoundscape({ action: 'library' })).toContain('…and 50 more');
+    expect(await tools.handleConfigureAreaSounds({ action: 'library' })).toContain('…and 50 more');
   });
 
   it('does not claim a filter when everything matched', async () => {
     const { tools } = build({ ...libraryResult, matched: 398 });
-    expect(await tools.handleConfigureSoundscape({ action: 'library' })).not.toContain('matching');
+    expect(await tools.handleConfigureAreaSounds({ action: 'library' })).not.toContain('matching');
+  });
+
+  it('passes on a warning from a found library (the pre-rename path)', async () => {
+    const { tools } = build({
+      ...libraryResult,
+      libraryPath: 'soundscape-sfx/library.json',
+      warnings: ['no library at "areasounds-sfx/library.json"; read the pre-rename one'],
+    });
+    const out = await tools.handleConfigureAreaSounds({ action: 'library' });
+    expect(out).toContain('at soundscape-sfx/library.json');
+    expect(out).toContain('read the pre-rename one');
   });
 
   it('reports an absent library as absent, with the warning', async () => {
     const { tools } = build({
       action: 'library',
       libraryFound: false,
-      warnings: ['no template library at "soundscape-sfx/library.json"'],
+      warnings: ['no template library at "areasounds-sfx/library.json"'],
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'library' });
-    expect(out).toContain('No Soundscape template library');
+    const out = await tools.handleConfigureAreaSounds({ action: 'library' });
+    expect(out).toContain('No Area Sounds template library');
     expect(out).toContain('no template library at');
   });
 });
@@ -266,7 +292,7 @@ describe('action add', () => {
       id: 'new1',
       name: 'Busy Tavern',
       active: true,
-      files: ['soundscape-sfx/ambient-loops/interiors/tavern.ogg'],
+      files: ['areasounds-sfx/ambient-loops/interiors/tavern.ogg'],
       playStyle: 'loop',
       volume: 0.8,
       whenToPlay: 'always',
@@ -281,7 +307,7 @@ describe('action add', () => {
 
   it('names the template it copied and the resulting set', async () => {
     const { tools } = build({ ...added, fromTemplate: 'Busy Tavern' });
-    const out = await tools.handleConfigureSoundscape({ action: 'add', template: 'Busy Tavern' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'add', template: 'Busy Tavern' });
     expect(out).toContain(
       'Added sound set "Busy Tavern" (new1) from library template "Busy Tavern"'
     );
@@ -291,7 +317,7 @@ describe('action add', () => {
 
   it('reports a clamp instead of applying it silently', async () => {
     const { tools } = build({ ...added, clamped: ['interval 9000 → 3600'] });
-    expect(await tools.handleConfigureSoundscape({ action: 'add', template: 'x' })).toContain(
+    expect(await tools.handleConfigureAreaSounds({ action: 'add', template: 'x' })).toContain(
       "clamped to the module's limits: interval 9000 → 3600"
     );
   });
@@ -301,7 +327,7 @@ describe('action add', () => {
       ...added,
       set: { ...added.set, whenToPlay: 'night', wouldPlayNow: false },
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'add', template: 'x' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'add', template: 'x' });
     expect(out).toContain('night only');
     expect(out).toContain('Not playing right now');
   });
@@ -311,7 +337,7 @@ describe('action add', () => {
       ...added,
       set: { ...added.set, active: false, wouldPlayNow: false },
     });
-    expect(await tools.handleConfigureSoundscape({ action: 'add', template: 'x' })).toContain(
+    expect(await tools.handleConfigureAreaSounds({ action: 'add', template: 'x' })).toContain(
       'INACTIVE'
     );
   });
@@ -321,7 +347,7 @@ describe('action add', () => {
       ...added,
       warnings: ['Supplied file "missing.ogg" was not found on the server'],
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'add', template: 'x' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'add', template: 'x' });
     expect(out).toContain('was not found on the server');
   });
 });
@@ -350,7 +376,7 @@ describe('action update', () => {
 
   it('lists the fields that actually changed', async () => {
     const { tools } = build(updated);
-    const out = await tools.handleConfigureSoundscape({
+    const out = await tools.handleConfigureAreaSounds({
       action: 'update',
       setIdentifier: 'set1',
       volume: 0.4,
@@ -363,7 +389,7 @@ describe('action update', () => {
   it('says nothing changed rather than implying a write', async () => {
     const { tools } = build({ ...updated, changed: [] });
     expect(
-      await tools.handleConfigureSoundscape({
+      await tools.handleConfigureAreaSounds({
         action: 'update',
         setIdentifier: 'set1',
         volume: 0.4,
@@ -380,7 +406,7 @@ describe('action remove', () => {
       removed: [{ id: 'set1', name: 'Wolf Howls' }],
       remaining: 1,
     });
-    const out = await tools.handleConfigureSoundscape({
+    const out = await tools.handleConfigureAreaSounds({
       action: 'remove',
       setIdentifier: 'Wolf Howls',
     });
@@ -399,7 +425,7 @@ describe('action remove', () => {
       ],
       remaining: 0,
     });
-    const out = await tools.handleConfigureSoundscape({ action: 'remove', setIdentifier: 'all' });
+    const out = await tools.handleConfigureAreaSounds({ action: 'remove', setIdentifier: 'all' });
     expect(out).toContain('Removed 2 sound set(s)');
     expect(out).toContain('0 set(s) remain');
   });
@@ -407,7 +433,7 @@ describe('action remove', () => {
   it('reports an empty scene as nothing to remove', async () => {
     const { tools } = build({ action: 'remove', scene, removed: [], remaining: 0 });
     expect(
-      await tools.handleConfigureSoundscape({ action: 'remove', setIdentifier: 'all' })
+      await tools.handleConfigureAreaSounds({ action: 'remove', setIdentifier: 'all' })
     ).toContain('Nothing to remove');
   });
 });

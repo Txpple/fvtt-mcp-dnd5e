@@ -60,7 +60,7 @@ Say it in plain words; the matching skill calls the tools.
 | `scene-builder` | a map image into a ready-to-play scene: walls, lights, mood, playlist, journal |
 | `journal-builder` | quests, handouts, lore, boxed text, GM notes, recaps, linked to each other |
 | `table-builder` · `cards-builder` · `playlist-builder` | roll tables, card decks, music and ambience |
-| `soundscape-builder` | atmospheric sound for a scene (companion module, below) |
+| `area-sounds-builder` | atmospheric sound for a scene (companion module, below) |
 | `tom-cartos-import` | a scene-pack module into your world: scenes, walls, lights, teleporters, legend |
 | `token-cutout` | a cut-out token image onto an actor |
 | `chat-and-narration` | narration, NPC dialogue, whispers, roll requests, item cards; export or prune the log |
@@ -99,8 +99,8 @@ A list answers one line per record, a `get` answers JSON, a miss is an error, an
 is refused by name. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
 lets a registration advertise a subset (`chat,combat` is 11 tools instead of 80).
 
-Two tools need a companion module and warn when it is absent: `configure-soundscape`
-([Open Roll 5e: Soundscape](https://github.com/Txpple/fvtt-mod-soundscape)) and `set-landing-scene`
+Two tools need a companion module and warn when it is absent: `configure-area-sounds`
+([Open Roll 5e: Area Sounds](https://github.com/Txpple/fvtt-mod-areasounds)) and `set-landing-scene`
 ([Open Roll 5e: Open Server](https://github.com/Txpple/fvtt-mod-openserver)).
 
 ## Hosts

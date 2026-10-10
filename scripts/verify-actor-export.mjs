@@ -1,4 +1,4 @@
-// LIVE acceptance for manage-actors export — driven through the TOOL REGISTRY (the soundscape lesson:
+// LIVE acceptance for manage-actors export — driven through the TOOL REGISTRY (the area-sounds lesson:
 // a tool is done when the FORMATTED output is right, not when the page function returns).
 //
 // Proves the v14 gotcha fix: toObject() pre-defines flags.exportSource as a getter-only

@@ -23,7 +23,7 @@ import {
   getSceneDimensions,
   prepareSceneShot,
 } from './scenes.js';
-import { configureSoundscape } from './soundscape.js';
+import { configureAreaSounds } from './areasounds.js';
 import {
   createSceneTiles,
   listSceneTiles,
@@ -200,8 +200,8 @@ const api = {
   setLandingScene,
   getSceneDimensions,
   prepareSceneShot,
-  // house module #6 (fvtt-mod-soundscape): per-scene atmospheric sound sets, flags-only
-  configureSoundscape,
+  // house module #6 (fvtt-mod-areasounds): per-scene atmospheric sound sets, flags-only
+  configureAreaSounds,
   // scene placeables (per-type CRUD over the shared kernel, src/page/placeables/**)
   createSceneTiles,
   listSceneTiles,

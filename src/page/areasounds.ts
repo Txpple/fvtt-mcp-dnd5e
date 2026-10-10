@@ -1,6 +1,6 @@
-// Page-side authoring for house module #6, fvtt-mod-soundscape — per-scene atmospheric SOUND SETS.
+// Page-side authoring for house module #6, fvtt-mod-areasounds — per-scene atmospheric SOUND SETS.
 //
-// WHAT THIS OWNS: a scene's `flags["fvtt-mod-soundscape"].sets` array. Soundscape is flags-only by
+// WHAT THIS OWNS: a scene's `flags["fvtt-mod-areasounds"].sets` array. Area Sounds is flags-only by
 // design ("MCP-authorable by construction" — its design.md), so the FLAG is the contract and this
 // writes it directly rather than going through `game.modules.get(...).api`. Two reasons that is the
 // right seam: the array is the documented data shape, and a direct write still authors correctly
@@ -12,7 +12,7 @@
 // what it clamped, which is the half a tool owes a caller that a UI does not. If that module's
 // schema ever gains a field, this is the file that has to follow.
 //
-// Set shape (fvtt-mod-soundscape design.md, "Data shape — flags-only"):
+// Set shape (fvtt-mod-areasounds design.md, "Data shape — flags-only"):
 //   { id, name, active, files[], playStyle: "interval"|"loop", interval, intervalVariation,
 //     crossfade, volume, volumeVariation, pitchVariation, whenToPlay: "always"|"day"|"night" }
 //
@@ -25,19 +25,29 @@ import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveSceneStrict } from './scenes.js';
 import { ambiguous, invalid, notFound } from './errors.js';
 
-export const SOUNDSCAPE_MODULE_ID = 'fvtt-mod-soundscape';
+export const AREASOUNDS_MODULE_ID = 'fvtt-mod-areasounds';
+
+/**
+ * The module's id and flag scope before its 2.0.0 rename (it was "Soundscape"). A world whose GM
+ * has not loaded 2.0.0 yet still keeps its sets here; the module moves them on that first load.
+ * Read as a fallback, never written (see `readSetsSource` / `setsUpdate`).
+ */
+export const LEGACY_MODULE_ID = 'fvtt-mod-soundscape';
 
 /**
  * The prebaked template manifest, at the Data ROOT rather than inside the module folder — Foundry's
  * installPackage clean-reinstalls `modules/<id>/` on every update and would wipe a library stored
- * there. Written by fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs.
+ * there. Written by fvtt-mod-areasounds-sfx/tools/upload-areasounds-library.mjs.
  */
-export const SOUNDSCAPE_LIBRARY_PATH = 'soundscape-sfx/library.json';
+export const AREASOUNDS_LIBRARY_PATH = 'areasounds-sfx/library.json';
+
+/** Where the library lived before the rename; tried once when the current path has none. */
+export const LEGACY_LIBRARY_PATH = 'soundscape-sfx/library.json';
 
 /** Darkness at or above which a scene counts as night (the module's day/night gate). */
 export const NIGHT_DARKNESS = 0.5;
 
-export interface SoundscapeSet {
+export interface AreaSoundsSet {
   id: string;
   name: string;
   active: boolean;
@@ -53,7 +63,7 @@ export interface SoundscapeSet {
 }
 
 /** A library template is a set plus the two taxonomy fields the picker cascades on. */
-export interface SoundscapeTemplate extends Partial<SoundscapeSet> {
+export interface AreaSoundsTemplate extends Partial<AreaSoundsSet> {
   name: string;
   section?: string | undefined;
   category?: string | undefined;
@@ -75,8 +85,8 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
  * silently storing something the caller did not ask for. `id` is generated when absent, in the
  * module's own format (base-36, 10 chars).
  */
-export function normalizeSoundscapeSet(raw: any = {}): {
-  set: SoundscapeSet;
+export function normalizeAreaSoundsSet(raw: any = {}): {
+  set: AreaSoundsSet;
   clamped: string[];
 } {
   const clamped: string[] = [];
@@ -124,13 +134,13 @@ export function normalizeSoundscapeSet(raw: any = {}): {
 }
 
 /** Does this set's whenToPlay gate admit the given darkness? (day < 0.5 ≤ night) */
-export function gateAllows(set: Pick<SoundscapeSet, 'whenToPlay'>, darkness: number): boolean {
+export function gateAllows(set: Pick<AreaSoundsSet, 'whenToPlay'>, darkness: number): boolean {
   if (set.whenToPlay === 'always') return true;
   return (set.whenToPlay === 'night') === darkness >= NIGHT_DARKNESS;
 }
 
 /** One-line timing summary, matching how the module's own scene-config tab reads. */
-export function describeTiming(set: SoundscapeSet): string {
+export function describeTiming(set: AreaSoundsSet): string {
   return set.playStyle === 'loop'
     ? `loop · ${set.crossfade}s crossfade`
     : `every ${set.interval} ± ${set.intervalVariation}s`;
@@ -141,7 +151,7 @@ export function describeTiming(set: SoundscapeSet): string {
  * Ambiguity THROWS rather than picking one — two sets can legitimately share a name, and silently
  * editing the wrong one is worse than an error that names both ids.
  */
-export function resolveSet(sets: SoundscapeSet[], identifier: string): SoundscapeSet {
+export function resolveSet(sets: AreaSoundsSet[], identifier: string): AreaSoundsSet {
   const byId = sets.find(s => s.id === identifier);
   if (byId) return byId;
   const exact = sets.filter(s => s.name === identifier);
@@ -170,13 +180,13 @@ export function resolveSet(sets: SoundscapeSet[], identifier: string): Soundscap
  * that START with the query first, which is what a caller typing a half-remembered name wants.
  */
 export function matchTemplates(
-  templates: SoundscapeTemplate[],
+  templates: AreaSoundsTemplate[],
   filters: {
     query?: string | undefined;
     section?: string | undefined;
     category?: string | undefined;
   }
-): SoundscapeTemplate[] {
+): AreaSoundsTemplate[] {
   const q = (filters.query ?? '').trim().toLowerCase();
   const section = (filters.section ?? '').trim().toLowerCase();
   const category = (filters.category ?? '').trim().toLowerCase();
@@ -193,7 +203,7 @@ export function matchTemplates(
   });
 
   if (!q) return hits;
-  const rank = (t: SoundscapeTemplate): number => {
+  const rank = (t: AreaSoundsTemplate): number => {
     const n = t.name.toLowerCase();
     if (n === q) return 0;
     if (n.startsWith(q)) return 1;
@@ -213,10 +223,10 @@ export function matchTemplates(
  * error below tells the caller to narrow — so narrowing has to actually work.
  */
 export function resolveTemplate(
-  templates: SoundscapeTemplate[],
+  templates: AreaSoundsTemplate[],
   template: string,
   filters: { section?: string | undefined; category?: string | undefined } = {}
-): SoundscapeTemplate {
+): AreaSoundsTemplate {
   const scoped = matchTemplates(templates, filters);
   const narrowed = scoped.length !== templates.length;
   const wanted = template.trim().toLowerCase();
@@ -250,7 +260,7 @@ export function resolveTemplate(
 }
 
 /** section → category → count, for orienting a caller who has not named a filter yet. */
-export function summarizeLibrary(templates: SoundscapeTemplate[]): Array<{
+export function summarizeLibrary(templates: AreaSoundsTemplate[]): Array<{
   section: string;
   total: number;
   categories: Array<{ category: string; count: number }>;
@@ -278,12 +288,43 @@ export function summarizeLibrary(templates: SoundscapeTemplate[]): Array<{
 /*  Page-coupled paths                                                                            */
 /* ---------------------------------------------------------------------------------------------- */
 
-const rawSets = (scene: any): any[] => scene?.flags?.[SOUNDSCAPE_MODULE_ID]?.sets ?? [];
+/**
+ * Where a scene's sets are: the current scope, else the pre-rename one (`legacy`), else none.
+ * The legacy fallback covers a world whose GM has not loaded Area Sounds 2.0.0 yet; the next
+ * write through `setsUpdate` moves the sets over, so the MCP never forks the data.
+ */
+export function readSetsSource(flags: any): { raw: any[]; legacy: boolean } {
+  const current = flags?.[AREASOUNDS_MODULE_ID]?.sets;
+  if (Array.isArray(current)) return { raw: current, legacy: false };
+  const old = flags?.[LEGACY_MODULE_ID]?.sets;
+  if (Array.isArray(old)) return { raw: old, legacy: true };
+  return { raw: [], legacy: false };
+}
+
+/**
+ * The one scene update that stores `sets`: always under the current scope, and when they were read
+ * from the legacy scope, that scope is unset in the same update. File paths are copied unchanged —
+ * a `soundscape-sfx/…` path may be a user's own audio folder, and the library repo's remap script
+ * repoints the house library's paths.
+ */
+export function setsUpdate(sets: AreaSoundsSet[], legacy: boolean): Record<string, unknown> {
+  const update: Record<string, unknown> = { [`flags.${AREASOUNDS_MODULE_ID}.sets`]: sets };
+  if (legacy) update[`flags.-=${LEGACY_MODULE_ID}`] = null;
+  return update;
+}
 
 /** Every set on a scene, repaired. Clamp reports are dropped here — reads never rewrite anything. */
-function readSets(scene: any): SoundscapeSet[] {
-  return rawSets(scene).map((s: any) => normalizeSoundscapeSet(s).set);
+function readSets(scene: any): { sets: AreaSoundsSet[]; legacy: boolean } {
+  const { raw, legacy } = readSetsSource(scene?.flags);
+  return { sets: raw.map((s: any) => normalizeAreaSoundsSet(s).set), legacy };
 }
+
+const LEGACY_READ_NOTE =
+  `these sets are still under the old "${LEGACY_MODULE_ID}" flag scope (the GM has not loaded ` +
+  'Area Sounds 2.0.0 on this world yet)';
+const LEGACY_MOVED_NOTE =
+  `moved this scene's sets from the old "${LEGACY_MODULE_ID}" flag scope to ` +
+  `"${AREASOUNDS_MODULE_ID}" (file paths unchanged)`;
 
 /** Scene darkness on v14's environment path, with the legacy fallback (matches the module). */
 function darknessOf(scene: any): number {
@@ -298,44 +339,84 @@ function moduleWarnings(): {
   installed: boolean;
   enabled: boolean;
   version: string | null;
+  legacy: boolean;
   warnings: string[];
 } {
-  const mod = (globalThis as any).game?.modules?.get?.(SOUNDSCAPE_MODULE_ID);
+  const modules = (globalThis as any).game?.modules;
+  const mod = modules?.get?.(AREASOUNDS_MODULE_ID);
+  const old = mod ? undefined : modules?.get?.(LEGACY_MODULE_ID);
   const warnings: string[] = [];
-  if (!mod) {
+  if (!mod && old?.active) {
     warnings.push(
-      `the "${SOUNDSCAPE_MODULE_ID}" module is NOT INSTALLED in this world — the sets are written ` +
-        'but NOTHING plays them. Install it (https://github.com/Txpple/fvtt-mod-soundscape).'
+      `this world still runs the module under its old name, "${LEGACY_MODULE_ID}", which gets no ` +
+        'more updates and does not read sets written here. Update it to Area Sounds ' +
+        `("${AREASOUNDS_MODULE_ID}", https://github.com/Txpple/fvtt-mod-areasounds); its first GM ` +
+        'load moves the old sets over.'
+    );
+  } else if (!mod) {
+    warnings.push(
+      `the "${AREASOUNDS_MODULE_ID}" module is NOT INSTALLED in this world — the sets are written ` +
+        'but NOTHING plays them. Install it (https://github.com/Txpple/fvtt-mod-areasounds).'
     );
   } else if (!mod.active) {
     warnings.push(
-      `the "${SOUNDSCAPE_MODULE_ID}" module is installed but DISABLED — the sets are written but ` +
+      `the "${AREASOUNDS_MODULE_ID}" module is installed but DISABLED — the sets are written but ` +
         'nothing plays them. Enable it in Manage Modules.'
     );
   }
   return {
     installed: !!mod,
     enabled: !!mod?.active,
-    version: mod?.version ?? null,
+    version: (mod ?? (old?.active ? old : undefined))?.version ?? null,
+    legacy: !mod && !!old?.active,
     warnings,
   };
 }
 
-let libraryCache: SoundscapeTemplate[] | null | undefined;
+interface Library {
+  templates: AreaSoundsTemplate[];
+  path: string;
+  warnings: string[];
+}
 
-/** Fetch (and memoize) the Data-root template manifest. Null when it is absent or unreadable. */
-async function loadLibrary(): Promise<SoundscapeTemplate[] | null> {
-  if (libraryCache !== undefined) return libraryCache;
+let libraryCache: Library | null | undefined;
+
+/** One Data-root manifest's `sets`, or null when it is absent or unreadable. */
+async function fetchLibrary(path: string): Promise<AreaSoundsTemplate[] | null> {
   try {
     const getRoute = (globalThis as any).foundry?.utils?.getRoute;
-    const url =
-      typeof getRoute === 'function' ? getRoute(SOUNDSCAPE_LIBRARY_PATH) : SOUNDSCAPE_LIBRARY_PATH;
+    const url = typeof getRoute === 'function' ? getRoute(path) : path;
     const res = await fetch(url, { cache: 'no-cache' });
     const json = res.ok ? await res.json() : null;
-    libraryCache = Array.isArray(json?.sets) ? (json.sets as SoundscapeTemplate[]) : null;
+    return Array.isArray(json?.sets) ? (json.sets as AreaSoundsTemplate[]) : null;
   } catch {
-    libraryCache = null;
+    return null;
   }
+}
+
+/**
+ * Fetch (and memoize) the template manifest: the current path, else the pre-rename one once (a box
+ * whose library has not been republished), whose paths are used as they are. Null when neither.
+ */
+async function loadLibrary(): Promise<Library | null> {
+  if (libraryCache !== undefined) return libraryCache;
+  const current = await fetchLibrary(AREASOUNDS_LIBRARY_PATH);
+  if (current) {
+    libraryCache = { templates: current, path: AREASOUNDS_LIBRARY_PATH, warnings: [] };
+    return libraryCache;
+  }
+  const legacy = await fetchLibrary(LEGACY_LIBRARY_PATH);
+  libraryCache = legacy
+    ? {
+        templates: legacy,
+        path: LEGACY_LIBRARY_PATH,
+        warnings: [
+          `no library at "${AREASOUNDS_LIBRARY_PATH}"; read the pre-rename one at ` +
+            `"${LEGACY_LIBRARY_PATH}" (its file paths as they are). Republish it with ` +
+            'fvtt-mod-areasounds-sfx/tools/upload-areasounds-library.mjs.',
+        ],
+      }
+    : null;
   return libraryCache;
 }
 
@@ -378,12 +459,21 @@ function sceneSummary(scene: any): { id: string; name: string; active: boolean; 
   };
 }
 
-/** Persist the whole array in one write; the module's updateScene hook re-syncs every client. */
-async function persist(scene: any, sets: SoundscapeSet[]): Promise<void> {
-  await scene.setFlag(SOUNDSCAPE_MODULE_ID, 'sets', sets);
+/**
+ * Persist the whole array in one write; the module's updateScene hook re-syncs every client. A
+ * plain update rather than setFlag, which refuses a scope whose module is not active.
+ */
+async function persist(scene: any, sets: AreaSoundsSet[], legacy: boolean): Promise<void> {
+  await scene.update(setsUpdate(sets, legacy));
 }
 
-export interface ConfigureSoundscapeArgs {
+/** The module status a result carries; `legacy` = only the pre-rename module runs here. */
+function moduleSummary(status: ReturnType<typeof moduleWarnings>) {
+  const { installed, enabled, version, legacy } = status;
+  return { installed, enabled, version, legacy };
+}
+
+export interface ConfigureAreaSoundsArgs {
   action: 'list' | 'library' | 'add' | 'update' | 'remove';
   sceneIdentifier?: string | undefined;
   setIdentifier?: string | undefined;
@@ -422,7 +512,7 @@ const SET_FIELDS = [
 ] as const;
 
 /** Only the set fields the caller actually named — absent means "leave alone", not "reset". */
-function patchFrom(args: ConfigureSoundscapeArgs): Record<string, unknown> {
+function patchFrom(args: ConfigureAreaSoundsArgs): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   for (const field of SET_FIELDS) {
     if (args[field] !== undefined) patch[field] = args[field];
@@ -431,41 +521,43 @@ function patchFrom(args: ConfigureSoundscapeArgs): Record<string, unknown> {
 }
 
 /**
- * configure-soundscape — read and author a scene's Soundscape sound sets, and browse the prebaked
+ * configure-area-sounds — read and author a scene's Area Sounds sound sets, and browse the prebaked
  * template library that feeds them.
  */
-export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
+export async function configureAreaSounds(args: ConfigureAreaSoundsArgs) {
   const action = args?.action;
 
   // ---- library: a read over the Data-root manifest; touches no scene ---------------------------
   if (action === 'library') {
-    const templates = await loadLibrary();
-    if (!templates) {
+    const library = await loadLibrary();
+    if (!library) {
       return {
         action,
-        libraryPath: SOUNDSCAPE_LIBRARY_PATH,
+        libraryPath: AREASOUNDS_LIBRARY_PATH,
         libraryFound: false,
         total: 0,
         sections: [],
         matches: [],
         warnings: [
-          `no template library at "${SOUNDSCAPE_LIBRARY_PATH}" — sets can still be authored by ` +
-            'passing explicit `files` paths. Publish one with fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs.',
+          `no template library at "${AREASOUNDS_LIBRARY_PATH}" — sets can still be authored by ` +
+            'passing explicit `files` paths. Publish one with fvtt-mod-areasounds-sfx/tools/upload-areasounds-library.mjs.',
         ],
       };
     }
+    const { templates } = library;
     const limit = Math.max(1, Math.min(200, args.limit ?? 40));
     const hits = matchTemplates(templates, args);
     return {
       action,
-      libraryPath: SOUNDSCAPE_LIBRARY_PATH,
+      libraryPath: library.path,
       libraryFound: true,
+      warnings: library.warnings,
       total: templates.length,
       matched: hits.length,
       truncated: Math.max(0, hits.length - limit),
       sections: summarizeLibrary(templates),
       matches: hits.slice(0, limit).map(t => {
-        const { set } = normalizeSoundscapeSet(t);
+        const { set } = normalizeAreaSoundsSet(t);
         return {
           name: t.name,
           section: t.section ?? 'Interval Sounds',
@@ -482,7 +574,9 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
   const scene = targetScene(args?.sceneIdentifier);
   const status = moduleWarnings();
   const darkness = darknessOf(scene);
-  const sets = readSets(scene);
+  const { sets, legacy } = readSets(scene);
+  // A write moves legacy-scope sets to the current scope (setsUpdate); a read only says where they are.
+  const moved = legacy ? [LEGACY_MOVED_NOTE] : [];
 
   // ---- list -----------------------------------------------------------------------------------
   if (action === 'list') {
@@ -519,11 +613,11 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
     return {
       action,
       scene: sceneSummary(scene),
-      module: { installed: status.installed, enabled: status.enabled, version: status.version },
+      module: moduleSummary(status),
       combatDucking,
       filesVerified: !!args.verifyFiles,
       sets: rows,
-      warnings: status.warnings,
+      warnings: legacy ? [...status.warnings, LEGACY_READ_NOTE] : status.warnings,
     };
   }
 
@@ -536,44 +630,45 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
       if (!sets.length) {
         return { action, scene: sceneSummary(scene), removed: [], remaining: 0, warnings: [] };
       }
-      await persist(scene, []);
+      await persist(scene, [], legacy);
       return {
         action,
         scene: sceneSummary(scene),
         removed: sets.map(s => ({ id: s.id, name: s.name })),
         remaining: 0,
-        warnings: [],
+        warnings: moved,
       };
     }
     const set = resolveSet(sets, identifier);
     const kept = sets.filter(s => s.id !== set.id);
-    await persist(scene, kept);
+    await persist(scene, kept, legacy);
     return {
       action,
       scene: sceneSummary(scene),
       removed: [{ id: set.id, name: set.name }],
       remaining: kept.length,
-      warnings: [],
+      warnings: moved,
     };
   }
 
   // ---- add / update ---------------------------------------------------------------------------
   const patch = patchFrom(args);
-  const warnings = [...status.warnings];
+  const warnings = [...status.warnings, ...moved];
   let base: Record<string, unknown>;
   let fromTemplate: string | undefined;
-  let before: SoundscapeSet | undefined;
+  let before: AreaSoundsSet | undefined;
 
   if (action === 'add') {
     if (args.template) {
-      const templates = await loadLibrary();
-      if (!templates) {
+      const library = await loadLibrary();
+      if (!library) {
         throw invalid(
-          `Cannot add from template: no library at "${SOUNDSCAPE_LIBRARY_PATH}". Pass explicit ` +
-            '`files` instead, or publish a library (fvtt-mod-soundscape-sfx/tools/upload-soundscape-library.mjs).'
+          `Cannot add from template: no library at "${AREASOUNDS_LIBRARY_PATH}". Pass explicit ` +
+            '`files` instead, or publish a library (fvtt-mod-areasounds-sfx/tools/upload-areasounds-library.mjs).'
         );
       }
-      const match = resolveTemplate(templates, args.template, args);
+      warnings.push(...library.warnings);
+      const match = resolveTemplate(library.templates, args.template, args);
       // The taxonomy fields are picker metadata, not part of a scene's set; drop them, and drop the
       // template's id so every copy is its own set (the module's own library picker does the same).
       const { section: _s, category: _c, id: _i, ...template } = match as any;
@@ -615,13 +710,13 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
     for (const f of missing) warnings.push(badAssetWarning('file', f, false));
   }
 
-  const { set, clamped } = normalizeSoundscapeSet(merged);
+  const { set, clamped } = normalizeAreaSoundsSet(merged);
   if (!set.files.length) {
     warnings.push('this set has no files — it will stay silent until audio paths are added.');
   }
 
   const next = before ? sets.map(s => (s.id === set.id ? set : s)) : [...sets, set];
-  await persist(scene, next);
+  await persist(scene, next, legacy);
 
   const changed = before
     ? SET_FIELDS.filter(f => JSON.stringify((before as any)[f]) !== JSON.stringify((set as any)[f]))
@@ -630,7 +725,7 @@ export async function configureSoundscape(args: ConfigureSoundscapeArgs) {
   return {
     action,
     scene: sceneSummary(scene),
-    module: { installed: status.installed, enabled: status.enabled, version: status.version },
+    module: moduleSummary(status),
     fromTemplate,
     set: {
       ...set,
