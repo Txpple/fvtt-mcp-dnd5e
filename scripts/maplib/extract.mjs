@@ -19,6 +19,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { groundTiles, hasNoBackground, stitchTiles } from './mapimage.mjs';
 
 const argv = process.argv.slice(2);
 const opt = (name, def) => {
@@ -44,11 +45,14 @@ const explicit = all('--module');
 const dataRoot = opt('--data-root') ?? null;
 // --scenes <json>: only scenes with these names (an array of names, or of {name, ok} as
 // fa-fetch.mjs writes in fa-fetch-results.json, where only ok entries count).
-const sceneNames = opt('--scenes')
+// Repeatable: a free run's and a premium run's results together.
+const sceneNames = all('--scenes').length
   ? new Set(
-      JSON.parse(fs.readFileSync(opt('--scenes'), 'utf8'))
-        .filter(e => typeof e === 'string' || e.ok !== false)
-        .map(e => (typeof e === 'string' ? e : e.name))
+      all('--scenes').flatMap(f =>
+        JSON.parse(fs.readFileSync(f, 'utf8'))
+          .filter(e => typeof e === 'string' || e.ok !== false)
+          .map(e => (typeof e === 'string' ? e : e.name))
+      )
     )
   : null;
 const dataAssets = new Set();
@@ -467,6 +471,14 @@ for (const { dir: moduleDir, manifest } of modules) {
   const packAssets = new Set();
   const missingAssets = new Set();
   const sceneFolders = [];
+  // A partial run (--scenes, or more FA maps staged since last time) adds to the pack's scene list
+  // instead of replacing it: earlier scenes whose folders are still there are kept.
+  const earlier =
+    !force && fs.existsSync(packJsonPath)
+      ? (JSON.parse(fs.readFileSync(packJsonPath, 'utf8')).sceneFolders ?? []).filter(f =>
+          fs.existsSync(path.join(packDir, f, 'meta.json'))
+        )
+      : [];
 
   for (const s of planned) {
     const sceneDir = path.join(packDir, s.folder);
@@ -591,11 +603,23 @@ for (const { dir: moduleDir, manifest } of modules) {
       files: { scene: 'scene.json', placeables: 'placeables.json', preview: null },
       extractedAt,
     };
-    if (bgAbs && fs.existsSync(bgAbs)) {
+    // A map painted as several ground tiles (FA's Tomb of Horrors: six tiles in a grid, no
+    // background) is stitched into one map.webp, so the library's map and preview show all of it.
+    const ground = hasNoBackground(doc) ? groundTiles(doc) : [];
+    let mapAbs = bgAbs;
+    if (ground.length > 1 && sharp) {
+      const stitched = path.join(sceneDir, 'map.webp');
+      const info = await stitchTiles(sharp, ground, packDir, stitched);
+      if (info) {
+        mapAbs = stitched;
+        meta.map.stitched = info;
+      }
+    }
+    if (mapAbs && fs.existsSync(mapAbs)) {
       // A full-quality copy of the map beside the document (the shared assets/ tree stays the
       // source the import uploads); other levels' backgrounds get their own copy too.
-      const mapFile = `map${path.extname(bgAbs).toLowerCase()}`;
-      fs.copyFileSync(bgAbs, path.join(sceneDir, mapFile));
+      const mapFile = `map${path.extname(mapAbs).toLowerCase()}`;
+      if (mapAbs === bgAbs) fs.copyFileSync(bgAbs, path.join(sceneDir, mapFile));
       meta.files.map = mapFile;
       for (const l of levels) {
         const src = l.background?.src;
@@ -606,10 +630,10 @@ for (const { dir: moduleDir, manifest } of modules) {
         fs.copyFileSync(from, path.join(sceneDir, file));
         (meta.files.levelMaps ??= {})[l._id] = file;
       }
-      const sz = await imageSize(bgAbs);
+      const sz = await imageSize(mapAbs);
       if (sz) meta.map.imagePixels = sz;
-      meta.map.video = VIDEO_RE.test(bgAbs);
-      if (wantPreview && (await makePreview(bgAbs, path.join(sceneDir, 'preview.jpg'), previewPx)))
+      meta.map.video = VIDEO_RE.test(mapAbs);
+      if (wantPreview && (await makePreview(mapAbs, path.join(sceneDir, 'preview.jpg'), previewPx)))
         meta.files.preview = 'preview.jpg';
     }
     fs.writeFileSync(path.join(sceneDir, 'scene.json'), JSON.stringify(doc, null, 2));
@@ -684,8 +708,8 @@ for (const { dir: moduleDir, manifest } of modules) {
         relationships: manifest.relationships ?? null,
         packs: (manifest.packs ?? []).map(p => ({ name: p.name, label: p.label, type: p.type })),
         journals: [...new Set(journalNames)],
-        scenes: sceneFolders.length,
-        sceneFolders,
+        sceneFolders: [...new Set([...earlier, ...sceneFolders])].sort(),
+        scenes: new Set([...earlier, ...sceneFolders]).size,
         assets: packAssets.size + extras.length,
         sceneAssets: packAssets.size,
         extras,

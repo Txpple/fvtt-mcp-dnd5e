@@ -15,6 +15,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import https from 'node:https';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -54,12 +55,59 @@ async function getJson(url) {
   }
 }
 
+/**
+ * One file to dest through node:https, not fetch: undici's fetch kills the process with an internal
+ * assertion when a server ends a socket mid-body under backpressure. A per-process .part name keeps
+ * two runs (free and premium) from writing the same shared file at once; a short or failed body is
+ * retried.
+ */
+function getOnce(url, part, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { timeout: 120_000 }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        resolve(getOnce(new URL(res.headers.location, url).href, part, redirects - 1));
+        return;
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      const out = fs.createWriteStream(part);
+      res.pipe(out);
+      res.on('error', reject);
+      out.on('error', reject);
+      out.on('finish', resolve);
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+  });
+}
+async function download(url, dest, size) {
+  const part = `${dest}.${process.pid}.part`;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await getOnce(url, part);
+      if (size && fs.statSync(part).size !== size)
+        throw new Error(`short file (${fs.statSync(part).size} of ${size} bytes)`);
+      fs.renameSync(part, dest);
+      return;
+    } catch (e) {
+      fs.rmSync(part, { force: true });
+      if (attempt >= 4) throw new Error(`${path.basename(dest)}: ${e.message}`);
+      await new Promise(r => setTimeout(r, 3000 * attempt));
+    }
+  }
+}
+
 // ---------- login ----------
 let userId = fs.existsSync(idFile) ? fs.readFileSync(idFile, 'utf8').trim() : null;
 if (flag('--login')) {
   userId = randomUUID();
   fs.writeFileSync(idFile, userId);
-  const url = `https://www.patreon.com/oauth2/authorize?response_type=code&client_id=${PATREON_CLIENT}&redirect_uri=${encodeURIComponent(`${API.replace('/api/v1', '')}/api/v1/patreon`)}&scope=identity&state=${userId}`;
+  // Built exactly as FA's module builds it (redirect_uri unencoded).
+  const url = `https://www.patreon.com/oauth2/authorize?response_type=code&client_id=${PATREON_CLIENT}&redirect_uri=${API}/patreon&scope=identity&state=${userId}`;
   console.log(
     `Open this in your browser while signed in to Patreon, and approve:\n\n${url}\n\nThen run fa-fetch again; it checks the link before downloading.`
   );
@@ -115,6 +163,7 @@ fs.writeFileSync(path.join(staging, 'fa-maps.json'), JSON.stringify(list, null, 
 const ids = opt('--ids') ? new Set(opt('--ids').split(',')) : null;
 let targets = list.filter(m => (ids ? ids.has(m.id) : true));
 if (flag('--free-only') || !premium) targets = targets.filter(m => m.access === 'Free');
+else if (flag('--premium-only')) targets = targets.filter(m => m.access === 'Premium');
 if (opt('--limit')) targets = targets.slice(0, Number(opt('--limit')));
 const hq = !flag('--no-hq');
 console.log(
@@ -156,10 +205,7 @@ for (const [i, m] of targets.entries()) {
       );
       if (!details?.url) throw new Error(`no download link for ${f.path}`);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      const res = await fetch(details.url);
-      if (!res.ok) throw new Error(`${f.path}: HTTP ${res.status}`);
-      await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(`${dest}.part`));
-      fs.renameSync(`${dest}.part`, dest);
+      await download(details.url, dest, f.size);
       bytes += f.size;
       got++;
     }
@@ -170,7 +216,13 @@ for (const [i, m] of targets.entries()) {
     results.push({ id: m.id, name: m.name, ok: false, error: e.message });
   }
 }
-fs.writeFileSync(path.join(staging, 'fa-fetch-results.json'), JSON.stringify(results, null, 2));
+// One results file per kind of run, so a free run and a premium run do not overwrite each other;
+// extract.mjs --scenes takes each.
+const kind = flag('--free-only') || !premium ? 'free' : flag('--premium-only') ? 'premium' : 'all';
+fs.writeFileSync(
+  path.join(staging, `fa-fetch-results-${kind}.json`),
+  JSON.stringify(results, null, 2)
+);
 console.log(
   `done: ${results.filter(r => r.ok).length} ok, ${results.filter(r => !r.ok).length} failed, ${(bytes / 1e9).toFixed(2)} GB downloaded`
 );
