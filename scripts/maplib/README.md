@@ -33,6 +33,25 @@ authored is lost between extract and import. `placeables.json` is the same walls
 regions in the sidecar shape `manage-scenes` `create` reads through `placeablesPath`, for the
 cases where only the geometry is wanted on a different image.
 
+## One library per creator
+
+Each creator gets its own library folder next to the others, built by the same scripts. A new
+creator is a new row: a folder name and the `--creator` regex (or `--module` paths).
+
+| Library | Creator | How the packs arrive | `--creator` |
+| --- | --- | --- | --- |
+| `Maps_MC` | The MAD Cartographer | premium modules on foundryvtt.com, installed through `/setup` (`install/`) | `"MAD Cartographer"` |
+| `Maps_FA` | Forgotten Adventures | the FA Battlemaps module downloads each map from FA's API (premium maps need the Battlesmith Patreon tier) | `"Forgotten Adventures"` |
+| `Maps_TC` | Tom Cartos | direct downloads, unzipped modules passed with `--module` | `"Tom Cartos"` |
+
+## Installing a creator's premium modules
+
+`install/list-packs.mjs list --creator "<regex>" --out <name>-packages.json` asks the local server
+(at the Setup screen) for every package by that creator and which of them the license owns;
+`install/install-packs.mjs --packages <name>-packages.json [--exclude "<id regex>"]` installs the
+owned and free ones one at a time, waiting for each download to land, and resumes after an
+interruption. Foundry 14 refuses packs that cap compatibility at an older generation.
+
 ## Extract
 
 Install the creator's modules on the local sandbox (Foundry's Setup screen, or the admin API), stop

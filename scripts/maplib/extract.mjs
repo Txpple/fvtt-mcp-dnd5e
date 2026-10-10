@@ -7,12 +7,13 @@
 //
 //   node scripts/maplib/extract.mjs --library <dir> --creator "<author regex>" [--modules-dir <Data/modules>]
 //   node scripts/maplib/extract.mjs --library <dir> --module <unzipped module folder> [--module ...]
-//   options: --only <module-id> (repeatable)  --force (re-extract a pack already in the library)
+//   options: --only <module-id> / --skip <module-id> (repeatable)  --force (re-extract a pack already in the library)
 //            --no-preview  --preview-px 1024
 //
 // Reads the LevelDB packs with @foundryvtt/foundryvtt-cli (a dependency of this repo); the pack
 // must not be open by a running Foundry (the Setup screen is fine, a launched world is not).
 import { extractPack } from '@foundryvtt/foundryvtt-cli';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -39,6 +40,7 @@ const modulesDir = opt(
 );
 const explicit = all('--module');
 const only = new Set(all('--only'));
+const skip = new Set(all('--skip'));
 const force = flag('--force');
 const previewPx = Number(opt('--preview-px', 1024));
 const wantPreview = !flag('--no-preview');
@@ -106,6 +108,7 @@ if (!explicit.length) {
   }
 }
 if (only.size) modules = modules.filter(m => only.has(m.manifest.id));
+if (skip.size) modules = modules.filter(m => !skip.has(m.manifest.id));
 modules = modules.filter(m =>
   (m.manifest.packs ?? []).some(p => p.type === 'Scene' || p.type === 'Adventure')
 );
@@ -124,11 +127,17 @@ const slug = s =>
     .replace(/[^A-Za-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase() || 'scene';
+// Per path segment with decodeURIComponent: decodeURI leaves reserved escapes like %2C (a comma
+// in "Crystal Dungeon (Wind%2C Enchanted)") encoded, and the file on disk has the real comma.
 const decode = s => {
   try {
-    return decodeURI(s);
+    return s.split('/').map(decodeURIComponent).join('/');
   } catch {
-    return s;
+    try {
+      return decodeURI(s);
+    } catch {
+      return s;
+    }
   }
 };
 function deepStrings(o, fn) {
@@ -150,13 +159,39 @@ function stripKeys(o) {
   }
   return o;
 }
+/**
+ * The file a module's zip wrote under a damaged name: Foundry's unzip turns a non-ASCII character
+ * the zip stored in a legacy code page into U+FFFD, so "Michaël-…ogg" in the scene is
+ * "Micha�l-…ogg" on disk. Match each non-ASCII character of the wanted name against U+FFFD
+ * (or itself) in the same folder; the copy lands under the correct name, which mends the library.
+ */
+function mangledTwin(wanted) {
+  const dir = path.dirname(wanted);
+  const name = path.basename(wanted);
+  if (/^[\x20-\x7e]*$/.test(name) || !fs.existsSync(dir)) return null;
+  const want = [...name.normalize('NFC')];
+  const cands = fs.readdirSync(dir);
+  for (const cand of cands) {
+    const got = [...cand.normalize('NFC')];
+    if (got.length !== want.length) continue;
+    if (got.every((c, i) => c === want[i] || (c === '�' && want[i].charCodeAt(0) > 0x7e)))
+      return path.join(dir, cand);
+  }
+  // The creator's own spelling drift: the scene says "Michaël-…" and the pack ships
+  // "Michael-…". Match with the accents folded away, when exactly one file does.
+  const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const folded = fold(name);
+  const hits = cands.filter(c => fold(c) === folded);
+  return hits.length === 1 ? path.join(dir, hits[0]) : null;
+}
 const copyOnce = new Map();
 function copyAsset(fromAbs, toAbs) {
   if (copyOnce.has(toAbs)) return copyOnce.get(toAbs);
   let ok = false;
-  if (fs.existsSync(fromAbs)) {
+  const src = fs.existsSync(fromAbs) ? fromAbs : mangledTwin(fromAbs);
+  if (src) {
     fs.mkdirSync(path.dirname(toAbs), { recursive: true });
-    fs.copyFileSync(fromAbs, toAbs);
+    fs.copyFileSync(src, toAbs);
     ok = true;
   }
   copyOnce.set(toAbs, ok);
@@ -188,10 +223,75 @@ function folderName(name, variant) {
     : slug(baseName(name)) || '00-scene';
   return `${leading || /\d/.test(stem) ? '' : '00-'}${stem}${variant ? `-${slug(variant)}` : ''}`;
 }
+const VIDEO_RE = /\.(webm|mp4|m4v|mov|ogv)$/i;
+// ffmpeg, for a still of an animated (video) map: on PATH, or where winget puts it for this user.
+function findFfmpeg() {
+  const probe = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+  if (probe.status === 0) return 'ffmpeg';
+  const base = process.env.LOCALAPPDATA
+    ? path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet')
+    : null;
+  if (!base) return null;
+  const link = path.join(base, 'Links', 'ffmpeg.exe');
+  if (fs.existsSync(link)) return link;
+  const pkgs = path.join(base, 'Packages');
+  if (!fs.existsSync(pkgs)) return null;
+  for (const d of fs.readdirSync(pkgs).filter(n => /ffmpeg/i.test(n))) {
+    for (const sub of fs.readdirSync(path.join(pkgs, d))) {
+      const exe = path.join(pkgs, d, sub, 'bin', 'ffmpeg.exe');
+      if (fs.existsSync(exe)) return exe;
+    }
+  }
+  return null;
+}
+const ffmpeg = wantPreview ? findFfmpeg() : null;
+/** One frame, one second in (or the first), of a video map as a JPEG buffer; null without ffmpeg. */
+function videoFrame(src) {
+  if (!ffmpeg) return null;
+  for (const at of ['1', '0']) {
+    const r = spawnSync(
+      ffmpeg,
+      [
+        '-v',
+        'error',
+        '-ss',
+        at,
+        '-i',
+        src,
+        '-frames:v',
+        '1',
+        '-f',
+        'image2pipe',
+        '-vcodec',
+        'mjpeg',
+        'pipe:1',
+      ],
+      { maxBuffer: 256 * 1024 * 1024 }
+    );
+    if (r.status === 0 && r.stdout?.length) return r.stdout;
+  }
+  return null;
+}
 // The image bytes go to sharp as a Buffer: libvips on Windows cannot open a path over the old
-// MAX_PATH, and a deep library folder plus a creator's long file names gets there.
+// MAX_PATH, and a deep library folder plus a creator's long file names gets there. An animated
+// (video) map is previewed from one frame when ffmpeg is present, and skipped quietly when not.
 async function makePreview(src, dest, px) {
   if (!sharp) return false;
+  if (VIDEO_RE.test(src)) {
+    const frame = videoFrame(src);
+    if (!frame) return false;
+    try {
+      const out = await sharp(frame)
+        .resize({ width: px, height: px, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 78 })
+        .toBuffer();
+      fs.writeFileSync(dest, out);
+      return true;
+    } catch (e) {
+      console.warn(`  video preview failed: ${e.message}`);
+      return false;
+    }
+  }
   try {
     const out = await sharp(fs.readFileSync(src), { limitInputPixels: false })
       .resize({ width: px, height: px, fit: 'inside', withoutEnlargement: true })
@@ -207,7 +307,9 @@ async function makePreview(src, dest, px) {
 async function imageSize(src) {
   if (!sharp) return null;
   try {
-    const m = await sharp(fs.readFileSync(src), { limitInputPixels: false }).metadata();
+    const input = VIDEO_RE.test(src) ? videoFrame(src) : fs.readFileSync(src);
+    if (!input) return null;
+    const m = await sharp(input, { limitInputPixels: false }).metadata();
     return { width: m.width, height: m.height };
   } catch {
     return null;
@@ -448,6 +550,7 @@ for (const { dir: moduleDir, manifest } of modules) {
       }
       const sz = await imageSize(bgAbs);
       if (sz) meta.map.imagePixels = sz;
+      meta.map.video = VIDEO_RE.test(bgAbs);
       if (wantPreview && (await makePreview(bgAbs, path.join(sceneDir, 'preview.jpg'), previewPx)))
         meta.files.preview = 'preview.jpg';
     }
@@ -544,6 +647,18 @@ for (const { dir: moduleDir, manifest } of modules) {
 fs.rmSync(tmpRoot, { recursive: true, force: true });
 
 // ---------- catalogue ----------
+// Rebuilt from every pack in the library, not only the packs this run touched, so an --only or
+// --skip run never shrinks the index.
+catalog.length = 0;
+for (const ent of fs.readdirSync(library, { withFileTypes: true })) {
+  if (!ent.isDirectory()) continue;
+  const pj = path.join(library, ent.name, 'pack.json');
+  if (!fs.existsSync(pj)) continue;
+  for (const s of JSON.parse(fs.readFileSync(pj, 'utf8')).sceneFolders ?? []) {
+    const mp = path.join(library, ent.name, s, 'meta.json');
+    if (fs.existsSync(mp)) catalog.push(JSON.parse(fs.readFileSync(mp, 'utf8')));
+  }
+}
 catalog.sort(
   (a, b) => a.pack.id.localeCompare(b.pack.id) || a.scene.folder.localeCompare(b.scene.folder)
 );

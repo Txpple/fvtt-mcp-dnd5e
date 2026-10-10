@@ -1,11 +1,19 @@
-// Usage: node madcart.mjs list | shutdown | install <id...> | install-all
+// list-packs.mjs — what a creator publishes on foundryvtt.com, and which of it this Foundry
+// license owns, through the local server's own /setup admin API (the same index the Setup
+// screen's "Install Module" dialog shows, with `owned` set from the license's purchases).
+//
+//   node scripts/maplib/install/list-packs.mjs list --creator "Forgotten Adventures" --out fa-packages.json
+//   node scripts/maplib/install/list-packs.mjs shutdown     # stop the active world (Setup only lists)
+//   node scripts/maplib/install/list-packs.mjs status
+//
+// `--creator` is a case-insensitive regex over each package's authors, title and id. The list is
+// written beside this script; install-packs.mjs reads it. Needs FOUNDRY_URL / FOUNDRY_ADMIN_KEY
+// from the repo .env and a server at the Setup screen (no world active).
 import fs from 'node:fs';
+
 const env = Object.fromEntries(
   fs
-    .readFileSync(
-      'C:/Users/sippelmc/Documents/Repos/FVTT/fvtt-suite-openroll5e/fvtt-mcp-dnd5e/.env',
-      'utf8'
-    )
+    .readFileSync(new URL('../../../.env', import.meta.url), 'utf8')
     .split(/\r?\n/)
     .filter(l => l && !l.startsWith('#') && l.includes('='))
     .map(l => {
@@ -29,69 +37,43 @@ async function post(path, body, timeoutMs = 60_000) {
   } catch {}
   return { status: res.status, payload };
 }
-const isMad = p =>
-  /mad\s*cartographer/i.test(JSON.stringify(p.authors ?? '')) ||
-  /madcartographer|mad-cartographer/i.test(p.id ?? '') ||
-  /mad cartographer/i.test(p.title ?? '');
-const [cmd, ...args] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const opt = name => {
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : undefined;
+};
+const cmd = argv[0];
 if (cmd === 'shutdown') {
   console.log(await post('/setup', { action: 'worldShutdown' }));
 } else if (cmd === 'status') {
   console.log(await (await fetch(`${base}/api/status`)).json());
 } else if (cmd === 'list') {
+  const creator = opt('--creator');
+  const out = opt('--out');
+  if (!creator || !out) {
+    console.error('list needs --creator "<regex>" and --out <file.json>');
+    process.exit(2);
+  }
+  const re = new RegExp(creator, 'i');
   const r = await post('/setup', { action: 'getPackages', type: 'module' }, 180_000);
   if (!Array.isArray(r.payload)) {
     console.log(r);
     process.exit(1);
   }
-  const mad = r.payload.filter(isMad);
-  fs.writeFileSync(
-    new URL('./madcart-packages.json', import.meta.url),
-    JSON.stringify(mad, null, 2)
+  const hits = r.payload.filter(p =>
+    re.test([JSON.stringify(p.authors ?? ''), p.title ?? '', p.id ?? ''].join(' | '))
   );
+  fs.writeFileSync(new URL(`./${out}`, import.meta.url), JSON.stringify(hits, null, 2));
   console.log(
-    `index: ${r.payload.length} modules; MAD Cartographer: ${mad.length}; owned: ${mad.filter(p => p.owned).length}; protected: ${mad.filter(p => p.protected).length}`
+    `index: ${r.payload.length} modules; matching: ${hits.length}; owned: ${hits.filter(p => p.owned).length}; premium: ${hits.filter(p => p.protected).length}`
   );
-  for (const p of mad)
+  for (const p of hits)
     console.log(
-      `${p.owned ? 'OWNED ' : '      '} ${p.installed ? '[inst]' : '      '} ${p.id}\t${p.title}\tv${p.version}\tmin ${p.compatibility?.minimum}/ver ${p.compatibility?.verified}`
+      `${p.owned ? 'OWNED' : p.protected ? '     ' : 'FREE '} ${p.installed ? '[inst]' : '      '} ${p.id}\t${p.title}\tv${p.version}\tmin ${p.compatibility?.minimum}/ver ${p.compatibility?.verified}`
     );
-} else if (cmd === 'install' || cmd === 'install-all') {
-  const mad = JSON.parse(
-    fs.readFileSync(new URL('./madcart-packages.json', import.meta.url), 'utf8')
+} else {
+  console.error(
+    'usage: list-packs.mjs list --creator "<regex>" --out <file.json> | shutdown | status'
   );
-  const targets =
-    cmd === 'install-all'
-      ? mad.filter(p => (p.owned || !p.protected) && !p.installed)
-      : mad.filter(p => args.includes(p.id));
-  console.log(`installing ${targets.length} packages`);
-  const results = [];
-  for (const [i, p] of targets.entries()) {
-    const t0 = Date.now();
-    process.stdout.write(`[${i + 1}/${targets.length}] ${p.id} … `);
-    try {
-      const r = await post(
-        '/setup',
-        { action: 'installPackage', type: 'module', id: p.id, manifest: p.manifest },
-        1_800_000
-      );
-      const ok = r.status === 200 && !r.payload?.error;
-      console.log(
-        ok
-          ? `ok (${((Date.now() - t0) / 1000) | 0}s)`
-          : `FAIL ${r.status} ${JSON.stringify(r.payload).slice(0, 300)}`
-      );
-      results.push({ id: p.id, ok, status: r.status, error: r.payload?.error });
-    } catch (e) {
-      console.log(`ERROR ${e.message}`);
-      results.push({ id: p.id, ok: false, error: e.message });
-    }
-  }
-  fs.writeFileSync(
-    new URL('./madcart-results.json', import.meta.url),
-    JSON.stringify(results, null, 2)
-  );
-  console.log(
-    `done: ${results.filter(r => r.ok).length} ok, ${results.filter(r => !r.ok).length} failed`
-  );
+  process.exit(2);
 }

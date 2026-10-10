@@ -1,14 +1,17 @@
-// Serial installer for the premium packs listed in madcart-packages.json (from list-packs.mjs list).
-// Resume after an interruption: boot the sandbox to Setup (node scripts/local-foundry.mjs start --no-world),
-// then `node scripts/maplib/install/install-packs.mjs`; installed packs are skipped.
+// install-packs.mjs — install, one at a time, the owned (and free) packages a list-packs.mjs list wrote.
+// Foundry's installPackage answers once the manifest is fetched and downloads in the background, so
+// each pack is waited on (its module.json appears, its .zip goes) before the next is asked for.
+//
+//   node scripts/maplib/install/install-packs.mjs --packages fa-packages.json [--exclude "<id regex>"]
+//
+// Resume after an interruption the same way: boot the sandbox to Setup
+// (node scripts/local-foundry.mjs start --no-world) and run it again; installed packs are skipped
+// and a dead .zip from the cut download is cleared first.
 import fs from 'node:fs';
 import path from 'node:path';
 const env = Object.fromEntries(
   fs
-    .readFileSync(
-      'C:/Users/sippelmc/Documents/Repos/FVTT/fvtt-suite-openroll5e/fvtt-mcp-dnd5e/.env',
-      'utf8'
-    )
+    .readFileSync(new URL('../../../.env', import.meta.url), 'utf8')
     .split(/\r?\n/)
     .filter(l => l && !l.startsWith('#') && l.includes('='))
     .map(l => {
@@ -53,10 +56,19 @@ async function waitFor(id) {
   }
   return hasJson(id);
 }
-const mad = JSON.parse(
-  fs.readFileSync(new URL('./madcart-packages.json', import.meta.url), 'utf8')
-);
-const targets = mad.filter(p => p.owned || !p.protected);
+const argv = process.argv.slice(2);
+const opt = name => {
+  const i = argv.indexOf(name);
+  return i >= 0 ? argv[i + 1] : undefined;
+};
+const listFile = opt('--packages');
+if (!listFile) {
+  console.error('--packages <file.json> (from list-packs.mjs list) is required');
+  process.exit(2);
+}
+const exclude = opt('--exclude') ? new RegExp(opt('--exclude'), 'i') : null;
+const listed = JSON.parse(fs.readFileSync(new URL(`./${listFile}`, import.meta.url), 'utf8'));
+const targets = listed.filter(p => (p.owned || !p.protected) && !exclude?.test(p.id));
 // A zip left by an interrupted run is a dead download: Foundry will not resume it. Clear it so
 // the pack is requested again instead of waited on.
 for (const f of fs.readdirSync(MODS))
@@ -102,7 +114,7 @@ for (const [i, p] of targets.entries()) {
   results.push({ id: p.id, ok });
 }
 fs.writeFileSync(
-  new URL('./madcart-results.json', import.meta.url),
+  new URL(`./${listFile.replace(/.json$/, '')}-results.json`, import.meta.url),
   JSON.stringify(results, null, 2)
 );
 console.log(

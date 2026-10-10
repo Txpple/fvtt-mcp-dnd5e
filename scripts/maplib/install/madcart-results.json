@@ -1,0 +1,351 @@
+[
+  {
+    "id": "mad-astral",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-astral2",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-badlands",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-blackbottom",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-buildabase",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-caverns",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-classicdun",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-classicdun-2",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-commerce",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-condemned",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-craftycollection",
+    "ok": false,
+    "error": "module mad-craftycollection version 12.0.1 requires an older version of the Foundry Virtual Tabletop software: 12 or older"
+  },
+  {
+    "id": "mad-crooked",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-curseoffrost",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-darkheart",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-deserts",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-deserts2",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-downtown",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-drakehall",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-dreadeddomains",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-dreadeddomains2",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-dungeondelve",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-dungeondelve2",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-dungeons",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-eastasia",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-endlesswiz",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-endlesswiz2",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-faecarnival",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-faewilds",
+    "ok": true,
+    "skipped": true
+  },
+  {
+    "id": "mad-faewilds2",
+    "ok": true
+  },
+  {
+    "id": "mad-farmlife",
+    "ok": true
+  },
+  {
+    "id": "mad-forestwild",
+    "ok": true
+  },
+  {
+    "id": "mad-freecontent",
+    "ok": true
+  },
+  {
+    "id": "mad-frozen",
+    "ok": true
+  },
+  {
+    "id": "mad-frozen2",
+    "ok": true
+  },
+  {
+    "id": "mad-gommage",
+    "ok": true
+  },
+  {
+    "id": "mad-heists",
+    "ok": true
+  },
+  {
+    "id": "mad-hellscapes",
+    "ok": true
+  },
+  {
+    "id": "mad-kanto",
+    "ok": true
+  },
+  {
+    "id": "mad-lairs",
+    "ok": true
+  },
+  {
+    "id": "mad-lairs2",
+    "ok": true
+  },
+  {
+    "id": "mad-madtv",
+    "ok": true
+  },
+  {
+    "id": "mad-midtown",
+    "ok": true
+  },
+  {
+    "id": "mad-modcaverns",
+    "ok": true
+  },
+  {
+    "id": "mad-moddungeons",
+    "ok": true
+  },
+  {
+    "id": "mad-modulargalleon",
+    "ok": true
+  },
+  {
+    "id": "mad-mythicgreece",
+    "ok": true
+  },
+  {
+    "id": "mad-oceans",
+    "ok": true
+  },
+  {
+    "id": "mad-oceans2",
+    "ok": true
+  },
+  {
+    "id": "mad-phandelver",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix1",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix10",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix11",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix2",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix3",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix4",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix5",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix6",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix7",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix8",
+    "ok": true
+  },
+  {
+    "id": "mad-picknmix9",
+    "ok": true
+  },
+  {
+    "id": "mad-redroad",
+    "ok": true
+  },
+  {
+    "id": "mad-strongholds",
+    "ok": true
+  },
+  {
+    "id": "mad-swamps",
+    "ok": true
+  },
+  {
+    "id": "mad-swamps2",
+    "ok": true
+  },
+  {
+    "id": "mad-taverns",
+    "ok": true
+  },
+  {
+    "id": "mad-taverns2",
+    "ok": true
+  },
+  {
+    "id": "mad-temples",
+    "ok": true
+  },
+  {
+    "id": "mad-titan",
+    "ok": true
+  },
+  {
+    "id": "mad-titan2",
+    "ok": true
+  },
+  {
+    "id": "mad-tropics",
+    "ok": true
+  },
+  {
+    "id": "mad-twilight",
+    "ok": true
+  },
+  {
+    "id": "mad-undercavern",
+    "ok": true
+  },
+  {
+    "id": "mad-uptown",
+    "ok": true
+  },
+  {
+    "id": "mad-urbanext",
+    "ok": false,
+    "error": "module mad-urbanext version 12.1.2 requires an older version of the Foundry Virtual Tabletop software: 12 or older"
+  },
+  {
+    "id": "mad-vampirehunters",
+    "ok": true
+  },
+  {
+    "id": "mad-wilderwoods",
+    "ok": true
+  },
+  {
+    "id": "mad-wildwoods",
+    "ok": true
+  },
+  {
+    "id": "mad-wildwoods2",
+    "ok": true
+  },
+  {
+    "id": "mad-worldwonders",
+    "ok": true
+  },
+  {
+    "id": "madventures-5e",
+    "ok": true
+  }
+]
