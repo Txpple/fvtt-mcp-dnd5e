@@ -31,6 +31,7 @@ import {
   type CallContext,
   callContext,
   markUndone,
+  NOTHING_PUT_BACK,
   pruneReceipts,
   receiptLine,
   receiptPath,
@@ -531,8 +532,16 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   // summed up in one line, appended centrally (src/index.ts): no tool formats its own.
   const canUndo = enabledToolsets.has('scripting') && !readOnly;
   const keepReceipt = (tool: string, ctx: CallContext): string | undefined => {
-    if (!effectiveOps(ctx.ops).length) return undefined;
     const reverses = ctx.reverses;
+    if (!effectiveOps(ctx.ops).length) {
+      // An undo that reversed every write and changed nothing (the world already matched: the
+      // values were put back by hand) still settles the receipt it reverses, so it is not offered
+      // again. It wrote nothing, so it keeps no receipt of its own.
+      if (!reverses || ctx.reversesPartial) return undefined;
+      const key = receiptWorldKey(serverUrl, foundry.lastWorldId() ?? '');
+      markUndone(reverses, key, NOTHING_PUT_BACK, storeDir);
+      return `reverses ${reverses}: nothing to put back (the world already matched)`;
+    }
     // an undo that could not reverse every write leaves the receipt it reverses undoable
     const partial = !!reverses && !!ctx.reversesPartial;
     const undoOf = reverses ? { reverses, ...(partial ? { partial: true as const } : {}) } : {};

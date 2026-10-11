@@ -116,9 +116,12 @@ What changed for a user of the tools and skills, release by release. The measure
   and never in the next call's, and a call its script makes after the run ended is refused; a
   create made by another session joined as the same user no longer lands in this session's
   receipt, whose undo would delete it; two writes from one session wait for each other in the
-  server, so a write's op cap no longer counts the time it queued; a call that wrote and then lost
-  its page answers with its receipt without reconnecting first; and a read that views a scene no
-  longer puts the previous scene's fog into an open receipt. Two sessions on one seat still
+  server, so a write's op cap no longer counts the time it queued, while writes issued together
+  still share one connect (and fail together when it fails, instead of each paying the wake in
+  turn), and a call that arrives during a connect joins it instead of failing it; a call that wrote
+  and then lost its page answers with its receipt without reconnecting first; a read that views a
+  scene no longer puts the previous scene's fog into an open receipt; and an undo that finds every
+  value already back (put back by hand) marks the receipt undone, saying `nothing to put back`. Two sessions on one seat still
   interleave their writes at the server, where no write lock reaches: an undo puts back a value
   the other session has changed since, as the seat warning at connect now says. Measured in the
   page on the sandbox: the recorder's hooks cost 0.07 ms per write, a delete's pre-image 0.15 ms

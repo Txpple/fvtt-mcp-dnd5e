@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { ReceiptOp } from '../page/_receipts.js';
-import { noteOps, receiptLineOf } from '../receipts.js';
+import { NOTHING_PUT_BACK, noteOps, receiptLineOf } from '../receipts.js';
 import { buildToolRegistry } from '../registry.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
@@ -1101,6 +1101,47 @@ describe('receipts on every write (issue #6): one line per call, appended centra
     await expect(dispatchWithReceipt('run-script', { undo: id })).rejects.toThrow(
       `receipt ${id} was already undone by ${againId}`
     );
+  });
+
+  it('an undo that changed nothing (the world already matched) marks the receipt undone, with no receipt of its own', async () => {
+    // the value was put back by hand: the undo's update changes nothing, so the page records no op
+    let failed: Array<{ op: string; uuid: string; error: string }> = [];
+    const { foundry, calls } = makeFoundry(async (name: string) => {
+      if (name === 'getWorldInfo') return { system: 'dnd5e' };
+      if (name === 'configurePrimaryParty') {
+        noteOps([SETTING]);
+        return PARTY;
+      }
+      if (name === 'undoOps') return { undone: failed.length ? 0 : 1, failed };
+      return {};
+    });
+    const { dispatchWithReceipt } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      serverUrl: 'http://localhost:30000',
+      receiptsDir: dir,
+    });
+    const first = await dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' });
+    const id = /receipt (rcpt_\w+)/.exec(first.receiptLine ?? '')?.[1] ?? '';
+    // one that could not reverse its write and wrote nothing: no line, the receipt stays undoable
+    failed = [{ op: 'update Setting', uuid: 'Setting.s1', error: 'refused' }];
+    const part = await dispatchWithReceipt('run-script', { undo: id });
+    expect(part.result).toContain(`receipt ${id} stays undoable`);
+    expect(part.receiptLine).toBeUndefined();
+    expect(stored()).toEqual([expect.not.objectContaining({ undoneBy: expect.anything() })]);
+    // a clean one: the receipt is undone, the line says there was nothing to put back
+    failed = [];
+    const undo = await dispatchWithReceipt('run-script', { undo: id });
+    expect(undo.result).toBe(`↩️ Receipt ${id}: 1 write(s) reversed.`);
+    expect(undo.receiptLine).toBe(
+      `reverses ${id}: nothing to put back (the world already matched)`
+    );
+    expect(stored()).toEqual([expect.objectContaining({ id, undoneBy: NOTHING_PUT_BACK })]);
+    await expect(dispatchWithReceipt('run-script', { undo: id })).rejects.toThrow(
+      `run-script: receipt ${id} was already undone: the world already matched it.`
+    );
+    expect(calls.filter(([n]) => n === 'undoOps')).toHaveLength(2);
   });
 
   it('files the receipt under the world of the last connect, without connecting', async () => {

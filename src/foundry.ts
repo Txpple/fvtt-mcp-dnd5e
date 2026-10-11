@@ -881,15 +881,18 @@ export class Foundry implements FoundryBridge {
    * session was lost under the call) as `code` — see src/bridge-error.ts. A write waits for this
    * bridge's earlier writes to settle first (`queued`): the page runs one write at a time anyway,
    * and a write that waited for the page's lock inside its own evaluate spent the wait against its
-   * op cap (issue #6's review). A read never waits.
+   * op cap (issue #6's review). A read never waits. A write connects before it queues, so writes
+   * issued together share one connect and, when it fails, fail together: queued first, each would
+   * pay the wake / launch budget in turn. `attempt` checks again, for a write whose page the op cap
+   * closed while it waited.
    */
   async call<N extends keyof PageApi>(name: N, ...args: PageArgs<N>): Promise<PageResult<N>> {
     const write = opKind(name, args[0]) !== 'read';
-    return this.track(() =>
-      write
-        ? this.queued(() => this.attempt<N>(name, args[0], write))
-        : this.attempt<N>(name, args[0], write)
-    );
+    return this.track(async (): Promise<PageResult<N>> => {
+      if (!write) return this.attempt<N>(name, args[0], write);
+      await this.ensureReady();
+      return this.queued(() => this.attempt<N>(name, args[0], write));
+    });
   }
 
   /**
@@ -1093,11 +1096,17 @@ export class Foundry implements FoundryBridge {
     });
   }
 
+  /**
+   * Connected, or connected now. A connect already under way is joined as it is: clearing its page
+   * under it failed that connect, and every call waiting on it, at its next step.
+   */
   private async ensureReady(): Promise<void> {
     if (this.isReady()) return;
-    this.log.warn('page not ready — reconnecting');
-    this.ready = false;
-    this.page = undefined;
+    if (!this.connecting) {
+      this.log.warn('page not ready — reconnecting');
+      this.ready = false;
+      this.page = undefined;
+    }
     await this.connect();
   }
 

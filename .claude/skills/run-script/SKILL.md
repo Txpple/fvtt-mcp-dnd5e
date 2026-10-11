@@ -79,7 +79,9 @@ return { placed };
   once, when every write of it was reversed; a second undo of it is refused, naming the receipt
   that reversed it. An undo that could not reverse every write lists the ones it could not and
   leaves the receipt undoable (`… stays undoable`; its own receipt `partly reverses` it): undo it
-  again once the cause is dealt with, and what is already back is left alone.
+  again once the cause is dealt with, and what is already back is left alone. An undo that finds
+  every value already back (put back by hand) writes nothing and keeps no receipt of its own: its
+  line says `nothing to put back`, and the receipt counts as undone.
 - **Two sessions on one seat** (two bridges joined as the same user; the bridge warns at connect)
   keep separate receipts, but their writes interleave at the server, where no write lock reaches:
   an undo puts back the prior value even where the other session, or a player, has written since.

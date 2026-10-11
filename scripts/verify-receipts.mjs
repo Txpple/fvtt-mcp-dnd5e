@@ -4,8 +4,9 @@
 //   FOUNDRY_HOST=local node scripts/verify-receipts.mjs
 // Drives buildToolRegistry().dispatchWithReceipt, what the server answers with:
 //   - an actor: create-actor-from-compendium → undo (gone) → undo of the undo (back with its id:
-//     the redo, once) → manage-actors update of a system field → undo (the prior value) →
-//     manage-actors delete → undo (back with its id, and its folder);
+//     the redo, once) → manage-actors update of a system field → undo (the prior value) → the
+//     same update put back by hand, then undone (nothing to put back; the receipt still marked
+//     undone) → manage-actors delete → undo (back with its id, and its folder);
 //   - a scene placeable, a light on the active scene: create → undo → create → update → undo →
 //     delete → undo;
 //   - a journal page: create-quest-journal → undo → create → update-quest-journal → undo (the
@@ -166,6 +167,29 @@ try {
         up.line
       ),
     `hp ${hp0} → ${hp1} → ${hp2} | ${up.line} | ${uu.line}`
+  );
+
+  // The value put back by hand before the undo: the undo changes nothing, and still settles it.
+  const up2 = await tool('manage-actors', {
+    action: 'update',
+    actorIdentifier: actor.id,
+    hp: { value: hp0 === 1 ? 2 : 1 },
+  });
+  await tool('manage-actors', { action: 'update', actorIdentifier: actor.id, hp: { value: hp0 } });
+  const nu = await undo(up2.id);
+  const hp3 = await hpOf(actor.id);
+  const settled = await undo(up2.id).then(
+    () => 'undone a second time',
+    e => e.message
+  );
+  check(
+    'an undo that finds the value already back (put back by hand) says so and marks the receipt undone',
+    hp3 === hp0 &&
+      nu.id === null &&
+      nu.line === `reverses ${up2.id}: nothing to put back (the world already matched)` &&
+      stored(up2.id)?.undoneBy === 'nothing to put back' &&
+      settled.includes(`receipt ${up2.id} was already undone: the world already matched it.`),
+    `${nu.line} | stored: undoneBy ${stored(up2.id)?.undoneBy} | ${settled}`
   );
 
   const del = await tool('manage-actors', { action: 'delete', identifiers: [actor.id] });

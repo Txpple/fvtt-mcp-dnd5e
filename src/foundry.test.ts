@@ -11,6 +11,8 @@
 // info() reports the seat and whether this connect found the world asleep or down (issue #9).
 // Issue #6's review: a write waits in this process for the bridge's earlier writes, so its op cap
 // never counts the wait (a read never waits); lastWorldId() reads the world without connecting.
+// Writes connect before they queue: issued together they share one connect and fail together, and
+// a write that arrives while the connect is under way joins it without clearing its page.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BridgeError } from './bridge-error.js';
 import { chromiumProblem, Foundry, type FoundryConfig } from './foundry.js';
@@ -385,6 +387,77 @@ describe('the write queue: one write at a time from this bridge (issue #6 review
     const second = f.call('updateActor', { actorIdentifier: 'a1', name: 'B' });
     expect(await first).toMatchObject({ code: 'invalid', detail: 'refused' });
     expect(await second).toBe('B');
+  });
+
+  it('writes issued together against a connect that fails share that one connect and fail together', async () => {
+    // An unreachable box: connect() is the real one, its work (wake, launch, join) fails.
+    const f = Object.create(Foundry.prototype) as Foundry;
+    const doConnect = vi.fn(async () => {
+      await sleep(10);
+      throw new Error('connect ECONNREFUSED 127.0.0.1:30000');
+    });
+    Object.assign(f, {
+      cfg: { serverUrl: 'http://localhost:30000', user: 'Bridge', idleLogoutMs: 0 },
+      log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      ready: false,
+      inflight: 0,
+      lastUsed: 0,
+      doConnect,
+    });
+    const settled = await Promise.allSettled(
+      ['A', 'B', 'C'].map(name => f.call('updateActor', { actorIdentifier: 'a1', name }))
+    );
+    expect(doConnect).toHaveBeenCalledTimes(1); // queued first, each paid its own connect in turn
+    expect(settled.map(s => s.status)).toEqual(['rejected', 'rejected', 'rejected']);
+    for (const s of settled) {
+      expect((s as PromiseRejectedResult).reason).toMatchObject({
+        code: 'connection',
+        detail: 'connect ECONNREFUSED 127.0.0.1:30000',
+      });
+    }
+  });
+
+  it('a write that arrives while the connect is under way joins it, and leaves its page alone', async () => {
+    // The real connect over a fake page; the wake holds it after the page is open. A call that
+    // cleared the page there failed the connect for both writes at its next step.
+    let wake: () => void = () => {};
+    const woken = new Promise<void>(resolve => {
+      wake = resolve;
+    });
+    const page = {
+      setDefaultTimeout: vi.fn(),
+      evaluate: vi.fn(async (_fn: unknown, arg?: { a: { name: string } }) =>
+        arg ? { result: arg.a.name } : { worldId: 'w', role: 4 }
+      ),
+      isClosed: () => false,
+    };
+    const newPage = vi.fn(async () => page);
+    const step = vi.fn(async () => {});
+    const f = Object.create(Foundry.prototype) as Foundry;
+    Object.assign(f, {
+      cfg: { serverUrl: 'http://localhost:30000', user: 'Bridge', idleLogoutMs: 0 },
+      log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      browser: { isConnected: () => true },
+      context: { newPage },
+      ready: false,
+      inflight: 0,
+      lastUsed: 0,
+      wake: vi.fn(() => woken),
+      ensureWorldReady: step,
+      joinWorld: step,
+      injectBundle: step,
+      markSeat: step,
+      warmIndexes: vi.fn(),
+      armIdle: vi.fn(),
+    });
+    const first = f.call('updateActor', { actorIdentifier: 'a1', name: 'A' });
+    await sleep(5); // the connect has its page and waits on the wake
+    const second = f.call('updateActor', { actorIdentifier: 'a1', name: 'B' });
+    await sleep(5);
+    wake();
+    expect(await Promise.all([first, second])).toEqual(['A', 'B']);
+    expect(newPage).toHaveBeenCalledTimes(1);
+    expect(f.isReady()).toBe(true);
   });
 });
 

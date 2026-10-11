@@ -20,7 +20,8 @@
  *   nothing, and a store failure never fails a tool call.
  * - An undo marks the receipt it reverses undone only when it reversed every write; one that could
  *   not reverse them all leaves the receipt undoable (`partialUndoBy`), and undoing it again is
- *   safe for what was already put back.
+ *   safe for what was already put back. An undo that reversed every write and changed nothing (the
+ *   world already matched) marks it undone too, with no receipt of its own (NOTHING_PUT_BACK).
  *
  * Node-side only: no Playwright, no page.
  */
@@ -73,11 +74,17 @@ export interface StoredReceipt {
   reverses?: string;
   /** An undo's own receipt: it could not reverse every write of the one it reverses. */
   partial?: true;
-  /** The receipt of the undo that reversed this one. */
+  /** The receipt of the undo that reversed this one, or NOTHING_PUT_BACK. */
   undoneBy?: string;
   /** The receipts of undos that reversed only part of this one: it stays undoable. */
   partialUndoBy?: string[];
 }
+
+/**
+ * `undoneBy` of a receipt whose undo found the world already matching it (the values were put back
+ * by hand): that undo wrote nothing, so it kept no receipt of its own to undo in turn.
+ */
+export const NOTHING_PUT_BACK = 'nothing to put back';
 
 export interface PruneLimits {
   kept: number;

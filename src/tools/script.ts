@@ -4,6 +4,7 @@ import { Logger } from '../logger.js';
 import {
   callContext,
   loadReceipt,
+  NOTHING_PUT_BACK,
   receiptsDir,
   receiptWorldKey,
   type StoredReceipt,
@@ -290,8 +291,10 @@ export class ScriptTools {
     }
     if (receipt.undoneBy) {
       throw new FormattedToolError(
-        `run-script: receipt ${id} was already undone by ${receipt.undoneBy}; undo ` +
-          `${receipt.undoneBy} to put it back.`
+        receipt.undoneBy === NOTHING_PUT_BACK
+          ? `run-script: receipt ${id} was already undone: the world already matched it.`
+          : `run-script: receipt ${id} was already undone by ${receipt.undoneBy}; undo ` +
+              `${receipt.undoneBy} to put it back.`
       );
     }
     const ctx = callContext.getStore();

@@ -75,7 +75,8 @@ tool proofs:
 - `verify-receipts` — the receipt every write answers with (issue #6), through the registry as the
   server answers: an actor, a light and a journal page, each created, updated and deleted and
   undone by its receipt id; the redo, once; a run-script run; two writes in flight, each undo only
-  its own; the store's refusal of a wrong id; a partial undo, which leaves its receipt undoable; a
+  its own; the store's refusal of a wrong id; a partial undo, which leaves its receipt undoable; an
+  undo with nothing to put back (the value restored by hand), which still marks its receipt undone; a
   run abandoned at its timeout with its creates in flight, which land in its own receipt; two
   run-script calls issued together, run one after the other with no op-cap time lost to the wait
   (about 35 s); the cost of the page's choke point, timed in the page.
