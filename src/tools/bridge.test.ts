@@ -55,26 +55,32 @@ describe('BridgeTools', () => {
     expect(result).toContain('"all": true');
   });
 
-  it('with `all`, ends every other holder and reports what it ended', async () => {
+  it('with `all`, ends every other holder and reports per holder what it ended or why not', async () => {
+    const holder = (pid: number, label: string) => ({
+      pid,
+      host: 'box',
+      label,
+      since: '2026-10-10T23:21:01.000Z',
+    });
     const { tools, foundry } = build(f => {
-      f.evictOtherHolders = () => ({
-        evicted: [
-          {
-            pid: 28560,
-            host: 'box',
-            label: 'Claude Code session s2',
-            since: '2026-10-10T23:21:01.000Z',
-          },
-        ],
-        pids: [30680, 38680],
-      });
+      f.evictOtherHolders = () => [
+        { holder: holder(28560, 'Claude Code session s2'), ended: 30680 },
+        {
+          holder: holder(31000, 'Claude Code session s3'),
+          ended: null,
+          skipped: 'left pid 31500 alone (it now runs another program, not the recorded browser)',
+        },
+      ];
     });
     const result = await tools.handleDisconnectBridge({ all: true });
     expect(foundry.dispose).toHaveBeenCalledTimes(1);
+    expect(result).toContain('Ended 1 of 2 other holder(s) of this seat on this machine:');
+    expect(result).toContain('pid 28560 on box — Claude Code session s2');
+    expect(result).toContain('browser pid 30680 ended');
     expect(result).toContain(
-      'Ended 1 other holder(s) of this seat on this machine (2 browser process(es))'
+      'pid 31000 on box — Claude Code session s3 — since 2026-10-10T23:21:01.000Z: left pid 31500 alone'
     );
-    expect(result).toContain('pid 28560 on box');
+    expect(result).toContain('Every record above is cleared');
   });
 
   it('with `all` and nobody else, says so', async () => {

@@ -1,15 +1,17 @@
 /**
  * The seat records (issue #12): one file per holding process, listed with liveness, pruned when
- * the process is gone, named from the Claude Code session that started the server.
+ * the process is gone, named from the Claude Code session that started the server. Eviction
+ * (issue #17) ends a holder's browser only while its pid still runs the recorded executable.
  */
-import { spawn } from 'node:child_process';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  childPids,
   describeHolder,
+  evictHolder,
+  exeOf,
+  type Holder,
   holderRecord,
   listHolders,
   removeHolder,
@@ -60,6 +62,7 @@ describe('the records', () => {
     );
     expect(rec.pid).toBe(process.pid);
     expect(rec.since).toBe('2026-10-10T23:21:01.000Z');
+    expect(rec).toMatchObject({ browserPid: null, browserExe: null }); // the bridge fills them in
     expect(writeHolder(rec, dir)).toMatch(/\.json$/);
     const [h] = listHolders(URL, USER, dir);
     expect(h).toMatchObject({
@@ -101,16 +104,79 @@ describe('the records', () => {
   });
 });
 
-describe('childPids', () => {
-  it('lists a child this process spawned', async () => {
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)'], {
-      stdio: 'ignore',
-    });
-    try {
-      await new Promise(r => setTimeout(r, 300));
-      expect(childPids(process.pid)).toContain(child.pid);
-    } finally {
-      child.kill();
+describe('exeOf', () => {
+  it("names a running process's executable, and nothing for a pid that runs nothing", () => {
+    const exe = exeOf(process.pid);
+    if (process.platform === 'win32' || process.platform === 'linux') {
+      expect(exe?.toLowerCase()).toBe(process.execPath.toLowerCase());
     }
+    expect(exeOf(999_999_999)).toBeNull();
+    expect(exeOf(0)).toBeNull();
+    expect(exeOf(-1)).toBeNull();
   }, 30_000);
+});
+
+describe('evictHolder', () => {
+  let dir: string;
+  const BROWSER = '/opt/ms-playwright/chromium_headless_shell-1228/chrome-linux/headless_shell';
+  const holder = (over: Partial<Holder> = {}): Holder => {
+    const rec = {
+      ...holderRecord(URL, USER, {}),
+      pid: 4242,
+      browserPid: 5151,
+      browserExe: BROWSER,
+      ...over,
+    };
+    const file = writeHolder(rec, dir) ?? '';
+    return { ...rec, alive: true, self: false, file };
+  };
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'holders-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('ends the recorded browser while its pid still runs the recorded executable', () => {
+    const kill = vi.fn();
+    const h = holder();
+    const e = evictHolder(h, dir, () => BROWSER, kill);
+    expect(kill).toHaveBeenCalledWith(5151);
+    expect(e).toEqual({ holder: h, ended: 5151 });
+    expect(readdirSync(dir)).toEqual([]); // the record is gone
+  });
+
+  it('leaves a reused pid alone: another executable is not the recorded browser', () => {
+    const kill = vi.fn();
+    const e = evictHolder(
+      holder(),
+      dir,
+      () => 'C:\\Program Files\\Google\\Chrome\\chrome.exe',
+      kill
+    );
+    expect(kill).not.toHaveBeenCalled();
+    expect(e.ended).toBeNull();
+    expect(e.skipped).toMatch(/left pid 5151 alone \(it now runs another program/);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('kills nothing when the browser is gone, or was never recorded', () => {
+    const kill = vi.fn();
+    expect(evictHolder(holder(), dir, () => null, kill).skipped).toBe(
+      'nothing to end (browser pid 5151 is gone)'
+    );
+    const exe = vi.fn(() => BROWSER);
+    expect(evictHolder(holder({ browserPid: null }), dir, exe, kill).skipped).toBe(
+      'nothing to end (no browser recorded)'
+    );
+    expect(evictHolder(holder({ browserExe: null }), dir, exe, kill).skipped).toBe(
+      'left pid 5151 alone (no browser path recorded)'
+    );
+    // a record an older server wrote has neither field
+    const { browserPid: _pid, browserExe: _exe, ...old } = holder();
+    expect(evictHolder(old as Holder, dir, exe, kill).ended).toBeNull();
+    expect(kill).not.toHaveBeenCalled();
+    expect(exe).not.toHaveBeenCalled();
+    expect(readdirSync(dir)).toEqual([]);
+  });
 });

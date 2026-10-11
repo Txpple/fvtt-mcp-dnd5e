@@ -63,14 +63,24 @@ export class BridgeTools {
     await this.foundry.dispose();
 
     // The other holders of this seat on this machine (src/holders.ts): named always, ended on `all`.
-    // The seat the preflight finds taken is almost always one of these, not ours (issue #12).
+    // The seat the preflight finds taken is almost always one of these, not ours (issue #12). A
+    // browser is ended only while its pid still runs the recorded executable (issue #17).
     let others: string;
     if (all) {
-      const { evicted, pids } = this.foundry.evictOtherHolders();
-      others = evicted.length
-        ? `\nEnded ${evicted.length} other holder(s) of this seat on this machine (${pids.length} browser process(es)):\n` +
-          evicted.map(h => `  • ${describeHolder(h)}`).join('\n') +
-          '\nTheir servers keep running and reconnect on their next call.'
+      const evictions = this.foundry.evictOtherHolders();
+      const ended = evictions.filter(e => e.ended !== null).length;
+      others = evictions.length
+        ? `\nEnded ${ended} of ${evictions.length} other holder(s) of this seat on this machine:\n` +
+          evictions
+            .map(
+              e =>
+                `  • ${describeHolder(e.holder)}: ${
+                  e.ended !== null ? `browser pid ${e.ended} ended` : e.skipped
+                }`
+            )
+            .join('\n') +
+          '\nEvery record above is cleared. A server whose browser was ended keeps running and ' +
+          'reconnects on its next call.'
         : '\nNo other session holds this seat on this machine.';
     } else {
       const rest = this.foundry.holders().filter(h => !h.self);

@@ -9,12 +9,15 @@
  * prints "held by pid N, session S, since T" instead of a bare user name. The same facts ride the
  * User document as `flags.world.fvttMcpBridge` (src/foundry.ts) for a reader on another machine.
  *
- * Node-side only: no Playwright, no page. Killing a holder means killing the browser it spawned
- * (its child processes), never the MCP server itself, which reconnects lazily on its next call.
+ * Node-side only: no Playwright, no page. Killing a holder means killing the browser it launched,
+ * never the MCP server itself, which reconnects lazily on its next call. The record names that
+ * browser by pid AND executable path (issue #17): a pid alone can be reused by an unrelated
+ * process after a hard-killed server leaves its record behind, so a pid is ended only while the
+ * process running under it is still the recorded executable.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,6 +32,10 @@ export interface HolderRecord {
   since: string;
   serverUrl: string;
   user: string;
+  /** The pid of the browser this holder launched (its CDP `SystemInfo`); null when unknown. */
+  browserPid: number | null;
+  /** That browser's executable path when the record was written (`exeOf`); null when unknown. */
+  browserExe: string | null;
 }
 
 export interface Holder extends HolderRecord {
@@ -78,6 +85,8 @@ export function holderRecord(
     since: now.toISOString(),
     serverUrl,
     user,
+    browserPid: null,
+    browserExe: null,
   };
 }
 
@@ -163,52 +172,106 @@ export function describeHolder(h: Pick<HolderRecord, 'pid' | 'label' | 'since' |
   return `pid ${h.pid} on ${h.host} — ${h.label} — since ${h.since}`;
 }
 
-/** The direct children of a process (the headless browser a bridge launched), by pid. */
-export function childPids(pid: number): number[] {
-  const list = (out: string): number[] =>
-    out
-      .split(/\s+/)
-      .filter(s => /^\d+$/.test(s))
-      .map(Number);
-  if (process.platform === 'win32') {
-    const r = spawnSync(
-      'powershell',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        `Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}" | Select-Object -ExpandProperty ProcessId`,
-      ],
-      { encoding: 'utf8', timeout: 20_000 }
-    );
-    return list(r.stdout ?? '');
+/**
+ * The executable a running process was started from, or null (no such process, not readable, or
+ * a platform with neither lookup). Windows asks CIM (~0.25 s); Linux reads `/proc/<pid>/exe`.
+ * Never throws. Elsewhere it answers null, so eviction there ends nothing (and says so).
+ */
+export function exeOf(pid: number): string | null {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    if (process.platform === 'win32') {
+      const r = spawnSync(
+        'powershell',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').ExecutablePath`,
+        ],
+        { encoding: 'utf8', timeout: 20_000, windowsHide: true }
+      );
+      return (r.stdout ?? '').trim() || null;
+    }
+    return readlinkSync(`/proc/${pid}/exe`) || null;
+  } catch {
+    return null;
   }
-  const r = spawnSync('pgrep', ['-P', String(pid)], { encoding: 'utf8', timeout: 5_000 });
-  return list(r.stdout ?? '');
 }
 
-/** End a process and everything under it. */
-export function killTree(pid: number): void {
-  if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 20_000 });
-    return;
-  }
-  for (const kid of childPids(pid)) killTree(kid);
-  try {
-    process.kill(pid, 'SIGKILL');
-  } catch {
-    // already gone
-  }
+/** Windows paths compare without case; elsewhere exactly. */
+function sameExe(a: string, b: string): boolean {
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 /**
- * Evict a holder: end the browser it spawned (every child of its pid) and drop its record. The
- * holding MCP server itself keeps running and reconnects lazily on its next tool call, exactly as
- * after its own disconnect-bridge. Returns the pids ended.
+ * End a bridge's browser and the processes under it: the tree on Windows (`taskkill /T /F`), the
+ * process group elsewhere (Playwright launches the browser as a group leader), the pid alone if
+ * the group cannot be signalled. Never throws.
  */
-export function evictHolder(h: Holder, dir: string = holderDir()): number[] {
-  const kids = childPids(h.pid);
-  for (const kid of kids) killTree(kid);
+export function killBrowser(pid: number): void {
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+      stdio: 'ignore',
+      timeout: 20_000,
+      windowsHide: true,
+    });
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+  }
+}
+
+/** What evicting one holder did: the browser pid it ended, or why it ended nothing. */
+export interface Eviction {
+  holder: Holder;
+  /** The browser pid ended; null when nothing was killed. */
+  ended: number | null;
+  /** Why nothing was killed, when nothing was. */
+  skipped?: string;
+}
+
+/**
+ * Evict a holder: end the browser it launched, but only while its pid still runs the recorded
+ * executable, and drop its record either way. The holding MCP server itself keeps running and
+ * reconnects lazily on its next tool call, exactly as after its own disconnect-bridge. `exe` and
+ * `kill` are injectable for the unit test.
+ */
+export function evictHolder(
+  h: Holder,
+  dir: string = holderDir(),
+  exe: (pid: number) => string | null = exeOf,
+  kill: (pid: number) => void = killBrowser
+): Eviction {
+  const pid = h.browserPid ?? null;
+  const recorded = h.browserExe ?? null;
+  let out: Eviction;
+  if (pid === null) {
+    out = { holder: h, ended: null, skipped: 'nothing to end (no browser recorded)' };
+  } else if (recorded === null) {
+    out = { holder: h, ended: null, skipped: `left pid ${pid} alone (no browser path recorded)` };
+  } else {
+    const live = exe(pid);
+    if (live === null) {
+      out = { holder: h, ended: null, skipped: `nothing to end (browser pid ${pid} is gone)` };
+    } else if (!sameExe(live, recorded)) {
+      out = {
+        holder: h,
+        ended: null,
+        skipped: `left pid ${pid} alone (it now runs another program, not the recorded browser)`,
+      };
+    } else {
+      kill(pid);
+      out = { holder: h, ended: pid };
+    }
+  }
   removeHolder(h, dir);
-  return kids;
+  return out;
 }

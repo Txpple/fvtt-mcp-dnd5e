@@ -30,7 +30,7 @@ restart. One world-driver at a time; temp documents are tagged `ZZ-*` and cleane
 
 `verify-<family>.mjs` — one script per tool family or per fix that needed a live proof
 (`verify-cards-tooling`, `verify-journal-tooling`, `verify-token-reskin`, …). Same conventions;
-run the ones that touch what you changed. Three of them are infrastructure proofs rather than
+run the ones that touch what you changed. Some of them are infrastructure proofs rather than
 tool proofs:
 
 - `verify-wake` — **DESTRUCTIVE**: takes the world down and proves the cold bring-up (wake →
@@ -38,6 +38,10 @@ tool proofs:
 - `verify-asset-plane` — the file plane on the selected host: the direct plane (WebDAV / the
   local `Data/`) and the bridge plane (Foundry's own FilePicker through the page).
 - `verify-toolsets` — the `FOUNDRY_TOOLSETS` registration filter (offline).
+- `verify-holders` — the seat records: two bridges on one seat (one in a forked child), and
+  `disconnect-bridge { all }` from one ends the other's browser by its recorded pid and
+  executable, leaves a decoy record whose pid runs another program alone, and the evicted bridge
+  re-joins on its next call. Touches no world document.
 - `prove-bridge` — the smallest possible live round trip (connect, one `foundry.call`, dispose).
 - `smoke-bridge` (`npm run smoke:bridge`) — the upgrade review's live check: joins as the bridge
   user, prints one PASS/FAIL line with the host kind and its Foundry and dnd5e versions (no URL, no

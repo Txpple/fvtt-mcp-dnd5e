@@ -37,7 +37,9 @@ import { clearSystemCache } from './utils/system-detection.js';
 import { OpCapError, raceWithCap } from './op-cap.js';
 import {
   describeHolder,
+  type Eviction,
   evictHolder,
+  exeOf,
   type Holder,
   holderRecord,
   listHolders,
@@ -125,9 +127,11 @@ export interface FoundryBridge {
   /**
    * End every OTHER holder's browser on this machine (their MCP servers keep running and reconnect
    * lazily on their next call) and drop their records. The cure for "a GM seat is taken by a bridge
-   * nobody in this session opened" (issue #12), without a walk through the process table.
+   * nobody in this session opened" (issue #12), without a walk through the process table. A browser
+   * is ended only while its recorded pid still runs its recorded executable (issue #17); each
+   * holder's entry says what was ended or why nothing was.
    */
-  evictOtherHolders(): { evicted: Holder[]; pids: number[] };
+  evictOtherHolders(): Eviction[];
 }
 
 export interface FoundryConfig {
@@ -282,6 +286,13 @@ export class Foundry implements FoundryBridge {
     // world, so drop the process-lifetime system-detection cache — it must re-detect, not trust a stale
     // answer (harmless no-op on the first connect).
     clearSystemCache();
+    // A browser that died under us (ended by another session's disconnect-bridge { all }, or a
+    // crash) is dropped, so this connect launches a new one instead of asking a dead context for a
+    // page, which fails on every call after.
+    if (this.browser && !this.browser.isConnected()) {
+      this.browser = undefined;
+      this.context = undefined;
+    }
     this.browser ??= await chromium.launch({
       headless: this.cfg.headless ?? true,
       args: GPU_ARGS,
@@ -326,6 +337,10 @@ export class Foundry implements FoundryBridge {
   private async markSeat(): Promise<void> {
     const rec = holderRecord(this.cfg.serverUrl, this.cfg.user);
     if (this.cfg.label) rec.label = this.cfg.label;
+    // The browser by pid and path, so another session's disconnect-bridge { all } can end it and
+    // nothing else (issue #17).
+    rec.browserPid = await this.browserPid();
+    rec.browserExe = rec.browserPid === null ? null : exeOf(rec.browserPid);
     const others = listHolders(this.cfg.serverUrl, this.cfg.user).filter(h => !h.self);
     for (const h of others) {
       this.log.warn(
@@ -349,6 +364,26 @@ export class Foundry implements FoundryBridge {
         }
       )
       .catch((err: Error) => this.log.debug(`seat marker not written — ${err.message}`));
+  }
+
+  /**
+   * The pid of the browser this bridge launched. A launched Playwright Browser has no `process()`,
+   * so it is read from a browser CDP session (`SystemInfo.getProcessInfo`, the entry of type
+   * `browser`). Best effort: null on any failure.
+   */
+  private async browserPid(): Promise<number | null> {
+    if (!this.browser) return null;
+    try {
+      const cdp = await this.browser.newBrowserCDPSession();
+      try {
+        const info = await cdp.send('SystemInfo.getProcessInfo');
+        return info.processInfo.find(p => p.type === 'browser')?.id ?? null;
+      } finally {
+        await cdp.detach().catch(() => {});
+      }
+    } catch {
+      return null;
+    }
   }
 
   /** Clear what markSeat left, under a short ceiling: a dispose must not wait on a dead page. */
@@ -375,11 +410,10 @@ export class Foundry implements FoundryBridge {
     return listHolders(this.cfg.serverUrl, this.cfg.user);
   }
 
-  evictOtherHolders(): { evicted: Holder[]; pids: number[] } {
-    const evicted = this.holders().filter(h => !h.self);
-    const pids: number[] = [];
-    for (const h of evicted) pids.push(...evictHolder(h));
-    return { evicted, pids };
+  evictOtherHolders(): Eviction[] {
+    return this.holders()
+      .filter(h => !h.self)
+      .map(h => evictHolder(h));
   }
 
   /** (Re)arm the idle logout from the last call's end; a call in flight pushes it out. */

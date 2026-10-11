@@ -57,6 +57,15 @@ What changed for a user of the tools and skills, release by release. The measure
   retried, and the next call reconnects. A script stuck in `while (true) {}` with a 5 s timeout
   now fails at about 40 s. The connect is never capped (a cold box keeps its wake and ready
   budgets). Library: `Foundry` takes `opCapMs`.
+- **`disconnect-bridge { "all": true }` ends only the recorded browser** (issue #17). A seat record
+  names the bridge's browser by pid and executable path (the pid from a CDP `SystemInfo` call, the
+  path from the operating system), and eviction ends that pid only while it still runs that
+  executable: a record left by a hard-killed server whose pid was since reused is cleared and
+  nothing is killed. The result says per holder which browser it ended, or why it ended none. No
+  `pgrep`: Windows ends the browser's tree (`taskkill /T`), Linux its process group. An evicted
+  bridge's next call re-joins with a new browser; it used to fail on the dead one (`Target page,
+  context or browser has been closed`) until its server restarted. Library: `Holder` carries
+  `browserPid` / `browserExe`, and `evictOtherHolders()` returns one entry per holder.
 - Budgets after: tools/list 204,719 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
