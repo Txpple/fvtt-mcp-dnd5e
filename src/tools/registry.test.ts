@@ -105,7 +105,8 @@ describe('tool registry', () => {
     //  and build the PC natively from the premium compendia instead — see design.md §7.)
     // + get-combat-stats (2026-08-27: per-combat analytics folded from Battle Flow's stat
     //   stamps — damage/healing/flips/spend economy/Bless margins; read-only, GM-facing,
-    //   filtered at call time. The stamps are an external wire format (battleflow ARCH §4),
+    //   filtered at call time. The stamps are an external wire format (By the Books, Battle
+    //   Flow until 3.0.0: its ARCH §4),
     //   never a code dependency.) − 1 (4.0.0, 2026-09-23): moved to fvtt-mcp-sessionscribe as
     //   analyze-combat, at parity on the sandbox first (owner's ruling; design.md §4).
     // + configure-dnd5e-settings (dnd5e 6.0 automation switches — allow-listed read + set, the

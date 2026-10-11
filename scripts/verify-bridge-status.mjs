@@ -1,7 +1,8 @@
 // Live verify for get-world-info's `bridge` block (issue #9), through the registry's own dispatch,
 // as the MCP server routes a call: the block names the renderer (GPU or software, with the page's
 // unmasked WebGL name), the canvas is ready, each Open Roll 5e module reads as its version when the
-// page finds it active and `not active` otherwise, the seat's `since` is an ISO date, the version is
+// page finds it active (`Battle Flow <version> (legacy)` for a world still on Battle Flow 2.x, which
+// is By the Books from 3.0.0) and `not active` otherwise, the seat's `since` is an ISO date, the version is
 // package.json's, the toolsets are `all`, the join user is `bridgeUser`'s alone (the block does not
 // echo it), and the warnings are exactly the true ones; a second
 // registry over the same bridge, built read-only, warns that the joined user can write (the
@@ -14,7 +15,13 @@ import { connectFoundry, quietLogger } from '../dist/client.js';
 import { buildToolRegistry } from '../dist/registry.js';
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const MODULES = { battleflow: 'Battle Flow', areasounds: 'Area Sounds', openserver: 'Open Server' };
+const MODULES = {
+  bythebooks: 'By the Books',
+  areasounds: 'Area Sounds',
+  openserver: 'Open Server',
+};
+// By the Books was Battle Flow until 3.0.0: a world still on 2.x reads as the legacy package.
+const LEGACY = { bythebooks: 'Battle Flow' };
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 
 const checks = [];
@@ -58,10 +65,16 @@ try {
   check('the canvas is ready', b?.canvasReady === true);
   for (const [key, name] of Object.entries(MODULES)) {
     const fact = page?.modules?.[key];
-    const want = fact?.active ? fact.version : 'not active';
+    const legacy = fact?.active && fact.legacy ? LEGACY[key] : null;
+    const want = !fact?.active
+      ? 'not active'
+      : legacy
+        ? `${legacy} ${fact.version} (legacy)`
+        : fact.version;
     check(
       `${name}: its version when active, else "not active"`,
-      b?.modules?.[key] === want && (want === 'not active' || /^\d+\.\d+/.test(want ?? '')),
+      b?.modules?.[key] === want &&
+        (want === 'not active' || /^\d+\.\d+/.test(String(fact?.version ?? ''))),
       `${b?.modules?.[key]} (page: active ${fact?.active}, version ${fact?.version})`
     );
   }
@@ -79,12 +92,18 @@ try {
   );
   check('woken: false (the sandbox world was up)', b?.woken === false, String(b?.woken));
   const inactive = Object.keys(MODULES).filter(k => !page?.modules?.[k]?.active);
+  const legacyOnly = Object.keys(MODULES).filter(
+    k => page?.modules?.[k]?.active && page.modules[k].legacy
+  );
   const software = r?.[1] === 'software';
   const warnings = b?.warnings ?? [];
   check(
-    'warnings: exactly the true ones (a software renderer, an inactive module), or none at all',
-    warnings.length === inactive.length + (software ? 1 : 0) &&
+    'warnings: exactly the true ones (a software renderer, an inactive or legacy module), or none at all',
+    warnings.length === inactive.length + legacyOnly.length + (software ? 1 : 0) &&
       inactive.every(k => warnings.some(w => w.startsWith(`${MODULES[k]} is not active`))) &&
+      legacyOnly.every(k =>
+        warnings.some(w => w.startsWith(`Only the legacy ${LEGACY[k]}`) && w.includes(MODULES[k]))
+      ) &&
       (!software || warnings.some(w => w.startsWith('Chromium renders in software'))) &&
       (warnings.length > 0 || !Object.hasOwn(b ?? {}, 'warnings')),
     warnings.join(' | ') || 'none'

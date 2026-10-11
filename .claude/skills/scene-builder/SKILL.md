@@ -51,7 +51,7 @@ itself applies the rules, no macro:
   consecrated ground that burns the undead: add `creatureTypes: ["undead"]`), `sizes`. Recipes:
   a poison pool → `effects: ["Poisoned"]`; brambles → `effects: ["Restrained"]`; a fog bank →
   `effects: ["Blinded"]`; a shrine → `effects: ["Frightened Immunity"]` for `dispositions:
-  ["friendly"]`; lava has no "damage per turn" effect — that is `executeMacro` or a Battle Flow
+  ["friendly"]`; lava has no "damage per turn" effect — that is `executeMacro` or a By the Books
   emanation, not this behavior.
 - **`dnd5e.difficultTerrain`** — `terrainTypes: ["web" | "plants" | "ice" | "mud" | "sand" |
   "snow" | "rocks" | "slope" | "liquid"]` (a creature that ignores that kind — a spider in webs — walks

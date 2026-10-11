@@ -3,6 +3,24 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.5.0 — 2026-10-11 — Battle Flow is By the Books
+
+- **The bridge reports By the Books.** Battle Flow became Open Roll 5e: By the Books
+  (`fvtt-mod-bythebooks`) at its 3.0.0. `get-world-info`'s `bridge.modules` names it under
+  `bythebooks` (was `battleflow`): its version when active, else `not active`, and the warning
+  reads `By the Books is not active in this world: the combat report needs it`. `npm run doctor`
+  and `npm run smoke:bridge` print `By the Books <version>`.
+- **A world still on Battle Flow 2.x reads as something true.** When By the Books is not active and
+  Battle Flow is, `bythebooks` is `Battle Flow 2.17.0 (legacy)` (the page fact carries
+  `legacy: true`), the doctor's line says `Battle Flow 2.17.0 (legacy, now By the Books)` with a !,
+  and the warning is `Only the legacy Battle Flow 2.17.0 is active in this world: it is now By the
+  Books; install fvtt-mod-bythebooks and disable Battle Flow`. Nothing here reads the module's
+  chat-card stat stamps (the scribe does): new cards carry `flags["fvtt-mod-bythebooks"]`, older
+  ones keep `flags["fvtt-mod-battleflow"]`; `docs/contracts.md` names both.
+- Docs that state current facts follow the rename (the contracts row, the sandbox deploy example,
+  the start-session and scene-builder skills); dated history stays as written.
+- Budgets unchanged: tools/list 204,651 chars (81 tools), always-on 1,778, skill descriptions 7,773.
+
 ## 4.4.1 — 2026-10-11 — the PC builder's own switch leaves the receipt
 
 - **`create-pc` and `level-up-pc` no longer report their advancement switch in the receipt.** The

@@ -2,7 +2,7 @@
 // and prove the bytes landed. Generalizes scripts/deploy-partystash.mjs + scripts/check-prod-bytes.mjs,
 // which were written per-module and had to be cloned for every new one.
 //
-//   node scripts/deploy-house-module.mjs fvtt-mod-battleflow --local     (the LOCAL sandbox)
+//   node scripts/deploy-house-module.mjs fvtt-mod-bythebooks --local     (the LOCAL sandbox)
 //   FOUNDRY_HOST=molten node scripts/deploy-house-module.mjs fvtt-mod-lootshelf
 //   FOUNDRY_HOST=molten node scripts/deploy-house-module.mjs fvtt-mod-partystash --check   (compare only)
 //

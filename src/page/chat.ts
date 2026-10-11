@@ -340,7 +340,7 @@ export async function postItemCard(args: {
   }
 
   // Honest `posted`: dnd5e returns undefined from use() and null from rollAttack/rollDamage when a
-  // `dnd5e.preUseActivity` / pre-roll hook vetoes the action (e.g. Battle Flow's require-target rule
+  // `dnd5e.preUseActivity` / pre-roll hook vetoes the action (e.g. By the Books' require-target rule
   // on an attack with nothing targeted) or a dialog is cancelled — nothing reaches chat then.
   const VETOED =
     'nothing was posted — a module hook vetoed the use (e.g. a require-target rule: target a token ' +

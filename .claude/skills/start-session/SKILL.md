@@ -48,8 +48,9 @@ one you used. The result's `host` block confirms it (`host.kind`, `host.label`).
    - `host` — where it runs (`kind`, `label`) and `files` (which file plane the asset tools have
      here: `local filesystem` / `WebDAV` / `bridge (FilePicker)`);
    - `bridge` — the bridge itself: `renderer` (`GPU: …` is healthy; `software: …` means slow
-     screenshots stamped with Foundry's hardware-acceleration banner), `modules` (Battle Flow,
-     Area Sounds, Open Server: a version, or `not active`) and `toolsets` (`all`, `readonly`, or
+     screenshots stamped with Foundry's hardware-acceleration banner), `modules` (By the Books,
+     Area Sounds, Open Server: a version, or `not active`; `Battle Flow <version> (legacy)` is a
+     world still on Battle Flow 2.x, now By the Books) and `toolsets` (`all`, `readonly`, or
      the list this registration advertises); `woken` says this call had to bring the world up.
      Surface every `warnings` entry as written: each names what it affects;
    - `bridgeUser` — the user the bridge joined as and its `role`; confirm it is present in

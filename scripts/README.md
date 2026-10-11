@@ -103,6 +103,6 @@ is the live 24-call baseline of result sizes.
   `fvtt-mod-areasounds-sfx/tools/` (`upload-areasounds-library`, `remap-areasounds-scene-paths`).
 - The spikes that de-risked a design (`spike-*.mjs`) are archived under `docs/history/spikes/`
   — reading material, not runnable against today's `dist/`.
-- `reload-clients` (battleflow owns the used copy), `register-partystash` (generalized into
+- `reload-clients` (By the Books owns the used copy), `register-partystash` (generalized into
   `register-module`), and the one-offs `party-stats`, `read-user-avatars`, `reveal-scene-fog`,
   `repair-orphaned-container-refs` are gone; git history has them.

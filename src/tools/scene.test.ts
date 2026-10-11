@@ -612,7 +612,7 @@ describe('get-world-info: the bridge block (issue #9)', () => {
     canvasReady: true,
     viewport: { width: 1920, height: 1080 },
     modules: {
-      battleflow: { active: true, version: '2.17.0' },
+      bythebooks: { active: true, version: '3.0.0' },
       areasounds: { active: true, version: '2.0.1' },
       openserver: { active: true, version: '1.2.0' },
     },
@@ -646,7 +646,7 @@ describe('get-world-info: the bridge block (issue #9)', () => {
       woken: false,
       renderer: `GPU: ${GPU}`,
       canvasReady: true,
-      modules: { battleflow: '2.17.0', areasounds: '2.0.1', openserver: '1.2.0' },
+      modules: { bythebooks: '3.0.0', areasounds: '2.0.1', openserver: '1.2.0' },
       toolsets: 'all',
     });
     // the join user is bridgeUser's alone: the block does not echo it (design.md §3)
@@ -685,20 +685,33 @@ describe('get-world-info: the bridge block (issue #9)', () => {
 
   it('warns about each family module that is not active, naming what needs it', async () => {
     const modules = {
-      battleflow: { active: false, version: null },
+      bythebooks: { active: false, version: null },
       areasounds: { active: false, version: '2.0.1' },
       openserver: { active: false, version: null },
     };
     const out = await run(world({ bridge: facts({ modules }) }));
     expect(out.bridge.modules).toEqual({
-      battleflow: 'not active',
+      bythebooks: 'not active',
       areasounds: 'not active',
       openserver: 'not active',
     });
     expect(out.bridge.warnings).toEqual([
-      'Battle Flow is not active in this world: the combat report needs it',
+      'By the Books is not active in this world: the combat report needs it',
       'Area Sounds is not active in this world: configure-area-sounds needs it',
       'Open Server is not active in this world: set-landing-scene needs it',
+    ]);
+  });
+
+  it('a world still on Battle Flow 2.x reads as legacy Battle Flow, and says it is now By the Books', async () => {
+    const modules = {
+      ...facts().modules,
+      bythebooks: { active: true, version: '2.17.0', legacy: true },
+    };
+    const out = await run(world({ bridge: facts({ modules }) }));
+    expect(out.bridge.modules.bythebooks).toBe('Battle Flow 2.17.0 (legacy)');
+    expect(out.bridge.warnings).toEqual([
+      'Only the legacy Battle Flow 2.17.0 is active in this world: it is now By the Books; ' +
+        'install fvtt-mod-bythebooks and disable Battle Flow',
     ]);
   });
 
@@ -739,7 +752,7 @@ describe('get-world-info: the bridge block (issue #9)', () => {
     expect(out.bridge).toMatchObject({
       renderer: 'unknown',
       canvasReady: false,
-      modules: { battleflow: 'not active', areasounds: 'not active', openserver: 'not active' },
+      modules: { bythebooks: 'not active', areasounds: 'not active', openserver: 'not active' },
     });
     expect(out.bridge).not.toHaveProperty('warnings');
   });

@@ -21,7 +21,8 @@ the asset tools are using (`local filesystem`, `WebDAV`, or `bridge (FilePicker)
 block reports the bridge itself: this server's version, since when it holds the seat (the join user
 is `bridgeUser`), whether the call had to wake or launch the world (`woken`), Chromium's renderer
 (`GPU: …` or `software: …`), whether the canvas is ready, the Open Roll 5e modules (a version, or
-`not active`), the registration's `toolsets`, and `warnings` for what needs a look; `npm run doctor` and
+`not active`; a world still on Battle Flow 2.x, which is By the Books from 3.0.0, reads
+`Battle Flow <version> (legacy)` under `bythebooks`), the registration's `toolsets`, and `warnings` for what needs a look; `npm run doctor` and
 `npm run smoke:bridge` print the renderer and the modules too.
 
 ## The facts (the variables)

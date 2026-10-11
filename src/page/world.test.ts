@@ -39,7 +39,7 @@ describe('getWorldInfo: the bridge facts', () => {
     stub({
       canvas: { ready: true, app: { renderer: { gl: gl(' ANGLE (Intel, Direct3D11) ') } } },
       modules: new Map([
-        ['fvtt-mod-battleflow', { active: true, version: '2.17.0' }],
+        ['fvtt-mod-bythebooks', { active: true, version: '3.0.0' }],
         ['fvtt-mod-areasounds', { active: false, version: '2.0.1' }],
       ]),
     });
@@ -48,11 +48,43 @@ describe('getWorldInfo: the bridge facts', () => {
       canvasReady: true,
       viewport: { width: 1920, height: 1080 },
       modules: {
-        battleflow: { active: true, version: '2.17.0' },
+        bythebooks: { active: true, version: '3.0.0' },
         areasounds: { active: false, version: '2.0.1' }, // installed, not active
         openserver: { active: false, version: null }, // not installed
       },
     });
+  });
+
+  it('By the Books not active: legacy Battle Flow stands in when it is active, flagged legacy', () => {
+    const canvas = { ready: true };
+    // a world still on Battle Flow 2.x
+    stub({
+      canvas,
+      modules: new Map([['fvtt-mod-battleflow', { active: true, version: '2.17.0' }]]),
+    });
+    expect(getWorldInfo().bridge.modules.bythebooks).toEqual({
+      active: true,
+      version: '2.17.0',
+      legacy: true,
+    });
+    // both installed, By the Books active: By the Books, whatever Battle Flow is
+    stub({
+      canvas,
+      modules: new Map([
+        ['fvtt-mod-bythebooks', { active: true, version: '3.0.0' }],
+        ['fvtt-mod-battleflow', { active: true, version: '2.17.0' }],
+      ]),
+    });
+    expect(getWorldInfo().bridge.modules.bythebooks).toEqual({ active: true, version: '3.0.0' });
+    // By the Books installed but off, Battle Flow off too: By the Books' own fact
+    stub({
+      canvas,
+      modules: new Map([
+        ['fvtt-mod-bythebooks', { active: false, version: '3.0.0' }],
+        ['fvtt-mod-battleflow', { active: false, version: '2.17.0' }],
+      ]),
+    });
+    expect(getWorldInfo().bridge.modules.bythebooks).toEqual({ active: false, version: '3.0.0' });
   });
 
   it('a software renderer is not the GPU', () => {
@@ -93,6 +125,6 @@ describe('getWorldInfo: the bridge facts', () => {
     const b = getWorldInfo().bridge;
     expect(b.renderer).toEqual({ name: null, gpu: null });
     expect(b.canvasReady).toBe(false);
-    expect(b.modules.battleflow).toEqual({ active: false, version: null });
+    expect(b.modules.bythebooks).toEqual({ active: false, version: null });
   });
 });

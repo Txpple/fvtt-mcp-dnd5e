@@ -41,7 +41,7 @@ const WRITING_ROLES: Record<string, string> = {
 
 /**
  * The bridge block's warnings: only what is true, each saying what it affects. A software renderer;
- * a family module the skills expect that is not active; a read-only registration whose join user
+ * a family module the skills expect that is not active, or only its old package is; a read-only registration whose join user
  * can write anyway; Foundry or dnd5e below the line this server is tested on.
  */
 function bridgeWarnings(
@@ -923,9 +923,9 @@ export class SceneTools {
       renderer: rendererLabel(facts?.renderer),
       canvasReady: facts?.canvasReady === true,
       modules: {
-        battleflow: moduleLabel(facts?.modules?.battleflow),
-        areasounds: moduleLabel(facts?.modules?.areasounds),
-        openserver: moduleLabel(facts?.modules?.openserver),
+        bythebooks: moduleLabel(facts?.modules?.bythebooks, 'bythebooks'),
+        areasounds: moduleLabel(facts?.modules?.areasounds, 'areasounds'),
+        openserver: moduleLabel(facts?.modules?.openserver, 'openserver'),
       },
       toolsets: this.registration.toolsets,
       ...(warnings.length ? { warnings } : {}),

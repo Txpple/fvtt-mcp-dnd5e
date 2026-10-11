@@ -13,6 +13,7 @@
 
 import {
   type BridgeFacts,
+  FAMILY_MODULES,
   type FamilyModuleKey,
   type ModuleFact,
   rendererOnGpu,
@@ -57,7 +58,7 @@ function calendarSummary(): Record<string, unknown> {
 
 /** The family modules' package ids; their names and what needs each: utils/bridge-facts.ts. */
 const FAMILY_MODULE_IDS: Record<FamilyModuleKey, string> = {
-  battleflow: 'fvtt-mod-battleflow',
+  bythebooks: 'fvtt-mod-bythebooks',
   areasounds: AREASOUNDS_MODULE_ID,
   openserver: 'fvtt-mod-openserver',
 };
@@ -94,6 +95,19 @@ function moduleFact(id: string): ModuleFact {
 }
 
 /**
+ * A family module's fact. A renamed module (By the Books, Battle Flow until 3.0.0) that is not
+ * active falls back to its old package when that one is: the fact is the old package's, flagged
+ * `legacy`, so a world still on Battle Flow 2.x reads as something true rather than not active.
+ */
+function familyModuleFact(key: FamilyModuleKey): ModuleFact {
+  const fact = moduleFact(FAMILY_MODULE_IDS[key]);
+  const legacyId = FAMILY_MODULES[key].legacy?.id;
+  if (fact.active || !legacyId) return fact;
+  const old = moduleFact(legacyId);
+  return old.active ? { ...old, legacy: true } : fact;
+}
+
+/**
  * The bridge's own client (issue #9): Chromium's renderer (the GPU, or software, which makes every
  * screenshot slow and stamps it with Foundry's hardware-acceleration banner; issue #2), whether the
  * canvas is ready, the window's size, and the Open Roll 5e modules the skills lean on. Every read is
@@ -111,9 +125,9 @@ function bridgeFacts(): BridgeFacts {
       return width > 0 && height > 0 ? { width, height } : null;
     }, null),
     modules: {
-      battleflow: moduleFact(FAMILY_MODULE_IDS.battleflow),
-      areasounds: moduleFact(FAMILY_MODULE_IDS.areasounds),
-      openserver: moduleFact(FAMILY_MODULE_IDS.openserver),
+      bythebooks: familyModuleFact('bythebooks'),
+      areasounds: familyModuleFact('areasounds'),
+      openserver: familyModuleFact('openserver'),
     },
   };
 }

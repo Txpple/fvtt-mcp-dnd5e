@@ -102,7 +102,7 @@ The house-module repos (`fvtt-mod-*`, beside this one) are exercised against the
 risking the played world:
 
 ```bash
-node scripts/deploy-house-module.mjs fvtt-mod-battleflow --local
+node scripts/deploy-house-module.mjs fvtt-mod-bythebooks --local
 ```
 
 `--local` writes the module's served files straight into the sandbox's `Data/modules/` (same
