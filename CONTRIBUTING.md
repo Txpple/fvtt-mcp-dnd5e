@@ -121,7 +121,8 @@ The 2.x / 3.x tools refuse a pre-6.0 dnd5e world; 1.x is the line for dnd5e 5.3.
 
 ## Working with Claude Code here
 
-- `CLAUDE.md` is a three-line pointer to this file; keep it that way.
+- `CLAUDE.md` is a three-line pointer to this file, and `AGENTS.md` the same pointer for the
+  clients that read that name; keep them that way.
 - Several agent sessions may work on this repo at once: `git status` / `git log` before editing,
   stop with a clean tree at a milestone breakpoint.
 - The Bash tool runs commands inside backticks in a double-quoted string — write patch scripts

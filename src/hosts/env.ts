@@ -30,7 +30,8 @@ import type { HostKind } from './types.js';
  * supplied the value, and only under the host they belong to — MOLTEN_* under molten, LOCAL_*
  * under local — so a .env written for the 2.x layout keeps working unchanged. Precedence:
  * host-prefixed alias > FOUNDRY_* > default. `FOUNDRY_PROFILE=local` (pre-2.2) = FOUNDRY_HOST=local.
- * MOLTEN_FILEBROWSER_URL was never read by anything and is dropped.
+ * MOLTEN_FILEBROWSER_URL was never read by anything and is dropped. The table is LEGACY_NAMES;
+ * `npm run init` asks it (`legacyNameOf`) which line of a .env supplies an answer it updates.
  *
  * Secrets AND the world id are optional with NO default — an unset world id means "discover it on
  * /setup" (one world) rather than a doomed launch. Tools check presence and name the variable.
@@ -94,6 +95,37 @@ const HostConfigSchema = z.object({
     .optional(),
 });
 
+/**
+ * The 2.x names still read, per host: canonical → its legacy alias. Read only under its own host,
+ * where it wins over the canonical name (what lets one 2.x .env, MOLTEN_* for prod and LOCAL_* for
+ * the sandbox, serve two registrations).
+ */
+const LEGACY_NAMES: Record<HostKind, Readonly<Record<string, string>>> = {
+  local: {
+    FOUNDRY_URL: 'LOCAL_SERVER_URL',
+    FOUNDRY_USER: 'LOCAL_FOUNDRY_USER',
+    FOUNDRY_PASSWORD: 'LOCAL_FOUNDRY_PASSWORD',
+    FOUNDRY_ADMIN_KEY: 'LOCAL_ADMIN_KEY',
+    FOUNDRY_WORLD_ID: 'LOCAL_WORLD_ID',
+    FOUNDRY_DATA_DIR: 'LOCAL_FOUNDRY_DATA',
+  },
+  molten: {
+    FOUNDRY_URL: 'MOLTEN_SERVER_URL',
+    FOUNDRY_ADMIN_KEY: 'MOLTEN_ADMIN_KEY',
+    FOUNDRY_WORLD_ID: 'MOLTEN_WORLD_ID',
+    FOUNDRY_WAKE_URL: 'MOLTEN_MAGIC_URL',
+    FOUNDRY_WEBDAV_URL: 'MOLTEN_WEBDAV_URL',
+    FOUNDRY_WEBDAV_USER: 'MOLTEN_WEBDAV_USER',
+    FOUNDRY_WEBDAV_PASSWORD: 'MOLTEN_WEBDAV_PASSWORD',
+  },
+  generic: {},
+};
+
+/** The legacy name that, when set, supplies `canonical` under `kind` in its place, if any. */
+export function legacyNameOf(kind: HostKind, canonical: string): string | undefined {
+  return LEGACY_NAMES[kind][canonical];
+}
+
 /** An empty string in .env means "unset" for every optional field. */
 const opt = (v: string | undefined): string | undefined => (v?.trim() ? v.trim() : undefined);
 
@@ -125,36 +157,39 @@ export function resolveHostConfig(
   opts: { warn?: AliasWarn } = {}
 ): HostConfig {
   const { warn } = opts;
-  kind ??= hostKindFromEnv(env, warn);
-  const p = (canonical: string, ...aliases: string[]) => pick(env, warn, canonical, ...aliases);
+  const host: HostKind = kind ?? hostKindFromEnv(env, warn);
+  const p = (canonical: string) => {
+    const alias = legacyNameOf(host, canonical);
+    return alias ? pick(env, warn, canonical, alias) : pick(env, warn, canonical);
+  };
   let raw: HostConfig;
-  switch (kind) {
+  switch (host) {
     case 'local': {
       raw = {
-        kind,
-        serverUrl: p('FOUNDRY_URL', 'LOCAL_SERVER_URL') ?? 'http://localhost:30000',
-        user: p('FOUNDRY_USER', 'LOCAL_FOUNDRY_USER') ?? 'MCP-Claude',
-        password: p('FOUNDRY_PASSWORD', 'LOCAL_FOUNDRY_PASSWORD'),
-        adminKey: p('FOUNDRY_ADMIN_KEY', 'LOCAL_ADMIN_KEY'), // unset -> manual world launch
-        worldId: p('FOUNDRY_WORLD_ID', 'LOCAL_WORLD_ID'),
-        dataDir: p('FOUNDRY_DATA_DIR', 'LOCAL_FOUNDRY_DATA'),
+        kind: host,
+        serverUrl: p('FOUNDRY_URL') ?? 'http://localhost:30000',
+        user: p('FOUNDRY_USER') ?? 'MCP-Claude',
+        password: p('FOUNDRY_PASSWORD'),
+        adminKey: p('FOUNDRY_ADMIN_KEY'), // unset -> manual world launch
+        worldId: p('FOUNDRY_WORLD_ID'),
+        dataDir: p('FOUNDRY_DATA_DIR'),
         // no wakeUrl (a local process does not sleep), no webdav (nothing to dial)
       };
       break;
     }
     case 'molten': {
-      const serverUrl = p('FOUNDRY_URL', 'MOLTEN_SERVER_URL') ?? PLACEHOLDER_URL;
-      const webdavUrl = p('FOUNDRY_WEBDAV_URL', 'MOLTEN_WEBDAV_URL') ?? moltenWebdavUrl(serverUrl);
-      const webdavUser = p('FOUNDRY_WEBDAV_USER', 'MOLTEN_WEBDAV_USER') ?? 'foundry-ftp';
-      const webdavPassword = p('FOUNDRY_WEBDAV_PASSWORD', 'MOLTEN_WEBDAV_PASSWORD');
+      const serverUrl = p('FOUNDRY_URL') ?? PLACEHOLDER_URL;
+      const webdavUrl = p('FOUNDRY_WEBDAV_URL') ?? moltenWebdavUrl(serverUrl);
+      const webdavUser = p('FOUNDRY_WEBDAV_USER') ?? 'foundry-ftp';
+      const webdavPassword = p('FOUNDRY_WEBDAV_PASSWORD');
       raw = {
-        kind,
+        kind: host,
         serverUrl,
         user: p('FOUNDRY_USER') ?? 'MCP-Claude',
         password: p('FOUNDRY_PASSWORD'),
-        adminKey: p('FOUNDRY_ADMIN_KEY', 'MOLTEN_ADMIN_KEY'),
-        worldId: p('FOUNDRY_WORLD_ID', 'MOLTEN_WORLD_ID'),
-        wakeUrl: p('FOUNDRY_WAKE_URL', 'MOLTEN_MAGIC_URL'),
+        adminKey: p('FOUNDRY_ADMIN_KEY'),
+        worldId: p('FOUNDRY_WORLD_ID'),
+        wakeUrl: p('FOUNDRY_WAKE_URL'),
         webdav:
           webdavUrl && webdavPassword
             ? { url: webdavUrl, user: webdavUser, password: webdavPassword }

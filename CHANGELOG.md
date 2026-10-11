@@ -148,6 +148,23 @@ What changed for a user of the tools and skills, release by release. The measure
   surfaces every warning. Library: `FoundryBridge.info()` (server URL, user, since, woken); the
   page's `getWorldInfo` result carries `bridge` (renderer, canvasReady, viewport, modules).
   `scripts/verify-bridge-status.mjs`: 13/13.
+- **`npm run init`: from a built clone to a checked registration in one command** (issue #7). It
+  says first what it cannot do (the Foundry user the bridge joins as must exist in the world), then
+  asks for the host (`local`, `molten`, `generic`), the URL, that user and its password, the admin
+  password, the host's extras (Molten's wake URL and File Manager password; a local install's
+  `Data` folder, offered at the platform's default), whether the first run is read-only, and where
+  the registration goes: this clone's `.mcp.json`, another project's, or `~/.claude.json` (copied
+  to `.bak-<time>` first; only its `mcpServers` entry changes). Every answer is also a flag; `--yes`
+  asks nothing, and a missing required answer exits 2 naming its flag. Secrets go only to the
+  `.env`: a new one gets the minimal block `.env.example` opens with, an existing one is copied to
+  `.bak` and changed in place where an answer differs (on the 2.x alias's line when that is what
+  the host reads, so the answer is not shadowed), every other line kept. The registration is the
+  full Node path, `dist/index.js` and an env block that names the instance (`FOUNDRY_HOST`,
+  `FOUNDRY_URL`, `FOUNDRY_TOOLSETS`, and `FVTT_MCP_ENV` for a `.env` that is not the repo's). Then
+  it runs the doctor, whose lines are the join report, and prints the entry as an `mcpServers`
+  block for any other MCP client; Claude Code's config is the only one it writes (issue #5, closed
+  as not planned). `AGENTS.md` ships beside `CLAUDE.md`. The legacy names are one table in the host
+  selector (`legacyNameOf`), and `runDoctor` takes the environment it reads as an argument.
 - Budgets after: tools/list 204,714 chars (≤ 205,000; the `undo` leaf is 5 chars shorter), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds

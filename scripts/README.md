@@ -62,6 +62,13 @@ tool proofs:
   renderer and modules (a ! when it renders in software or a module is not active). Read-only; it
   never launches a world (the admin key is withheld from its login) and does not wake a sleeping
   box.
+- `init` (`npm run init`; `-- --help` for the flags) — the setup in one command: it says first
+  that the Foundry user must exist (it cannot create one), asks for the connection (or takes it as
+  flags; `--yes` asks nothing), writes the `.env` (an existing one copied to `.bak` and changed in
+  place) and the registration (this clone's `.mcp.json`, another project's, or `~/.claude.json`,
+  copied to `.bak-<time>` first; never a secret), runs the doctor on them, and prints the entry as
+  an `mcpServers` block for any other MCP client. `scripts/lib/preflight.mjs` holds the Node and
+  build checks it shares with the doctor.
 - `verify-error-contract` — the error contract end to end (read-only): a page-side `PageError`
   code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
   appends one hint per code, a dead URL is `connection`.

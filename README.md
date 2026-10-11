@@ -15,11 +15,24 @@ Targets **dnd5e 6.0.5+ on Foundry 14.368+**, on any host: a hosting provider, th
 ```bash
 git clone https://github.com/Txpple/fvtt-mcp-dnd5e && cd fvtt-mcp-dnd5e
 npm install && npx playwright install chromium && npm run build
-cp .env.example .env              # or just the minimal local / Molten block at its top
-cp .mcp.json.example .mcp.json    # absolute paths; one registration per Foundry instance
-FOUNDRY_HOST=local npm run doctor # checks the setup, one line per item (the host as registered)
+npm run init                      # asks, writes .env and the registration, runs the doctor
 node scripts/install-skills.mjs ~/my-campaign   # optional: link the skills into another project
 ```
+
+`npm run init` first says the one thing it cannot do: the Foundry user the server joins as must
+exist in the world (Users → Create User; Gamemaster or Assistant GM, default name `MCP-Claude`).
+Then it asks where Foundry runs (`local`, `molten` or `generic`), its URL, that user and its
+password, and the admin password (the Setup screen's Administrator Password, not the license key),
+plus the wake URL and File Manager password on Molten or the `Data` folder of a local install. It
+writes those to `.env` (an existing one is backed up and changed in place), registers the server
+for Claude Code with the full Node path (this clone's `.mcp.json`, another project's, or
+`~/.claude.json` for every project; never a secret), runs the doctor as its join report, and
+prints the same entry as an `mcpServers` block for any other MCP client. For a cautious first run,
+answer yes to read-only (`FOUNDRY_TOOLSETS=readonly`) and join as a Player or Trusted Player: the
+server then reads the world and refuses every write (Tools, below). Every answer is also a flag
+(`npm run init -- --help`; `--yes` asks nothing). By hand instead: the minimal block at the top of
+`.env.example` into `.env`, `.mcp.json.example` into `.mcp.json` with absolute paths, then
+`npm run doctor`.
 
 `npm run doctor` checks, in order: Node, the build, Playwright's Chromium, the `.env` (as the
 server reads it), the Foundry app (local host), that Foundry answers, the admin key (when no world
@@ -28,24 +41,12 @@ Open Roll 5e modules. Every ✗ line names its fix, and any ✗ exits non-zero. 
 stops a world; the login is the same short join a tool call makes, so it is safe against a live
 instance.
 
-Registration (`.mcp.json`, or `mcpServers` in `~/.claude.json` for every project) names the
-full Node path, `"command": "C:/Program Files/nodejs/node.exe"` on Windows, since the client
-that starts the server may not have Node on PATH. A desktop-app install of Claude Code may not put
-`claude` on PATH either, so register by editing one of those files rather than with
-`claude mcp add`.
-
-In Foundry, create the user the server joins as (Gamemaster or Assistant GM; default name
-`MCP-Claude`), or set `FOUNDRY_USER` to an existing Gamemaster or Assistant GM user; a name the
-world does not have is refused at the first tool call, with the users it does have. Start Claude
-Code and say **"start the world"**: the server wakes the instance if it sleeps, launches the world
-if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the host, its role, which premium
-books it found, and the bridge's state (Chromium's renderer, the Open Roll 5e modules it found
-active, the toolsets it advertises, and a warning for anything that needs a look). Then ask for
-content.
-
-For a cautious first run, register with `"FOUNDRY_TOOLSETS": "readonly"` and a Player or Trusted
-Player user: the server then reads the world and refuses every write (the `foundry-readonly`
-entry in `.mcp.json.example`; Tools, below).
+Start Claude Code and say **"start the world"**: the server wakes the instance if it sleeps,
+launches the world if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the host, its role,
+which premium books it found, and the bridge's state (Chromium's renderer, the Open Roll 5e modules
+it found active, the toolsets it advertises, and a warning for anything that needs a look). A user
+name the world does not have is refused at the first tool call, with the users it does have. Then
+ask for content.
 
 **Requirements:** Node.js 22+ · Foundry 14.368+ with dnd5e 6.0.5+ (6.0.0–6.0.3 delete every
 effect without an expiry on a rest; the tools refuse a pre-6.0 world; an older world is upgraded

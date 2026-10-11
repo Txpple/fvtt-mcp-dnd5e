@@ -4,7 +4,8 @@
 //
 // It reads the configuration exactly as the server does: the .env (src/env.ts — <repo>/.env, or
 // FVTT_MCP_ENV) layered UNDER the process environment, so a registration-style override
-// (`FOUNDRY_USER=x npm run doctor`) wins, and FOUNDRY_HOST picks the host the same way.
+// (`FOUNDRY_USER=x npm run doctor`) wins, and FOUNDRY_HOST picks the host the same way. `npm run
+// init` (src/init.ts) passes the environment a registration it just wrote would start with.
 //
 // Safe against prod: it never launches or stops a world and writes nothing. The Foundry checks are
 // GET /api/status, at most one POST /auth (only when no world is running, to test the admin key;
@@ -146,11 +147,13 @@ function firstLine(err: unknown): string {
 }
 
 /**
- * Run every check after Node and dist/. Returns the number of failures (✗ lines).
+ * Run every check after Node and dist/. Returns the number of failures (✗ lines). `processEnv`
+ * stands in for the process environment: the .env it names (FVTT_MCP_ENV) and the values it lays
+ * over that file.
  *
  * @public scripts/doctor.mjs loads it from dist/ by a dynamic import, which knip cannot follow.
  */
-export async function runDoctor(io: DoctorIO): Promise<number> {
+export async function runDoctor(io: DoctorIO, processEnv: Env = process.env): Promise<number> {
   let failed = 0;
   const fail = (text: string): void => {
     failed++;
@@ -158,7 +161,7 @@ export async function runDoctor(io: DoctorIO): Promise<number> {
   };
 
   // --- configuration: the .env under process.env, as src/config.ts layers it -----------------
-  const path = envPath();
+  const path = envPath(processEnv);
   const fileWarnings: string[] = [];
   const warn = console.warn;
   console.warn = (m: unknown) => fileWarnings.push(String(m).replace(/^\[env\] /, ''));
@@ -169,13 +172,13 @@ export async function runDoctor(io: DoctorIO): Promise<number> {
     console.warn = warn;
   }
   if (!existsSync(path)) {
-    if (process.env.FVTT_MCP_ENV?.trim()) {
+    if (processEnv.FVTT_MCP_ENV?.trim()) {
       fail(`.env: FVTT_MCP_ENV points at ${path}, which does not exist — fix the path`);
       return failed;
     }
     io.say('warn', `.env: none at ${path} — only the process environment and the defaults apply`);
   }
-  const env: Env = { ...fileEnv, ...process.env };
+  const env: Env = { ...fileEnv, ...processEnv };
   let kind: HostKind;
   let hostConfig: HostConfig;
   const notes: string[] = [];

@@ -4,7 +4,9 @@ The server drives a Foundry world through Foundry's own client (a headless Chrom
 user). Where that world runs — a hosting provider, this machine, any URL — is a **host**: a preset
 over a few facts, chosen per MCP registration with `FOUNDRY_HOST`, and the only place in the code
 that knows one host from another is `src/hosts/**` ([design.md §2.6](../design.md)). A new user
-sees one variable set, `FOUNDRY_*`.
+sees one variable set, `FOUNDRY_*`, and sets it up with `npm run init` (README, Setup), which asks
+for the facts below, writes them and runs the doctor. What it cannot do is on Foundry's side:
+install it, make the world, and create the user the bridge joins as.
 
 ## The three presets
 
@@ -60,7 +62,11 @@ registrations.
 A registration's `env` block beats the shared `.env`, so one `.env` serves every registration and
 each registration sets only what differs — which instance (`FOUNDRY_URL`) and how it is reached
 (`FOUNDRY_HOST`). Which instance a tool call touches is fixed by which server it goes to; there is
-no runtime "switch instance" state. The documented registrations are in
+no runtime "switch instance" state. `npm run init` writes one: the instance's keys into the
+`.env`, and the registration (`FOUNDRY_HOST`, `FOUNDRY_URL`, `FOUNDRY_TOOLSETS` when chosen) into
+this clone's `.mcp.json`, another project's, or `~/.claude.json`. A second instance has secrets
+of its own, so it is a second run with its own `--name` and `--env .env.<name>`; the
+registration then names that file in `FVTT_MCP_ENV`. The documented shapes are in
 [`.mcp.json.example`](../.mcp.json.example): `foundry` (your world), `foundry-local5e`
 (`FOUNDRY_HOST=local`) and `foundry-readonly` (your world, read-only, as a Player). The skills
 name tools bare; when more than one Foundry is registered they use the one you named.
@@ -159,6 +165,7 @@ The line before this one, 1.5.2, is the last release that speaks dnd5e 5.3.x.
 
 `npm run doctor` checks the whole path in order (the browser, the `.env`, Foundry, the world, a
 login as `FOUNDRY_USER`) and names the fix for each failure. Read-only; safe against prod.
+`npm run init` ends with it, and a fix is either another `npm run init` or an edit of the `.env`.
 
 The error names the variable or the step, and the host adds its own hint:
 
