@@ -22,6 +22,7 @@ import { bridgeConfigOf, createHost } from './hosts/index.js';
 import { capResult } from './utils/cap.js';
 import { ErrorHandler, FormattedToolError } from './utils/error-handler.js';
 import { buildToolRegistry } from './registry.js';
+import { receiptLineOf } from './receipts.js';
 
 async function main(): Promise<void> {
   // No browser = no bridge: refuse here, naming the install command, rather than at the first
@@ -63,12 +64,14 @@ async function main(): Promise<void> {
   });
 
   // The whole tool surface: definitions + dispatch, wired in one place (src/registry.ts).
-  const { tools, dispatch, enabledToolsets, readOnly } = buildToolRegistry({
+  const { tools, dispatchWithReceipt, enabledToolsets, readOnly } = buildToolRegistry({
     foundry,
     logger,
     host,
     toolsets: config.toolsets,
     readOnly: config.readOnly,
+    // with the world id, the key of the receipt store (src/receipts.ts)
+    serverUrl: config.host.serverUrl,
   });
   logger.info('Tool surface', { tools: tools.length, toolsets: [...enabledToolsets], readOnly });
 
@@ -87,20 +90,26 @@ async function main(): Promise<void> {
   mcp.setRequestHandler(CallToolRequestSchema, async request => {
     const { name, arguments: args } = request.params as any;
     try {
-      const result = await dispatch(name, args ?? {});
+      const { result, receiptLine } = await dispatchWithReceipt(name, args ?? {});
       // A fat result (a broad search, a loaded actor) is cut at RECORD boundaries with a count of
-      // what was omitted — config.toolResponseMaxChars is the guardrail (src/utils/cap.ts).
+      // what was omitted — config.toolResponseMaxChars is the guardrail (src/utils/cap.ts). The
+      // receipt line of a call that wrote follows the cut result, so it is never what is cut.
+      const text = capResult(result, config.toolResponseMaxChars);
       return {
-        content: [{ type: 'text', text: capResult(result, config.toolResponseMaxChars) }],
+        content: [{ type: 'text', text: receiptLine ? `${text}\n${receiptLine}` : text }],
       };
     } catch (e) {
       // Tools that curate their own errors throw FormattedToolError — pass those through verbatim.
-      // Everything else is mapped centrally by its code (src/utils/error-handler.ts).
+      // Everything else is mapped centrally by its code (src/utils/error-handler.ts). A call that
+      // wrote before it failed still answers its receipt line.
       const message =
         e instanceof FormattedToolError ? e.message : errorHandler.toUserMessage(e, name);
       logger.error('Tool call failed', { name, error: message });
+      const receiptLine = receiptLineOf(e);
       return {
-        content: [{ type: 'text', text: `Error: ${message}` }],
+        content: [
+          { type: 'text', text: `Error: ${message}${receiptLine ? `\n${receiptLine}` : ''}` },
+        ],
         isError: true,
       };
     }

@@ -4,9 +4,14 @@
 // op on a page that answers is never killed; run-script's cap is its timeout + 30 s.
 // The role warning at connect, on a fake page (issue #8): a read-only registration wants a Player
 // or Trusted Player, a full one a Gamemaster or Assistant GM.
+// The receipts' seam (issue #6): the page is asked to record only inside a tool call, and what it
+// reports joins that call, a failed write's included. After the page bridge vanished under a call,
+// only a read is run again (issue #16's review): a write fails with its outcome unknown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BridgeError } from './bridge-error.js';
 import { chromiumProblem, Foundry, type FoundryConfig } from './foundry.js';
+import type { ReceiptOp } from './page/_receipts.js';
+import { callContext } from './receipts.js';
 
 describe('chromiumProblem', () => {
   it('asks for the headless shell a headless launch runs, beside the full build', () => {
@@ -31,17 +36,20 @@ describe('chromiumProblem', () => {
 /**
  * A connected bridge over a fake page, without a browser: the constructor (which loads the page
  * bundle) is skipped and the fields a connect would set are set by hand. `answer(arg)` serves the
- * op's evaluate (its argument is `{ n, a }`); the probe (`evaluate(() => 1)`, no argument) gets
- * `probe()`. A reconnect or a recover would be a retry, so both fail the test if reached.
+ * op's evaluate (its argument is `{ n, a, r }`, `r` whether the page records; it answers what
+ * window.__fvttCall would, `{ result, ops? }`); the probe and the bridge check (an evaluate with no
+ * argument) get `probe()`. A reconnect or a recover would be a retry, so both fail the test if
+ * reached, unless the test hands its own `recover`.
  */
 function connected(opts: {
-  answer: (arg: { n: string; a: unknown }) => Promise<unknown>;
+  answer: (arg: { n: string; a: unknown; r: boolean }) => Promise<unknown>;
   probe: () => Promise<unknown>;
   cfg?: Partial<FoundryConfig>;
+  recover?: () => Promise<void>;
 }) {
   let closed = false;
   const page = {
-    evaluate: vi.fn((_fn: unknown, arg?: { n: string; a: unknown }) =>
+    evaluate: vi.fn((_fn: unknown, arg?: { n: string; a: unknown; r: boolean }) =>
       arg === undefined ? opts.probe() : opts.answer(arg)
     ),
     isClosed: () => closed,
@@ -61,7 +69,7 @@ function connected(opts: {
     ready: true,
     inflight: 0,
     lastUsed: 0,
-    recover: retried,
+    recover: opts.recover ?? retried,
     connect: retried,
   });
   return { f, page, log, retried };
@@ -111,7 +119,8 @@ describe('the op cap (issue #16)', () => {
 
   it('a slow op on a page that answers is never killed', async () => {
     const { f, page, retried } = connected({
-      answer: () => new Promise(resolve => setTimeout(() => resolve({ id: 'w' }), 3_500)),
+      answer: () =>
+        new Promise(resolve => setTimeout(() => resolve({ result: { id: 'w' } }), 3_500)),
       probe: async () => 1,
       cfg: { opCapMs: 1_000 },
     });
@@ -225,5 +234,103 @@ describe('the role warning at connect (issue #8)', () => {
     const gm = connecting(4, {});
     await gm.f.connect();
     expect(gm.log.warn).not.toHaveBeenCalled();
+  });
+});
+
+const UPDATE: ReceiptOp = {
+  kind: 'update',
+  documentName: 'Actor',
+  uuid: 'Actor.a1',
+  label: 'Goblin',
+  pre: { name: 'Goblin' },
+};
+
+describe('receipts through the seam (issue #6)', () => {
+  it('outside a tool call the page records nothing; inside one, the writes it reports join the call', async () => {
+    const asked: boolean[] = [];
+    const { f } = connected({
+      answer: async ({ r }) => {
+        asked.push(r);
+        return r ? { result: { ok: true }, ops: [UPDATE] } : { result: { ok: true } };
+      },
+      probe: async () => true,
+    });
+    expect(await f.call('updateActor', { actorIdentifier: 'a1', name: 'Hob' })).toEqual({
+      ok: true,
+    });
+    const ctx = { ops: [] as ReceiptOp[] };
+    const inside = await callContext.run(ctx, () =>
+      f.call('updateActor', { actorIdentifier: 'a1', name: 'Hob' })
+    );
+    expect(inside).toEqual({ ok: true });
+    expect(asked).toEqual([false, true]);
+    expect(ctx.ops).toEqual([UPDATE]);
+  });
+
+  it('a write that failed after it wrote: its writes join the call, its error keeps its code', async () => {
+    const { f } = connected({
+      answer: async () => ({
+        error: {
+          name: 'PageError:not-found',
+          message: 'Actor "Gren" not found',
+          stack: 'PageError:not-found: Actor "Gren" not found\n    at deleteActor (eval:1:2)',
+        },
+        ops: [UPDATE],
+      }),
+      probe: async () => true,
+    });
+    const ctx = { ops: [] as ReceiptOp[] };
+    const err = await callContext
+      .run(ctx, () => f.call('deleteActor', { identifiers: ['Gren'] }))
+      .catch(e => e);
+    expect(err).toBeInstanceOf(BridgeError);
+    expect(err).toMatchObject({
+      code: 'not-found',
+      fn: 'deleteActor',
+      detail: 'Actor "Gren" not found',
+    });
+    expect(err.pageStack).toContain('at deleteActor');
+    expect(ctx.ops).toEqual([UPDATE]);
+  });
+});
+
+describe('a vanished page bridge: only a read is run again (issue #16 review)', () => {
+  /** A page whose bridge is gone on the first call (a reload under it), back after the recover. */
+  function vanishing() {
+    let first = true;
+    const recover = vi.fn(async () => {});
+    const answer = vi.fn(async () => {
+      if (first) {
+        first = false;
+        throw new Error('page.evaluate: Execution context was destroyed');
+      }
+      return { result: { id: 'w' } };
+    });
+    const { f, log } = connected({ answer, probe: async () => false, recover });
+    return { f, log, recover, answer };
+  }
+
+  it('a read is recovered and run again', async () => {
+    const { f, recover, answer } = vanishing();
+    expect(await f.call('getWorldInfo')).toEqual({ id: 'w' });
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(answer).toHaveBeenCalledTimes(2);
+  });
+
+  it('a write is recovered but not run again: it fails as a connection error, its outcome unknown', async () => {
+    const { f, log, recover, answer } = vanishing();
+    const err = await f.call('updateActor', { actorIdentifier: 'a1', name: 'Hob' }).catch(e => e);
+    expect(err).toBeInstanceOf(BridgeError);
+    expect(err.code).toBe('connection');
+    expect(err.explained).toBe(true); // the detail is the whole answer, no generic connect hint
+    expect(err.detail).toContain("the page went away under 'updateActor'");
+    expect(err.detail).toContain('its outcome is unknown, a write may or may not have landed');
+    expect(recover).toHaveBeenCalledTimes(1); // the next call finds a working bridge
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('a write is not run again'));
+    // a configure call naming no field is a read by its page tag, so it is run again
+    const again = vanishing();
+    expect(await again.f.call('configurePrimaryParty', {})).toEqual({ id: 'w' });
+    expect(again.answer).toHaveBeenCalledTimes(2);
   });
 });

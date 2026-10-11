@@ -104,7 +104,8 @@ tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`,
   rights: that user's role, not the facade, is the boundary.
 
 A list answers one line per record, a `get` answers JSON, a miss is an error, an unknown argument
-is refused by name. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
+is refused by name. Every write tool answers with a receipt; `run-script { "undo": "rcpt_…" }`
+reverses it. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
 lets a registration advertise a subset (`chat,combat` is 11 tools instead of 81).
 `FOUNDRY_TOOLSETS=readonly` advertises every toolset's reads (41 tools) and refuses every other
 call by name before it runs; pair it with a Player or Trusted Player join user, whose role is the

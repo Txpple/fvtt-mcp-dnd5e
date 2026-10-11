@@ -25,6 +25,18 @@ import {
 } from './toolsets.js';
 import { FormattedToolError } from './utils/error-handler.js';
 import { Logger } from './logger.js';
+import { effectiveOps } from './page/_receipts.js';
+import {
+  type CallContext,
+  callContext,
+  markUndone,
+  pruneReceipts,
+  receiptLine,
+  receiptsDir,
+  receiptWorldKey,
+  saveReceipt,
+  withReceiptLine,
+} from './receipts.js';
 
 import { ActorTools } from './tools/actor.js';
 import { ItemTools } from './tools/items.js';
@@ -78,8 +90,16 @@ export interface ToolRegistry {
    * Route a tool call to its handler. Throws `Unknown tool` for an unregistered name, a by-name
    * refusal (which toolset, how to enable it) for a tool outside the enabled toolsets, and, on a
    * read-only registration, a by-name refusal for any call that is not a read (src/tool-kinds.ts).
+   * A call that writes leaves its receipt in the store, as `dispatchWithReceipt`; only the line
+   * is not returned.
    */
   dispatch(name: string, args: any): Promise<any>;
+  /**
+   * `dispatch`, and the receipt line of the writes the call made (src/receipts.ts): kept in the
+   * store, one line the server appends to the answer; none when the call wrote nothing. A call that
+   * fails after it wrote throws an error carrying the line (`receiptLineOf`).
+   */
+  dispatchWithReceipt(name: string, args: any): Promise<{ result: any; receiptLine?: string }>;
   /** The toolsets this registry advertises. */
   enabledToolsets: ReadonlySet<ToolsetName>;
   /** FOUNDRY_TOOLSETS=readonly: the reads are advertised, and every other call is refused. */
@@ -95,6 +115,13 @@ export interface ToolRegistryDeps {
   toolsets?: readonly string[];
   /** A read-only registration (src/config.ts): `readonly` in `toolsets` says the same. */
   readOnly?: boolean;
+  /**
+   * FOUNDRY_URL. With the live world's id it keys the receipt store, so a receipt is never applied
+   * to another world of the same id (src/receipts.ts). The server passes it; a script may not.
+   */
+  serverUrl?: string;
+  /** Where receipts are kept (default: the OS temp dir); a test points it at its own. */
+  receiptsDir?: string;
 }
 
 /**
@@ -104,6 +131,8 @@ export interface ToolRegistryDeps {
  */
 export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const { foundry, logger, host } = deps;
+  const serverUrl = deps.serverUrl ?? '';
+  const storeDir = deps.receiptsDir ?? receiptsDir();
   // `readonly` stands alone whichever way it arrives (the flag, or the name in the list): a toolset
   // beside it fails here, at startup.
   const selected = deps.toolsets ?? [];
@@ -165,8 +194,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const bridgeTools = new BridgeTools({ foundry, logger });
 
   // run-script (issue #4): a short program against the page API — loops and bulk jobs in one
-  // round trip, with a receipt and undo. The guard rails are in src/page/run-script.ts.
-  const scriptTools = new ScriptTools({ foundry, logger });
+  // round trip; its undo reverses any call's receipt. The guard rails are in src/page/run-script.ts.
+  const scriptTools = new ScriptTools({ foundry, logger, serverUrl, receiptsDir: storeDir });
 
   // Unified add-feature tool: composes the three mode schemas (feature / compendium-features /
   // items) — each generated from the owning handler's zod — into a single-entry `add-feature`.
@@ -458,7 +487,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
       return readOnly ? readOnlyView(def) : [def];
     });
 
-  const dispatch = async (name: string, args: any): Promise<any> => {
+  const route = async (name: string, args: any): Promise<any> => {
     const handler = handlers[name];
     if (!handler) {
       throw new Error(`Unknown tool: ${name}`);
@@ -482,7 +511,61 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     return handler(args ?? {});
   };
 
-  return { tools, handlers, dispatch, enabledToolsets, readOnly };
+  // Receipts (issue #6): every call runs in a context of its own (src/receipts.ts), the writes its
+  // page ops report are noted into it, and when it wrote anything they are kept as one receipt and
+  // summed up in one line, appended centrally (src/index.ts): no tool formats its own.
+  const canUndo = enabledToolsets.has('scripting') && !readOnly;
+  const keepReceipt = async (tool: string, ctx: CallContext): Promise<string | undefined> => {
+    if (!effectiveOps(ctx.ops).length) return undefined;
+    const reverses = ctx.reverses;
+    try {
+      const worldId = await foundry.worldId();
+      const receipt = saveReceipt(
+        {
+          at: new Date().toISOString(),
+          serverUrl,
+          worldId,
+          tool,
+          ops: ctx.ops,
+          ...(reverses ? { reverses } : {}),
+        },
+        storeDir
+      );
+      const key = receiptWorldKey(serverUrl, worldId);
+      if (reverses) markUndone(reverses, key, receipt.id, storeDir);
+      pruneReceipts(key, storeDir);
+      return receiptLine(receipt, { canUndo });
+    } catch (err) {
+      // a store failure never fails the call: the line says the receipt was not kept
+      const why = (err as Error)?.message ?? String(err);
+      logger.warn('receipt not kept', { tool, error: why });
+      return receiptLine(
+        { id: '', ops: ctx.ops, ...(reverses ? { reverses } : {}) },
+        { canUndo, notKept: why }
+      );
+    }
+  };
+
+  const dispatchWithReceipt = async (
+    name: string,
+    args: any
+  ): Promise<{ result: any; receiptLine?: string }> => {
+    const ctx: CallContext = { ops: [] };
+    let result: any;
+    try {
+      result = await callContext.run(ctx, () => route(name, args));
+    } catch (err) {
+      const line = await keepReceipt(name, ctx);
+      throw line ? withReceiptLine(err, line) : err;
+    }
+    const line = await keepReceipt(name, ctx);
+    return line ? { result, receiptLine: line } : { result };
+  };
+
+  const dispatch = async (name: string, args: any): Promise<any> =>
+    (await dispatchWithReceipt(name, args)).result;
+
+  return { tools, handlers, dispatch, dispatchWithReceipt, enabledToolsets, readOnly };
 }
 
 /**

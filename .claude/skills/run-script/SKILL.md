@@ -58,19 +58,27 @@ return { placed };
   reads, stubs every write (each returns `{ dryRun: true }`) and lists the writes it reached. Show
   the user that list; then run for real.
 - **Caps**: 150 writes and 30 deletes per run, 60 s. Raise `maxWrites` / `maxDeletes` /
-  `timeoutSeconds` only when the job's size is known and the user has seen it. A script that never
-  yields (a synchronous loop) cannot be timed out from inside: the bridge cuts it about 35 s past
-  its timeout and closes the page (the receipts in it go too), and the outcome is unknown. Read
-  the world before running it again.
+  `timeoutSeconds` only when the job's size is known and the user has seen it. A run past its
+  timeout is abandoned and can write no more (every `fvtt.*` call after it is refused). A script
+  that never yields (a synchronous loop) cannot be timed out from inside: the bridge cuts it about
+  35 s past its timeout and closes the page, the run's receipt is lost with it, and the outcome is
+  unknown. Read the world before running it again.
 - **Batch**: one `createActorFromCompendium` with `quantity: 6` beats six calls; one
   `addActorItems` with the whole list beats one per item. The write count is calls, not documents.
-- **The receipt**: every run returns `receipt rcpt_…: N created, N updated, N deleted`. Undo it with
-  `{ "undo": "rcpt_…" }` — deletes what the run created, restores what it changed or deleted,
-  newest write first. Receipts live in the bridge's page (the last 50); a `disconnect-bridge` or a
-  reload loses them, so undo promptly or not at all. A key an update *added* has no prior value and
-  is not restored; a document a run deleted comes back with its id.
-- **A failed run keeps its receipt** (the writes done before the throw are in it); undo it if the
-  half-done state is worse than none.
+- **The receipt**: every write tool answers with one receipt line, and a run with one for the whole
+  run: `receipt rcpt_…: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value)
+  · undo: run-script { "undo": "rcpt_…" }`. The undo is the same `{ "undo": "rcpt_…" }` for a tool's
+  receipt and a run's: it deletes what the call created, puts back the paths it changed (removing
+  the ones it added), and re-creates what it deleted with its id, newest write first. Receipts are
+  kept on the bridge's machine for a day (the newest 50 per world), so they survive a
+  `disconnect-bridge` and a restart; a receipt belongs to the world it was written in. An undo
+  answers with a receipt of its own (`reverses rcpt_…`): undo that to redo. A receipt is undone
+  once; a second undo of it is refused, naming the receipt that reversed it.
+- **What cannot be undone**: a write whose pre-image was over the cap (2 MB per document, 8 MB per
+  call; the line counts them as not undoable), the file plane (uploads, copies, moves and deletes of
+  files), chat players have already seen (the message can be deleted, not unseen), and a pulled view.
+- **A failed run keeps its receipt** (the writes done before the throw are in it), and so does a
+  tool that fails after it wrote; undo it if the half-done state is worse than none.
 
 ## What stays the same
 

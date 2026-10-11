@@ -1,19 +1,28 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
+import {
+  callContext,
+  loadReceipt,
+  receiptsDir,
+  receiptWorldKey,
+  type StoredReceipt,
+} from '../receipts.js';
+import { FormattedToolError } from '../utils/error-handler.js';
 import { toInputSchema } from '../utils/schema.js';
 
 /**
  * run-script (issue #4): one tool whose argument is a short JavaScript program. The model writes
  * it, the page runs it against `fvtt.*` — the page functions behind every tool — and only the
- * return value plus a receipt come back: a loop of a dozen steps in one round trip, with none of
- * the intermediate data in the conversation. The guard rails live in the page (src/page/run-script.ts):
- * counted and capped writes, a receipt of every document touched, a dry run that stubs the writes,
- * and `undo` by receipt id. The facade is the intended surface. The check here refuses, before
- * anything travels, the words that step around it — in code, never in a string or a comment — and
- * the page shadows the globals a script would reach for by habit. Both guard against accidents and
- * close the obvious doors; neither is a security boundary (issue #15). A script runs with the
- * rights of the user the bridge joined as: that role is the boundary.
+ * return value comes back: a loop of a dozen steps in one round trip, with none of the
+ * intermediate data in the conversation. The guard rails live in the page (src/page/run-script.ts):
+ * counted and capped writes and a dry run that stubs them. A run's writes are its call's receipt,
+ * like every write tool's (src/receipts.ts), and `undo` reverses any receipt by id: a run's, a
+ * tool call's, or an undo's own (a redo). The facade is the intended surface. The check here
+ * refuses, before anything travels, the words that step around it — in code, never in a string or
+ * a comment — and the page shadows the globals a script would reach for by habit. Both guard
+ * against accidents and close the obvious doors; neither is a security boundary (issue #15). A
+ * script runs with the rights of the user the bridge joined as: that role is the boundary.
  */
 
 const RunScriptSchema = z
@@ -36,7 +45,7 @@ const RunScriptSchema = z
       .min(1)
       .optional()
       .describe(
-        'A receipt id from an earlier run: delete what it created, restore what it changed or deleted.'
+        'A receipt id from any write: delete what it created, restore what it changed or deleted.'
       ),
     maxWrites: z
       .number()
@@ -184,15 +193,23 @@ export function forbiddenWords(script: string): string[] {
 export interface ScriptToolsOptions {
   foundry: FoundryBridge;
   logger: Logger;
+  /** FOUNDRY_URL: with the live world's id, the key receipts are kept under (src/receipts.ts). */
+  serverUrl?: string;
+  /** Where receipts are kept (default: the OS temp dir). */
+  receiptsDir?: string;
 }
 
 export class ScriptTools {
   private foundry: FoundryBridge;
   private logger: Logger;
+  private serverUrl: string;
+  private receiptsDir: string;
 
-  constructor({ foundry, logger }: ScriptToolsOptions) {
+  constructor({ foundry, logger, serverUrl, receiptsDir: dir }: ScriptToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'ScriptTools' });
+    this.serverUrl = serverUrl ?? '';
+    this.receiptsDir = dir ?? receiptsDir();
   }
 
   getToolDefinitions() {
@@ -211,13 +228,7 @@ export class ScriptTools {
 
   async handleRunScript(args: any): Promise<string> {
     const a = RunScriptSchema.parse(args ?? {});
-    if (a.undo) {
-      const r = await this.foundry.call('undoScript', { id: a.undo });
-      const failed = r.failed.length
-        ? `\n${r.failed.length} could not be reversed:\n${r.failed.map(f => `  • ${f.op} ${f.uuid}: ${f.error}`).join('\n')}`
-        : '';
-      return `↩️ Receipt ${r.id}: ${r.undone} write(s) reversed.${failed}`;
-    }
+    if (a.undo) return this.undo(a.undo);
     const script = a.script!;
     const bad = forbiddenWords(script);
     if (bad.length) {
@@ -249,11 +260,9 @@ export class ScriptTools {
         );
       }
     } else {
-      const rc = r.receipt;
+      // The receipt (its id, what changed, the undo) is the line the server appends to every write.
       lines.push(
-        `${r.ok ? '✅' : '❌'} ${r.ok ? 'Done' : 'Failed'} — receipt ${rc.id}: ${rc.created} created, ` +
-          `${rc.updated} updated, ${rc.deleted} deleted (${rc.calls} call(s), ${rc.writes} write(s)). ` +
-          `Undo with { "undo": "${rc.id}" }.`
+        `${r.ok ? '✅ Done' : '❌ Failed'} — ${r.receipt.calls} call(s), ${r.receipt.writes} write(s).`
       );
       if (!r.ok) lines.push(`Error: ${r.error}`);
     }
@@ -263,5 +272,33 @@ export class ScriptTools {
       lines.push(JSON.stringify(r.result, null, 2));
     }
     return lines.join('\n');
+  }
+
+  /**
+   * Reverse receipt `id` of the live world, newest write first. The undo's own writes are its call's
+   * receipt, which names the one it reverses, so an undo can be undone (a redo), once like any.
+   */
+  private async undo(id: string): Promise<string> {
+    const key = receiptWorldKey(this.serverUrl, await this.foundry.worldId());
+    let receipt: StoredReceipt;
+    try {
+      receipt = loadReceipt(id, key, this.receiptsDir);
+    } catch (err) {
+      throw new FormattedToolError(`run-script: ${(err as Error).message}.`);
+    }
+    if (receipt.undoneBy) {
+      throw new FormattedToolError(
+        `run-script: receipt ${id} was already undone by ${receipt.undoneBy}; undo ` +
+          `${receipt.undoneBy} to put it back.`
+      );
+    }
+    const ctx = callContext.getStore();
+    if (ctx) ctx.reverses = id;
+    this.logger.info('run-script undo', { id, ops: receipt.ops.length });
+    const r = await this.foundry.call('undoOps', { ops: receipt.ops });
+    const failed = r.failed.length
+      ? `\n${r.failed.length} could not be reversed:\n${r.failed.map(f => `  • ${f.op} ${f.uuid}: ${f.error}`).join('\n')}`
+      : '';
+    return `↩️ Receipt ${id}: ${r.undone} write(s) reversed.${failed}`;
   }
 }

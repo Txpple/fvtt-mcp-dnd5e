@@ -1,16 +1,35 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the strings are script source, where a `${…}` is the case under test
 /**
  * run-script's Node half: the static refusal (code only: strings, template text and comments are
- * prose), the argument shaping onto the page op, the receipt line, the dry-run listing and undo —
- * against the fake bridge.
+ * prose), the argument shaping onto the page op, the run's own lines, the dry-run listing, and undo
+ * through the receipt store (src/receipts.ts) — against the fake bridge. The receipt line itself is
+ * the registry's, for every write tool alike (src/tools/registry.test.ts).
  */
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { callContext, loadReceipt, receiptWorldKey, saveReceipt } from '../receipts.js';
 import { blankLiterals, forbiddenWords, ScriptTools } from './script.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
 
+const SERVER = 'http://localhost:30000';
+let dir: string;
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'fvtt-script-test-'));
+});
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
+
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
-  const tools = new ScriptTools({ foundry, logger: makeLogger() });
+  const tools = new ScriptTools({
+    foundry,
+    logger: makeLogger(),
+    serverUrl: SERVER,
+    receiptsDir: dir,
+  });
   return { tools, foundry, calls };
 }
 
@@ -19,7 +38,7 @@ const okRun = {
   result: { tokens: 7 },
   log: ['placed 7'],
   timedOut: false,
-  receipt: { id: 'rcpt_8f3a', created: 14, updated: 0, deleted: 0, calls: 16, writes: 14 },
+  receipt: { created: 14, updated: 0, deleted: 0, calls: 16, writes: 14 },
 };
 
 describe('blankLiterals', () => {
@@ -150,10 +169,9 @@ describe('ScriptTools', () => {
     expect(calls).toEqual([
       ['runScript', { src: 'return 1', maxWrites: 20, maxDeletes: 2, timeoutMs: 30_000 }],
     ]);
-    expect(out).toContain(
-      '✅ Done — receipt rcpt_8f3a: 14 created, 0 updated, 0 deleted (16 call(s), 14 write(s))'
-    );
-    expect(out).toContain('Undo with { "undo": "rcpt_8f3a" }');
+    expect(out).toContain('✅ Done — 16 call(s), 14 write(s).');
+    // the receipt (its id, what changed, the undo) is the line every write answers with, not the run's
+    expect(out).not.toContain('rcpt_');
     expect(out).toContain('  · placed 7');
     expect(out).toContain('"tokens": 7');
   });
@@ -166,7 +184,7 @@ describe('ScriptTools', () => {
       result: undefined,
     });
     const out = await tools.handleRunScript({ script: 'return x.y' });
-    expect(out).toContain('❌ Failed — receipt rcpt_8f3a');
+    expect(out).toContain('❌ Failed — 16 call(s), 14 write(s).');
     expect(out).toContain('Error: TypeError: x is undefined');
     expect(out).not.toContain('Result:');
   });
@@ -174,7 +192,6 @@ describe('ScriptTools', () => {
   it('a dry run lists the writes it would make', async () => {
     const { tools, calls } = build({
       ...okRun,
-      receipt: { ...okRun.receipt, id: '' },
       dryRun: [{ fn: 'createActorFromCompendium', args: { name: 'Goblin' } }],
     });
     const out = await tools.handleRunScript({ script: 'return 1', dryRun: true });
@@ -183,16 +200,49 @@ describe('ScriptTools', () => {
     expect(out).toContain('fvtt.createActorFromCompendium({"name":"Goblin"})');
   });
 
-  it('undo reverses a receipt and names what could not be', async () => {
+  it("undo sends the stored receipt's writes to the page, names what could not be, and says what it reverses", async () => {
+    const ops = [
+      { kind: 'create' as const, documentName: 'Actor', uuid: 'Actor.x', label: 'X' },
+      { kind: 'create' as const, documentName: 'Actor', uuid: 'Actor.y', label: 'Y' },
+    ];
+    // makeFoundry's world is "w"
+    const kept = saveReceipt(
+      { at: 'now', serverUrl: SERVER, worldId: 'w', tool: 'run-script', ops },
+      dir
+    );
     const { tools, calls } = build({
-      id: 'rcpt_8f3a',
-      undone: 13,
+      undone: 1,
       failed: [{ op: 'create Actor', uuid: 'Actor.x', error: 'gone' }],
     });
-    const out = await tools.handleRunScript({ undo: 'rcpt_8f3a' });
-    expect(calls).toEqual([['undoScript', { id: 'rcpt_8f3a' }]]);
-    expect(out).toContain('↩️ Receipt rcpt_8f3a: 13 write(s) reversed.');
+    const ctx = { ops: [] };
+    const out = await callContext.run(ctx, () => tools.handleRunScript({ undo: kept.id }));
+    expect(calls).toEqual([['undoOps', { ops }]]);
+    expect(out).toContain(`↩️ Receipt ${kept.id}: 1 write(s) reversed.`);
     expect(out).toContain('1 could not be reversed');
     expect(out).toContain('create Actor Actor.x: gone');
+    expect(ctx).toEqual({ ops: [], reverses: kept.id });
+  });
+
+  it('undo refuses an id the store does not have for this world, and one already undone', async () => {
+    const { tools, calls } = build();
+    await expect(tools.handleRunScript({ undo: 'rcpt_zzzzzz' })).rejects.toThrow(
+      'run-script: receipt rcpt_zzzzzz is not in the store: receipts belong to the world they were written in'
+    );
+    const other = saveReceipt(
+      { at: 'now', serverUrl: SERVER, worldId: 'elsewhere', tool: 'x', ops: [] },
+      dir
+    );
+    await expect(tools.handleRunScript({ undo: other.id })).rejects.toThrow(
+      `receipt ${other.id} was written in another world`
+    );
+    const done = saveReceipt(
+      { at: 'now', serverUrl: SERVER, worldId: 'w', tool: 'x', ops: [], undoneBy: 'rcpt_r00001' },
+      dir
+    );
+    await expect(tools.handleRunScript({ undo: done.id })).rejects.toThrow(
+      `run-script: receipt ${done.id} was already undone by rcpt_r00001; undo rcpt_r00001 to put it back.`
+    );
+    expect(calls).toEqual([]);
+    expect(loadReceipt(done.id, receiptWorldKey(SERVER, 'w'), dir).undoneBy).toBe('rcpt_r00001');
   });
 });

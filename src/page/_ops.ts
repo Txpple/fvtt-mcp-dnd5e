@@ -214,9 +214,9 @@ export const OPS = {
   manageGroupMembers: 'write',
   getGroupInfo: 'read',
   configurePrimaryParty: { emptyReads: true },
-  // run-script itself; the facade never offers these two to a script
+  // run-script and the undo of a receipt; the facade never offers these two to a script
   runScript: 'write',
-  undoScript: 'write',
+  undoOps: 'write',
 } as const satisfies Record<keyof PageApi, OpKind>;
 
 /**

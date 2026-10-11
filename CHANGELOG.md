@@ -28,10 +28,11 @@ What changed for a user of the tools and skills, release by release. The measure
   the words refused before the script travels (`import`, `eval`, …) guard against accidents and
   are not a sandbox (issue #15). Writes are counted and capped (150 writes, 30 deletes, 60 s;
   raisable), every document created, updated or deleted is recorded through Foundry's hooks into
-  a receipt with pre-images, `dryRun` stubs the writes and lists them, and `undo: "<receipt>"`
-  reverses a run newest write first. Receipts live in the bridge's page (the last 50). The
-  `run-script` skill carries the rules; the facade's reference, `docs/run-script-api.md` (155
-  functions), is generated from the program by `scripts/measure/run-script-api.mjs`.
+  the run's receipt with pre-images, `dryRun` stubs the writes and lists them, and
+  `undo: "<receipt>"` reverses a run newest write first. A run's receipt is the one every write
+  tool now answers with (below), kept on the bridge's machine, not in the page. The `run-script`
+  skill carries the rules; the facade's reference, `docs/run-script-api.md` (155 functions), is
+  generated from the program by `scripts/measure/run-script-api.mjs`.
 - **What a run-script call does is declared per function** (issue #14): every `fvtt.*` function
   is tagged read, write or delete by what its handler does (`src/page/_ops.ts`), where a verb
   guessed from its name used to decide. A dry run had executed `remapSceneTeleporters` for real,
@@ -79,7 +80,35 @@ What changed for a user of the tools and skills, release by release. The measure
   `npm run doctor` on its login line, when a read-only registration joins as a Gamemaster or
   Assistant GM. The tags, per tool and per action, are `src/tool-kinds.ts`; `.mcp.json.example`
   carries a `foundry-readonly` entry.
-- Budgets after: tools/list 204,719 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
+- **Every write tool answers with a receipt** (issue #6). The bridge reaches every page op through
+  one choke point: a write runs under the page's write lock, one at a time, while Foundry's own
+  document hooks record each document it creates, updates or deletes, with the pre-image an undo
+  needs (an update keeps the prior value of each path it changes, a delete the whole document). The
+  server groups one call's writes into one receipt and appends one line to the answer, also when
+  the call failed after it wrote:
+  `receipt rcpt_ab12cd: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value) · undo: run-script { "undo": "rcpt_ab12cd" }`.
+  `run-script { "undo": … }` reverses any receipt, a tool call's or a run's, newest write first:
+  it deletes what the call created, puts back the paths it changed (removing the ones it added)
+  and re-creates what it deleted with its id. An undo answers with its own receipt
+  (`reverses rcpt_…`), so it can be undone in turn (a redo); a receipt is undone once. Receipts
+  are kept on the bridge's machine (`fvtt-mcp-dnd5e/receipts/` under the OS temp dir, keyed by
+  server URL and world id), the newest 50 per world for a day and 64 MB at most, so they survive a
+  `disconnect-bridge` and a restart and are never applied to another world. Not undoable: a
+  pre-image over 2 MB (8 MB per call; the line counts them), the file plane, chat already seen, a
+  pulled view. A registration without `scripting` gets the line with how to enable the undo. A
+  sibling harness driving `fvtt-mcp-dnd5e/client` asks for no receipt and pays nothing. Measured
+  in the page on the sandbox: the recorder's hooks cost 0.04 ms per write, a delete's pre-image
+  0.13 ms for a 26 kB actor, and a real update's time is unchanged within its noise (7–9 ms).
+  `scripts/verify-receipts.mjs`: 18/18.
+- **A write is never run twice after the page went away** (issue #16's review). A call whose page
+  bridge vanished under it (a world reload, a page the op cap closed under another call) was
+  recovered and run again; now only a read is. A write fails as a `connection` error saying its
+  outcome is unknown, and the bridge reconnects for the next call.
+- **A run abandoned at its timeout can write no more** (issue #16's review): every `fvtt.*` call
+  after the timeout is refused, where the script's body used to keep writing, unrecorded.
+- `set-primary-party` with no arguments sends an empty call, which the page's op table reads as
+  the read it is (it sent `clear: false` and counted as a write).
+- Budgets after: tools/list 204,714 chars (≤ 205,000; the `undo` leaf is 5 chars shorter), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 

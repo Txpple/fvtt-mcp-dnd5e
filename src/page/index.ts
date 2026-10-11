@@ -5,12 +5,14 @@
 // tools invoke it through the foundry.call(name, args) seam. Nothing here imports
 // Node/Playwright — only browser + Foundry globals (see foundry-globals.d.ts).
 //
-// The api keys ARE the bridge method names: foundry.call('getCharacterInfo', args)
-// === window.__fvtt.getCharacterInfo(args). They match the legacy
-// foundry-mcp-bridge.<name> methods 1:1, so the Node tools rewire mechanically.
+// The api keys ARE the bridge method names: foundry.call('getCharacterInfo', args) reaches
+// window.__fvtt.getCharacterInfo(args) through window.__fvttCall, the one choke point that runs a
+// write under the page's write lock with its receipt recorder on (./_receipts.ts, issue #6). They
+// match the legacy foundry-mcp-bridge.<name> methods 1:1, so the Node tools rewire mechanically.
 
 import { guardSerialization } from './_shared.js';
-import { runScript, undoScript } from './run-script.js';
+import { callOp, undoOps } from './_receipts.js';
+import { runScript } from './run-script.js';
 import { getWorldInfo } from './world.js';
 import {
   getActiveScene,
@@ -366,9 +368,10 @@ const api = {
   manageGroupMembers,
   getGroupInfo,
   configurePrimaryParty,
-  // run-script (issue #4): a short program against the API above, with a receipt and undo.
+  // run-script (issue #4): a short program against the API above; undoOps reverses a receipt,
+  // a tool call's or a run's (issue #6)
   runScript,
-  undoScript,
+  undoOps,
 } satisfies Record<string, (...args: any[]) => unknown>;
 
 /**
@@ -416,3 +419,7 @@ export type SeamGuard = [
 // instead of corrupting data. `PageApi` above stays derived from the RAW `api`, so the tool-side
 // `foundry.call(name)` contract is unchanged (see src/page/_shared.ts guardSerialization).
 window.__fvtt = guardSerialization(api);
+// The bridge's entry point (src/foundry.ts `invoke`): every page op, a write recorded into the call's
+// receipt when the Node side asks for one. `window.__fvtt` stays the raw guarded api, which the
+// run-script facade and the sibling harnesses' `evaluate` reach directly.
+window.__fvttCall = callOp;

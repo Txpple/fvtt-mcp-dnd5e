@@ -1,13 +1,19 @@
 // Live verify for run-script (issue #4): the page op and the tool against a real world.
 //   FOUNDRY_HOST=local node scripts/verify-run-script.mjs
-// Reads, a dry run (stubbing by the op table: a remap is a write, an area-sounds list a read), a
-// real run with a receipt (create / update / delete), undo, the caps, the timeout, the shadowed
-// globals, the static refusal, and last a synchronous loop cut by the bridge's op cap (the page is
-// closed and the next call re-joins: ~40 s plus a join). Temp documents are ZZ-* and deleted in
-// finally. Needs a built dist/ (the tool class and the page bundle come from there).
+// Reads, a dry run (stubbing by the op table: a remap is a write, an area-sounds list a read), real
+// runs whose receipt is the line every write answers with (issue #6: the registry keeps it, the
+// page keeps nothing), undo by that id, the caps, the timeout, the shadowed globals, the static
+// refusal, and last a synchronous loop cut by the bridge's op cap (the page is closed and the next
+// call re-joins: ~40 s plus a join). The runs that need a receipt go through
+// buildToolRegistry().dispatchWithReceipt, as the server answers; the page-level checks call the op.
+// Temp documents are ZZ-* and deleted in finally, and the receipts this run made leave the store.
+// Needs a built dist/ (the registry and the page bundle come from there).
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { connectFoundry } from '../dist/client.js';
 import { Logger } from '../dist/logger.js';
-import { ScriptTools } from '../dist/tools/script.js';
+import { receiptsDir, receiptWorldKey } from '../dist/receipts.js';
+import { buildToolRegistry } from '../dist/registry.js';
 
 const checks = [];
 const check = (name, ok, detail = '') => {
@@ -15,7 +21,7 @@ const check = (name, ok, detail = '') => {
   console.log(`  ${ok ? 'PASS' : 'FAIL'} ${name}${detail ? `  [${detail}]` : ''}`);
 };
 
-const { f, dispose } = await connectFoundry({
+const { f, host, hostConfig, dispose } = await connectFoundry({
   identity: 'bridge',
   tag: 'verify-run-script',
   watchdogMs: 300_000,
@@ -26,7 +32,30 @@ const logger = new Logger({
   enableConsole: false,
   enableFile: false,
 });
-const tool = new ScriptTools({ foundry: f, logger });
+const { dispatchWithReceipt } = buildToolRegistry({
+  foundry: f,
+  logger,
+  host,
+  serverUrl: hostConfig.serverUrl,
+});
+const made = new Set(); // receipt ids this run made: removed from the store at the end
+/** The tool as the server answers it: its text, its receipt line, the receipt id in that line. */
+const tool = async args => {
+  const { result, receiptLine } = await dispatchWithReceipt('run-script', args);
+  const id = /^receipt (rcpt_[0-9a-z]{6})/.exec(receiptLine ?? '')?.[1] ?? null;
+  if (id) made.add(id);
+  return { text: String(result), line: receiptLine ?? '', id };
+};
+/** A run's return value, read back from the tool's text (the JSON after `Result:`). */
+const resultOf = text => {
+  const at = text.indexOf('\nResult:\n');
+  try {
+    return at < 0 ? null : JSON.parse(text.slice(at + 9));
+  } catch {
+    return null;
+  }
+};
+const created = line => Number(/: (\d+) created/.exec(line)?.[1] ?? 0);
 const FOLDER = 'ZZ-run-script';
 let receiptId = null;
 try {
@@ -116,24 +145,27 @@ try {
 
   // 5. A real run creates two actors; a SECOND run renames one and deletes the other — the
   // receipt of the second run counts an update and a delete of documents it did not create.
-  const made = await f.call('runScript', { src: makeTwo });
-  const madeId = made.receipt?.id ?? null;
+  const make = await tool({ script: makeTwo });
+  const madeId = make.id;
+  const pair = resultOf(make.text) ?? [];
   check(
-    'a run that creates returns a receipt counting the creates',
-    made.ok && made.receipt.created >= 2 && Array.isArray(made.result) && made.result.length === 2,
-    JSON.stringify(made.receipt)
+    'a run that creates answers the receipt line counting the creates',
+    /^✅ Done/.test(make.text) && created(make.line) >= 2 && pair.length === 2,
+    make.line
   );
-  const [a, b] = made.result ?? [];
-  const run = await f.call('runScript', {
-    src: `await fvtt.updateActor({ actorIdentifier: ${JSON.stringify(a)}, name: "ZZ-run-script A2" });
+  const [a, b] = pair;
+  const run = await tool({
+    script: `await fvtt.updateActor({ actorIdentifier: ${JSON.stringify(a)}, name: "ZZ-run-script A2" });
     await fvtt.deleteActor({ identifiers: [${JSON.stringify(b)}], removeEmptyFolder: false });
     return true;`,
   });
-  receiptId = run.receipt?.id ?? null;
+  receiptId = run.id;
   check(
-    'a run that updates and deletes returns a receipt counting both',
-    run.ok && run.receipt.updated === 1 && run.receipt.deleted === 1,
-    `${JSON.stringify(run.receipt)} ${run.log.join(' | ')}`
+    'a run that updates and deletes answers a receipt line counting both',
+    /: 0 created, 1 updated, 1 deleted \(Actor "ZZ-run-script A": [^;]*\bname\b[^;]*; Actor "ZZ-run-script B"\)/.test(
+      run.line
+    ),
+    run.line
   );
   const live = await f.call('runScript', {
     src: 'return (await fvtt.listActors({})).filter(a => /^ZZ-run-script/.test(a.name)).map(a => a.name).sort();',
@@ -145,42 +177,44 @@ try {
   );
 
   // 6. Undo the second run through the tool: A's name restored, B back (same id); then undo the first: both gone.
-  const undoText = await tool.handleRunScript({ undo: receiptId });
+  const undone2 = await tool({ undo: receiptId });
   receiptId = null;
   const undone = await f.call('runScript', {
     src: 'return (await fvtt.listActors({})).filter(a => /^ZZ-run-script/.test(a.name)).map(a => ({ id: a.id, name: a.name })).sort((x, y) => x.name.localeCompare(y.name));',
   });
   const names = (undone.result ?? []).map(x => x.name);
   const bBack = (undone.result ?? []).find(x => x.name === 'ZZ-run-script B')?.id === b;
-  const firstLine = t => String(t).split(/\r?\n/)[0];
   check(
     'undo restores what the run changed and what it deleted, with its id',
-    /reversed/.test(undoText) &&
+    /reversed/.test(undone2.text) &&
       JSON.stringify(names) === JSON.stringify(['ZZ-run-script A', 'ZZ-run-script B']) &&
       bBack,
-    `${firstLine(undoText)} → ${JSON.stringify(names)} (B id kept: ${bBack})`
+    `${undone2.text} → ${JSON.stringify(names)} (B id kept: ${bBack}) | ${undone2.line}`
   );
-  const undoMade = madeId ? await tool.handleRunScript({ undo: madeId }) : '';
+  const undoMade = madeId ? await tool({ undo: madeId }) : { text: '' };
   const gone = await f.call('runScript', {
     src: 'return (await fvtt.listActors({})).filter(a => /^ZZ-run-script/.test(a.name)).length;',
   });
   check(
     'undo of the creating run deletes what it created',
-    /reversed/.test(undoMade) && gone.result === 0,
-    `${firstLine(undoMade)} → ${gone.result} left`
+    /reversed/.test(undoMade.text) && gone.result === 0,
+    `${undoMade.text} → ${gone.result} left`
   );
 
-  // 7. The caps.
-  const capped = await f.call('runScript', {
-    src: 'for (let i = 0; i < 3; i++) await fvtt.createFolder({ name: "ZZ-run-script-cap" + i, type: "Actor" }); return 1;',
+  // 7. The caps: a run stopped by one keeps its receipt (the write it made before the cap).
+  const capped = await tool({
+    script:
+      'for (let i = 0; i < 3; i++) await fvtt.createFolder({ name: "ZZ-run-script-cap" + i, type: "Actor" }); return 1;',
     maxWrites: 1,
   });
   check(
-    'the write cap stops the second write',
-    !capped.ok && /write cap \(1\)/.test(capped.error) && capped.receipt.created === 1,
-    capped.error
+    'the write cap stops the second write; the run keeps its receipt',
+    /^❌ Failed/.test(capped.text) &&
+      /write cap \(1\)/.test(capped.text) &&
+      created(capped.line) === 1,
+    `${capped.text.split('\n').slice(0, 2).join(' / ')} | ${capped.line}`
   );
-  if (capped.receipt?.id) await tool.handleRunScript({ undo: capped.receipt.id });
+  if (capped.id) await tool({ undo: capped.id });
 
   // 8. The timeout.
   const slow = await f.call('runScript', {
@@ -190,25 +224,24 @@ try {
   check('a slow run is abandoned at its timeout', !slow.ok && slow.timedOut, slow.error);
 
   // 9. The static refusal, in the tool.
-  let refused = '';
-  try {
-    await tool.handleRunScript({ script: 'const m = await import("x"); return 1;' });
-  } catch (e) {
-    refused = e.message;
-  }
+  const refused = await tool({ script: 'const m = await import("x"); return 1;' }).then(
+    () => '',
+    e => e.message
+  );
   check(
     'the tool refuses `import` before the script travels',
     /refused: the script uses `import`/.test(refused),
     refused.slice(0, 80)
   );
 
-  // 10. The tool's own output shape.
-  const text = await tool.handleRunScript({
-    script: 'return { n: (await fvtt.listActors({})).length };',
-  });
+  // 10. The tool's own output shape: a run that wrote nothing has no receipt.
+  const shape = await tool({ script: 'return { n: (await fvtt.listActors({})).length };' });
   check(
-    'the tool prints the receipt line and the result',
-    /receipt rcpt_/.test(text) && /"n": \d+/.test(text)
+    'the tool prints the result, and a run that wrote nothing answers no receipt line',
+    /^✅ Done — 1 call\(s\), 0 write\(s\)\./.test(shape.text) &&
+      /"n": \d+/.test(shape.text) &&
+      shape.line === '',
+    shape.text.split('\n')[0]
   );
 
   // 11. A script stuck in a synchronous loop (issue #16). Its own timeout cannot preempt it, so the
@@ -237,7 +270,7 @@ try {
     `${((Date.now() - t1) / 1000).toFixed(1)} s to reconnect${info?.error ? `: ${info.error}` : ''}`
   );
 } finally {
-  if (receiptId) await tool.handleRunScript({ undo: receiptId }).catch(() => {});
+  if (receiptId) await tool({ undo: receiptId }).catch(() => {});
   await f
     .call('runScript', {
       src: `const zz = (await fvtt.listActors({})).filter(a => /^ZZ-run-script/.test(a.name));
@@ -248,6 +281,9 @@ try {
       maxDeletes: 100,
     })
     .catch(e => console.log(`cleanup: ${e.message}`));
+  const worldId = await f.worldId().catch(() => '');
+  const key = receiptWorldKey(hostConfig.serverUrl, worldId);
+  for (const id of made) rmSync(join(receiptsDir(), `${key}-${id}.json`), { force: true });
   await dispose();
 }
 const passed = checks.filter(c => c.ok).length;

@@ -11,15 +11,18 @@
 //     spelling and the obvious others before the script travels (`eval` cannot be a strict-mode
 //     parameter name, so it is refused there too);
 //   - writes are counted and capped (writes, deletes, seconds), by each op's tag (./_ops.ts);
-//   - every document the run creates, updates or deletes is recorded through Foundry's own hooks
-//     into a receipt, with the pre-image of what it changed or deleted;
+//   - every document the run creates, updates or deletes is recorded by the recorder every write
+//     tool shares (./_receipts.ts), with the pre-image an undo needs; the run holds the page's
+//     write lock while it runs, so no other call's writes land in its receipt;
 //   - a dry run stubs the writes (each returns `{ dryRun: true }`) and lists them;
-//   - `undoScript` reverses a receipt as one unit, newest write first.
-// Receipts live in this page (`globalThis.__fvttReceipts`, the last 50): a reload loses them, and
-// the result says so. Pre-images in the world (a hidden journal) are the next step, not this one.
+//   - a run abandoned at its timeout cannot write any more: every facade call after it is refused
+//     (issue #16's review), since its recorder is off by then.
+// The page keeps no receipts: the run's writes ride back as `ops`, the bridge files them as the
+// tool call's receipt (src/receipts.ts), and `undoOps` reverses one.
 
 import { opKind } from './_ops.js';
-import { invalid, notFound } from './errors.js';
+import { documentNames, type ReceiptOp, record, withWriteLock } from './_receipts.js';
+import { invalid } from './errors.js';
 
 /**
  * The globals a script does not see by name: shadowed as parameters of the compiled function, so
@@ -69,31 +72,6 @@ export const SHADOWED = [
   'dnd5e',
 ];
 
-/** Every document class name CONFIG declares (Actor, Item, Token, ActiveEffect, …). */
-function documentNames(): string[] {
-  const cfg = (globalThis as any).CONFIG ?? {};
-  return Object.keys(cfg).filter(k => typeof cfg[k]?.documentClass === 'function');
-}
-
-export interface ReceiptOp {
-  kind: 'create' | 'update' | 'delete';
-  documentName: string;
-  uuid: string;
-  /** update: the pre-image of the keys that changed; delete: the whole document. */
-  pre?: Record<string, unknown>;
-  /** delete: the parent's uuid for an embedded document, so it can be re-created in place. */
-  parentUuid?: string | null;
-}
-
-export interface Receipt {
-  id: string;
-  at: string;
-  ops: ReceiptOp[];
-  calls: number;
-  writes: number;
-  deletes: number;
-}
-
 export interface RunScriptArgs {
   src: string;
   dryRun?: boolean;
@@ -108,8 +86,8 @@ export interface RunScriptResult {
   error?: string;
   log: string[];
   timedOut: boolean;
+  /** What the run did, counted: documents by kind, and the facade calls and writes it made. */
   receipt: {
-    id: string;
     created: number;
     updated: number;
     deleted: number;
@@ -117,20 +95,14 @@ export interface RunScriptResult {
     writes: number;
   };
   dryRun?: Array<{ fn: string; args: unknown }>;
+  /** The run's writes, in order; the bridge lifts them out into the call's receipt. */
+  ops?: ReceiptOp[];
 }
 
-const RECEIPTS_KEPT = 50;
-
-function receipts(): Map<string, Receipt> {
-  const g = globalThis as any;
-  g.__fvttReceipts ??= new Map<string, Receipt>();
-  return g.__fvttReceipts as Map<string, Receipt>;
-}
-
-function newReceiptId(): string {
-  const r =
-    (globalThis as any).foundry?.utils?.randomID?.(6) ?? Math.random().toString(36).slice(2, 8);
-  return `rcpt_${r}`;
+interface Counts {
+  calls: number;
+  writes: number;
+  deletes: number;
 }
 
 /** Arguments as they will be shown in a dry run: JSON, cut at 400 chars. */
@@ -145,70 +117,23 @@ function summarize(args: unknown): unknown {
 }
 
 /**
- * Record this user's own document writes through Foundry's hooks for the run's duration.
- * Returns the stop function. Pre-images: an update keeps the prior values of the keys it changes
- * (`filterObject` over the changes' shape — a key the update ADDS has no prior value and is not
- * restored); a delete keeps the whole document and its parent.
- */
-function record(receipt: Receipt): () => void {
-  const g = globalThis as any;
-  const me = g.game?.user?.id;
-  const ids: Array<[string, number]> = [];
-  for (const name of documentNames()) {
-    ids.push([
-      `create${name}`,
-      g.Hooks.on(`create${name}`, (doc: any, _o: unknown, userId: string) => {
-        if (userId !== me) return;
-        receipt.ops.push({ kind: 'create', documentName: name, uuid: doc.uuid });
-      }),
-    ]);
-    ids.push([
-      `preUpdate${name}`,
-      g.Hooks.on(`preUpdate${name}`, (doc: any, changes: unknown, _o: unknown, userId: string) => {
-        if (userId !== me) return;
-        let pre: Record<string, unknown> = {};
-        try {
-          pre = g.foundry.utils.filterObject(doc.toObject(), changes);
-        } catch {
-          // an unusual change shape: recorded without a pre-image
-        }
-        receipt.ops.push({ kind: 'update', documentName: name, uuid: doc.uuid, pre });
-      }),
-    ]);
-    ids.push([
-      `preDelete${name}`,
-      g.Hooks.on(`preDelete${name}`, (doc: any, _o: unknown, userId: string) => {
-        if (userId !== me) return;
-        receipt.ops.push({
-          kind: 'delete',
-          documentName: name,
-          uuid: doc.uuid,
-          pre: doc.toObject(),
-          parentUuid: doc.parent?.uuid ?? null,
-        });
-      }),
-    ]);
-  }
-  return () => {
-    for (const [hook, id] of ids) g.Hooks.off(hook, id);
-  };
-}
-
-/**
  * The script's view of the world: the page API, counted, capped and (on a dry run) stubbed. What a
- * call does is the op's own tag (./_ops.ts), never a guess from its name.
+ * call does is the op's own tag (./_ops.ts), never a guess from its name. Once the run is abandoned
+ * at its timeout, every call is refused.
  */
 function facade(
-  receipt: Receipt,
+  counts: Counts,
   opts: { dryRun: boolean; maxWrites: number; maxDeletes: number },
-  dry: Array<{ fn: string; args: unknown }>
+  dry: Array<{ fn: string; args: unknown }>,
+  abandoned: () => boolean
 ): Record<string, (args?: unknown) => Promise<unknown>> {
   const api = (globalThis as any).window.__fvtt as Record<string, (a?: unknown) => unknown>;
   const out: Record<string, (args?: unknown) => Promise<unknown>> = {};
   for (const [name, fn] of Object.entries(api)) {
-    if (name === 'runScript' || name === 'undoScript' || typeof fn !== 'function') continue;
+    if (name === 'runScript' || name === 'undoOps' || typeof fn !== 'function') continue;
     out[name] = async (args?: unknown) => {
-      receipt.calls++;
+      if (abandoned()) throw invalid('the run was abandoned at its timeout');
+      counts.calls++;
       const kind = opKind(name, args);
       if (kind !== 'read') {
         if (opts.dryRun) {
@@ -216,13 +141,13 @@ function facade(
           return { dryRun: true };
         }
         if (kind === 'delete') {
-          receipt.deletes++;
-          if (receipt.deletes > opts.maxDeletes) {
+          counts.deletes++;
+          if (counts.deletes > opts.maxDeletes) {
             throw invalid(`the run's delete cap (${opts.maxDeletes}) was reached at fvtt.${name}`);
           }
         }
-        receipt.writes++;
-        if (receipt.writes > opts.maxWrites) {
+        counts.writes++;
+        if (counts.writes > opts.maxWrites) {
           throw invalid(`the run's write cap (${opts.maxWrites}) was reached at fvtt.${name}`);
         }
       }
@@ -249,21 +174,6 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
   const maxDeletes = Math.max(0, Math.floor(args.maxDeletes ?? 30));
   const timeoutMs = Math.max(1_000, Math.floor(args.timeoutMs ?? 60_000));
 
-  const receipt: Receipt = {
-    id: newReceiptId(),
-    at: new Date().toISOString(),
-    ops: [],
-    calls: 0,
-    writes: 0,
-    deletes: 0,
-  };
-  const log: string[] = [];
-  const dry: Array<{ fn: string; args: unknown }> = [];
-  const logFn = (...parts: unknown[]) => {
-    log.push(parts.map(p => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
-    if (log.length > 500) log.splice(0, log.length - 500);
-  };
-
   // Compile with the habitual globals shadowed; `"use strict"` makes a stray assignment throw.
   const shadow = [...new Set([...SHADOWED, ...documentNames()])];
   let body: (...a: unknown[]) => Promise<unknown>;
@@ -278,116 +188,68 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
     throw invalid(`run-script: the script does not parse — ${(err as Error).message}`);
   }
 
-  const fvtt = facade(receipt, { dryRun, maxWrites, maxDeletes }, dry);
-  const stop = dryRun ? () => {} : record(receipt);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const TIMEOUT = Symbol('timeout');
-  let ok = true;
-  let error: string | undefined;
-  let result: unknown;
-  try {
-    const outcome = await Promise.race([
-      body(fvtt, logFn, ...shadow.map(() => undefined)),
-      new Promise<typeof TIMEOUT>(r => {
-        timer = setTimeout(() => r(TIMEOUT), timeoutMs);
-      }),
-    ]);
-    if (outcome === TIMEOUT) {
-      ok = false;
-      error = `the run exceeded ${Math.round(timeoutMs / 1000)} s and was abandoned; a write still in flight is not in the receipt`;
-    } else {
-      result = serializable(outcome);
-    }
-  } catch (err) {
-    ok = false;
-    const e = err as Error;
-    error = `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`;
-  } finally {
-    if (timer) clearTimeout(timer);
-    stop();
-  }
-
-  if (!dryRun) {
-    const all = receipts();
-    all.set(receipt.id, receipt);
-    while (all.size > RECEIPTS_KEPT) all.delete(all.keys().next().value as string);
-  }
-
-  const count = (kind: ReceiptOp['kind']) => receipt.ops.filter(o => o.kind === kind).length;
-  const out: RunScriptResult = {
-    ok,
-    log,
-    timedOut: error?.startsWith('the run exceeded') ?? false,
-    receipt: {
-      id: dryRun ? '' : receipt.id,
-      created: count('create'),
-      updated: count('update'),
-      deleted: count('delete'),
-      calls: receipt.calls,
-      writes: receipt.writes,
-    },
-  };
-  if (ok) out.result = result;
-  else out.error = error ?? 'unknown error';
-  if (dryRun) out.dryRun = dry;
-  return out;
-}
-
-export interface UndoScriptResult {
-  id: string;
-  undone: number;
-  failed: Array<{ op: string; uuid: string; error: string }>;
-}
-
-/** Reverse a receipt, newest op first: delete what it created, restore what it changed or deleted. */
-export async function undoScript(args: { id: string }): Promise<UndoScriptResult> {
-  const id = String(args?.id ?? '');
-  const receipt = receipts().get(id);
-  if (!receipt) {
-    throw notFound(
-      `receipt "${id}" is not in this page (the last ${RECEIPTS_KEPT} runs are kept; a reload of the bridge loses them)`
-    );
-  }
-  const g = globalThis as any;
-  // A document the run created and then deleted nets to nothing: reversing both would re-create
-  // it and then delete the re-creation (the 2026-10-11 live verify lost the restored actor that
-  // way). Every op on such a uuid is dropped before the walk.
-  const created = new Set(receipt.ops.filter(o => o.kind === 'create').map(o => o.uuid));
-  const netted = new Set(
-    receipt.ops.filter(o => o.kind === 'delete' && created.has(o.uuid)).map(o => o.uuid)
-  );
-  const ops = receipt.ops.filter(o => !netted.has(o.uuid));
-  let undone = 0;
-  const failed: UndoScriptResult['failed'] = [];
-  for (const op of [...ops].reverse()) {
+  const run = async (): Promise<RunScriptResult> => {
+    const counts: Counts = { calls: 0, writes: 0, deletes: 0 };
+    const log: string[] = [];
+    const dry: Array<{ fn: string; args: unknown }> = [];
+    const logFn = (...parts: unknown[]) => {
+      log.push(parts.map(p => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
+      if (log.length > 500) log.splice(0, log.length - 500);
+    };
+    let abandoned = false;
+    const fvtt = facade(counts, { dryRun, maxWrites, maxDeletes }, dry, () => abandoned);
+    const recorder = dryRun ? null : record();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const TIMEOUT = Symbol('timeout');
+    let ok = true;
+    let error: string | undefined;
+    let result: unknown;
+    let ops: ReceiptOp[] = [];
     try {
-      if (op.kind === 'create') {
-        const doc = await g.fromUuid(op.uuid);
-        if (doc) await doc.delete();
-      } else if (op.kind === 'update') {
-        const doc = await g.fromUuid(op.uuid);
-        if (doc && op.pre && Object.keys(op.pre).length) await doc.update(op.pre);
+      const outcome = await Promise.race([
+        body(fvtt, logFn, ...shadow.map(() => undefined)),
+        new Promise<typeof TIMEOUT>(r => {
+          timer = setTimeout(() => {
+            abandoned = true;
+            r(TIMEOUT);
+          }, timeoutMs);
+        }),
+      ]);
+      if (outcome === TIMEOUT) {
+        ok = false;
+        error = `the run exceeded ${Math.round(timeoutMs / 1000)} s and was abandoned; a write still in flight is not in the receipt, and the script can make no more`;
       } else {
-        const exists = await g.fromUuid(op.uuid).catch(() => null);
-        if (!exists && op.pre) {
-          if (op.parentUuid) {
-            const parent = await g.fromUuid(op.parentUuid);
-            if (!parent) throw new Error(`parent ${op.parentUuid} is gone`);
-            await parent.createEmbeddedDocuments(op.documentName, [op.pre], { keepId: true });
-          } else {
-            await g.CONFIG[op.documentName].documentClass.create(op.pre, { keepId: true });
-          }
-        }
+        result = serializable(outcome);
       }
-      undone++;
     } catch (err) {
-      failed.push({
-        op: `${op.kind} ${op.documentName}`,
-        uuid: op.uuid,
-        error: (err as Error).message,
-      });
+      ok = false;
+      const e = err as Error;
+      error = `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`;
+    } finally {
+      if (timer) clearTimeout(timer);
+      ops = recorder?.stop() ?? [];
     }
-  }
-  receipts().delete(id);
-  return { id, undone, failed };
+
+    const count = (kind: ReceiptOp['kind']) => ops.filter(o => o.kind === kind).length;
+    const out: RunScriptResult = {
+      ok,
+      log,
+      timedOut: error?.startsWith('the run exceeded') ?? false,
+      receipt: {
+        created: count('create'),
+        updated: count('update'),
+        deleted: count('delete'),
+        calls: counts.calls,
+        writes: counts.writes,
+      },
+    };
+    if (ok) out.result = result;
+    else out.error = error ?? 'unknown error';
+    if (dryRun) out.dryRun = dry;
+    else out.ops = ops;
+    return out;
+  };
+  // A real run holds the write lock until the race settles (its timeout included): nothing else
+  // writes while it runs, so its recorder sees only its own writes. A dry run writes nothing.
+  return dryRun ? run() : withWriteLock(run);
 }

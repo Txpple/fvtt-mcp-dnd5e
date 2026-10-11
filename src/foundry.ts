@@ -6,7 +6,8 @@
 // passwordless MCP user, wait for game.ready, inject the page-side domain library
 // (window.__fvtt), and expose a tiny seam:
 //
-//     foundry.call(name, args)   ->  window.__fvtt[name](args)   (the tool surface)
+//     foundry.call(name, args)   ->  window.__fvttCall(name, args)   (the tool surface; a write
+//                                     is recorded into the tool call's receipt, src/receipts.ts)
 //     foundry.evaluate(fn, arg)  ->  page.evaluate(fn, arg)      (escape hatch)
 //
 // Everything else in the tree calls foundry.call() and never sees a Page. The irreducible
@@ -21,7 +22,7 @@ import type { PageApi, PageArgs, PageResult } from './page/index.js';
 // The seam's types, re-exported so a tool (or a sibling) names a handler's argument or result
 // without reaching into src/page: `PageArgs<'manageEffect'>[0]`, `PageResult<'listUsers'>`.
 export type { PageApi, PageArgs, PageResult };
-import { asCallError, asConnectError, ConnectProblem } from './bridge-error.js';
+import { asCallError, asConnectError, BridgeError, ConnectProblem } from './bridge-error.js';
 import type { Host } from './hosts/types.js';
 import { hostConfigProblem } from './hosts/env.js';
 import {
@@ -35,6 +36,9 @@ import {
 } from './join-form.js';
 import { clearSystemCache } from './utils/system-detection.js';
 import { OpCapError, raceWithCap } from './op-cap.js';
+import { opKind } from './page/_ops.js';
+import { type CallOutcome, UNRECORDED } from './page/_receipts.js';
+import { callContext, noteOps } from './receipts.js';
 import {
   describeHolder,
   type Eviction,
@@ -364,18 +368,23 @@ export class Foundry implements FoundryBridge {
       );
     }
     writeHolder(rec);
+    // The marker is the bridge's own bookkeeping: written UNRECORDED, so a tool call in flight
+    // never finds it in its receipt (src/page/_receipts.ts).
     await this.page
       ?.evaluate(
-        async marker => {
+        async ({ marker, unrecorded }) => {
           const user = (globalThis as any).game?.user;
-          await user?.update({ 'flags.world.fvttMcpBridge': marker });
+          await user?.update({ 'flags.world.fvttMcpBridge': marker }, { [unrecorded]: true });
         },
         {
-          pid: rec.pid,
-          host: rec.host,
-          label: rec.label,
-          session: rec.session,
-          since: rec.since,
+          marker: {
+            pid: rec.pid,
+            host: rec.host,
+            label: rec.label,
+            session: rec.session,
+            since: rec.since,
+          },
+          unrecorded: UNRECORDED,
         }
       )
       .catch((err: Error) => this.log.debug(`seat marker not written — ${err.message}`));
@@ -409,10 +418,10 @@ export class Foundry implements FoundryBridge {
     let timer: NodeJS.Timeout | undefined;
     await Promise.race([
       page
-        .evaluate(async () => {
+        .evaluate(async unrecorded => {
           const user = (globalThis as any).game?.user;
-          await user?.update({ 'flags.world.-=fvttMcpBridge': null });
-        })
+          await user?.update({ 'flags.world.-=fvttMcpBridge': null }, { [unrecorded]: true });
+        }, UNRECORDED)
         .catch(() => {}),
       new Promise<void>(r => {
         timer = setTimeout(r, 3_000);
@@ -798,11 +807,14 @@ export class Foundry implements FoundryBridge {
     if (outcome !== 'ready') throw new Error(`Join did not reach game.ready (${outcome}).`);
   }
 
-  /** Inject the bundled page-side domain library, defining window.__fvtt. */
+  /** Inject the bundled page-side domain library, defining window.__fvtt and window.__fvttCall. */
   private async injectBundle(page: Page): Promise<void> {
     await page.addScriptTag({ content: this.pageBundle });
     const ok = await page.evaluate(
-      () => typeof window.__fvtt === 'object' && window.__fvtt !== null
+      () =>
+        typeof window.__fvtt === 'object' &&
+        window.__fvtt !== null &&
+        typeof window.__fvttCall === 'function'
     );
     if (!ok) throw new Error('page bundle injected but window.__fvtt is missing');
   }
@@ -825,9 +837,29 @@ export class Foundry implements FoundryBridge {
         // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page
         // stays open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge
         // has vanished, recover once (re-inject in place, or full reconnect if the session itself
-        // dropped) and retry — so a mid-session reload self-heals instead of wedging until a
-        // process restart.
+        // dropped), so a mid-session reload self-heals instead of wedging until a process restart.
+        // Only a read is run again: a write may have landed before the page went (a reload under
+        // it, or a page the op cap closed under another call), and a second run could land it
+        // twice, so it fails with its outcome unknown (issue #16's review).
         if (!(await this.bridgeAlive())) {
+          if (opKind(name, args[0]) !== 'read') {
+            this.log.warn(
+              `page bridge missing under '${name}' — recovering; a write is not run again`
+            );
+            await this.recover().catch((e: Error) =>
+              this.log.warn(`recovery after '${name}' failed — ${e.message}`)
+            );
+            throw new BridgeError({
+              code: 'connection',
+              fn: name,
+              detail:
+                `the page went away under '${name}' (a world reload, or a page closed under the call), ` +
+                'so the bridge did not run it again: its outcome is unknown, a write may or may not ' +
+                'have landed. Read the world before running it again; the next call reconnects.',
+              explained: true,
+              cause: err,
+            });
+          }
           this.log.warn(`page bridge missing on '${name}' — recovering and retrying`);
           await this.recover();
           try {
@@ -842,25 +874,30 @@ export class Foundry implements FoundryBridge {
   }
 
   /**
-   * Single page-side dispatch into the injected window.__fvtt bridge, under the op cap (issue #16,
-   * src/op-cap.ts): past its cap the page is asked whether it still answers; a page that does not
-   * is closed (the browser and context stay, so the next call only re-joins) and the op fails with
-   * its outcome unknown. Only the evaluate is capped, never the connect in front of it.
+   * Single page-side dispatch through window.__fvttCall, the page's choke point
+   * (src/page/_receipts.ts), under the op cap (issue #16, src/op-cap.ts): past its cap the page is
+   * asked whether it still answers; a page that does not is closed (the browser and context stay,
+   * so the next call only re-joins) and the op fails with its outcome unknown. Only the evaluate is
+   * capped, never the connect in front of it. Inside a tool call (src/receipts.ts `callContext`)
+   * the page records a write under its write lock, and the writes it reports join the call's
+   * receipt, a failed write's included; outside one (a sibling harness) nothing is recorded.
    */
   private async invoke<T>(name: string, args?: unknown): Promise<T> {
     // Capture the page locally: a concurrent call entering recover() can null this.page mid-flight,
     // and `this.page!` would then throw a TypeError on the deref.
     const page = this.page!;
+    const record = callContext.getStore() !== undefined;
     const work = page.evaluate(
-      ({ n, a }) => {
-        const fn = window.__fvtt?.[n];
-        if (typeof fn !== 'function') throw new Error(`Unknown page function: ${n}`);
-        return fn(a);
+      ({ n, a, r }) => {
+        const call = window.__fvttCall;
+        if (typeof call !== 'function') throw new Error(`Unknown page function: ${n}`);
+        return call(n, a, { record: r });
       },
-      { n: name, a: args }
-    ) as Promise<T>;
+      { n: name, a: args, r: record }
+    ) as Promise<CallOutcome>;
+    let out: CallOutcome;
     try {
-      return await raceWithCap(work, () => page.evaluate(() => 1), {
+      out = await raceWithCap(work, () => page.evaluate(() => 1), {
         capMs: opCapFor(name, args, this.cfg.opCapMs),
         probeMs: OP_PROBE_MS,
         hardMs: OP_CEILING_MS,
@@ -896,13 +933,27 @@ export class Foundry implements FoundryBridge {
       clearTimeout(timer);
       throw new OpCapError(message, err.elapsedMs, err.reason, { cause: err });
     }
+    if (out.ops?.length) noteOps(out.ops);
+    if (out.error) {
+      // The op threw after it had written: its writes are in the receipt; its words are thrown as
+      // Chromium would have reported them (`<name>: <message>` and the in-page frames), so the
+      // seam reads the same code and detail out of them (src/bridge-error.ts parsePageThrow).
+      const frames = /\n\s+at [\s\S]*$/.exec(out.error.stack ?? '')?.[0] ?? '';
+      throw new Error(`${out.error.name}: ${out.error.message}${frames}`);
+    }
+    return out.result as T;
   }
 
-  /** Is the injected page bridge (window.__fvtt) currently present on a live page? */
+  /** Is the injected page bridge (window.__fvtt, window.__fvttCall) present on a live page? */
   private async bridgeAlive(): Promise<boolean> {
     if (!this.page || this.page.isClosed()) return false;
     return this.page
-      .evaluate(() => typeof window.__fvtt === 'object' && window.__fvtt !== null)
+      .evaluate(
+        () =>
+          typeof window.__fvtt === 'object' &&
+          window.__fvtt !== null &&
+          typeof window.__fvttCall === 'function'
+      )
       .catch(() => false);
   }
 

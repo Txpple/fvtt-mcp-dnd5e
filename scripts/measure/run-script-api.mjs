@@ -74,7 +74,7 @@ const groups = new Map();
 const apiType = checker.getTypeAtLocation(apiDecl.name);
 for (const member of apiType.getProperties()) {
   const name = member.name;
-  if (name === 'runScript' || name === 'undoScript') continue;
+  if (name === 'runScript' || name === 'undoOps') continue;
   const memberDecl = member.valueDeclaration ?? member.declarations?.[0];
   const fnType = checker.getTypeOfSymbolAtLocation(member, memberDecl);
   const sig = fnType.getCallSignatures()[0];

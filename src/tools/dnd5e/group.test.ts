@@ -176,7 +176,8 @@ describe('set-primary-party', () => {
       current: { id: 'G1', name: 'The Party' },
     });
     const out = await tool.handleSetPrimaryParty({});
-    expect(calls.find(c => c[0] === 'configurePrimaryParty')![1].clear).toBe(false);
+    // an empty call, so the page op's tag (emptyReads) takes it for the read it is
+    expect(calls.find(c => c[0] === 'configurePrimaryParty')![1]).toEqual({});
     expect(out).toBe('**Primary party:** **The Party** (`G1`)');
   });
 

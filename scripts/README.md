@@ -55,6 +55,10 @@ tool proofs:
 - `verify-error-contract` — the error contract end to end (read-only): a page-side `PageError`
   code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
   appends one hint per code, a dead URL is `connection`.
+- `verify-receipts` — the receipt every write answers with (issue #6), through the registry as the
+  server answers: an actor, a light and a journal page, each created, updated and deleted and
+  undone by its receipt id; the redo, once; a run-script run; two writes in flight, each undo only
+  its own; the store's refusal of a wrong id; the cost of the page's choke point, timed in the page.
 
 ## The sandbox toolkit (`docs/local-sandbox.md`, `docs/hosts.md`)
 

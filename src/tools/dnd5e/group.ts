@@ -187,7 +187,16 @@ export class DnD5eGroupTools {
   async handleSetPrimaryParty(args: any): Promise<string> {
     const parsed = SetPrimaryPartySchema.parse(args ?? {});
     await assertDnd5e(this.foundry, this.logger, 'set-primary-party');
-    const r = await this.foundry.call('configurePrimaryParty', parsed);
+    // The read form sends nothing (not the schema's `clear: false`): the page op's tag reads an
+    // empty call (src/page/_ops.ts `emptyReads`), so it runs unlocked and unrecorded.
+    const r = await this.foundry.call(
+      'configurePrimaryParty',
+      parsed.groupIdentifier !== undefined
+        ? { groupIdentifier: parsed.groupIdentifier }
+        : parsed.clear
+          ? { clear: true }
+          : {}
+    );
 
     const show = (p: { id: string; name: string } | null) =>
       p ? `**${p.name}** (\`${p.id}\`)` : '(none)';

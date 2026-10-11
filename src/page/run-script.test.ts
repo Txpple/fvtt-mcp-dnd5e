@@ -1,11 +1,14 @@
 /**
  * run-script's page half, offline: the shadow list, and a run against a stubbed page API with
- * stubbed hooks — the facade counts, the dry run stubs, the receipt records, the cap refuses, the
- * shadowed globals read undefined. What counts as a write is the op table's (./_ops.test.ts). The
- * shadowing is an accident guard, not a boundary (issue #15): the join user's role is.
+ * stubbed hooks — the facade counts, the dry run stubs, the run's writes come back as `ops` (the
+ * page keeps no receipts), the cap refuses, the shadowed globals read undefined, and a run abandoned
+ * at its timeout can write no more. What counts as a write is the op table's (./_ops.test.ts); the
+ * recorder and the undo are ./_receipts.test.ts's. The shadowing is an accident guard, not a
+ * boundary (issue #15): the join user's role is.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { runScript, SHADOWED, undoScript } from './run-script.js';
+import { undoOps, withWriteLock } from './_receipts.js';
+import { runScript, SHADOWED } from './run-script.js';
 
 describe('the shadow list', () => {
   it('shadows the globals a script would reach for by habit', () => {
@@ -43,12 +46,7 @@ describe('runScript against a stubbed page', () => {
       Item: { documentClass: function Item() {} },
     };
     g.game = { user: { id: 'u1' } };
-    g.foundry = {
-      utils: {
-        filterObject: (src: any, tpl: any) =>
-          Object.fromEntries(Object.keys(tpl).map(k => [k, src[k]])),
-      },
-    };
+    g.foundry = { utils: { deepClone: (v: unknown) => structuredClone(v) } };
     g.Hooks = {
       on: (hook: string, fn: (...a: unknown[]) => void) => {
         hooks.set(hook, [...(hooks.get(hook) ?? []), fn]);
@@ -66,14 +64,14 @@ describe('runScript against a stubbed page', () => {
         },
         createActorFromCompendium: async (a: unknown) => {
           calls.push(['createActorFromCompendium', a]);
-          fire('createActor', { uuid: `Actor.${calls.length}` }, {}, 'u1');
+          fire('createActor', { uuid: `Actor.${calls.length}`, name: 'Goblin' }, {}, 'u1');
           return { id: `a${calls.length}` };
         },
         updateActor: async (a: unknown) => {
           calls.push(['updateActor', a]);
           fire(
             'preUpdateActor',
-            { uuid: 'Actor.a1', toObject: () => ({ name: 'Goblin', hp: 7 }) },
+            { uuid: 'Actor.a1', name: 'Goblin', _source: { name: 'Goblin', hp: 7 } },
             { hp: 1 },
             {},
             'u1'
@@ -85,15 +83,18 @@ describe('runScript against a stubbed page', () => {
           return { ok: true };
         },
         runScript: async () => {},
+        undoOps: async () => {},
       },
     };
   });
   afterEach(() => {
     const g = globalThis as any;
-    for (const k of ['CONFIG', 'game', 'foundry', 'Hooks', 'window']) delete g[k];
+    for (const k of ['CONFIG', 'game', 'foundry', 'Hooks', 'window', 'fromUuid', '__sink']) {
+      delete g[k];
+    }
   });
 
-  it('runs the body with fvtt and log, returns the value, and records the receipt', async () => {
+  it('runs the body with fvtt and log, returns the value, and hands back its writes', async () => {
     const r = await runScript({
       src: `const actors = await fvtt.listActors({}); log("found", actors.length);
         const made = await fvtt.createActorFromCompendium({ name: actors[0].name });
@@ -103,12 +104,17 @@ describe('runScript against a stubbed page', () => {
     expect(r.ok).toBe(true);
     expect(r.result).toEqual({ made: 'a2' });
     expect(r.log).toEqual(['found 1']);
-    expect(r.receipt).toMatchObject({ created: 1, updated: 1, deleted: 0, calls: 3, writes: 2 });
-    expect(r.receipt.id).toMatch(/^rcpt_/);
+    expect(r.receipt).toEqual({ created: 1, updated: 1, deleted: 0, calls: 3, writes: 2 });
+    expect(r.ops).toEqual([
+      { kind: 'create', documentName: 'Actor', uuid: 'Actor.2', label: 'Goblin' },
+      { kind: 'update', documentName: 'Actor', uuid: 'Actor.a1', label: 'Goblin', pre: { hp: 7 } },
+    ]);
     expect(hooks.get('createActor')).toEqual([]); // the hooks are off after the run
+    // the page keeps nothing: the ops are the run's, the receipt is the bridge's (src/receipts.ts)
+    expect((globalThis as any).__fvttReceipts).toBeUndefined();
   });
 
-  it('a dry run stubs the writes and lists them; reads still run', async () => {
+  it('a dry run stubs the writes and lists them; reads still run; no ops', async () => {
     const r = await runScript({
       src: `const a = await fvtt.listActors({}); const m = await fvtt.createActorFromCompendium({ n: 6 }); return m;`,
       dryRun: true,
@@ -117,7 +123,8 @@ describe('runScript against a stubbed page', () => {
     expect(r.result).toEqual({ dryRun: true });
     expect(r.dryRun).toEqual([{ fn: 'createActorFromCompendium', args: { n: 6 } }]);
     expect(calls.map(c => c[0])).toEqual(['listActors']);
-    expect(r.receipt.id).toBe('');
+    expect(r.ops).toBeUndefined();
+    expect(hooks.size).toBe(0); // a dry run records nothing
   });
 
   it('a dry run stubs by the op table: a remap is a write, a list action reads', async () => {
@@ -170,6 +177,8 @@ describe('runScript against a stubbed page', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toContain('write cap (3)');
     expect(calls.filter(c => c[0] === 'createActorFromCompendium')).toHaveLength(3);
+    // a failed run keeps its writes: the three creates made before the cap are its ops
+    expect(r.ops?.map(o => o.kind)).toEqual(['create', 'create', 'create']);
   });
 
   it('a shadowed global reads undefined, and a script that throws reports its error', async () => {
@@ -188,35 +197,45 @@ describe('runScript against a stubbed page', () => {
     expect(r.timedOut).toBe(true);
   }, 10_000);
 
+  it('a run abandoned at its timeout can write no more: the facade refuses, nothing is recorded', async () => {
+    // the body sleeps past the timeout, then reaches for a write; `__sink` is a plain global the
+    // script reports through (it is not shadowed)
+    (globalThis as any).__sink = [];
+    const r = await runScript({
+      src: `await new Promise(res => setTimeout(res, 1300));
+        try { await fvtt.createActorFromCompendium({ late: true }); __sink.push("written"); }
+        catch (e) { __sink.push(e.name + ": " + e.message); }`,
+      timeoutMs: 1_000,
+    });
+    expect(r.timedOut).toBe(true);
+    expect(r.error).toContain('the script can make no more');
+    await new Promise(res => setTimeout(res, 600));
+    expect((globalThis as any).__sink).toEqual([
+      'PageError:invalid: the run was abandoned at its timeout',
+    ]);
+    expect(calls.filter(c => c[0] === 'createActorFromCompendium')).toEqual([]);
+    expect(r.ops).toEqual([]);
+  }, 10_000);
+
+  it('a real run holds the write lock until it settles; a dry run does not take it', async () => {
+    const src = `await new Promise(res => setTimeout(res, 50)); await fvtt.listActors({}); return 1;`;
+    // a write queued behind a real run sees the run's last call made
+    const run = runScript({ src });
+    expect(await withWriteLock(async () => calls.map(c => c[0]))).toEqual(['listActors']);
+    await run;
+
+    calls.length = 0;
+    const dry = runScript({ src, dryRun: true });
+    expect(await withWriteLock(async () => calls.map(c => c[0]))).toEqual([]);
+    await dry;
+    expect(calls.map(c => c[0])).toEqual(['listActors']);
+  });
+
   it('a script that does not parse is refused as invalid', async () => {
     await expect(runScript({ src: `return (;` })).rejects.toThrow(/does not parse/);
   });
 
-  it('undo reverses the receipt newest first, and an unknown receipt is not-found', async () => {
-    const g = globalThis as any;
-    const deleted: string[] = [];
-    const updated: Array<[string, unknown]> = [];
-    g.fromUuid = async (uuid: string) => ({
-      uuid,
-      delete: async () => {
-        deleted.push(uuid);
-      },
-      update: async (d: unknown) => {
-        updated.push([uuid, d]);
-      },
-    });
-    const run = await runScript({
-      src: `const m = await fvtt.createActorFromCompendium({}); await fvtt.updateActor({ id: m.id, hp: 1 }); return 1;`,
-    });
-    const u = await undoScript({ id: run.receipt.id });
-    expect(u.undone).toBe(2);
-    expect(updated).toEqual([['Actor.a1', { hp: 7 }]]); // the pre-image, restored first (newest op)
-    expect(deleted).toEqual(['Actor.1']);
-    await expect(undoScript({ id: run.receipt.id })).rejects.toThrow(/not in this page/);
-    delete g.fromUuid;
-  });
-
-  it('a document created and then deleted in one run nets out of the undo', async () => {
+  it("the run's ops are what undoOps reverses, newest first", async () => {
     const g = globalThis as any;
     const touched: string[] = [];
     g.fromUuid = async (uuid: string) => ({
@@ -224,27 +243,16 @@ describe('runScript against a stubbed page', () => {
       delete: async () => {
         touched.push(`delete ${uuid}`);
       },
-      update: async () => {
-        touched.push(`update ${uuid}`);
+      update: async (d: unknown) => {
+        touched.push(`update ${uuid} ${JSON.stringify(d)}`);
       },
     });
-    g.window.__fvtt.deleteActor = async (a: any) => {
-      calls.push(['deleteActor', a]);
-      fire(
-        'preDeleteActor',
-        { uuid: a.uuid, toObject: () => ({ name: 'gone' }), parent: null },
-        {},
-        'u1'
-      );
-      return { ok: true };
-    };
     const run = await runScript({
-      src: `const m = await fvtt.createActorFromCompendium({}); await fvtt.deleteActor({ uuid: "Actor.1" }); return m;`,
+      src: `const m = await fvtt.createActorFromCompendium({}); await fvtt.updateActor({ id: m.id, hp: 1 }); return 1;`,
     });
-    expect(run.receipt).toMatchObject({ created: 1, deleted: 1 });
-    const u = await undoScript({ id: run.receipt.id });
-    expect(u.undone).toBe(0);
-    expect(touched).toEqual([]);
-    delete g.fromUuid;
+    const u = await undoOps({ ops: run.ops ?? [] });
+    expect(u.undone).toBe(2);
+    expect(u.failed).toEqual([]);
+    expect(touched).toEqual(['update Actor.a1 {"hp":7}', 'delete Actor.1']);
   });
 });

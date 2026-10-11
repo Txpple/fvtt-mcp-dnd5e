@@ -9,7 +9,12 @@
  * already part of the guarantee.
  */
 
-import { describe, it, expect } from 'vitest';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import type { ReceiptOp } from '../page/_receipts.js';
+import { noteOps, receiptLineOf } from '../receipts.js';
 import { buildToolRegistry } from '../registry.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
@@ -829,9 +834,6 @@ describe('FOUNDRY_TOOLSETS=readonly — the reads only, every other call refused
       'inspect-pc-advancement': { className: 'Wizard' },
       'manage-effect': { actorIdentifier: 'ZZ-x' },
     };
-    // the page tag reads only an empty call, and the tool's zod default sends `clear: false`
-    const PAGE_TAG_STRICTER = new Set(['configurePrimaryParty']);
-
     clearSystemCache();
     const { tools, dispatch, calls } = buildReadOnly((name: string) =>
       name === 'getWorldInfo' ? { system: 'dnd5e' } : {}
@@ -863,8 +865,7 @@ describe('FOUNDRY_TOOLSETS=readonly — the reads only, every other call refused
           problems.push(`${label} ${JSON.stringify(args)}: no page op (${error})`);
         }
         for (const [op, kind] of ops) {
-          if (kind !== 'read' && !PAGE_TAG_STRICTER.has(op))
-            problems.push(`${label} → ${op} is a ${kind}`);
+          if (kind !== 'read') problems.push(`${label} → ${op} is a ${kind}`);
         }
         reached.push(label);
       }
@@ -908,5 +909,163 @@ describe('FOUNDRY_TOOLSETS=readonly — the reads only, every other call refused
     expect(() =>
       buildToolRegistry({ foundry, logger: makeLogger(), host, toolsets: ['read-only'] })
     ).toThrow(/"read-only" is not a toolset \(one of: .*scripting; or "readonly" alone\)/);
+  });
+});
+
+describe('receipts on every write (issue #6): one line per call, appended centrally', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'fvtt-registry-receipts-'));
+    clearSystemCache(); // set-primary-party → assertDnd5e probes getWorldInfo (cached)
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const SETTING: ReceiptOp = {
+    kind: 'update',
+    documentName: 'Setting',
+    uuid: 'Setting.s1',
+    label: 'dnd5e.primaryParty',
+    pre: { value: '{"actor":null}' },
+  };
+  const PARTY = { success: true, changed: true, previous: null, current: { id: 'G1', name: 'P' } };
+
+  /** A registry whose fake bridge notes `ops` from configurePrimaryParty, as the page reports them. */
+  function registry(onWrite: () => unknown = () => PARTY, toolsets?: string[]) {
+    const { foundry, calls } = makeFoundry(async (name: string) => {
+      if (name === 'getWorldInfo') return { system: 'dnd5e' };
+      if (name === 'configurePrimaryParty') return onWrite();
+      return {};
+    });
+    const reg = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      serverUrl: 'http://localhost:30000',
+      receiptsDir: dir,
+      ...(toolsets ? { toolsets } : {}),
+    });
+    return { ...reg, calls };
+  }
+  const stored = () => readdirSync(dir).map(f => JSON.parse(readFileSync(join(dir, f), 'utf8')));
+
+  it('a call whose page ops wrote answers one receipt line, and the receipt is kept', async () => {
+    const { dispatchWithReceipt } = registry(() => {
+      noteOps([SETTING]);
+      return PARTY;
+    });
+    const { result, receiptLine } = await dispatchWithReceipt('set-primary-party', {
+      groupIdentifier: 'P',
+    });
+    expect(result).toBe('✅ Primary party: (none) → **P** (`G1`)');
+    const id = /^receipt (rcpt_[0-9a-z]{6}): /.exec(receiptLine ?? '')?.[1];
+    expect(receiptLine).toBe(
+      `receipt ${id}: 0 created, 1 updated, 0 deleted (Setting "dnd5e.primaryParty": value) · ` +
+        `undo: run-script { "undo": "${id}" }`
+    );
+    expect(stored()).toEqual([
+      expect.objectContaining({
+        id,
+        tool: 'set-primary-party',
+        worldId: 'w',
+        serverUrl: 'http://localhost:30000',
+        ops: [SETTING],
+      }),
+    ]);
+  });
+
+  it('a read answers no line and keeps nothing; plain dispatch keeps the receipt, returns the result', async () => {
+    const { dispatchWithReceipt, dispatch } = registry(() => {
+      noteOps([SETTING]);
+      return PARTY;
+    });
+    expect(await dispatchWithReceipt('get-world-info', {})).toEqual({ result: expect.anything() });
+    expect(readdirSync(dir)).toEqual([]);
+    expect(await dispatch('set-primary-party', { groupIdentifier: 'P' })).toContain(
+      'Primary party'
+    );
+    expect(stored()).toHaveLength(1);
+  });
+
+  it('a registration without run-script says where the undo is', async () => {
+    const { dispatchWithReceipt } = registry(() => {
+      noteOps([SETTING]);
+      return PARTY;
+    }, ['actors']);
+    const { receiptLine } = await dispatchWithReceipt('set-primary-party', {
+      groupIdentifier: 'P',
+    });
+    expect(receiptLine).toMatch(/ · undo needs the scripting toolset \(FOUNDRY_TOOLSETS\)$/);
+  });
+
+  it('an undo answers its own receipt, which names the one it reverses; that one cannot be undone twice', async () => {
+    const reverse: ReceiptOp = { ...SETTING, pre: { value: '{"actor":"G1"}' } };
+    const { foundry, calls } = makeFoundry(async (name: string) => {
+      if (name === 'getWorldInfo') return { system: 'dnd5e' };
+      if (name === 'configurePrimaryParty') {
+        noteOps([SETTING]);
+        return PARTY;
+      }
+      if (name === 'undoOps') {
+        noteOps([reverse]);
+        return { undone: 1, failed: [] };
+      }
+      return {};
+    });
+    const { dispatchWithReceipt } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      serverUrl: 'http://localhost:30000',
+      receiptsDir: dir,
+    });
+    const first = await dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' });
+    const id = /receipt (rcpt_\w+)/.exec(first.receiptLine ?? '')?.[1] ?? '';
+    const undo = await dispatchWithReceipt('run-script', { undo: id });
+    expect(undo.result).toBe(`↩️ Receipt ${id}: 1 write(s) reversed.`);
+    const undoId = /receipt (rcpt_\w+)/.exec(undo.receiptLine ?? '')?.[1] ?? '';
+    expect(undo.receiptLine).toBe(
+      `receipt ${undoId} (reverses ${id}): 0 created, 1 updated, 0 deleted ` +
+        `(Setting "dnd5e.primaryParty": value) · undo: run-script { "undo": "${undoId}" }`
+    );
+    expect(calls.find(([n]) => n === 'undoOps')?.[1]).toEqual({ ops: [SETTING] });
+    const byId = new Map(stored().map(r => [r.id, r]));
+    expect(byId.get(id)?.undoneBy).toBe(undoId);
+    expect(byId.get(undoId)?.reverses).toBe(id);
+    await expect(dispatchWithReceipt('run-script', { undo: id })).rejects.toThrow(
+      `receipt ${id} was already undone by ${undoId}`
+    );
+  });
+
+  it('a call that fails after it wrote still carries its receipt line', async () => {
+    const { dispatchWithReceipt } = registry(() => {
+      noteOps([SETTING]);
+      throw new Error('the second half failed');
+    });
+    const err = await dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' }).catch(
+      e => e
+    );
+    expect(err.message).toContain('the second half failed');
+    expect(receiptLineOf(err)).toMatch(/^receipt rcpt_\w{6}: 0 created, 1 updated, 0 deleted/);
+    expect(stored()).toHaveLength(1);
+  });
+
+  it('two calls in flight at once get a receipt each, each with only its own writes', async () => {
+    let n = 0;
+    const { dispatchWithReceipt } = registry(async () => {
+      const mine = ++n;
+      await new Promise(res => setTimeout(res, mine === 1 ? 30 : 5));
+      noteOps([{ ...SETTING, uuid: `Setting.s${mine}`, label: `call ${mine}` }]);
+      return PARTY;
+    });
+    const [a, b] = await Promise.all([
+      dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' }),
+      dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' }),
+    ]);
+    expect(a.receiptLine).toContain('(Setting "call 1": value)');
+    expect(b.receiptLine).toContain('(Setting "call 2": value)');
+    expect(a.receiptLine).not.toBe(b.receiptLine);
+    expect(stored().map(r => r.ops.length)).toEqual([1, 1]);
   });
 });
