@@ -106,6 +106,16 @@ What the script guarantees, so you don't have to check it by hand:
   enough on its own here: it sets the page but leaves the *entry* GM-only, so players never see the
   journal at all.
 
+**The stat block, when the table wants it.** The page is the lore, and nothing pastes a stat block
+into it. When the DM wants the block beside the lore (the players see what they fought), embed
+dnd5e's own after the run: `update-quest-journal` with the Bestiary's `journalId`, the page's `pageId`
+and `blocks: [{ type: "html", html: "@Embed[<the MM uuid> statblock]" }]`, the uuid from
+`search-compendium { type: "creatures", name }` (`Compendium.dnd-monster-manual.actors.Actor.<id>`;
+the options are in `journal-builder`). Add `label="<the page's name>"` when the players know the
+creature by another name: the block shows the actor's. NPC only (a `character` embeds its
+description), and the page's visibility is the only gate (a `--gm-only` page hides its block too). A
+re-run of the script rewrites the page: embed the block again after it.
+
 ## Step 4 — Verify and report
 
 `manage-journals { action: "get" }` with the Bestiary's `journalId`: confirm the new page is present, the order is

@@ -165,6 +165,17 @@ What changed for a user of the tools and skills, release by release. The measure
   block for any other MCP client; Claude Code's config is the only one it writes (issue #5, closed
   as not planned). `AGENTS.md` ships beside `CLAUDE.md`. The legacy names are one table in the host
   selector (`legacyNameOf`), and `runDoctor` takes the environment it reads as an argument.
+- **A journal page can carry an NPC's stat block** (issue #11): an `html` block holding
+  `@Embed[<uuid> statblock]`, which dnd5e draws from the live actor when the page renders (its own
+  stat-block template: title, tags, abilities, actions, in a figure captioned with the name;
+  `inline`, `caption=false` and `label="…"` as the system reads them), so a later edit to the actor
+  shows on the page. The quest tools already store enricher text as written (4.2.0), so no tool or
+  schema changed (0 chars of tools/list): `journal-builder` documents the block, where its uuid
+  comes from (`search-compendium` for a book creature, `manage-actors` `list` for a world NPC), that
+  it is NPC only (a `character`'s embed is its description) and that the page's visibility is the
+  only gate; `bestiary-builder` appends one beside a creature's lore when the table wants it.
+  `scripts/verify-journal-tooling.mjs` holds the rendered classes, 54/54 (was 48), and now removes
+  the `ZZ-JOURNAL-IT Journals` folder its first section used to leave behind.
 - Budgets after: tools/list 204,714 chars (≤ 205,000; the `undo` leaf is 5 chars shorter), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds

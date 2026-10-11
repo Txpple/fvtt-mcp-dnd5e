@@ -21,7 +21,12 @@
 //   7. manage-journals create makes dnd5e page types (map with a location code, rule) with their
 //      system data;
 //   8. update-quest-journal appends after a page still carrying the pre-4.2 `.mcp-journal` wrapper,
-//      never inside it.
+//      never inside it;
+//   9. a stat block is an `html` block holding `@Embed[<uuid> statblock]` (issue #11):
+//      create-quest-journal stores the enricher as written, and enriched inside a .dnd5e2-journal
+//      container dnd5e draws a Monster Manual NPC's block (title link, tags, six ability rows,
+//      action sections, the stylesheet's double border) in a figure with its caption; `inline`
+//      drops the figure; a character has no stat block and embeds its description instead.
 // Everything created is namespaced ZZ-JOURNAL-IT and cleaned up.
 //
 // Build first: npm run build. Run: node scripts/verify-journal-tooling.mjs
@@ -53,6 +58,8 @@ const f = new Foundry(cfg);
 let journalId;
 let unionId;
 let typedId;
+let statblockId;
+let heroId;
 
 try {
   console.log('[verify-journal] connecting to sandbox…');
@@ -422,6 +429,118 @@ try {
     `8 — the new section sits after the old wrapper, not inside it (${appended.slice(-120)})`
   );
 
+  // --- 9. a stat block: dnd5e's @Embed in an html block (issue #11) -------
+  // No typed block: the journal-builder skill puts `@Embed[<uuid> statblock]` in an `html` block and
+  // dnd5e renders its own npc-embed template from the live actor when the page is enriched.
+  console.log('\n# 9) stat block: @Embed[<uuid> statblock] in an html block');
+  const goblins = await f.call('searchCompendium', {
+    query: 'Goblin Warrior',
+    packType: 'Actor',
+    limit: 10,
+  });
+  const mmHit = (goblins?.results ?? []).find(
+    r => r.pack === 'dnd-monster-manual.actors' && r.type === 'npc'
+  );
+  assert(
+    /^Compendium\.dnd-monster-manual\.actors\.Actor\./.test(mmHit?.uuid ?? ''),
+    `9 — a Monster Manual NPC through searchCompendium (${mmHit?.uuid})`
+  );
+  heroId = await f.evaluate(async name => {
+    const hero = await Actor.create({
+      name,
+      type: 'character',
+      system: { details: { biography: { value: '<p>A hero of the Thorned Grove.</p>' } } },
+    });
+    return hero?.id;
+  }, `${TAG} Hero`);
+  const embeds = [
+    `@Embed[${mmHit?.uuid} statblock]`,
+    `@Embed[${mmHit?.uuid} statblock inline]`,
+    `@Embed[Actor.${heroId} statblock]`,
+  ];
+  const sbJournal = await dispatch('create-quest-journal', {
+    title: `${TAG} Statblocks`,
+    pages: [
+      {
+        name: 'Goblins',
+        blocks: [
+          { type: 'paragraph', html: 'Goblins lurk where the road bends.' },
+          ...embeds.map(html => ({ type: 'html', html })),
+        ],
+      },
+    ],
+  });
+  statblockId = sbJournal?.journalId;
+  const sbContent =
+    (
+      await f.call('getJournalPageContent', {
+        journalId: statblockId,
+        pageId: sbJournal?.pages?.[0]?.id,
+      })
+    )?.content || '';
+  assert(
+    embeds.every(e => sbContent.includes(e)),
+    `9 — create-quest-journal stores the @Embed text verbatim (${sbContent.slice(0, 160)})`
+  );
+  const drawn = await f.evaluate(async html => {
+    const TE = foundry.applications.ux.TextEditor.implementation;
+    const host = document.createElement('div');
+    host.className = 'dnd5e2 dnd5e2-journal';
+    host.innerHTML = await TE.enrichHTML(html, { secrets: false });
+    document.body.appendChild(host);
+    const read = embed => {
+      const block = embed.querySelector('div.statblock');
+      return {
+        figure: embed.firstElementChild?.matches('figure.content-embed') ?? false,
+        caption: embed.querySelector(':scope > figure > figcaption')?.textContent.trim() ?? null,
+        statblock: block?.className ?? null,
+        title: block?.querySelector('.statblock-title')?.textContent.trim() ?? null,
+        titleLink: Boolean(block?.querySelector('.statblock-title a.content-link')),
+        tags: block?.querySelector('.statblock-tags')?.textContent.trim() ?? null,
+        abilities: block?.querySelectorAll('.abilities tbody tr, .abilities .ability').length ?? 0,
+        actions: [...(block?.querySelectorAll('.statblock-actions') ?? [])].map(a => a.className),
+        border: block ? getComputedStyle(block).borderTopStyle : null,
+        text: embed.textContent.replace(/\s+/g, ' ').trim().slice(0, 120),
+      };
+    };
+    const out = {
+      lore: host.querySelector(':scope > p')?.textContent ?? null,
+      embeds: [...host.querySelectorAll(':scope > document-embed')].map(read),
+    };
+    host.remove();
+    return out;
+  }, sbContent);
+  const [figured, inline, hero] = drawn.embeds;
+  assert(
+    drawn.embeds.length === 3 && drawn.lore === 'Goblins lurk where the road bends.',
+    `9 — the three embeds render beside the lore paragraph (${drawn.embeds.length}, ${drawn.lore})`
+  );
+  assert(
+    figured?.figure === true &&
+      /\bstatblock npc\b/.test(figured.statblock ?? '') &&
+      figured.title === mmHit?.name &&
+      figured.titleLink &&
+      Boolean(figured.tags) &&
+      figured.abilities === 6 &&
+      figured.actions.includes('statblock-actions action') &&
+      figured.border === 'double' &&
+      figured.caption === mmHit?.name,
+    `9 — dnd5e draws the NPC's block in a figure with its caption (${JSON.stringify(figured)})`
+  );
+  assert(
+    inline?.figure === false &&
+      /\bstatblock npc\b/.test(inline.statblock ?? '') &&
+      inline.caption === null &&
+      inline.title === mmHit?.name &&
+      !inline.titleLink &&
+      inline.abilities === 6,
+    `9 — inline: the same block, no figure, no caption, a plain title (${JSON.stringify(inline)})`
+  );
+  assert(
+    hero?.statblock === null && hero.text.includes('A hero of the Thorned Grove.'),
+    `9 — a character draws no stat block: its description instead (${JSON.stringify(hero)})`
+  );
+
   const del = String(await mj({ action: 'delete', identifiers: [unionId, 'ZZ-NOPE-JOURNAL'] }));
   assert(
     del === `Deleted 1 journal(s): "${TAG} Union 2" (${unionId}) (1 not found: ZZ-NOPE-JOURNAL)`,
@@ -432,7 +551,7 @@ try {
   fails++;
   console.log(`\n[verify-journal] FATAL: ${e?.message || String(e)}`);
 } finally {
-  const strays = [journalId, unionId, typedId].filter(Boolean);
+  const strays = [journalId, unionId, typedId, statblockId].filter(Boolean);
   if (strays.length) {
     try {
       await f.call('deleteJournals', { identifiers: strays });
@@ -440,6 +559,28 @@ try {
     } catch {
       /* best-effort */
     }
+  }
+  if (heroId) {
+    try {
+      await f.evaluate(async id => {
+        await game.actors.get(id)?.delete();
+      }, heroId);
+      console.log('[verify-journal] cleaned up the character');
+    } catch {
+      /* best-effort */
+    }
+  }
+  // Section 1's folder, once it holds nothing (createJournal makes it when absent).
+  try {
+    const gone = await f.evaluate(async name => {
+      const folder = game.folders.find(x => x.type === 'JournalEntry' && x.name === name);
+      if (!folder || game.journal.some(j => j.folder?.id === folder.id)) return false;
+      await folder.delete();
+      return true;
+    }, `${TAG} Journals`);
+    if (gone) console.log('[verify-journal] cleaned up the folder');
+  } catch {
+    /* best-effort */
   }
   await f.dispose?.();
 }

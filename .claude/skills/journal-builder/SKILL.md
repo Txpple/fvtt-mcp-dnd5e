@@ -71,7 +71,7 @@ Each page's `blocks` is an ordered list. Every `text`/`html`/`items` value is **
 | `advice` | GM advice, a card with an optional round icon | `{type:"advice", title?, html, img?}` | `<div class="fvtt advice">` |
 | `quest` | An objective card, same shape | `{type:"quest", title?, html, img?}` | `<div class="fvtt quest">` |
 | `quote` | A pull quote, floated right | `{type:"quote", html, author?}` | `<aside class="quote-lg float-right">` |
-| `html` | Escape hatch — a table, anything custom | `{type:"html", html}` | verbatim |
+| `html` | Escape hatch — a table, a stat block (below), anything custom | `{type:"html", html}` | verbatim |
 
 These are dnd5e's documented classes (the System-HTML page of the dnd5e wiki); the system's stylesheet
 draws them in its journal sheet, so a page needs no stylesheet of ours. Bare text in a box block
@@ -103,11 +103,35 @@ forms (dnd5e wiki, Enrichers, current as of 6.0):
 | Condition / rule tooltip | `&Reference[prone]`, `&Reference[Difficult Terrain]` |
 | A language | `[[language gnomish]]` |
 | A linked document | `@UUID[Compendium.….Item.<id>]{Label}` (from `search-compendium`) |
+| An NPC's stat block | `@Embed[<uuid> statblock]`, alone in an `html` block (below) |
 
 `format=long` spells out "Dexterity check" / "saving throw"; `request` (check / save) posts a roll
 request to the players instead of rolling. A DC may be a formula (`dc=@abilities.cha.dc`, quoted when
 it has spaces) but never dice. Don't invent an enricher form that is not in this table or the wiki;
 anything else stays plain prose.
+
+### A stat block — dnd5e draws it from the actor
+
+`{ type: "html", html: "@Embed[<uuid> statblock]" }` puts an NPC's stat block on a page. Always an
+`html` block, never a `paragraph`: the stat block is a figure, and a figure inside `<p>` is invalid
+HTML. When the page renders, dnd5e fills its own stat-block template from the actor (name, tags,
+abilities, actions; a figure captioned with the name), so the block follows the actor: a later edit to
+the actor shows on the page, and a compendium actor shows without being imported.
+
+- **The uuid.** A book NPC: `search-compendium { type: "creatures", name }` (premium packs first),
+  the hit's `uuid` (a Monster Manual one reads `Compendium.dnd-monster-manual.actors.Actor.<id>`). A
+  world NPC: `Actor.<id>`, the id from `manage-actors { action: "list", type: "npc" }`.
+- **Options**, after `statblock`: `inline` (no figure, no caption, the title not a link),
+  `caption=false` (no caption), `label="…"` (the title and the caption read the label).
+- **NPC only.** A `character` has no stat block: its embed shows the character's description instead.
+  Asked for a PC's stat block, say so, and decline or take the NPC path (a book creature, or an NPC
+  built with `stat-block-builder`).
+- **Who sees it.** Whoever can read the page sees the whole block: the page's visibility is the only
+  gate (neither Foundry nor dnd5e checks the actor's own ownership). A player-visible page with a
+  monster's stat block gives the players the stat block.
+
+These are this skill's rules because the quest tools store the text as given and resolve nothing in
+it: finding the uuid and keeping to NPCs happen here, before the call.
 
 ## dnd5e page types (`manage-journals` create)
 
@@ -190,7 +214,8 @@ house convention — keep it consistent so the sidebar stays trustworthy at a gl
   The actor must exist first (build it with `stat-block-builder`); the tool refuses a dead name.
 - A **compendium/world item, spell, or monster** the journal references → write a Foundry
   `@UUID[…]{Label}` link in a `paragraph`/`html` block (get the uuid from `search-compendium`). Link
-  the real document; don't transcribe its stats into the prose.
+  the real document; don't transcribe its stats into the prose (a monster's whole block is the stat
+  block embed above).
 
 ## Session recaps & logs
 
