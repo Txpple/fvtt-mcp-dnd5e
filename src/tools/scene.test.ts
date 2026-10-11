@@ -642,7 +642,6 @@ describe('get-world-info: the bridge block (issue #9)', () => {
     });
     expect(out.bridge).toEqual({
       version: '4.4.0',
-      user: 'MCP-Claude',
       since: '2026-10-11T12:00:00.000Z',
       woken: false,
       renderer: `GPU: ${GPU}`,
@@ -650,6 +649,8 @@ describe('get-world-info: the bridge block (issue #9)', () => {
       modules: { battleflow: '2.17.0', areasounds: '2.0.1', openserver: '1.2.0' },
       toolsets: 'all',
     });
+    // the join user is bridgeUser's alone: the block does not echo it (design.md §3)
+    expect(out.bridgeUser).toEqual({ name: 'MCP-Claude', role: 'ASSISTANT' });
     // all is well: no warnings key at all; the block sits between host and the users
     const keys = Object.keys(out);
     expect(keys.indexOf('bridge')).toBe(keys.indexOf('users') - 1);
@@ -743,10 +744,10 @@ describe('get-world-info: the bridge block (issue #9)', () => {
     expect(out.bridge).not.toHaveProperty('warnings');
   });
 
-  it('stays small: no viewport, and no world fact the result already carries', async () => {
+  it('stays small: no viewport, and no world fact the result already carries (the user is bridgeUser)', async () => {
     const out = await run(world());
     expect(Object.keys(out.bridge).sort()).toEqual(
-      ['canvasReady', 'modules', 'renderer', 'since', 'toolsets', 'user', 'version', 'woken'].sort()
+      ['canvasReady', 'modules', 'renderer', 'since', 'toolsets', 'version', 'woken'].sort()
     );
   });
 });

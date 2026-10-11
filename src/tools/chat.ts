@@ -120,10 +120,7 @@ const DeleteChatMessagesSchema = z
       .optional()
       .describe('Every message older than this epoch ms (needs confirm).'),
     clearAll: z.boolean().default(false).describe('Every message (needs confirm).'),
-    confirm: z
-      .boolean()
-      .default(false)
-      .describe('Required by the two bulk modes (irreversible); not by ids.'),
+    confirm: z.boolean().default(false).describe('Required by the two bulk modes; not by ids.'),
   })
   .refine(a => (a.ids && a.ids.length > 0) || a.beforeTimestamp !== undefined || a.clearAll, {
     message: 'Provide ids, beforeTimestamp, or clearAll.',
@@ -241,7 +238,7 @@ export class ChatTools {
         name: 'delete-chat-messages',
         description:
           'Delete chat messages by id, older than a timestamp, or all; the bulk modes need ' +
-          'confirm:true. Irreversible. GM-only.',
+          'confirm:true. GM-only.',
         inputSchema: toInputSchema(DeleteChatMessagesSchema),
       },
       {
@@ -394,16 +391,13 @@ export class ChatTools {
 
   async handleDeleteChatMessages(args: any): Promise<string> {
     const parsed = DeleteChatMessagesSchema.parse(args ?? {});
-    // Guard the irreversible bulk deletes BEFORE touching the bridge (clearAll + beforeTimestamp).
+    // Guard the bulk deletes BEFORE touching the bridge (clearAll + beforeTimestamp).
     if (parsed.clearAll && !parsed.confirm) {
-      return (
-        'Refused: clearAll deletes EVERY chat message and is irreversible. ' +
-        'Pass confirm:true to proceed.'
-      );
+      return 'Refused: clearAll deletes EVERY chat message. Pass confirm:true to proceed.';
     }
     if (parsed.beforeTimestamp !== undefined && !parsed.confirm) {
       return (
-        'Refused: beforeTimestamp deletes every message older than the cutoff and is irreversible. ' +
+        'Refused: beforeTimestamp deletes every message older than the cutoff. ' +
         'Pass confirm:true to proceed.'
       );
     }

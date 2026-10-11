@@ -226,7 +226,7 @@ export class OrganizationTools {
       {
         name: 'bulk-delete',
         description:
-          'Permanently delete world documents of one type by exact id or exact name; dryRun ' +
+          'Delete world documents of one type by exact id or exact name; dryRun ' +
           'previews. Folders: manage-folders. GM-only.',
         inputSchema: toInputSchema(BulkDeleteSchema),
       },
@@ -262,7 +262,7 @@ export class OrganizationTools {
           ? `\n  not found: ${result.notFound.join(', ')}`
           : '';
       return would.length
-        ? `Dry run — would delete ${would.length} ${parsed.documentType} document(s):\n${lines}${notFound}\n\nRe-run without dryRun to delete them (IRREVERSIBLE).`
+        ? `Dry run — would delete ${would.length} ${parsed.documentType} document(s):\n${lines}${notFound}\n\nRe-run without dryRun to delete them.`
         : `Dry run — nothing matched.${notFound}`;
     }
     return formatDeletionResult(result, `${parsed.documentType} document(s)`);

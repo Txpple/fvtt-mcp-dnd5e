@@ -2,7 +2,8 @@
 // as the MCP server routes a call: the block names the renderer (GPU or software, with the page's
 // unmasked WebGL name), the canvas is ready, each Open Roll 5e module reads as its version when the
 // page finds it active and `not active` otherwise, the seat's `since` is an ISO date, the version is
-// package.json's, the toolsets are `all`, and the warnings are exactly the true ones; a second
+// package.json's, the toolsets are `all`, the join user is `bridgeUser`'s alone (the block does not
+// echo it), and the warnings are exactly the true ones; a second
 // registry over the same bridge, built read-only, warns that the joined user can write (the
 // sandbox's bridge user is an Assistant GM).
 //   npm run build && FOUNDRY_HOST=local node scripts/verify-bridge-status.mjs
@@ -72,9 +73,9 @@ try {
   check(`version: package.json's ${version}`, b?.version === version, b?.version);
   check('toolsets: all', b?.toolsets === 'all', b?.toolsets);
   check(
-    'user: the bridge user, as joined',
-    b?.user === hostConfig.user && b?.user === world?.bridgeUser?.name,
-    b?.user
+    'the join user is bridgeUser alone, as joined: the block does not echo it',
+    !Object.hasOwn(b ?? {}, 'user') && world?.bridgeUser?.name === hostConfig.user,
+    `bridgeUser ${world?.bridgeUser?.name}; block keys ${Object.keys(b ?? {}).join(', ')}`
   );
   check('woken: false (the sandbox world was up)', b?.woken === false, String(b?.woken));
   const inactive = Object.keys(MODULES).filter(k => !page?.modules?.[k]?.active);

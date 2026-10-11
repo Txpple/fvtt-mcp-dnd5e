@@ -906,11 +906,11 @@ export class SceneTools {
   }
 
   /**
-   * The bridge itself (issue #9): this server's version, the seat (who, since when, whether the
-   * connect found the world asleep or down), Chromium's renderer, the canvas, the family modules,
-   * the registration's toolsets, and the warnings, omitted when there are none. Kept small (a
-   * result is a diet): no world fact the result already carries. A block here costs no tools/list
-   * chars, which a tool of its own would have.
+   * The bridge itself (issue #9): this server's version, the seat (since when, whether the connect
+   * found the world asleep or down), Chromium's renderer, the canvas, the family modules, the
+   * registration's toolsets, and the warnings, omitted when there are none. Kept small (a result is
+   * a diet): no world fact the result already carries, so the join user is `bridgeUser`'s alone. A
+   * block here costs no tools/list chars, which a tool of its own would have.
    */
   private bridgeBlock(worldData: any): Record<string, unknown> {
     const facts: BridgeFacts | undefined = worldData.bridge;
@@ -918,7 +918,6 @@ export class SceneTools {
     const warnings = bridgeWarnings(worldData, facts, this.registration.readOnly);
     return {
       version: this.serverVersion,
-      user: seat.user,
       since: seat.since,
       woken: seat.woken,
       renderer: rendererLabel(facts?.renderer),

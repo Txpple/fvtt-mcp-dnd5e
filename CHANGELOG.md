@@ -125,8 +125,9 @@ What changed for a user of the tools and skills, release by release. The measure
   interleave their writes at the server, where no write lock reaches: an undo puts back a value
   the other session has changed since, as the seat warning at connect now says. Measured in the
   page on the sandbox: the recorder's hooks cost 0.07 ms per write, a delete's pre-image 0.15 ms
-  for a 26 kB actor, and a real update's time is unchanged within its noise (8–9 ms).
-  `scripts/verify-receipts.mjs`: 24/24.
+  for a 26 kB actor, and a real update's time is unchanged within its noise (8–9 ms). The delete
+  tools (`manage-actors` `delete`, `bulk-delete`, `delete-chat-messages`) no longer say a delete
+  cannot be undone. `scripts/verify-receipts.mjs`: 25/25.
 - **A write is never run twice after the page went away** (issue #16's review). A call whose page
   bridge vanished under it (a world reload, a page the op cap closed under another call) was
   recovered and run again; now only a read is. A write fails as a `connection` error saying its
@@ -136,8 +137,8 @@ What changed for a user of the tools and skills, release by release. The measure
 - `set-primary-party` with no arguments sends an empty call, which the page's op table reads as
   the read it is (it sent `clear: false` and counted as a write).
 - **`get-world-info` reports the bridge itself** (issue #9): a `bridge` block after `host` with
-  this server's version, the join user and since when it holds the seat, `woken` (this connect
-  found the world asleep, not launched, or booting), Chromium's renderer (`GPU: <name>` or
+  this server's version, since when it holds the seat (the join user is `bridgeUser`'s), `woken`
+  (this connect found the world asleep, not launched, or booting), Chromium's renderer (`GPU: <name>` or
   `software: <name>`, the canvas's unmasked WebGL renderer), `canvasReady`, the Open Roll 5e
   modules the skills lean on (Battle Flow, Area Sounds, Open Server: a version, or `not active`),
   the registration's `toolsets` (`all`, `readonly`, or the list), and `warnings` for whatever of
@@ -179,7 +180,8 @@ What changed for a user of the tools and skills, release by release. The measure
   only gate; `bestiary-builder` appends one beside a creature's lore when the table wants it.
   `scripts/verify-journal-tooling.mjs` holds the rendered classes, 54/54 (was 48), and now removes
   the `ZZ-JOURNAL-IT Journals` folder its first section used to leave behind.
-- Budgets after: tools/list 204,714 chars (≤ 205,000; the `undo` leaf is 5 chars shorter), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
+- Budgets after: tools/list 204,651 chars (≤ 205,000; the `undo` leaf is 5 chars shorter, the delete
+  tools 63), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 

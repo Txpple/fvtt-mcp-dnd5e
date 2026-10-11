@@ -127,7 +127,7 @@ export const DeleteActorSchema = z.object({
 });
 
 export const DELETE_ACTOR_DESCRIPTION =
-  'Permanently delete world actors (no undo). A bridge-created folder left empty is removed too ' +
+  'Delete world actors. A bridge-created folder left empty is removed too ' +
   'unless removeEmptyFolder:false.';
 
 export async function deleteActors(
