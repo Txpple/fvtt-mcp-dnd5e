@@ -1,8 +1,9 @@
 // Live verify for run-script (issue #4): the page op and the tool against a real world.
 //   FOUNDRY_HOST=local node scripts/verify-run-script.mjs
-// Reads, a dry run, a real run with a receipt (create / update / delete), undo, the caps, the
-// timeout, the shadowed globals and the static refusal. Temp documents are ZZ-* and deleted in
-// finally. Needs a built dist/ (the tool class and the page bundle come from there).
+// Reads, a dry run (stubbing by the op table: a remap is a write, an area-sounds list a read), a
+// real run with a receipt (create / update / delete), undo, the caps, the timeout, the shadowed
+// globals and the static refusal. Temp documents are ZZ-* and deleted in finally. Needs a built
+// dist/ (the tool class and the page bundle come from there).
 import { connectFoundry } from '../dist/client.js';
 import { Logger } from '../dist/logger.js';
 import { ScriptTools } from '../dist/tools/script.js';
@@ -78,6 +79,38 @@ try {
       dry.dryRun[0].fn === 'createActorFromCompendium' &&
       after.result === 0,
     `${dry.dryRun?.length} listed, ${after.result} made, ok=${dry.ok}`
+  );
+
+  // 4b. What a dry run stubs is the op table's (issue #14): the teleporter remap is a write, so it
+  // is listed and stubbed (a real call answers `success`, `scenesScanned`, … instead) ...
+  const remap = await f.call('runScript', {
+    src: 'return await fvtt.remapSceneTeleporters({ sourceModule: "ZZ-none" });',
+    dryRun: true,
+  });
+  check(
+    'a dry run lists remapSceneTeleporters as a write and stubs it',
+    remap.ok &&
+      remap.dryRun?.length === 1 &&
+      remap.dryRun[0].fn === 'remapSceneTeleporters' &&
+      JSON.stringify(remap.result) === JSON.stringify({ dryRun: true }),
+    `${JSON.stringify(remap.dryRun)} → ${JSON.stringify(remap.result)}`
+  );
+
+  // ... and an area-sounds list is a read, so a dry run runs it and returns the scene's real sets.
+  const sounds = await f.call('runScript', {
+    src: `const scene = await fvtt.getActiveScene();
+    const r = await fvtt.configureAreaSounds({ action: "list", sceneIdentifier: scene.name });
+    return { scene: scene.name, listed: r.scene?.name ?? null, sets: Array.isArray(r.sets) ? r.sets.length : null, dryRun: r.dryRun ?? false };`,
+    dryRun: true,
+  });
+  check(
+    'a dry run runs an area-sounds list (a read) and returns its real data',
+    sounds.ok &&
+      sounds.dryRun?.length === 0 &&
+      sounds.result?.dryRun === false &&
+      sounds.result?.listed === sounds.result?.scene &&
+      typeof sounds.result?.sets === 'number',
+    JSON.stringify(sounds.result ?? sounds.error)
   );
 
   // 5. A real run creates two actors; a SECOND run renames one and deletes the other — the

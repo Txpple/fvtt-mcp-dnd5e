@@ -1,27 +1,12 @@
 /**
- * run-script's page half, offline: the write classification (what is counted, capped and stubbed),
- * the shadow list, and a run against a stubbed page API with stubbed hooks — the facade counts,
- * the dry run stubs, the receipt records, the cap refuses, the globals are out of reach.
+ * run-script's page half, offline: the shadow list, and a run against a stubbed page API with
+ * stubbed hooks — the facade counts, the dry run stubs, the receipt records, the cap refuses, the
+ * globals are out of reach. What counts as a write is the op table's (./_ops.test.ts).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isDeleteCall, isWriteCall, runScript, SHADOWED, undoScript } from './run-script.js';
+import { runScript, SHADOWED, undoScript } from './run-script.js';
 
-describe('the write classification', () => {
-  it('reads pass, writes count, deletes count twice', () => {
-    expect(isWriteCall('listActors', {})).toBe(false);
-    expect(isWriteCall('searchCompendium', {})).toBe(false);
-    expect(isWriteCall('createActorFromCompendium', {})).toBe(true);
-    expect(isWriteCall('placeSceneTokens', {})).toBe(true);
-    expect(isDeleteCall('deleteActor', {})).toBe(true);
-    expect(isDeleteCall('removeActorItems', {})).toBe(true);
-    expect(isDeleteCall('createScene', {})).toBe(false);
-  });
-  it('manage* is a write unless its action reads', () => {
-    expect(isWriteCall('manageEffect', { action: 'list' })).toBe(false);
-    expect(isWriteCall('manageEffect', { action: 'create' })).toBe(true);
-    expect(isDeleteCall('manageEffect', { action: 'delete' })).toBe(true);
-    expect(isDeleteCall('manageEffect', { action: 'update' })).toBe(false);
-  });
+describe('the shadow list', () => {
   it('shadows the doors out of the facade', () => {
     for (const name of [
       'game',
@@ -132,6 +117,48 @@ describe('runScript against a stubbed page', () => {
     expect(r.dryRun).toEqual([{ fn: 'createActorFromCompendium', args: { n: 6 } }]);
     expect(calls.map(c => c[0])).toEqual(['listActors']);
     expect(r.receipt.id).toBe('');
+  });
+
+  it('a dry run stubs by the op table: a remap is a write, a list action reads', async () => {
+    const g = globalThis as any;
+    g.window.__fvtt.remapSceneTeleporters = async (a: unknown) => {
+      calls.push(['remapSceneTeleporters', a]);
+      return { success: true, rewritten: 3 };
+    };
+    g.window.__fvtt.configureAreaSounds = async (a: unknown) => {
+      calls.push(['configureAreaSounds', a]);
+      return { action: 'list', sets: [] };
+    };
+    const r = await runScript({
+      src: `const remap = await fvtt.remapSceneTeleporters({ sourceModule: "x" });
+        const sets = await fvtt.configureAreaSounds({ action: "list" });
+        await fvtt.configureAreaSounds({ action: "remove", setIdentifier: "all" });
+        return { remap, sets };`,
+      dryRun: true,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.result).toEqual({ remap: { dryRun: true }, sets: { action: 'list', sets: [] } });
+    expect(r.dryRun?.map(d => d.fn)).toEqual(['remapSceneTeleporters', 'configureAreaSounds']);
+    expect(calls).toEqual([['configureAreaSounds', { action: 'list' }]]);
+  });
+
+  it('the delete cap counts a delete action, not only a delete op', async () => {
+    const g = globalThis as any;
+    g.window.__fvtt.manageEffect = async (a: unknown) => {
+      calls.push(['manageEffect', a]);
+      return { success: true };
+    };
+    const r = await runScript({
+      src: `await fvtt.manageEffect({ action: "list", actorIdentifier: "a" });
+        await fvtt.manageEffect({ action: "delete", actorIdentifier: "a", effectId: "e1" });
+        await fvtt.manageEffect({ action: "delete", actorIdentifier: "a", effectId: "e2" });
+        return 1;`,
+      maxDeletes: 1,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('delete cap (1)');
+    expect(r.receipt).toMatchObject({ calls: 3, writes: 1 });
+    expect(calls).toHaveLength(2);
   });
 
   it("the write cap refuses the write past it, and the error is the script's", async () => {

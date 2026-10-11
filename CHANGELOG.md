@@ -31,6 +31,15 @@ What changed for a user of the tools and skills, release by release. The measure
   bridge's page (the last 50). The `run-script` skill carries the rules; the facade's reference,
   `docs/run-script-api.md` (155 functions), is generated from the program by
   `scripts/measure/run-script-api.mjs`.
+- **What a run-script call does is declared per function** (issue #14): every `fvtt.*` function
+  is tagged read, write or delete by what its handler does (`src/page/_ops.ts`), where a verb
+  guessed from its name used to decide. A dry run had executed `remapSceneTeleporters` for real,
+  uncounted; it is now listed and stubbed like every write. Reads a dry run now runs instead of
+  stubbing: `configureAreaSounds` `list` / `library`, `rollOnTable` (it neither draws nor posts),
+  `manageCalendar` without an action, a configure function called with no field
+  (`configureDnd5eSettings`, `configureCombatTracker`, `configurePrimaryParty`), and a
+  `bulkDelete` / `relinkAsset` preview (`dryRun: true`). `configureAreaSounds` `remove` counts
+  against the delete cap. A page function added without a tag does not compile.
 - Budgets after: tools/list 204,734 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds

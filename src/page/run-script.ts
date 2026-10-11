@@ -13,32 +13,8 @@
 // Receipts live in this page (`globalThis.__fvttReceipts`, the last 50): a reload loses them, and
 // the result says so. Pre-images in the world (a hidden journal) are the next step, not this one.
 
+import { opKind } from './_ops.js';
 import { invalid, notFound } from './errors.js';
-
-/** Page-API names that write, by verb; anything else is a read and passes through on a dry run. */
-const WRITE_VERBS =
-  /^(create|update|delete|add|remove|set|place|apply|import|configure|activate|pull|post|roll|move|bulk|level|manage|duplicate|upload|relink|request|author)/;
-const DELETE_VERBS = /^(delete|remove|bulkDelete)/;
-/** `manage*` ops carry an `action`; these actions read. */
-const READ_ACTIONS = new Set(['list', 'get', 'info', 'read', 'find', 'search']);
-
-export function isWriteCall(name: string, args: unknown): boolean {
-  if (!WRITE_VERBS.test(name)) return false;
-  if (name.startsWith('manage')) {
-    const action = (args as { action?: unknown } | null)?.action;
-    if (typeof action === 'string' && READ_ACTIONS.has(action)) return false;
-  }
-  return true;
-}
-
-export function isDeleteCall(name: string, args: unknown): boolean {
-  if (DELETE_VERBS.test(name)) return true;
-  if (name.startsWith('manage')) {
-    const action = (args as { action?: unknown } | null)?.action;
-    return typeof action === 'string' && /^(delete|remove)/.test(action);
-  }
-  return false;
-}
 
 /**
  * The globals a script cannot see: shadowed as parameters of the compiled function, so the only
@@ -211,7 +187,10 @@ function record(receipt: Receipt): () => void {
   };
 }
 
-/** The script's view of the world: the page API, counted, capped and (on a dry run) stubbed. */
+/**
+ * The script's view of the world: the page API, counted, capped and (on a dry run) stubbed. What a
+ * call does is the op's own tag (./_ops.ts), never a guess from its name.
+ */
 function facade(
   receipt: Receipt,
   opts: { dryRun: boolean; maxWrites: number; maxDeletes: number },
@@ -223,12 +202,13 @@ function facade(
     if (name === 'runScript' || name === 'undoScript' || typeof fn !== 'function') continue;
     out[name] = async (args?: unknown) => {
       receipt.calls++;
-      if (isWriteCall(name, args)) {
+      const kind = opKind(name, args);
+      if (kind !== 'read') {
         if (opts.dryRun) {
           dry.push({ fn: name, args: summarize(args) });
           return { dryRun: true };
         }
-        if (isDeleteCall(name, args)) {
+        if (kind === 'delete') {
           receipt.deletes++;
           if (receipt.deletes > opts.maxDeletes) {
             throw invalid(`the run's delete cap (${opts.maxDeletes}) was reached at fvtt.${name}`);
