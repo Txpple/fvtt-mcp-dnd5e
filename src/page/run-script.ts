@@ -15,8 +15,13 @@
 //     tool shares (./_receipts.ts), with the pre-image an undo needs; the run holds the page's
 //     write lock while it runs, so no other call's writes land in its receipt;
 //   - a dry run stubs the writes (each returns `{ dryRun: true }`) and lists them;
-//   - a run abandoned at its timeout cannot write any more: every facade call after it is refused
-//     (issue #16's review), since its recorder is off by then.
+//   - a run that has ended (returned, thrown, or abandoned at its timeout) can make no more calls:
+//     every facade call after it is refused (issue #16's review). A call it still had in flight is
+//     waited on, ABANDON_GRACE_MS at most, with the recorder on and the lock held, so what it writes
+//     is this run's receipt and nobody else's (issue #6's review). A call still running after the
+//     grace is let go, and what it writes is not in this receipt: a create it began in time lands
+//     in no receipt (it carries this run's recorder token, ./_receipts.ts), but a write it begins
+//     later can land in the next write's receipt, since a hook cannot tell which call made it.
 // The page keeps no receipts: the run's writes ride back as `ops`, the bridge files them as the
 // tool call's receipt (src/receipts.ts), and `undoOps` reverses one.
 
@@ -105,6 +110,22 @@ interface Counts {
   deletes: number;
 }
 
+/**
+ * How long a run that ended with facade calls still in flight (abandoned at its timeout, or a call
+ * it did not await) waits for them, its recorder on and the write lock held, before both go: what
+ * they write meanwhile is the run's receipt (issue #6's review). Well within run-script's op cap
+ * (its timeout + 30 s, src/foundry.ts).
+ */
+const ABANDON_GRACE_MS = 15_000;
+
+/** What the facade asks of its run: may a call still start, and where a call in flight is kept. */
+interface RunState {
+  /** Why no call may start any more (the run has ended), or undefined while it runs. */
+  refusal(): string | undefined;
+  /** The facade calls in flight; each leaves the set when it settles. */
+  pending: Set<Promise<unknown>>;
+}
+
 /** Arguments as they will be shown in a dry run: JSON, cut at 400 chars. */
 function summarize(args: unknown): unknown {
   try {
@@ -118,21 +139,23 @@ function summarize(args: unknown): unknown {
 
 /**
  * The script's view of the world: the page API, counted, capped and (on a dry run) stubbed. What a
- * call does is the op's own tag (./_ops.ts), never a guess from its name. Once the run is abandoned
- * at its timeout, every call is refused.
+ * call does is the op's own tag (./_ops.ts), never a guess from its name. Once the run has ended
+ * (abandoned at its timeout included), every call is refused; a call in flight is tracked until it
+ * settles.
  */
 function facade(
   counts: Counts,
   opts: { dryRun: boolean; maxWrites: number; maxDeletes: number },
   dry: Array<{ fn: string; args: unknown }>,
-  abandoned: () => boolean
+  run: RunState
 ): Record<string, (args?: unknown) => Promise<unknown>> {
   const api = (globalThis as any).window.__fvtt as Record<string, (a?: unknown) => unknown>;
   const out: Record<string, (args?: unknown) => Promise<unknown>> = {};
   for (const [name, fn] of Object.entries(api)) {
     if (name === 'runScript' || name === 'undoOps' || typeof fn !== 'function') continue;
     out[name] = async (args?: unknown) => {
-      if (abandoned()) throw invalid('the run was abandoned at its timeout');
+      const refused = run.refusal();
+      if (refused) throw invalid(refused);
       counts.calls++;
       const kind = opKind(name, args);
       if (kind !== 'read') {
@@ -151,10 +174,43 @@ function facade(
           throw invalid(`the run's write cap (${opts.maxWrites}) was reached at fvtt.${name}`);
         }
       }
-      return fn(args);
+      const call = Promise.resolve(fn(args));
+      run.pending.add(call);
+      const settled = () => {
+        run.pending.delete(call);
+      };
+      void call.then(settled, settled);
+      return call;
     };
   }
   return Object.freeze(out);
+}
+
+/** Wait until every call in `pending` has settled, `ms` at most; answer how many still run. */
+async function settle(pending: Set<Promise<unknown>>, ms: number): Promise<number> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.allSettled([...pending]),
+    new Promise<void>(resolve => {
+      timer = setTimeout(resolve, ms);
+    }),
+  ]);
+  clearTimeout(timer);
+  return pending.size;
+}
+
+/** A run abandoned at its timeout, in words: what became of the calls it had in flight. */
+function abandonedError(timeoutMs: number, inFlight: number, unsettled: number): string {
+  const head = `the run exceeded ${Math.round(timeoutMs / 1000)} s and was abandoned: the script can make no more calls`;
+  if (!inFlight) return head;
+  const grace = `the ${ABANDON_GRACE_MS / 1000} s grace`;
+  if (!unsettled) {
+    return `${head}, and the ${inFlight} call(s) it had in flight settled within ${grace}: their writes are in the receipt`;
+  }
+  return (
+    `${head}; of the ${inFlight} call(s) it had in flight, ${inFlight - unsettled} settled within ${grace} ` +
+    `(their writes are in the receipt) and ${unsettled} did not: their outcome is unknown, and what they write is not in this receipt`
+  );
 }
 
 /** A JSON round trip with a size cap: the result travels to Node as data, never as live objects. */
@@ -196,28 +252,41 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
       log.push(parts.map(p => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
       if (log.length > 500) log.splice(0, log.length - 500);
     };
-    let abandoned = false;
-    const fvtt = facade(counts, { dryRun, maxWrites, maxDeletes }, dry, () => abandoned);
+    // running, then abandoned (at the timeout) or ended (the body settled): no call starts after
+    let state: 'running' | 'abandoned' | 'ended' = 'running';
+    const pending = new Set<Promise<unknown>>();
+    const fvtt = facade(counts, { dryRun, maxWrites, maxDeletes }, dry, {
+      pending,
+      refusal: () =>
+        state === 'abandoned'
+          ? 'the run was abandoned at its timeout'
+          : state === 'ended'
+            ? 'the run has ended'
+            : undefined,
+    });
     const recorder = dryRun ? null : record();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const TIMEOUT = Symbol('timeout');
     let ok = true;
+    let timedOut = false;
     let error: string | undefined;
     let result: unknown;
     let ops: ReceiptOp[] = [];
+    let inFlight = 0;
+    let unsettled = 0;
     try {
       const outcome = await Promise.race([
         body(fvtt, logFn, ...shadow.map(() => undefined)),
         new Promise<typeof TIMEOUT>(r => {
           timer = setTimeout(() => {
-            abandoned = true;
+            state = 'abandoned';
             r(TIMEOUT);
           }, timeoutMs);
         }),
       ]);
       if (outcome === TIMEOUT) {
         ok = false;
-        error = `the run exceeded ${Math.round(timeoutMs / 1000)} s and was abandoned; a write still in flight is not in the receipt, and the script can make no more`;
+        timedOut = true;
       } else {
         result = serializable(outcome);
       }
@@ -227,14 +296,28 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
       error = `${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`;
     } finally {
       if (timer) clearTimeout(timer);
+      if (state === 'running') state = 'ended';
+      // A call still in flight writes into this run's receipt: the recorder stays on and the lock
+      // held until it settles, ABANDON_GRACE_MS at most. A dry run records nothing, holds no lock.
+      if (recorder && pending.size) {
+        inFlight = pending.size;
+        unsettled = await settle(pending, ABANDON_GRACE_MS);
+      }
       ops = recorder?.stop() ?? [];
+    }
+    if (timedOut) error = abandonedError(timeoutMs, inFlight, unsettled);
+    else if (unsettled) {
+      log.push(
+        `${unsettled} call(s) the script did not await were still in flight ${ABANDON_GRACE_MS / 1000} s after it ended: ` +
+          'their outcome is unknown, and what they write is not in this receipt'
+      );
     }
 
     const count = (kind: ReceiptOp['kind']) => ops.filter(o => o.kind === kind).length;
     const out: RunScriptResult = {
       ok,
       log,
-      timedOut: error?.startsWith('the run exceeded') ?? false,
+      timedOut,
       receipt: {
         created: count('create'),
         updated: count('update'),
@@ -249,7 +332,8 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
     else out.ops = ops;
     return out;
   };
-  // A real run holds the write lock until the race settles (its timeout included): nothing else
-  // writes while it runs, so its recorder sees only its own writes. A dry run writes nothing.
+  // A real run holds the write lock until the race settles (its timeout included) and the calls it
+  // had in flight have settled (ABANDON_GRACE_MS at most): nothing else writes while it runs, so its
+  // recorder sees only its own writes. A dry run writes nothing.
   return dryRun ? run() : withWriteLock(run);
 }

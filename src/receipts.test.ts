@@ -1,7 +1,7 @@
 /**
  * The receipt store and the receipt line (issue #6), offline, in a temp dir: the world key, save /
- * load / the refusals, the undone mark, the pruning by count, age and bytes, the grouping context,
- * and the line every write answers with.
+ * load / the refusals, the undone mark and the partial one, the pruning by count, age and bytes
+ * (never the file just written), the grouping context, and the line every write answers with.
  */
 import { mkdtempSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,7 @@ import {
   RECEIPT_LIMITS,
   receiptLine,
   receiptLineOf,
+  receiptPath,
   receiptWorldKey,
   saveReceipt,
   summarizeOps,
@@ -98,6 +99,18 @@ describe('the store', () => {
     markUndone('rcpt_nonexi', key, 'rcpt_aaaaaa', dir); // a missing receipt: nothing, no throw
   });
 
+  it('an undo that reversed only part of a receipt leaves it undoable, and names itself', () => {
+    const saved = saveReceipt(fields(), dir);
+    const key = receiptWorldKey(URL, 'w');
+    markUndone(saved.id, key, 'rcpt_part01', dir, { partial: true });
+    markUndone(saved.id, key, 'rcpt_part02', dir, { partial: true });
+    const after = loadReceipt(saved.id, key, dir);
+    expect(after.undoneBy).toBeUndefined();
+    expect(after.partialUndoBy).toEqual(['rcpt_part01', 'rcpt_part02']);
+    markUndone(saved.id, key, 'rcpt_whole1', dir);
+    expect(loadReceipt(saved.id, key, dir).undoneBy).toBe('rcpt_whole1');
+  });
+
   describe('pruning', () => {
     const now = Date.now();
     /** A receipt file of world `key`, `ageMs` old, `bytes` long. */
@@ -113,7 +126,7 @@ describe('the store', () => {
 
     it('keeps the newest 50 of the world', () => {
       for (let i = 0; i < 53; i++) put(mine, `rcpt_${String(i).padStart(6, '0')}`, i * 60_000);
-      pruneReceipts(mine, dir, RECEIPT_LIMITS, now);
+      pruneReceipts(mine, dir, { now });
       const kept = left();
       expect(kept).toHaveLength(50);
       expect(kept.at(-1)).toBe(`${mine}-rcpt_000049.json`);
@@ -124,7 +137,7 @@ describe('the store', () => {
       put(mine, 'rcpt_new000', 60_000);
       put(theirs, 'rcpt_old111', 25 * 3_600_000);
       for (let i = 0; i < 55; i++) put(theirs, `rcpt_t${String(i).padStart(5, '0')}`, 60_000);
-      pruneReceipts(mine, dir, RECEIPT_LIMITS, now);
+      pruneReceipts(mine, dir, { now });
       const kept = left();
       expect(kept).toContain(`${mine}-rcpt_new000.json`);
       expect(kept).not.toContain(`${mine}-rcpt_old000.json`);
@@ -134,8 +147,19 @@ describe('the store', () => {
 
     it('keeps at most maxBytes of the world, the oldest going first', () => {
       for (let i = 0; i < 5; i++) put(mine, `rcpt_b0000${i}`, i * 60_000, 400);
-      pruneReceipts(mine, dir, { ...RECEIPT_LIMITS, maxBytes: 1_000 }, now);
+      pruneReceipts(mine, dir, { limits: { ...RECEIPT_LIMITS, maxBytes: 1_000 }, now });
       expect(left()).toEqual([`${mine}-rcpt_b00000.json`, `${mine}-rcpt_b00001.json`]);
+    });
+
+    it('never removes the file just written, even one alone over maxBytes; it still counts', () => {
+      put(mine, 'rcpt_big000', 0, 2_000);
+      put(mine, 'rcpt_old000', 60_000, 10);
+      const limits = { ...RECEIPT_LIMITS, maxBytes: 1_000 };
+      pruneReceipts(mine, dir, { limits, now, keep: receiptPath(dir, mine, 'rcpt_big000') });
+      expect(left()).toEqual([`${mine}-rcpt_big000.json`]);
+      // without it, the newest file alone over the limit went with the rest
+      pruneReceipts(mine, dir, { limits, now });
+      expect(left()).toEqual([]);
     });
   });
 });
@@ -187,6 +211,28 @@ describe('the receipt line', () => {
     );
     expect(line).toMatch(/^receipt rcpt_x00001 \(reverses rcpt_y00002\): 1 created/);
     expect(line).toMatch(/ · undo needs the scripting toolset \(FOUNDRY_TOOLSETS\)$/);
+  });
+
+  it('an undo that reversed only part of a receipt says so in its line', () => {
+    const part = receiptLine(
+      { id: 'rcpt_x00001', ops, reverses: 'rcpt_y00002', partial: true },
+      { canUndo: true }
+    );
+    expect(part.startsWith('receipt rcpt_x00001 (partly reverses rcpt_y00002): 1 created')).toBe(
+      true
+    );
+  });
+
+  it('a receipt kept under no world id says no undo finds it', () => {
+    expect(
+      receiptLine(
+        { id: 'rcpt_ab12cd', ops: [op('create', 'Actor.n')] },
+        { canUndo: true, noWorld: true }
+      )
+    ).toBe(
+      'receipt rcpt_ab12cd: 1 created, 0 updated, 0 deleted · kept under no world id (none was ' +
+        'read), so no undo finds it'
+    );
   });
 
   it('cuts the detail at 240 characters and counts what cannot be undone', () => {

@@ -100,16 +100,30 @@ What changed for a user of the tools and skills, release by release. The measure
   `run-script { "undo": … }` reverses any receipt, a tool call's or a run's, newest write first:
   it deletes what the call created, puts back the paths it changed (removing the ones it added)
   and re-creates what it deleted with its id. An undo answers with its own receipt
-  (`reverses rcpt_…`), so it can be undone in turn (a redo); a receipt is undone once. Receipts
-  are kept on the bridge's machine (`fvtt-mcp-dnd5e/receipts/` under the OS temp dir, keyed by
-  server URL and world id), the newest 50 per world for a day and 64 MB at most, so they survive a
+  (`reverses rcpt_…`), so it can be undone in turn (a redo); a receipt is undone once, and only
+  when every write of it was reversed: an undo that cannot reverse them all names the ones it
+  could not and says `receipt rcpt_… stays undoable` (its own receipt `partly reverses` it), and
+  undoing it again leaves alone what is already back. Receipts are kept on the bridge's machine
+  (`fvtt-mcp-dnd5e/receipts/` under the OS temp dir, keyed by server URL and world id), the newest
+  50 per world for a day and 64 MB at most, never the one just written, so they survive a
   `disconnect-bridge` and a restart and are never applied to another world. Not undoable: a
-  pre-image over 2 MB (8 MB per call; the line counts them), the file plane, chat already seen, a
-  pulled view. A registration without `scripting` gets the line with how to enable the undo. A
-  sibling harness driving `fvtt-mcp-dnd5e/client` asks for no receipt and pays nothing. Measured
-  in the page on the sandbox: the recorder's hooks cost 0.04 ms per write, a delete's pre-image
-  0.13 ms for a 26 kB actor, and a real update's time is unchanged within its noise (7–9 ms).
-  `scripts/verify-receipts.mjs`: 18/18.
+  pre-image over 2 MB (8 MB per call, across all of its page writes; the line counts them), the
+  file plane, chat already seen, a pulled view. A registration without `scripting` gets the line
+  with how to enable the undo. A sibling harness driving `fvtt-mcp-dnd5e/client` asks for no
+  receipt and pays nothing. A receipt holds its own call's writes and no other's (issue #6's
+  review): a `run-script` run that ends, or is abandoned at its timeout, with a call still in
+  flight waits for it (15 s at most) with its lock held, so those writes land in its own receipt
+  and never in the next call's, and a call its script makes after the run ended is refused; a
+  create made by another session joined as the same user no longer lands in this session's
+  receipt, whose undo would delete it; two writes from one session wait for each other in the
+  server, so a write's op cap no longer counts the time it queued; a call that wrote and then lost
+  its page answers with its receipt without reconnecting first; and a read that views a scene no
+  longer puts the previous scene's fog into an open receipt. Two sessions on one seat still
+  interleave their writes at the server, where no write lock reaches: an undo puts back a value
+  the other session has changed since, as the seat warning at connect now says. Measured in the
+  page on the sandbox: the recorder's hooks cost 0.07 ms per write, a delete's pre-image 0.15 ms
+  for a 26 kB actor, and a real update's time is unchanged within its noise (8–9 ms).
+  `scripts/verify-receipts.mjs`: 24/24.
 - **A write is never run twice after the page went away** (issue #16's review). A call whose page
   bridge vanished under it (a world reload, a page the op cap closed under another call) was
   recovered and run again; now only a read is. A write fails as a `connection` error saying its

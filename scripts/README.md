@@ -40,7 +40,8 @@ tool proofs:
 - `verify-toolsets` — the `FOUNDRY_TOOLSETS` registration filter (offline): a selection, a
   misspelt name, and `readonly` (only the reads advertised, a write refused by name before the
   bridge connects, `readonly` beside a toolset refused at startup).
-- `verify-holders` — the seat records: two bridges on one seat (one in a forked child), and
+- `verify-holders` — the seat records: two bridges on one seat (one in a forked child; the second
+  to join warns that the seat is held twice, and what that means for receipts), and
   `disconnect-bridge { all }` from one ends the other's browser by its recorded pid and
   executable, leaves a decoy record whose pid runs another program alone, keeps a record that
   names no browser (still named afterwards), and the evicted bridge re-joins on its next call; an
@@ -67,7 +68,10 @@ tool proofs:
 - `verify-receipts` — the receipt every write answers with (issue #6), through the registry as the
   server answers: an actor, a light and a journal page, each created, updated and deleted and
   undone by its receipt id; the redo, once; a run-script run; two writes in flight, each undo only
-  its own; the store's refusal of a wrong id; the cost of the page's choke point, timed in the page.
+  its own; the store's refusal of a wrong id; a partial undo, which leaves its receipt undoable; a
+  run abandoned at its timeout with its creates in flight, which land in its own receipt; two
+  run-script calls issued together, run one after the other with no op-cap time lost to the wait
+  (about 35 s); the cost of the page's choke point, timed in the page.
 
 ## The sandbox toolkit (`docs/local-sandbox.md`, `docs/hosts.md`)
 

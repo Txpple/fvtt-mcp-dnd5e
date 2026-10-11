@@ -12,7 +12,7 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { ReceiptOp } from '../page/_receipts.js';
 import { noteOps, receiptLineOf } from '../receipts.js';
 import { buildToolRegistry } from '../registry.js';
@@ -1051,6 +1051,126 @@ describe('receipts on every write (issue #6): one line per call, appended centra
     await expect(dispatchWithReceipt('run-script', { undo: id })).rejects.toThrow(
       `receipt ${id} was already undone by ${undoId}`
     );
+  });
+
+  it('an undo that could not reverse every write leaves the receipt undoable; undone again, it is undone', async () => {
+    const reverse: ReceiptOp = { ...SETTING, pre: { value: '{"actor":"G1"}' } };
+    const failed = [
+      { op: 'delete Item', uuid: 'Actor.x.Item.i', error: 'its parent Actor.x is gone' },
+    ];
+    let failing = true;
+    const { foundry, calls } = makeFoundry(async (name: string) => {
+      if (name === 'getWorldInfo') return { system: 'dnd5e' };
+      if (name === 'configurePrimaryParty') {
+        noteOps([SETTING]);
+        return PARTY;
+      }
+      if (name === 'undoOps') {
+        noteOps([reverse]);
+        return failing ? { undone: 1, failed } : { undone: 2, failed: [] };
+      }
+      return {};
+    });
+    const { dispatchWithReceipt } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      serverUrl: 'http://localhost:30000',
+      receiptsDir: dir,
+    });
+    const first = await dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' });
+    const id = /receipt (rcpt_\w+)/.exec(first.receiptLine ?? '')?.[1] ?? '';
+    const part = await dispatchWithReceipt('run-script', { undo: id });
+    expect(part.result).toContain(`↩️ Receipt ${id}: 1 write(s) reversed.`);
+    expect(part.result).toContain(`1 could not be reversed; receipt ${id} stays undoable:`);
+    expect(part.result).toContain('delete Item Actor.x.Item.i: its parent Actor.x is gone');
+    const partId = /receipt (rcpt_\w+)/.exec(part.receiptLine ?? '')?.[1] ?? '';
+    expect(part.receiptLine?.startsWith(`receipt ${partId} (partly reverses ${id}): `)).toBe(true);
+    let byId = new Map(stored().map(r => [r.id, r]));
+    expect(byId.get(id)?.undoneBy).toBeUndefined();
+    expect(byId.get(id)?.partialUndoBy).toEqual([partId]);
+    expect(byId.get(partId)).toMatchObject({ reverses: id, partial: true });
+    // undone again (what is already back is left alone): every write reversed, so it is undone
+    failing = false;
+    const again = await dispatchWithReceipt('run-script', { undo: id });
+    const againId = /receipt (rcpt_\w+)/.exec(again.receiptLine ?? '')?.[1] ?? '';
+    expect(again.receiptLine?.startsWith(`receipt ${againId} (reverses ${id}): `)).toBe(true);
+    byId = new Map(stored().map(r => [r.id, r]));
+    expect(byId.get(id)?.undoneBy).toBe(againId);
+    expect(calls.filter(([n]) => n === 'undoOps')).toHaveLength(2);
+    await expect(dispatchWithReceipt('run-script', { undo: id })).rejects.toThrow(
+      `receipt ${id} was already undone by ${againId}`
+    );
+  });
+
+  it('files the receipt under the world of the last connect, without connecting', async () => {
+    const { foundry } = makeFoundry(async (name: string) => {
+      if (name === 'getWorldInfo') return { system: 'dnd5e' };
+      if (name === 'configurePrimaryParty') {
+        noteOps([SETTING]);
+        throw new Error('the page went away under it');
+      }
+      return {};
+    });
+    // a connect now would fail: filing the receipt must not need one
+    foundry.worldId = vi.fn(async () => {
+      throw new Error('the reconnect failed');
+    });
+    const { dispatchWithReceipt } = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      serverUrl: 'http://localhost:30000',
+      receiptsDir: dir,
+    });
+    const err = await dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' }).catch(
+      e => e
+    );
+    expect(err.message).toContain('the page went away under it');
+    expect(receiptLineOf(err)).toMatch(
+      /^receipt rcpt_\w{6}: 0 created, 1 updated, .* · undo: run-script/
+    );
+    expect(foundry.worldId).not.toHaveBeenCalled();
+    expect(stored()).toEqual([expect.objectContaining({ worldId: 'w', ops: [SETTING] })]);
+    // no world read yet (a guard: nothing writes without one): kept under none, no undo offered
+    foundry.lastWorldId = vi.fn(() => undefined);
+    const orphan = await dispatchWithReceipt('set-primary-party', { groupIdentifier: 'P' }).catch(
+      e => e
+    );
+    expect(receiptLineOf(orphan)).toMatch(
+      / · kept under no world id \(none was read\), so no undo finds it$/
+    );
+    expect(
+      stored()
+        .map(r => r.worldId)
+        .sort()
+    ).toEqual(['', 'w']);
+  });
+
+  it("one receipt's byte cap holds across every page op of the call", async () => {
+    const big = (n: number): ReceiptOp => ({
+      kind: 'delete',
+      documentName: 'Scene',
+      uuid: `Scene.s${n}`,
+      label: `Big ${n}`,
+      parentUuid: null,
+      pre: { _id: `s${n}`, blob: 'x'.repeat(4_500_000) },
+    });
+    // two page ops, each within its own recorder's 8 MB, 9 MB in all
+    const { dispatchWithReceipt } = registry(() => {
+      noteOps([big(1)]);
+      noteOps([big(2)]);
+      return PARTY;
+    });
+    const { receiptLine } = await dispatchWithReceipt('set-primary-party', {
+      groupIdentifier: 'P',
+    });
+    expect(receiptLine).toContain(' · 1 not undoable (pre-image over the cap) · ');
+    const [kept] = stored();
+    expect(kept.ops.map((o: ReceiptOp) => [o.uuid, !!o.pre, !!o.tooLarge])).toEqual([
+      ['Scene.s1', true, false],
+      ['Scene.s2', false, true],
+    ]);
   });
 
   it('a call that fails after it wrote still carries its receipt line', async () => {

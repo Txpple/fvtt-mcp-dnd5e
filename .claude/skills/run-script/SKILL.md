@@ -59,7 +59,10 @@ return { placed };
   the user that list; then run for real.
 - **Caps**: 150 writes and 30 deletes per run, 60 s. Raise `maxWrites` / `maxDeletes` /
   `timeoutSeconds` only when the job's size is known and the user has seen it. A run past its
-  timeout is abandoned and can write no more (every `fvtt.*` call after it is refused). A script
+  timeout is abandoned and can write no more (every `fvtt.*` call after it is refused); a call it
+  had in flight is waited on for up to 15 s and its writes are in the run's receipt, and one still
+  running after that is not (its outcome is unknown). Await every call: one left un-awaited is
+  waited on the same way when the run ends, and a call made after the run ended is refused. A script
   that never yields (a synchronous loop) cannot be timed out from inside: the bridge cuts it about
   35 s past its timeout and closes the page, the run's receipt is lost with it, and the outcome is
   unknown. Read the world before running it again.
@@ -73,7 +76,13 @@ return { placed };
   kept on the bridge's machine for a day (the newest 50 per world), so they survive a
   `disconnect-bridge` and a restart; a receipt belongs to the world it was written in. An undo
   answers with a receipt of its own (`reverses rcpt_…`): undo that to redo. A receipt is undone
-  once; a second undo of it is refused, naming the receipt that reversed it.
+  once, when every write of it was reversed; a second undo of it is refused, naming the receipt
+  that reversed it. An undo that could not reverse every write lists the ones it could not and
+  leaves the receipt undoable (`… stays undoable`; its own receipt `partly reverses` it): undo it
+  again once the cause is dealt with, and what is already back is left alone.
+- **Two sessions on one seat** (two bridges joined as the same user; the bridge warns at connect)
+  keep separate receipts, but their writes interleave at the server, where no write lock reaches:
+  an undo puts back the prior value even where the other session, or a player, has written since.
 - **What cannot be undone**: a write whose pre-image was over the cap (2 MB per document, 8 MB per
   call; the line counts them as not undoable), the file plane (uploads, copies, moves and deletes of
   files), chat players have already seen (the message can be deleted, not unseen), and a pulled view.

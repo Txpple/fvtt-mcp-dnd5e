@@ -4,6 +4,8 @@
 // alone and cleared; a record that names no browser is kept, ends nothing and still names its
 // holder afterwards; both bridges' next calls re-join on their own; and an eviction made while
 // connected never ends the evicting bridge's own browser, even when another record names its pid.
+// A's connect warns that B holds the seat too, and what two sessions on one seat mean for receipts
+// (issue #6's review).
 //   FOUNDRY_HOST=local node scripts/verify-holders.mjs
 // Bridge A runs in this process, bridge B in a forked child (a seat record is per process); both
 // join as the bridge user and both leave in finally. Three sleeping node processes stand in for
@@ -104,14 +106,28 @@ if (process.argv.includes('--child')) {
     h.browserPid > 0 &&
     typeof h.browserExe === 'string' &&
     /headless|chrom/i.test(basename(h.browserExe));
+  const warnings = []; // A's bridge log: its seat warning
   try {
     A = await connectFoundry({
       identity: 'bridge',
       tag: 'verify-holders A',
       watchdogMs: WATCHDOG_MS,
+      logger: { debug() {}, info() {}, warn: m => warnings.push(m), error() {} },
     });
     const { f } = A;
     const tool = new BridgeTools({ foundry: f, logger: quietLogger() });
+
+    // 0. A joined a seat B holds: its connect says so, and what that means for receipts.
+    const seatWarning =
+      warnings.find(w => w.includes(`held on this machine by pid ${up.pid} `)) ?? '';
+    echo(seatWarning);
+    check(
+      "A's connect names B as another holder of the seat, and what it means for receipts",
+      seatWarning.includes('Each keeps receipts of its own writes only') &&
+        seatWarning.includes(
+          'an undo here can put back a value the other session has changed since'
+        )
+    );
 
     // 1. Both records name their browser.
     const me = f.holders().find(h => h.self);

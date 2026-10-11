@@ -26,13 +26,14 @@ import {
 } from './toolsets.js';
 import { FormattedToolError } from './utils/error-handler.js';
 import { Logger } from './logger.js';
-import { effectiveOps } from './page/_receipts.js';
+import { capReceipt, effectiveOps } from './page/_receipts.js';
 import {
   type CallContext,
   callContext,
   markUndone,
   pruneReceipts,
   receiptLine,
+  receiptPath,
   receiptsDir,
   receiptWorldKey,
   saveReceipt,
@@ -529,34 +530,31 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   // page ops report are noted into it, and when it wrote anything they are kept as one receipt and
   // summed up in one line, appended centrally (src/index.ts): no tool formats its own.
   const canUndo = enabledToolsets.has('scripting') && !readOnly;
-  const keepReceipt = async (tool: string, ctx: CallContext): Promise<string | undefined> => {
+  const keepReceipt = (tool: string, ctx: CallContext): string | undefined => {
     if (!effectiveOps(ctx.ops).length) return undefined;
     const reverses = ctx.reverses;
+    // an undo that could not reverse every write leaves the receipt it reverses undoable
+    const partial = !!reverses && !!ctx.reversesPartial;
+    const undoOf = reverses ? { reverses, ...(partial ? { partial: true as const } : {}) } : {};
+    // one receipt's byte cap across the whole call, which may span many page ops (each capped alone)
+    const ops = capReceipt(ctx.ops);
     try {
-      const worldId = await foundry.worldId();
+      // the world of the last connect, read without connecting: a call that wrote and then lost
+      // its page answers at once, its receipt kept, instead of reconnecting to file it
+      const worldId = foundry.lastWorldId();
       const receipt = saveReceipt(
-        {
-          at: new Date().toISOString(),
-          serverUrl,
-          worldId,
-          tool,
-          ops: ctx.ops,
-          ...(reverses ? { reverses } : {}),
-        },
+        { at: new Date().toISOString(), serverUrl, worldId: worldId ?? '', tool, ops, ...undoOf },
         storeDir
       );
-      const key = receiptWorldKey(serverUrl, worldId);
-      if (reverses) markUndone(reverses, key, receipt.id, storeDir);
-      pruneReceipts(key, storeDir);
-      return receiptLine(receipt, { canUndo });
+      const key = receiptWorldKey(serverUrl, worldId ?? '');
+      if (reverses) markUndone(reverses, key, receipt.id, storeDir, { partial });
+      pruneReceipts(key, storeDir, { keep: receiptPath(storeDir, key, receipt.id) });
+      return receiptLine(receipt, { canUndo, ...(worldId === undefined ? { noWorld: true } : {}) });
     } catch (err) {
       // a store failure never fails the call: the line says the receipt was not kept
       const why = (err as Error)?.message ?? String(err);
       logger.warn('receipt not kept', { tool, error: why });
-      return receiptLine(
-        { id: '', ops: ctx.ops, ...(reverses ? { reverses } : {}) },
-        { canUndo, notKept: why }
-      );
+      return receiptLine({ id: '', ops, ...undoOf }, { canUndo, notKept: why });
     }
   };
 
@@ -569,10 +567,10 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     try {
       result = await callContext.run(ctx, () => route(name, args));
     } catch (err) {
-      const line = await keepReceipt(name, ctx);
+      const line = keepReceipt(name, ctx);
       throw line ? withReceiptLine(err, line) : err;
     }
-    const line = await keepReceipt(name, ctx);
+    const line = keepReceipt(name, ctx);
     return line ? { result, receiptLine: line } : { result };
   };
 

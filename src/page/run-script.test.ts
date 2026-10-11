@@ -1,12 +1,14 @@
 /**
  * run-script's page half, offline: the shadow list, and a run against a stubbed page API with
  * stubbed hooks — the facade counts, the dry run stubs, the run's writes come back as `ops` (the
- * page keeps no receipts), the cap refuses, the shadowed globals read undefined, and a run abandoned
- * at its timeout can write no more. What counts as a write is the op table's (./_ops.test.ts); the
+ * page keeps no receipts), the cap refuses, the shadowed globals read undefined, a run abandoned at
+ * its timeout can write no more, and a call still in flight when a run ends is waited on (15 s at
+ * most) with the lock held, so its writes are the run's. What counts as a write is the op table's
+ * (./_ops.test.ts); the
  * recorder and the undo are ./_receipts.test.ts's. The shadowing is an accident guard, not a
  * boundary (issue #15): the join user's role is.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { undoOps, withWriteLock } from './_receipts.js';
 import { runScript, SHADOWED } from './run-script.js';
 
@@ -34,6 +36,12 @@ describe('runScript against a stubbed page', () => {
   const calls: Array<[string, unknown]> = [];
   const fire = (hook: string, ...args: unknown[]) => {
     for (const fn of hooks.get(hook) ?? []) fn(...args);
+  };
+  /** A create as the page that makes it sees it: preCreate, then create, with one options object. */
+  const create = (name: string, doc: Record<string, unknown>) => {
+    const options = {};
+    fire(`preCreate${name}`, doc, {}, options, 'u1');
+    fire(`create${name}`, doc, options, 'u1');
   };
 
   beforeEach(() => {
@@ -64,7 +72,7 @@ describe('runScript against a stubbed page', () => {
         },
         createActorFromCompendium: async (a: unknown) => {
           calls.push(['createActorFromCompendium', a]);
-          fire('createActor', { uuid: `Actor.${calls.length}`, name: 'Goblin' }, {}, 'u1');
+          create('Actor', { uuid: `Actor.${calls.length}`, name: 'Goblin' });
           return { id: `a${calls.length}` };
         },
         updateActor: async (a: unknown) => {
@@ -216,6 +224,93 @@ describe('runScript against a stubbed page', () => {
     expect(calls.filter(c => c[0] === 'createActorFromCompendium')).toEqual([]);
     expect(r.ops).toEqual([]);
   }, 10_000);
+
+  it("a call in flight at the timeout is waited on: its create is the run's, the lock held until it lands", async () => {
+    const g = globalThis as any;
+    const order: string[] = [];
+    g.window.__fvtt.createActorFromCompendium = async (a: unknown) => {
+      calls.push(['createActorFromCompendium', a]);
+      await new Promise(res => setTimeout(res, 1_400)); // the server answers 0.4 s past the timeout
+      create('Actor', { uuid: 'Actor.late', name: 'Late' });
+      order.push('the create lands');
+      return { id: 'late' };
+    };
+    const run = runScript({
+      src: 'log("go"); await fvtt.createActorFromCompendium({ quantity: 3 }); return 1;',
+      timeoutMs: 1_000,
+    });
+    await new Promise(res => setTimeout(res, 1_150)); // abandoned by now, its create in flight
+    const next = withWriteLock(async () => {
+      order.push('the next write');
+    });
+    const r = await run;
+    await next;
+    expect(r.timedOut).toBe(true);
+    expect(r.error).toBe(
+      'the run exceeded 1 s and was abandoned: the script can make no more calls, and the 1 ' +
+        'call(s) it had in flight settled within the 15 s grace: their writes are in the receipt'
+    );
+    expect(r.ops).toEqual([
+      { kind: 'create', documentName: 'Actor', uuid: 'Actor.late', label: 'Late' },
+    ]);
+    expect(r.receipt).toMatchObject({ created: 1, calls: 1, writes: 1 });
+    expect(order).toEqual(['the create lands', 'the next write']);
+  }, 10_000);
+
+  it('a call still in flight after the 15 s grace is let go: the run answers, and says so', async () => {
+    vi.useFakeTimers();
+    try {
+      const g = globalThis as any;
+      g.window.__fvtt.createActorFromCompendium = (a: unknown) => {
+        calls.push(['createActorFromCompendium', a]);
+        return new Promise(() => {}); // never answers
+      };
+      const run = runScript({
+        src: 'await fvtt.createActorFromCompendium({}); return 1;',
+        timeoutMs: 1_000,
+      });
+      let answered = false;
+      void run.then(() => {
+        answered = true;
+      });
+      await vi.advanceTimersByTimeAsync(1_000 + 14_999);
+      expect(answered).toBe(false); // the lock and the recorder are still the run's
+      await vi.advanceTimersByTimeAsync(1);
+      const r = await run;
+      expect(r.error).toBe(
+        'the run exceeded 1 s and was abandoned: the script can make no more calls; of the 1 ' +
+          'call(s) it had in flight, 0 settled within the 15 s grace (their writes are in the ' +
+          'receipt) and 1 did not: their outcome is unknown, and what they write is not in this receipt'
+      );
+      expect(r.ops).toEqual([]);
+      expect(hooks.get('createActor')).toEqual([]); // the recorder is off
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a call the script did not await is waited on as the run ends; a call after the end is refused', async () => {
+    const g = globalThis as any;
+    g.window.__fvtt.createActorFromCompendium = async (a: unknown) => {
+      calls.push(['createActorFromCompendium', a]);
+      await new Promise(res => setTimeout(res, 100));
+      create('Actor', { uuid: 'Actor.unawaited', name: 'Unawaited' });
+      return { id: 'u' };
+    };
+    g.__sink = [];
+    const r = await runScript({
+      src: `fvtt.createActorFromCompendium({});
+        setTimeout(() => fvtt.listActors({}).catch(e => __sink.push(e.message)), 300);
+        return 1;`,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.ops).toEqual([
+      { kind: 'create', documentName: 'Actor', uuid: 'Actor.unawaited', label: 'Unawaited' },
+    ]);
+    await new Promise(res => setTimeout(res, 400));
+    expect(g.__sink).toEqual(['the run has ended']);
+    expect(calls.map(c => c[0])).toEqual(['createActorFromCompendium']);
+  });
 
   it('a real run holds the write lock until it settles; a dry run does not take it', async () => {
     const src = `await new Promise(res => setTimeout(res, 50)); await fvtt.listActors({}); return 1;`;

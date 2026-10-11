@@ -12,11 +12,15 @@
  * - The store is one JSON file per receipt under the OS temp dir (`fvtt-mcp-dnd5e/receipts/`), named
  *   `<world key>-<id>.json`, the world key being the server URL and the world id hashed (the seat
  *   records' shape, src/holders.ts): a receipt belongs to the world it was written in, and is never
- *   applied to another one, the sandbox and a hosted world of the same id included. Per world the
- *   newest 50 are kept, none older than a day, at most 64 MB. A pre-image is world content (a
- *   journal's text, an NPC's sheet), so the directory and the files are the user's alone where the
- *   OS has modes (a shared temp dir). The page keeps nothing, and a store failure never fails a
- *   tool call.
+ *   applied to another one, the sandbox and a hosted world of the same id included. The world is
+ *   the one of the bridge's last connect (`lastWorldId`): filing a receipt never reconnects. Per
+ *   world the newest 50 are kept, none older than a day, at most 64 MB, and never the one just
+ *   written. A pre-image is world content (a journal's text, an NPC's sheet), so the directory and
+ *   the files are the user's alone where the OS has modes (a shared temp dir). The page keeps
+ *   nothing, and a store failure never fails a tool call.
+ * - An undo marks the receipt it reverses undone only when it reversed every write; one that could
+ *   not reverse them all leaves the receipt undoable (`partialUndoBy`), and undoing it again is
+ *   safe for what was already put back.
  *
  * Node-side only: no Playwright, no page.
  */
@@ -32,7 +36,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { effectiveOps, type ReceiptOp } from './page/_receipts.js';
 
 export interface CallContext {
@@ -40,6 +44,11 @@ export interface CallContext {
   ops: ReceiptOp[];
   /** Set by run-script's undo: the receipt this call reverses. */
   reverses?: string;
+  /**
+   * Set by run-script's undo until the page answers that every write was reversed: the receipt it
+   * reverses is then not marked undone, and stays undoable.
+   */
+  reversesPartial?: boolean;
 }
 
 /** The tool call in flight on this async path (src/registry.ts runs every call inside one). */
@@ -62,8 +71,12 @@ export interface StoredReceipt {
   ops: ReceiptOp[];
   /** An undo's own receipt: the receipt it reverses. */
   reverses?: string;
+  /** An undo's own receipt: it could not reverse every write of the one it reverses. */
+  partial?: true;
   /** The receipt of the undo that reversed this one. */
   undoneBy?: string;
+  /** The receipts of undos that reversed only part of this one: it stays undoable. */
+  partialUndoBy?: string[];
 }
 
 export interface PruneLimits {
@@ -99,7 +112,8 @@ export function newReceiptId(): string {
   return `rcpt_${id}`;
 }
 
-const fileOf = (dir: string, worldKey: string, id: string): string =>
+/** The file receipt `id` of world `worldKey` is kept in. */
+export const receiptPath = (dir: string, worldKey: string, id: string): string =>
   join(dir, `${worldKey}-${id}.json`);
 
 /**
@@ -115,7 +129,7 @@ export function saveReceipt(
   for (let attempt = 1; ; attempt++) {
     const receipt: StoredReceipt = { id: newReceiptId(), ...fields };
     try {
-      writeFileSync(fileOf(dir, key, receipt.id), JSON.stringify(receipt), {
+      writeFileSync(receiptPath(dir, key, receipt.id), JSON.stringify(receipt), {
         flag: 'wx',
         mode: 0o600,
       });
@@ -147,7 +161,7 @@ export function loadReceipt(
   }
   let receipt: StoredReceipt;
   try {
-    receipt = JSON.parse(readFileSync(fileOf(dir, worldKey, id), 'utf8')) as StoredReceipt;
+    receipt = JSON.parse(readFileSync(receiptPath(dir, worldKey, id), 'utf8')) as StoredReceipt;
   } catch {
     const elsewhere = receiptFiles(dir).some(f => f.endsWith(`-${id}.json`));
     throw new Error(
@@ -162,18 +176,23 @@ export function loadReceipt(
   return receipt;
 }
 
-/** Record that receipt `id` was reversed by receipt `byId`. Best effort; its age is unchanged. */
+/**
+ * Record that receipt `id` was reversed by receipt `byId`: undone, or with `partial` only in part
+ * (it stays undoable). Best effort; its age is unchanged.
+ */
 export function markUndone(
   id: string,
   worldKey: string,
   byId: string,
-  dir: string = receiptsDir()
+  dir: string = receiptsDir(),
+  { partial = false }: { partial?: boolean } = {}
 ): void {
-  const file = fileOf(dir, worldKey, id);
+  const file = receiptPath(dir, worldKey, id);
   try {
     const { atime, mtime } = statSync(file);
     const receipt = JSON.parse(readFileSync(file, 'utf8')) as StoredReceipt;
-    receipt.undoneBy = byId;
+    if (partial) receipt.partialUndoBy = [...(receipt.partialUndoBy ?? []), byId];
+    else receipt.undoneBy = byId;
     writeFileSync(file, JSON.stringify(receipt));
     utimesSync(file, atime, mtime);
   } catch {
@@ -184,14 +203,19 @@ export function markUndone(
 /**
  * Keep the newest `kept` receipts of world `worldKey`, none older than `maxAgeMs` and at most
  * `maxBytes` of them (the oldest go first); a receipt of any world older than `maxAgeMs` goes too.
- * Best effort.
+ * `keep`, the file just written, is never removed: its line has offered its undo. It still counts
+ * toward the limits. Best effort.
  */
 export function pruneReceipts(
   worldKey: string,
   dir: string = receiptsDir(),
-  limits: PruneLimits = RECEIPT_LIMITS,
-  now: number = Date.now()
+  {
+    keep,
+    limits = RECEIPT_LIMITS,
+    now = Date.now(),
+  }: { keep?: string; limits?: PruneLimits; now?: number } = {}
 ): void {
+  const kept = keep === undefined ? undefined : resolve(keep);
   const files: Array<{ path: string; mine: boolean; mtime: number; size: number }> = [];
   for (const name of receiptFiles(dir)) {
     try {
@@ -203,16 +227,16 @@ export function pruneReceipts(
     }
   }
   files.sort((a, b) => b.mtime - a.mtime);
-  let kept = 0;
+  let count = 0;
   let bytes = 0;
   for (const f of files) {
     let drop = now - f.mtime > limits.maxAgeMs;
     if (f.mine && !drop) {
-      kept++;
+      count++;
       bytes += f.size;
-      drop = kept > limits.kept || bytes > limits.maxBytes;
+      drop = count > limits.kept || bytes > limits.maxBytes;
     }
-    if (drop) {
+    if (drop && resolve(f.path) !== kept) {
       try {
         rmSync(f.path, { force: true });
       } catch {
@@ -266,11 +290,14 @@ const DETAIL_MAX = 240;
  * The receipt line the server appends to a call's answer:
  * `receipt rcpt_ab12cd: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value)
  * · undo: run-script { "undo": "rcpt_ab12cd" }`. `canUndo`: the registration advertises run-script.
- * `notKept`: the store failed, so the line names why and offers no undo.
+ * `notKept`: the store failed, so the line names why and offers no undo. `noWorld`: the bridge
+ * had read no world id, so the receipt is kept under none and no undo would find it (a guard:
+ * nothing writes without a world). An undo names the receipt it reverses, `partly` when it could
+ * not reverse every write of it.
  */
 export function receiptLine(
-  receipt: Pick<StoredReceipt, 'id' | 'ops' | 'reverses'>,
-  opts: { canUndo: boolean; notKept?: string }
+  receipt: Pick<StoredReceipt, 'id' | 'ops' | 'reverses' | 'partial'>,
+  opts: { canUndo: boolean; notKept?: string; noWorld?: boolean }
 ): string {
   const { documents, notUndoable } = summarizeOps(receipt.ops);
   const n = (did: string) => documents.filter(d => d.did === did).length;
@@ -284,12 +311,16 @@ export function receiptLine(
     .join('; ');
   if (detail.length > DETAIL_MAX) detail = `${detail.slice(0, DETAIL_MAX - 1)}…`;
   const name = opts.notKept ? 'receipt' : `receipt ${receipt.id}`;
+  const reverses = receipt.reverses
+    ? ` (${receipt.partial ? 'partly reverses' : 'reverses'} ${receipt.reverses})`
+    : '';
   const parts = [
-    `${name}${receipt.reverses ? ` (reverses ${receipt.reverses})` : ''}: ${n('created')} created, ` +
+    `${name}${reverses}: ${n('created')} created, ` +
       `${n('updated')} updated, ${n('deleted')} deleted${detail ? ` (${detail})` : ''}`,
   ];
   if (notUndoable) parts.push(`${notUndoable} not undoable (pre-image over the cap)`);
   if (opts.notKept) parts.push(`not kept (${opts.notKept}), so it cannot be undone`);
+  else if (opts.noWorld) parts.push('kept under no world id (none was read), so no undo finds it');
   else if (opts.canUndo) parts.push(`undo: run-script { "undo": "${receipt.id}" }`);
   else parts.push('undo needs the scripting toolset (FOUNDRY_TOOLSETS)');
   return parts.join(' · ');

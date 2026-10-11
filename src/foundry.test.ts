@@ -9,6 +9,8 @@
 // only a read is run again (issue #16's review): a write fails with its outcome unknown.
 // Eviction never ends this bridge's own browser while it is connected (issue #17's review).
 // info() reports the seat and whether this connect found the world asleep or down (issue #9).
+// Issue #6's review: a write waits in this process for the bridge's earlier writes, so its op cap
+// never counts the wait (a read never waits); lastWorldId() reads the world without connecting.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BridgeError } from './bridge-error.js';
 import { chromiumProblem, Foundry, type FoundryConfig } from './foundry.js';
@@ -334,6 +336,65 @@ describe('a vanished page bridge: only a read is run again (issue #16 review)', 
     const again = vanishing();
     expect(await again.f.call('configurePrimaryParty', {})).toEqual({ id: 'w' });
     expect(again.answer).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the write queue: one write at a time from this bridge (issue #6 review)', () => {
+  const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+  it('two writes issued together are evaluated one after the other; a read in between is not delayed', async () => {
+    const order: string[] = [];
+    const { f, page } = connected({
+      answer: async ({ n, a }) => {
+        const tag = n === 'getWorldInfo' ? 'read' : `write ${(a as { name: string }).name}`;
+        order.push(`${tag} issued`);
+        if (n !== 'getWorldInfo') await sleep(30);
+        order.push(`${tag} done`);
+        return { result: tag };
+      },
+      probe: async () => true,
+    });
+    const first = f.call('updateActor', { actorIdentifier: 'a1', name: 'A' });
+    const second = f.call('updateActor', { actorIdentifier: 'a1', name: 'B' });
+    await sleep(5);
+    // B waits in this process, not inside the page (where its op cap would be counting)
+    expect(page.evaluate).toHaveBeenCalledTimes(1);
+    expect(await f.call('getWorldInfo')).toBe('read');
+    expect(await Promise.all([first, second])).toEqual(['write A', 'write B']);
+    expect(order).toEqual([
+      'write A issued',
+      'read issued',
+      'read done',
+      'write A done',
+      'write B issued',
+      'write B done',
+    ]);
+  });
+
+  it('a write that fails releases the queue for the next', async () => {
+    const { f } = connected({
+      answer: async ({ a }) => {
+        if ((a as { name: string }).name === 'A') {
+          throw new Error('page.evaluate: PageError:invalid: refused');
+        }
+        return { result: 'B' };
+      },
+      probe: async () => true,
+    });
+    const first = f.call('updateActor', { actorIdentifier: 'a1', name: 'A' }).catch(e => e);
+    const second = f.call('updateActor', { actorIdentifier: 'a1', name: 'B' });
+    expect(await first).toMatchObject({ code: 'invalid', detail: 'refused' });
+    expect(await second).toBe('B');
+  });
+});
+
+describe('lastWorldId(): the world of the last connect, read without connecting (issue #6 review)', () => {
+  it('answers the cached id, never connects, and is undefined before the first connect', () => {
+    const { f, retried } = connected({ answer: never, probe: never });
+    expect(f.lastWorldId()).toBeUndefined();
+    Object.assign(f, { liveWorldId: 'w', ready: false });
+    expect(f.lastWorldId()).toBe('w');
+    expect(retried).not.toHaveBeenCalled();
   });
 });
 

@@ -15,6 +15,14 @@
 //     its own;
 //   - the store: the file is there and marked undone after the undo; a wrong id is refused by name;
 //   - a write marked UNRECORDED (the seat marker's option) stays out of a receipt;
+//   - a partial undo (issue #6's review): a receipt planted in the store whose delete names a parent
+//     that does not exist; its undo reverses the rest, says what it could not, and leaves the
+//     receipt undoable; a second undo is accepted;
+//   - a run-script run abandoned at its 1 s timeout while its createActorFromCompendium (quantity 3)
+//     is in flight: the three creates are in the run's own receipt, none in the next call's, and
+//     the run's undo removes them;
+//   - two run-script calls issued together: the second runs after the first, and its op cap never
+//     counts the wait (no "still running" warning from the bridge, no page closed; about 35 s);
 //   - the cost of the choke point, timed in the page (printed, not a check).
 // Everything is named ZZ-receipts… (the lights are tracked by id) and deleted in finally, through
 // the bridge without a receipt; the receipt files this run made are removed from the store.
@@ -25,7 +33,7 @@ import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { Logger } from '../dist/logger.js';
 import { UNRECORDED } from '../dist/page/_receipts.js';
-import { callContext, receiptsDir, receiptWorldKey } from '../dist/receipts.js';
+import { callContext, receiptsDir, receiptWorldKey, saveReceipt } from '../dist/receipts.js';
 import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
 
@@ -39,7 +47,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const env = loadEnv();
 const cfg = bridgeConfig(env);
-const quiet = { debug() {}, info() {}, warn() {}, error: m => console.log(`  [bridge] ${m}`) };
+const warned = []; // the bridge's warnings: the op cap's "still running" is one
+const quiet = {
+  debug() {},
+  info() {},
+  warn: m => warned.push(m),
+  error: m => console.log(`  [bridge] ${m}`),
+};
 const f = new Foundry(cfg, quiet);
 const { dispatchWithReceipt } = buildToolRegistry({
   foundry: f,
@@ -60,6 +74,15 @@ async function tool(name, args) {
   return { result, line: receiptLine ?? '', id };
 }
 const undo = id => tool('run-script', { undo: id });
+/** A run's return value, read back from the tool's text (the JSON after `Result:`). */
+const resultOf = text => {
+  const at = text.indexOf('\nResult:\n');
+  try {
+    return at < 0 ? null : JSON.parse(text.slice(at + 9));
+  } catch {
+    return null;
+  }
+};
 /** A look at the world (an evaluate: no receipt, no recorder). */
 const look = (fn, arg) => f.evaluate(fn, arg);
 const stored = id => {
@@ -356,7 +379,136 @@ try {
     JSON.stringify(userPaths)
   );
 
-  // ── 8. The cost of the choke point, timed in the page ──────────────────────────────────────────
+  // ── 8. A partial undo leaves its receipt undoable (issue #6's review) ──────────────────────────
+  console.log('\n# a partial undo');
+  const partialId = await look(
+    async name => (await CONFIG.Actor.documentClass.create({ name, type: 'npc' })).id,
+    `${TAG} Partial`
+  );
+  const ghost = 'zzzzzzzzzzzzzzzz'; // an actor id the world does not have
+  const planted = saveReceipt({
+    at: new Date().toISOString(),
+    serverUrl: cfg.serverUrl,
+    worldId,
+    tool: 'verify-receipts',
+    ops: [
+      {
+        kind: 'create',
+        documentName: 'Actor',
+        uuid: `Actor.${partialId}`,
+        label: `${TAG} Partial`,
+      },
+      {
+        kind: 'delete',
+        documentName: 'Item',
+        uuid: `Actor.${ghost}.Item.${ghost}`,
+        label: `${TAG} Ghost`,
+        parentUuid: `Actor.${ghost}`,
+        pre: { _id: ghost, name: `${TAG} Ghost`, type: 'loot' },
+      },
+    ],
+  });
+  made.add(planted.id);
+  const pu = await undo(planted.id);
+  const afterPartial = stored(planted.id);
+  check(
+    'an undo that cannot reverse every write says which, and leaves the receipt undoable',
+    String(pu.result).includes(`↩️ Receipt ${planted.id}: 1 write(s) reversed.`) &&
+      String(pu.result).includes(
+        `1 could not be reversed; receipt ${planted.id} stays undoable:`
+      ) &&
+      String(pu.result).includes(`its parent Actor.${ghost} is gone`) &&
+      (await actorsNamed(`${TAG} Partial`)).length === 0 &&
+      pu.line.startsWith(
+        `receipt ${pu.id} (partly reverses ${planted.id}): 0 created, 0 updated, 1 deleted`
+      ) &&
+      afterPartial?.undoneBy === undefined &&
+      !!afterPartial?.partialUndoBy?.includes(pu.id),
+    `${String(pu.result).replaceAll('\n', ' / ')} | ${pu.line} | stored: undoneBy ${afterPartial?.undoneBy}, partialUndoBy ${JSON.stringify(afterPartial?.partialUndoBy)}`
+  );
+  const pu2 = await undo(planted.id).then(
+    r => r,
+    e => ({ result: e.message, line: '', id: null })
+  );
+  check(
+    '…and a second undo of it is accepted: what is already back is left alone',
+    String(pu2.result).includes(`receipt ${planted.id} stays undoable`) &&
+      !String(pu2.result).includes('already undone') &&
+      pu2.line === '',
+    String(pu2.result).replaceAll('\n', ' / ')
+  );
+
+  // ── 9. A run abandoned at its timeout with its creates in flight (issue #6's review) ───────────
+  console.log('\n# a run abandoned at its timeout, its creates in flight');
+  const lateNames = ['A', 'B', 'C'].map(s => `${TAG} Late ${s}`);
+  // the create starts 0.95 s in, so the 1 s timeout comes while its three copies are being made
+  const late = await tool('run-script', {
+    script: `log("three copies");
+      await new Promise(r => setTimeout(r, 950));
+      const r = await fvtt.createActorFromCompendium({ packId: ${JSON.stringify(goblin.pack)}, itemId: ${JSON.stringify(goblin.id)}, customNames: ${JSON.stringify(lateNames)}, quantity: 3, folder: ${JSON.stringify(TAG)} });
+      return r.totalCreated;`,
+    timeoutSeconds: 1,
+  });
+  const lateActors = await actorsNamed(`${TAG} Late`);
+  const lateOps = stored(late.id)?.ops ?? [];
+  check(
+    'a run abandoned at its timeout waits for its creates in flight: all three are in its own receipt',
+    String(late.result).includes('exceeded 1 s and was abandoned') &&
+      String(late.result).includes(
+        'settled within the 15 s grace: their writes are in the receipt'
+      ) &&
+      lateActors.length === 3 &&
+      lateActors.every(a => lateOps.some(o => o.kind === 'create' && o.uuid === `Actor.${a.id}`)),
+    `${String(late.result).split('\n').slice(0, 2).join(' / ')} | ${late.line}`
+  );
+  const next = await tool('create-actor-from-compendium', createArgs([`${TAG} Next`]));
+  const [nextActor] = await actorsNamed(`${TAG} Next`);
+  const nextOps = stored(next.id)?.ops ?? [];
+  check(
+    "…none of them lands in the next call's receipt",
+    !!nextActor &&
+      nextOps.some(o => o.uuid === `Actor.${nextActor.id}`) &&
+      !lateActors.some(a => nextOps.some(o => o.uuid.startsWith(`Actor.${a.id}`))),
+    next.line
+  );
+  await undo(next.id);
+  const lateUndo = await undo(late.id);
+  check(
+    "…and the run's undo removes all three",
+    (await actorsNamed(`${TAG} Late`)).length === 0,
+    lateUndo.line
+  );
+
+  // ── 10. Two run-script calls issued together (issue #6's review) ───────────────────────────────
+  // The second's op cap is its 1 s timeout + 30 s; the first takes 33 s. Waiting inside the page for
+  // the first, its cap ran out at 31 s and the bridge logged it as still running; waiting in this
+  // process, it is issued when the first is done.
+  console.log('\n# two run-script calls issued together (about 35 s)');
+  warned.length = 0;
+  const [first, second] = await Promise.all([
+    tool('run-script', {
+      script:
+        'const start = Date.now(); await new Promise(r => setTimeout(r, 33000)); return { start, end: Date.now() };',
+      timeoutSeconds: 60,
+    }),
+    tool('run-script', { script: 'return { start: Date.now() };', timeoutSeconds: 1 }),
+  ]);
+  const firstAt = resultOf(String(first.result));
+  const secondAt = resultOf(String(second.result));
+  const capped = warned.filter(w => /still running after|closed its page/.test(w));
+  check(
+    "two run-script calls issued together run one after the other; the second's cap never counts the wait",
+    String(first.result).startsWith('✅ Done') &&
+      String(second.result).startsWith('✅ Done') &&
+      typeof firstAt?.end === 'number' &&
+      typeof secondAt?.start === 'number' &&
+      secondAt.start >= firstAt.end &&
+      capped.length === 0 &&
+      f.isReady(),
+    `first ${firstAt?.end - firstAt?.start} ms, second issued ${secondAt?.start - firstAt?.end} ms after it ended; op-cap warnings ${capped.length}`
+  );
+
+  // ── 11. The cost of the choke point, timed in the page ─────────────────────────────────────────
   console.log('\n# the cost (in the page, 20 calls each)');
   const [subject] = await actorsNamed(`${TAG} Goblin`);
   const cost = await look(
@@ -379,13 +531,13 @@ try {
       };
       await call(false, { actorIdentifier: id, hp: { value: hp } });
       const classes = Object.keys(CONFIG).filter(
-        k => typeof CONFIG[k]?.documentClass === 'function'
+        k => typeof CONFIG[k]?.documentClass === 'function' && k !== 'FogExploration'
       );
       const t0 = performance.now();
       for (let i = 0; i < n; i++) {
         const ids = [];
         for (const c of classes) {
-          for (const h of ['create', 'preUpdate', 'preDelete'])
+          for (const h of ['preCreate', 'create', 'preUpdate', 'preDelete'])
             ids.push([h + c, Hooks.on(h + c, () => {})]);
         }
         for (const [h, hid] of ids) Hooks.off(h, hid);
@@ -406,7 +558,7 @@ try {
   if (cost.error) console.log(`  cost not measured: ${cost.error}`);
   else {
     console.log(
-      `  hooks on + off (${cost.classes} classes × 3): ${ms(cost.hooksOnOff)} per write\n` +
+      `  hooks on + off (${cost.classes} classes × 4): ${ms(cost.hooksOnOff)} per write\n` +
         `  a no-op update (no round trip): ${ms(cost.noopOff)} unrecorded, ${ms(cost.noopOn)} recorded\n` +
         `  a real update (one round trip): ${ms(cost.realOff)} unrecorded, ${ms(cost.realOn)} recorded (with its pre-image)\n` +
         `  a delete's pre-image (toObject + size, ${cost.actorChars.toLocaleString('en-US')} chars of actor): ${ms(cost.deletePreImage)}`

@@ -200,7 +200,7 @@ describe('ScriptTools', () => {
     expect(out).toContain('fvtt.createActorFromCompendium({"name":"Goblin"})');
   });
 
-  it("undo sends the stored receipt's writes to the page, names what could not be, and says what it reverses", async () => {
+  it("undo sends the stored receipt's writes to the page, names what could not be, and leaves the receipt undoable", async () => {
     const ops = [
       { kind: 'create' as const, documentName: 'Actor', uuid: 'Actor.x', label: 'X' },
       { kind: 'create' as const, documentName: 'Actor', uuid: 'Actor.y', label: 'Y' },
@@ -218,9 +218,31 @@ describe('ScriptTools', () => {
     const out = await callContext.run(ctx, () => tools.handleRunScript({ undo: kept.id }));
     expect(calls).toEqual([['undoOps', { ops }]]);
     expect(out).toContain(`↩️ Receipt ${kept.id}: 1 write(s) reversed.`);
-    expect(out).toContain('1 could not be reversed');
+    expect(out).toContain(`1 could not be reversed; receipt ${kept.id} stays undoable:`);
     expect(out).toContain('create Actor Actor.x: gone');
+    // not every write was reversed: the call reverses the receipt only in part (src/registry.ts)
+    expect(ctx).toEqual({ ops: [], reverses: kept.id, reversesPartial: true });
+  });
+
+  it('an undo that reversed every write reverses the receipt whole; one the page never answered, in part', async () => {
+    const ops = [{ kind: 'create' as const, documentName: 'Actor', uuid: 'Actor.x', label: 'X' }];
+    const kept = saveReceipt(
+      { at: 'now', serverUrl: SERVER, worldId: 'w', tool: 'run-script', ops },
+      dir
+    );
+    const { tools } = build({ undone: 1, failed: [] });
+    const ctx = { ops: [] };
+    const out = await callContext.run(ctx, () => tools.handleRunScript({ undo: kept.id }));
+    expect(out).toBe(`↩️ Receipt ${kept.id}: 1 write(s) reversed.`);
     expect(ctx).toEqual({ ops: [], reverses: kept.id });
+    const broken = build(async () => {
+      throw new Error('the page went away');
+    });
+    const lost = { ops: [] };
+    await expect(
+      callContext.run(lost, () => broken.tools.handleRunScript({ undo: kept.id }))
+    ).rejects.toThrow('the page went away');
+    expect(lost).toEqual({ ops: [], reverses: kept.id, reversesPartial: true });
   });
 
   it('undo refuses an id the store does not have for this world, and one already undone', async () => {

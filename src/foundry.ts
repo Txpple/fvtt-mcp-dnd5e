@@ -114,6 +114,12 @@ export interface FoundryBridge {
    * build world-scoped default paths on it (`worlds/<id>/assets/...`) instead of on config.
    */
   worldId(): Promise<string>;
+  /**
+   * The live world's id as of the last connect, read without connecting: undefined before the
+   * first. The receipt store files a call's receipt under it (src/registry.ts), so a call whose
+   * page went away answers at once, its receipt kept, instead of reconnecting first.
+   */
+  lastWorldId(): string | undefined;
   /** Is the live session currently up (page open + bridge marked ready)? */
   isReady(): boolean;
   /**
@@ -264,6 +270,8 @@ export class Foundry implements FoundryBridge {
   private seatSince: string | null = null;
   /** This connect's first /join probe found no joinable world: asleep, launched, or booting. */
   private woken = false;
+  /** The tail of this bridge's write queue (`queued`); undefined while no write has been made. */
+  private writeTail: Promise<void> | undefined;
 
   constructor(
     private readonly cfg: FoundryConfig,
@@ -391,7 +399,10 @@ export class Foundry implements FoundryBridge {
     for (const h of others) {
       this.log.warn(
         `the seat "${this.cfg.user}" is also held on this machine by ${describeHolder(h)} — two ` +
-          'sessions joined as one user; disconnect-bridge { all: true } ends every other holder'
+          'sessions joined as one user. Each keeps receipts of its own writes only, but their writes ' +
+          'interleave at the server, where neither write lock reaches: an undo here can put back a ' +
+          'value the other session has changed since. disconnect-bridge { all: true } ends every ' +
+          'other holder'
       );
     }
     writeHolder(rec);
@@ -509,6 +520,10 @@ export class Foundry implements FoundryBridge {
   async worldId(): Promise<string> {
     await this.ensureReady();
     return this.liveWorldId ?? '';
+  }
+
+  lastWorldId(): string | undefined {
+    return this.liveWorldId || undefined;
   }
 
   /**
@@ -863,54 +878,89 @@ export class Foundry implements FoundryBridge {
    * The tool seam: invoke a page-side domain function by name.
    * Mirrors the legacy foundryClient.query('foundry-mcp-bridge.X', data) 1:1. A failure is a
    * BridgeError: the page's own words as `detail`, its PageError code (or `connection` when the
-   * session was lost under the call) as `code` — see src/bridge-error.ts.
+   * session was lost under the call) as `code` — see src/bridge-error.ts. A write waits for this
+   * bridge's earlier writes to settle first (`queued`): the page runs one write at a time anyway,
+   * and a write that waited for the page's lock inside its own evaluate spent the wait against its
+   * op cap (issue #6's review). A read never waits.
    */
   async call<N extends keyof PageApi>(name: N, ...args: PageArgs<N>): Promise<PageResult<N>> {
-    return this.track(async () => {
-      await this.ensureReady();
-      try {
-        return await this.invoke<PageResult<N>>(name, args[0]);
-      } catch (err) {
-        // The op outlived its cap and its page was closed: its outcome is unknown, so it is never
-        // run a second time (a retried write could land twice). The next call reconnects.
-        if (err instanceof OpCapError) throw asCallError(name, err);
-        // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page
-        // stays open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge
-        // has vanished, recover once (re-inject in place, or full reconnect if the session itself
-        // dropped), so a mid-session reload self-heals instead of wedging until a process restart.
-        // Only a read is run again: a write may have landed before the page went (a reload under
-        // it, or a page the op cap closed under another call), and a second run could land it
-        // twice, so it fails with its outcome unknown (issue #16's review).
-        if (!(await this.bridgeAlive())) {
-          if (opKind(name, args[0]) !== 'read') {
-            this.log.warn(
-              `page bridge missing under '${name}' — recovering; a write is not run again`
-            );
-            await this.recover().catch((e: Error) =>
-              this.log.warn(`recovery after '${name}' failed — ${e.message}`)
-            );
-            throw new BridgeError({
-              code: 'connection',
-              fn: name,
-              detail:
-                `the page went away under '${name}' (a world reload, or a page closed under the call), ` +
-                'so the bridge did not run it again: its outcome is unknown, a write may or may not ' +
-                'have landed. Read the world before running it again; the next call reconnects.',
-              explained: true,
-              cause: err,
-            });
-          }
-          this.log.warn(`page bridge missing on '${name}' — recovering and retrying`);
-          await this.recover();
-          try {
-            return await this.invoke<PageResult<N>>(name, args[0]);
-          } catch (err2) {
-            throw asCallError(name, err2);
-          }
-        }
-        throw asCallError(name, err);
-      }
+    const write = opKind(name, args[0]) !== 'read';
+    return this.track(() =>
+      write
+        ? this.queued(() => this.attempt<N>(name, args[0], write))
+        : this.attempt<N>(name, args[0], write)
+    );
+  }
+
+  /**
+   * Run `work` once every earlier write of this bridge has settled, and release the queue when it
+   * settles: one write at a time from this process, in the order called, as the page's write lock
+   * would run them. A write's op cap (`invoke`) then counts from when it is issued, never while it
+   * waits for an earlier write of its own process.
+   */
+  private async queued<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.writeTail;
+    let release: () => void = () => {};
+    this.writeTail = new Promise<void>(resolve => {
+      release = resolve;
     });
+    try {
+      await previous;
+      return await work();
+    } finally {
+      release();
+    }
+  }
+
+  /** One call, connected first; a vanished page bridge is recovered, and only a read run again. */
+  private async attempt<N extends keyof PageApi>(
+    name: N,
+    arg: unknown,
+    write: boolean
+  ): Promise<PageResult<N>> {
+    await this.ensureReady();
+    try {
+      return await this.invoke<PageResult<N>>(name, arg);
+    } catch (err) {
+      // The op outlived its cap and its page was closed: its outcome is unknown, so it is never
+      // run a second time (a retried write could land twice). The next call reconnects.
+      if (err instanceof OpCapError) throw asCallError(name, err);
+      // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page
+      // stays open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge
+      // has vanished, recover once (re-inject in place, or full reconnect if the session itself
+      // dropped), so a mid-session reload self-heals instead of wedging until a process restart.
+      // Only a read is run again: a write may have landed before the page went (a reload under
+      // it, or a page the op cap closed under another call), and a second run could land it
+      // twice, so it fails with its outcome unknown (issue #16's review).
+      if (!(await this.bridgeAlive())) {
+        if (write) {
+          this.log.warn(
+            `page bridge missing under '${name}' — recovering; a write is not run again`
+          );
+          await this.recover().catch((e: Error) =>
+            this.log.warn(`recovery after '${name}' failed — ${e.message}`)
+          );
+          throw new BridgeError({
+            code: 'connection',
+            fn: name,
+            detail:
+              `the page went away under '${name}' (a world reload, or a page closed under the call), ` +
+              'so the bridge did not run it again: its outcome is unknown, a write may or may not ' +
+              'have landed. Read the world before running it again; the next call reconnects.',
+            explained: true,
+            cause: err,
+          });
+        }
+        this.log.warn(`page bridge missing on '${name}' — recovering and retrying`);
+        await this.recover();
+        try {
+          return await this.invoke<PageResult<N>>(name, arg);
+        } catch (err2) {
+          throw asCallError(name, err2);
+        }
+      }
+      throw asCallError(name, err);
+    }
   }
 
   /**

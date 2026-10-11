@@ -46,8 +46,10 @@ export function makeFoundry(response: any = {}): {
     // the one exercised; override isReady per-test for the already-disconnected branch.
     isReady: vi.fn(() => true),
     dispose: vi.fn(async () => {}),
-    // The live world's id (world-scoped default paths, e.g. send-chat-message's image folder).
+    // The live world's id (world-scoped default paths, e.g. send-chat-message's image folder), and
+    // the same id as of the last connect, read without connecting (the receipt store's key).
     worldId: vi.fn(async () => 'w'),
+    lastWorldId: vi.fn(() => 'w'),
     // The seat records (src/holders.ts): nobody else holds the seat unless a test says so.
     holders: vi.fn(() => []),
     evictOtherHolders: vi.fn(async () => []),

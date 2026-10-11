@@ -1,15 +1,20 @@
 /**
  * The page's receipt machinery, offline, on stubbed Foundry globals (the run-script.test.ts
- * pattern): the write lock, the recorder's per-path pre-image, the byte cap, the choke point
- * (`callOp`), the netting, and `undoOps`. Issue #6.
+ * pattern): the write lock, the recorder's per-path pre-image, its token on a create (a create
+ * begun on another page, or under another recorder, is not this receipt's), the bookkeeping it
+ * never records, the byte cap per page op and per call (`capReceipt`), the choke point
+ * (`callOp`), the netting, and `undoOps`. Issue #6 and its review.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   callOp,
+  capReceipt,
   changedPaths,
+  documentNames,
   effectiveOps,
   MAX_PRE_IMAGE_CHARS,
   MAX_RECEIPT_CHARS,
+  RECORDER_MARK,
   type ReceiptOp,
   record,
   UNRECORDED,
@@ -43,6 +48,20 @@ const fire = (hook: string, ...args: unknown[]) => {
   for (const h of hooks.get(hook) ?? []) h.fn(...args);
 };
 const liveHooks = () => [...hooks.values()].reduce((n, list) => n + list.length, 0);
+/**
+ * A create as Foundry runs it on the page that makes it: `preCreate<Doc>` with the operation's
+ * options, then `create<Doc>` with the same options as the server hands them back.
+ */
+const create = (
+  name: string,
+  doc: Record<string, unknown>,
+  options: Record<string, unknown> = {},
+  userId = 'u1'
+) => {
+  fire(`preCreate${name}`, doc, {}, options, userId);
+  fire(`create${name}`, doc, options, userId);
+  return options;
+};
 
 beforeEach(() => {
   hooks.clear();
@@ -191,9 +210,9 @@ describe('the recorder', () => {
     expect(rec.stop()).toEqual([]);
   });
 
-  it('a create is recorded from its post hook; a delete keeps the document and its parent', () => {
+  it('a create begun on this page is recorded from its post hook; a delete keeps the document and its parent', () => {
     const rec = record();
-    fire('createActor', { uuid: 'Actor.n1', name: 'New' }, {}, 'u1');
+    create('Actor', { uuid: 'Actor.n1', name: 'New' });
     fire(
       'preDeleteJournalEntryPage',
       {
@@ -205,7 +224,7 @@ describe('the recorder', () => {
       {},
       'u1'
     );
-    fire('createSetting', { uuid: 'Setting.s1', key: 'dnd5e.rulesVersion' }, {}, 'u1');
+    create('Setting', { uuid: 'Setting.s1', key: 'dnd5e.rulesVersion' });
     expect(rec.stop()).toEqual([
       { kind: 'create', documentName: 'Actor', uuid: 'Actor.n1', label: 'New' },
       {
@@ -223,7 +242,8 @@ describe('the recorder', () => {
 
   it('a hook per document class goes on, and stop takes them all off, once', () => {
     const rec = record();
-    expect(liveHooks()).toBe(4 * 3); // four classes in CONFIG × create / preUpdate / preDelete
+    // four classes in CONFIG × preCreate / create / preUpdate / preDelete
+    expect(liveHooks()).toBe(4 * 4);
     rec.stop();
     expect(liveHooks()).toBe(0);
     expect(rec.stop()).toEqual([]);
@@ -249,6 +269,42 @@ describe('the recorder', () => {
     expect(rec.stop()).toEqual([
       { kind: 'update', documentName: 'Actor', uuid: 'Actor.x', label: '' },
     ]);
+  });
+
+  it("a create is this recorder's only when it carries back the token its preCreate stamped", () => {
+    // begun under an earlier recorder, whose stop came before the server answered
+    const earlier = record();
+    const late: Record<string, unknown> = {};
+    fire('preCreateActor', { name: 'Late' }, {}, late, 'u1');
+    expect(late[RECORDER_MARK]).toEqual(expect.any(String));
+    earlier.stop();
+    const rec = record();
+    fire('createActor', { uuid: 'Actor.late', name: 'Late' }, late, 'u1');
+    // the same user's create, begun on another page (a second session on the seat): no token
+    fire('createActor', { uuid: 'Actor.remote', name: 'Remote' }, {}, 'u1');
+    // one with a token that is not this recorder's
+    fire('createActor', { uuid: 'Actor.other', name: 'Other' }, { [RECORDER_MARK]: 'x' }, 'u1');
+    // one begun here, now
+    const own = create('Actor', { uuid: 'Actor.own', name: 'Own' });
+    expect(own[RECORDER_MARK]).toEqual(expect.any(String));
+    expect(own[RECORDER_MARK]).not.toBe(late[RECORDER_MARK]); // each recorder draws its own
+    expect(rec.stop()).toEqual([
+      { kind: 'create', documentName: 'Actor', uuid: 'Actor.own', label: 'Own' },
+    ]);
+    expect(earlier.stop()).toEqual([]);
+  });
+
+  it('never records FogExploration: bookkeeping a read can write while a write records', () => {
+    g.CONFIG.FogExploration = { documentClass: function FogExploration() {} };
+    const rec = record();
+    expect([...hooks.keys()].filter(h => h.endsWith('FogExploration'))).toEqual([]);
+    const fog = { uuid: 'FogExploration.f1', name: '', _source: { explored: 'a' } };
+    create('FogExploration', fog);
+    fire('preUpdateFogExploration', fog, { explored: 'b' }, {}, 'u1');
+    fire('preDeleteFogExploration', { ...fog, parent: null, toObject: () => ({}) }, {}, 'u1');
+    expect(rec.stop()).toEqual([]);
+    // left out of the receipts, still shadowed in a script (./run-script.ts)
+    expect(documentNames()).toContain('FogExploration');
   });
 });
 
@@ -285,6 +341,36 @@ describe('the byte cap', () => {
     const kept = ops.filter(o => o.pre).length;
     expect(kept * 1_900_000).toBeLessThanOrEqual(MAX_RECEIPT_CHARS);
     expect(ops.map(o => !!o.tooLarge)).toEqual([false, false, false, false, true]);
+  });
+
+  it('capReceipt holds the cap across a whole call: past it a pre-image is dropped, its op tooLarge', () => {
+    const ops = [
+      op('update', 'Actor.a', { pre: { bio: 'x'.repeat(40) } }), // 50 chars of JSON
+      op('create', 'Actor.n'),
+      op('delete', 'Actor.b', { pre: { bio: 'y'.repeat(40) } }), // 100 in all: past 60
+      op('update', 'Actor.c', { pre: { hp: 1 }, absent: ['flags.world.x'] }), // 58: within
+    ];
+    const capped = capReceipt(ops, 60);
+    expect(capped.map(o => [o.uuid, !!o.pre, !!o.tooLarge])).toEqual([
+      ['Actor.a', true, false],
+      ['Actor.n', false, false],
+      ['Actor.b', false, true],
+      ['Actor.c', true, false],
+    ]);
+    expect(capped[2]).toEqual({
+      kind: 'delete',
+      documentName: 'Actor',
+      uuid: 'Actor.b',
+      label: '',
+      tooLarge: true,
+    });
+    expect(ops[2]!.pre).toBeDefined(); // the ops handed in are not changed
+    // two page ops' pre-images of 4.5 MB: each within its own recorder's cap, not within one call's
+    const big = (uuid: string) => op('delete', uuid, { pre: { blob: 'z'.repeat(4_500_000) } });
+    expect(capReceipt([big('Scene.s1'), big('Scene.s2')]).map(o => !!o.tooLarge)).toEqual([
+      false,
+      true,
+    ]);
   });
 });
 
@@ -469,16 +555,16 @@ describe('undoOps', () => {
         fire(`preUpdate${uuid.split('.').at(-2)}`, docs.get(uuid), data, {}, 'u1');
         log.push(`update ${uuid} ${JSON.stringify(data)}`);
       },
-      createEmbeddedDocuments: async (name: string, data: any[], opts: unknown) => {
+      createEmbeddedDocuments: async (name: string, data: any[], opts: object) => {
         log.push(`create ${name} under ${uuid} ${JSON.stringify(data)} ${JSON.stringify(opts)}`);
-        fire(`create${name}`, { uuid: `${uuid}.${name}.${data[0]._id}`, name: '' }, {}, 'u1');
+        create(name, { uuid: `${uuid}.${name}.${data[0]._id}`, name: '' }, { ...opts });
       },
     });
     for (const uuid of uuids) docs.set(uuid, make(uuid));
     g.fromUuid = async (uuid: string) => docs.get(uuid) ?? null;
-    g.CONFIG.Actor.documentClass.create = vi.fn(async (data: any, opts: unknown) => {
+    g.CONFIG.Actor.documentClass.create = vi.fn(async (data: any, opts: object) => {
       log.push(`create Actor ${JSON.stringify(data)} ${JSON.stringify(opts)}`);
-      fire('createActor', { uuid: `Actor.${data._id}`, name: data.name }, {}, 'u1');
+      create('Actor', { uuid: `Actor.${data._id}`, name: data.name }, { ...opts });
     });
     return { log, docs };
   }
@@ -502,6 +588,13 @@ describe('undoOps', () => {
       'create Actor {"_id":"gone","name":"Gone"} {"keepId":true}',
       'create JournalEntryPage under JournalEntry.j1 [{"_id":"p1","name":"Clues"}] {"keepId":true}',
       'update Actor.a1 {"name":"Old","flags.world.-=added":null}',
+      'delete Actor.n1',
+    ]);
+    // the undo records its own writes, the documents it re-creates included
+    expect(r.ops?.map(o => `${o.kind} ${o.uuid}`)).toEqual([
+      'create Actor.gone',
+      'create JournalEntry.j1.JournalEntryPage.p1',
+      'update Actor.a1',
       'delete Actor.n1',
     ]);
   });

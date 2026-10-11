@@ -1,6 +1,7 @@
 // Page-side: the receipt every write leaves (issue #6). Runs INSIDE the headless Foundry page; the
 // Foundry globals are read at call time, never at module level, so the pure parts (the op shape,
-// `effectiveOps`, `updatePreImage`) are imported by the Node side too (src/receipts.ts).
+// `effectiveOps`, `updatePreImage`, `capReceipt`) are imported by the Node side too
+// (src/receipts.ts, src/registry.ts).
 //
 // One choke point: the bridge reaches every page op through `callOp` (window.__fvttCall). A read
 // runs as it is. A write, when the Node side asks for a receipt, runs under the page's WRITE LOCK
@@ -11,11 +12,17 @@
 // is a receipt of its own, so it can be reversed too). The page keeps nothing: the ops ride back
 // with the result, and the Node side groups them per tool call and keeps them in a file.
 //
+// The lock is this page's: another page joined as the same user (a second session on the seat)
+// writes past it. Its updates and deletes never reach this recorder (their pre hooks fire on the
+// page that makes them), and its creates are told apart by a token (`record`). Bookkeeping
+// classes (UNRECORDED_CLASSES) are never recorded: a read can write them while a write records.
+//
 // An update's pre-image is per changed path: the prior value of each path the change writes,
 // cloned; a path the change adds is listed in `absent`, which undo removes; a path whose value does
 // not change is left out, and an update that changes nothing is no op at all. A delete keeps the
-// whole document. A pre-image over MAX_PRE_IMAGE_CHARS, or past MAX_RECEIPT_CHARS in one receipt,
-// is not kept: the op is marked `tooLarge` and undo reports it as not undoable.
+// whole document. A pre-image over MAX_PRE_IMAGE_CHARS, or past MAX_RECEIPT_CHARS in one receipt
+// (here per page op; the Node side applies `capReceipt` to a whole tool call), is not kept: the
+// op is marked `tooLarge` and undo reports it as not undoable.
 
 import { opKind } from './_ops.js';
 
@@ -47,7 +54,10 @@ export interface CallOutcome {
 
 /** A pre-image larger than this (JSON characters) is not kept; the op is `tooLarge`. */
 export const MAX_PRE_IMAGE_CHARS = 2_000_000;
-/** Once one receipt's pre-images reach this, every further pre-image in it is dropped the same way. */
+/**
+ * One receipt's pre-images, in all: one that would take the total past this is dropped the same way.
+ * The recorder holds it per page op, the Node side per tool call (`capReceipt`).
+ */
 export const MAX_RECEIPT_CHARS = 8_000_000;
 
 /**
@@ -55,6 +65,19 @@ export const MAX_RECEIPT_CHARS = 8_000_000;
  * marker on its User document, src/foundry.ts) is not part of anybody's receipt.
  */
 export const UNRECORDED = 'fvttMcpUnrecorded';
+
+/**
+ * Document classes never recorded: bookkeeping, never content. A read runs unlocked while a write's
+ * recorder may be open, and one can write these (`prepareSceneShot` views a scene, and Foundry
+ * saves the previous scene's fog exploration); no undo should put them back either.
+ */
+export const UNRECORDED_CLASSES: readonly string[] = ['FogExploration'];
+
+/**
+ * The option key a recorder stamps, with its own token, on each create this page begins
+ * (`preCreate<Doc>`); its `create<Doc>` hook records only a create that carries the token back.
+ */
+export const RECORDER_MARK = 'fvttMcpRecorder';
 
 /** The ops that hold the lock and record for themselves (they lift `ops` into their result). */
 const SELF_RECORDING: ReadonlySet<string> = new Set(['runScript', 'undoOps']);
@@ -244,14 +267,33 @@ export interface Recorder {
   stop(): ReceiptOp[];
 }
 
+/** A recorder's token: random, so no other recorder, on this page or on another, holds it. */
+function drawToken(): string {
+  const bytes = new Uint8Array(12);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Record this user's own document writes through Foundry's hooks until `stop()`: `create<Doc>` for a
  * create, `preUpdate<Doc>` / `preDelete<Doc>` for the pre-image of an update or a delete, for every
- * document class in CONFIG. A hook here never throws and never vetoes a write.
+ * document class in CONFIG but the bookkeeping ones (UNRECORDED_CLASSES). A hook here never throws
+ * and never vetoes a write.
+ *
+ * A create is recorded from its post hook, the first to know the new document's uuid (an ordinary
+ * create has no id before the server assigns one). That hook fires on every client joined as this
+ * user, a second bridge on the same seat included, and for a create of ours it can fire after
+ * `stop()`, when the server answers late. Only the pre hooks are this page's alone. So the recorder
+ * draws a token, its `preCreate<Doc>` hook stamps it on the operation's options (Foundry sends them
+ * with the request and hands them back to every client with the post hook), and its `create<Doc>`
+ * hook records only a create that carries the token back: one begun on another page never does,
+ * and one of ours that lands after `stop()` carries a token no later recorder holds. An update or a
+ * delete needs no token: its pre hook fires only on the page that makes it.
  */
 export function record(): Recorder {
   const g = globalThis as any;
   const me = g.game?.user?.id;
+  const token = drawToken();
   const ops: ReceiptOp[] = [];
   let total = 0;
   const withPre = (op: ReceiptOp, pre: Record<string, unknown>): ReceiptOp => {
@@ -278,8 +320,14 @@ export function record(): Recorder {
     ids.push([hook, id]);
   };
   for (const name of documentNames()) {
+    if (UNRECORDED_CLASSES.includes(name)) continue;
+    on(`preCreate${name}`, (_doc, _data, options, userId) => {
+      if (mine(options, userId) && options !== null && typeof options === 'object') {
+        options[RECORDER_MARK] = token;
+      }
+    });
     on(`create${name}`, (doc, options, userId) => {
-      if (!mine(options, userId)) return;
+      if (!mine(options, userId) || options?.[RECORDER_MARK] !== token) return;
       ops.push({ kind: 'create', documentName: name, uuid: doc.uuid, label: labelOf(doc) });
     });
     on(`preUpdate${name}`, (doc, changes, options, userId) => {
@@ -334,6 +382,31 @@ export function record(): Recorder {
       return ops;
     },
   };
+}
+
+/**
+ * A receipt's ops with the byte cap held across all of them, in order: a pre-image that would take
+ * the total past `max` is dropped and its op marked `tooLarge`, as the recorder does within one
+ * page op. The Node side applies it to a whole tool call (src/registry.ts), which may span many
+ * page ops, each capped on its own by its recorder.
+ */
+export function capReceipt(
+  ops: readonly ReceiptOp[],
+  max: number = MAX_RECEIPT_CHARS
+): ReceiptOp[] {
+  let total = 0;
+  return ops.map(op => {
+    if (!op.pre) return op;
+    const size = sizeOf(op.pre);
+    if (total + size <= max) {
+      total += size;
+      return op;
+    }
+    const dropped: ReceiptOp = { ...op, tooLarge: true };
+    delete dropped.pre;
+    delete dropped.absent;
+    return dropped;
+  });
 }
 
 /**

@@ -276,7 +276,9 @@ export class ScriptTools {
 
   /**
    * Reverse receipt `id` of the live world, newest write first. The undo's own writes are its call's
-   * receipt, which names the one it reverses, so an undo can be undone (a redo), once like any.
+   * receipt, which names the one it reverses, so an undo can be undone (a redo), once like any. The
+   * receipt is marked undone only when every write was reversed: one the page could not reverse
+   * leaves it undoable, and undoing it again leaves alone what is already back.
    */
   private async undo(id: string): Promise<string> {
     const key = receiptWorldKey(this.serverUrl, await this.foundry.worldId());
@@ -293,11 +295,16 @@ export class ScriptTools {
       );
     }
     const ctx = callContext.getStore();
-    if (ctx) ctx.reverses = id;
+    // partial until the page answers that every write was reversed (src/registry.ts keepReceipt)
+    if (ctx) {
+      ctx.reverses = id;
+      ctx.reversesPartial = true;
+    }
     this.logger.info('run-script undo', { id, ops: receipt.ops.length });
     const r = await this.foundry.call('undoOps', { ops: receipt.ops });
+    if (ctx && r.failed.length === 0) delete ctx.reversesPartial;
     const failed = r.failed.length
-      ? `\n${r.failed.length} could not be reversed:\n${r.failed.map(f => `  • ${f.op} ${f.uuid}: ${f.error}`).join('\n')}`
+      ? `\n${r.failed.length} could not be reversed; receipt ${id} stays undoable:\n${r.failed.map(f => `  • ${f.op} ${f.uuid}: ${f.error}`).join('\n')}`
       : '';
     return `↩️ Receipt ${id}: ${r.undone} write(s) reversed.${failed}`;
   }
