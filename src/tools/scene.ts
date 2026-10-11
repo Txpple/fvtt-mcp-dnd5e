@@ -7,9 +7,16 @@ import type { FoundryBridge } from '../foundry.js';
 import type { Host } from '../hosts/types.js';
 import { filePlaneFor } from '../hosts/index.js';
 import { Logger } from '../logger.js';
+import {
+  type BridgeFacts,
+  moduleLabel,
+  moduleWarnings,
+  rendererLabel,
+} from '../utils/bridge-facts.js';
 import { FormattedToolError } from '../utils/error-handler.js';
 import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
+import { TESTED_DND5E, TESTED_FOUNDRY, versionBelow } from '../utils/system-detection.js';
 import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 export interface SceneToolsOptions {
@@ -17,6 +24,52 @@ export interface SceneToolsOptions {
   logger: Logger;
   /** Where Foundry runs — reported by get-world-info so a session knows which instance and plane it is on. */
   host?: Host;
+  /**
+   * What this registration advertises (FOUNDRY_TOOLSETS), as get-world-info's bridge block reports
+   * it: `all`, `readonly`, or the comma list (src/toolsets.ts registrationLabel). Default: all.
+   */
+  registration?: { toolsets: 'all' | string; readOnly: boolean };
+  /** This server's version, reported in the bridge block. Default `?`. */
+  serverVersion?: string;
+}
+
+/** A join user that can write, by the role name the page reports (CONST.USER_ROLES). */
+const WRITING_ROLES: Record<string, string> = {
+  ASSISTANT: 'Assistant GM',
+  GAMEMASTER: 'Gamemaster',
+};
+
+/**
+ * The bridge block's warnings: only what is true, each saying what it affects. A software renderer;
+ * a family module the skills expect that is not active; a read-only registration whose join user
+ * can write anyway; Foundry or dnd5e below the line this server is tested on.
+ */
+function bridgeWarnings(
+  worldData: any,
+  facts: BridgeFacts | undefined,
+  readOnly: boolean
+): string[] {
+  const out: string[] = [];
+  if (facts?.renderer?.gpu === false) {
+    out.push(
+      "Chromium renders in software: screenshots are slow and carry Foundry's hardware-acceleration banner"
+    );
+  }
+  out.push(...moduleWarnings(facts));
+  const role = WRITING_ROLES[String(worldData.bridgeUser?.role ?? '')];
+  if (readOnly && role) {
+    out.push(
+      `read-only registration joined as ${role}: the role is the boundary, not the server's ` +
+        'refusals; join as a Player or Trusted Player user'
+    );
+  }
+  if (versionBelow(worldData.foundryVersion, TESTED_FOUNDRY)) {
+    out.push(`Foundry ${worldData.foundryVersion} is below the tested ${TESTED_FOUNDRY}`);
+  }
+  if (worldData.system === 'dnd5e' && versionBelow(worldData.systemVersion, TESTED_DND5E)) {
+    out.push(`dnd5e ${worldData.systemVersion} is below the tested ${TESTED_DND5E}`);
+  }
+  return out;
 }
 
 // Single source of truth for each tool's input contract: the handler parses with these
@@ -326,12 +379,16 @@ export class SceneTools {
   private foundry: FoundryBridge;
   private logger: Logger;
   private host: Host | undefined;
+  private registration: { toolsets: string; readOnly: boolean };
+  private serverVersion: string;
   private union: UnionTool;
 
-  constructor({ foundry, logger, host }: SceneToolsOptions) {
+  constructor({ foundry, logger, host, registration, serverVersion }: SceneToolsOptions) {
     this.foundry = foundry;
     this.logger = logger.child({ component: 'SceneTools' });
     this.host = host;
+    this.registration = registration ?? { toolsets: 'all', readOnly: false };
+    this.serverVersion = serverVersion ?? '?';
     this.union = unionTool({
       name: MANAGE_SCENES,
       description:
@@ -823,6 +880,7 @@ export class SceneTools {
             },
           }
         : {}),
+      bridge: this.bridgeBlock(worldData),
       users: {
         total: worldData.users?.length || 0,
         active: worldData.users?.filter((u: any) => u.active).length || 0,
@@ -844,6 +902,34 @@ export class SceneTools {
       ...(worldData.library ? { library: worldData.library } : {}),
       // dnd5e 6.0 automation switches + the calendar (configure-dnd5e-settings / manage-calendar)
       ...(worldData.automation ? { automation: worldData.automation } : {}),
+    };
+  }
+
+  /**
+   * The bridge itself (issue #9): this server's version, the seat (who, since when, whether the
+   * connect found the world asleep or down), Chromium's renderer, the canvas, the family modules,
+   * the registration's toolsets, and the warnings, omitted when there are none. Kept small (a
+   * result is a diet): no world fact the result already carries. A block here costs no tools/list
+   * chars, which a tool of its own would have.
+   */
+  private bridgeBlock(worldData: any): Record<string, unknown> {
+    const facts: BridgeFacts | undefined = worldData.bridge;
+    const seat = this.foundry.info();
+    const warnings = bridgeWarnings(worldData, facts, this.registration.readOnly);
+    return {
+      version: this.serverVersion,
+      user: seat.user,
+      since: seat.since,
+      woken: seat.woken,
+      renderer: rendererLabel(facts?.renderer),
+      canvasReady: facts?.canvasReady === true,
+      modules: {
+        battleflow: moduleLabel(facts?.modules?.battleflow),
+        areasounds: moduleLabel(facts?.modules?.areasounds),
+        openserver: moduleLabel(facts?.modules?.openserver),
+      },
+      toolsets: this.registration.toolsets,
+      ...(warnings.length ? { warnings } : {}),
     };
   }
 

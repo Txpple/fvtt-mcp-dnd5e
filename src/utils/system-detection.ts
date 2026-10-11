@@ -25,6 +25,34 @@ let cachedSystemVersion: string | null = null;
 export const REQUIRED_DND5E_MAJOR = 6;
 
 /**
+ * The Foundry build and dnd5e release this server is tested on (the README's requirements line).
+ * Below either, get-world-info's bridge block warns; nothing is refused.
+ */
+export const TESTED_FOUNDRY = '14.368';
+export const TESTED_DND5E = '6.0.5';
+
+/** A version's leading numeric parts ("14.369" → [14, 369], "v6.0.6-beta" → [6, 0, 6]), or null. */
+function versionParts(version: string | null | undefined): number[] | null {
+  const m = /^\s*v?(\d+(?:\.\d+)*)/.exec(String(version ?? ''));
+  return m ? m[1]!.split('.').map(Number) : null;
+}
+
+/**
+ * Is `version` below `floor`, compared numerically part by part ("6.0.9" < "6.0.10"; a missing part
+ * is 0)? False when either has no leading number, so an unreadable version never makes a warning.
+ */
+export function versionBelow(version: string | null | undefined, floor: string): boolean {
+  const a = versionParts(version);
+  const b = versionParts(floor);
+  if (!a || !b) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d < 0;
+  }
+  return false;
+}
+
+/**
  * The leading integer of a version string ("6.0.1" → 6, "v5.3.3" → 5). Returns null when the
  * string carries no recognisable number, so an unreadable version never fabricates a refusal.
  */

@@ -118,6 +118,22 @@ What changed for a user of the tools and skills, release by release. The measure
   after the timeout is refused, where the script's body used to keep writing, unrecorded.
 - `set-primary-party` with no arguments sends an empty call, which the page's op table reads as
   the read it is (it sent `clear: false` and counted as a write).
+- **`get-world-info` reports the bridge itself** (issue #9): a `bridge` block after `host` with
+  this server's version, the join user and since when it holds the seat, `woken` (this connect
+  found the world asleep, not launched, or booting), Chromium's renderer (`GPU: <name>` or
+  `software: <name>`, the canvas's unmasked WebGL renderer), `canvasReady`, the Open Roll 5e
+  modules the skills lean on (Battle Flow, Area Sounds, Open Server: a version, or `not active`),
+  the registration's `toolsets` (`all`, `readonly`, or the list), and `warnings` for whatever of
+  it is amber: a software renderer, an inactive family module (naming what needs it), a read-only
+  registration joined as a user that can write, Foundry below 14.368 or dnd5e below 6.0.5 (the
+  README's requirements line). It stands in for the proposed `bridge-status` tool: a tool would
+  have pushed tools/list (204,714 of 205,000) and the always-on set (1,778 of 2,100) past their
+  ceilings, where a block in a result costs neither. `npm run doctor` prints a `bridge:` line
+  after the login (a ! for a software renderer or an inactive module), `npm run smoke:bridge`'s
+  line gains the renderer and the modules, and the `start-session` skill reports the block and
+  surfaces every warning. Library: `FoundryBridge.info()` (server URL, user, since, woken); the
+  page's `getWorldInfo` result carries `bridge` (renderer, canvasReady, viewport, modules).
+  `scripts/verify-bridge-status.mjs`: 13/13.
 - Budgets after: tools/list 204,714 chars (≤ 205,000; the `undo` leaf is 5 chars shorter), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds

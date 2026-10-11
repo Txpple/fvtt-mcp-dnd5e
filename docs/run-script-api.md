@@ -1916,7 +1916,7 @@ Returns `{ warnings?: string[]; success: boolean; user: UserSummary; applied: st
 
 ### `fvtt.getWorldInfo()`
 
-Basic world/system metadata.
+Basic world/system metadata, and the bridge's own client: its renderer, canvas and window, and the Open Roll 5e modules.
 
 Returns `WorldInfo`
 

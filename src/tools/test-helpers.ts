@@ -51,6 +51,13 @@ export function makeFoundry(response: any = {}): {
     // The seat records (src/holders.ts): nobody else holds the seat unless a test says so.
     holders: vi.fn(() => []),
     evictOtherHolders: vi.fn(async () => []),
+    // The bridge's own facts (get-world-info's bridge block): joined, and the world was up.
+    info: vi.fn(() => ({
+      serverUrl: 'http://localhost:30000',
+      user: 'MCP-Claude',
+      since: '2026-10-11T12:00:00.000Z',
+      woken: false,
+    })),
   };
   return { foundry, calls };
 }

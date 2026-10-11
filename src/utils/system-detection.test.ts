@@ -7,6 +7,7 @@
  * a hard refusal for every caller of assertDnd5e, all of which write.
  */
 
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeFoundry, makeLogger } from '../tools/test-helpers.js';
 import {
@@ -18,6 +19,9 @@ import {
   getCachedSystemVersion,
   majorVersion,
   REQUIRED_DND5E_MAJOR,
+  TESTED_DND5E,
+  TESTED_FOUNDRY,
+  versionBelow,
 } from './system-detection.js';
 
 function world(info: any) {
@@ -40,6 +44,35 @@ describe('majorVersion', () => {
     expect(majorVersion(null)).toBeNull();
     expect(majorVersion('')).toBeNull();
     expect(majorVersion('unknown')).toBeNull();
+  });
+});
+
+describe('versionBelow: the tested line (get-world-info warns below it, issue #9)', () => {
+  it('compares numerically, part by part', () => {
+    expect(versionBelow('14.367', TESTED_FOUNDRY)).toBe(true);
+    expect(versionBelow('13.351', TESTED_FOUNDRY)).toBe(true);
+    expect(versionBelow('14.368', TESTED_FOUNDRY)).toBe(false);
+    expect(versionBelow('14.369', TESTED_FOUNDRY)).toBe(false);
+    expect(versionBelow('6.0.4', TESTED_DND5E)).toBe(true);
+    expect(versionBelow('6.0.5', TESTED_DND5E)).toBe(false);
+    expect(versionBelow('6.0.6', TESTED_DND5E)).toBe(false);
+    expect(versionBelow('6.0.10', '6.0.9')).toBe(false); // not a string comparison
+    expect(versionBelow('6.0.9', '6.0.10')).toBe(true);
+    expect(versionBelow('6.1', '6.0.5')).toBe(false); // a missing part is 0
+    expect(versionBelow('6', '6.0.5')).toBe(true);
+    expect(versionBelow('v6.0.6-beta.1', '6.0.5')).toBe(false);
+  });
+
+  it('an unreadable version is never below: no warning is fabricated', () => {
+    expect(versionBelow(undefined, TESTED_DND5E)).toBe(false);
+    expect(versionBelow(null, TESTED_DND5E)).toBe(false);
+    expect(versionBelow('', TESTED_DND5E)).toBe(false);
+    expect(versionBelow('unknown', TESTED_DND5E)).toBe(false);
+  });
+
+  it("is the README's requirements line", () => {
+    const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+    expect(readme).toContain(`Foundry ${TESTED_FOUNDRY}+ with dnd5e ${TESTED_DND5E}+`);
   });
 });
 

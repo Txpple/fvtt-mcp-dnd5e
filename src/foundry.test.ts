@@ -8,6 +8,7 @@
 // reports joins that call, a failed write's included. After the page bridge vanished under a call,
 // only a read is run again (issue #16's review): a write fails with its outcome unknown.
 // Eviction never ends this bridge's own browser while it is connected (issue #17's review).
+// info() reports the seat and whether this connect found the world asleep or down (issue #9).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BridgeError } from './bridge-error.js';
 import { chromiumProblem, Foundry, type FoundryConfig } from './foundry.js';
@@ -374,5 +375,48 @@ describe("evictOtherHolders never ends this bridge's own browser (issue #17 revi
   it('once our browser is gone the guard is off: the record is judged on its own', async () => {
     const [e] = await bridge(false).evictOtherHolders();
     expect(e!.skipped).toBe('nothing to end (browser pid 999999998 is gone)');
+  });
+});
+
+describe('info(): the seat and the wake, for the bridge block (issue #9)', () => {
+  /** A bridge whose /join probes answer `states` in turn (then joinable); nothing else is real. */
+  function probing(states: string[]) {
+    const f = Object.create(Foundry.prototype) as Foundry;
+    const queue = [...states];
+    Object.assign(f, {
+      cfg: { serverUrl: 'http://foundry.unit.test', user: 'Bridge', wakeTimeoutMs: 60_000 },
+      log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      seatSince: null,
+      woken: false,
+      probeJoinState: vi.fn(async () => queue.shift() ?? 'joinable'),
+      wake: vi.fn(async () => {}),
+    });
+    return f;
+  }
+  const page = { waitForTimeout: vi.fn(async () => {}) };
+
+  it("woken: this connect's first /join probe found no world to join", async () => {
+    const cold = probing(['booting', 'booting', 'joinable']);
+    await (cold as any).ensureWorldReady(page);
+    expect(cold.info()).toEqual({
+      serverUrl: 'http://foundry.unit.test',
+      user: 'Bridge',
+      since: null,
+      woken: true,
+    });
+    const warm = probing(['joinable']);
+    await (warm as any).ensureWorldReady(page);
+    expect(warm.info().woken).toBe(false);
+    // the next connect that finds the world up says so, whatever the one before found
+    await (cold as any).ensureWorldReady(page);
+    expect(cold.info().woken).toBe(false);
+  });
+
+  it('since: the seat record of this connection, gone once the seat is cleared', async () => {
+    const f = probing([]);
+    Object.assign(f, { seatSince: '2026-10-11T13:05:00.000Z' });
+    expect(f.info().since).toBe('2026-10-11T13:05:00.000Z');
+    await (f as any).clearSeat();
+    expect(f.info().since).toBeNull();
   });
 });

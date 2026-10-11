@@ -10,7 +10,7 @@
 // GET /api/status, at most one POST /auth (only when no world is running, to test the admin key;
 // Foundry answers it with a redirect and nothing else), and one login as the bridge user — the
 // same join any tool call makes, with the admin key withheld so the bridge cannot launch a
-// world — followed by a disconnect.
+// world — which reads the bridge's own state as get-world-info does, then disconnects.
 
 import { existsSync } from 'node:fs';
 import {
@@ -29,6 +29,7 @@ import {
 } from './client.js';
 import { chromiumProblem } from './foundry.js';
 import { parseToolsetsEnv, resolveRegistration } from './toolsets.js';
+import { bridgeLine } from './utils/bridge-facts.js';
 import { majorVersion, REQUIRED_DND5E_MAJOR } from './utils/system-detection.js';
 
 export type Mark = 'ok' | 'fail' | 'warn' | 'skip';
@@ -316,12 +317,18 @@ export async function runDoctor(io: DoctorIO): Promise<number> {
       watchdogMs: 420_000,
     });
     let who: { name: string; role: number };
+    let bridge: { text: string; amber: boolean } | string;
     try {
       who = await f.evaluate(() => {
         const user = (globalThis as { game?: { user?: { name?: string; role?: number } } }).game
           ?.user;
         return { name: user?.name ?? '?', role: Number(user?.role ?? 0) };
       }, null);
+      // The bridge's own state, from the page read get-world-info's bridge block makes (issue #9).
+      bridge = await f.call('getWorldInfo').then(
+        w => bridgeLine(w.bridge),
+        (err: unknown) => firstLine(err)
+      );
     } finally {
       await dispose();
     }
@@ -329,6 +336,9 @@ export async function runDoctor(io: DoctorIO): Promise<number> {
     const login = loginLine(who.name, who.role, secs, readOnly);
     if (login.mark === 'fail') fail(login.text);
     else io.say(login.mark, login.text);
+    // A software renderer or a family module that is not active is worth a look, never a failure.
+    if (typeof bridge === 'string') io.say('warn', `bridge: not read — ${bridge}`);
+    else io.say(bridge.amber ? 'warn' : 'ok', `bridge: ${bridge.text}`);
   } catch (err) {
     fail(`login: ${firstLine(err)}`);
   }

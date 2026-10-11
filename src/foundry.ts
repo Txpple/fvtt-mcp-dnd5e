@@ -137,6 +137,13 @@ export interface FoundryBridge {
    * holder's entry says what was ended or why nothing was, and whether its record stays.
    */
   evictOtherHolders(): Promise<Eviction[]>;
+  /**
+   * The bridge's own facts, without a page call (get-world-info's bridge block): the server URL and
+   * the join user it was configured with, when this connection took the seat (the seat record's
+   * `since`; null while disconnected), and whether this connect's first `/join` probe found no
+   * joinable world (a sleeping box, a world it launched, or one still booting).
+   */
+  info(): { serverUrl: string; user: string; since: string | null; woken: boolean };
 }
 
 export interface FoundryConfig {
@@ -253,6 +260,10 @@ export class Foundry implements FoundryBridge {
   private idleTimer: NodeJS.Timeout | undefined;
   /** The pid of the browser this bridge launched, from markSeat; null once that browser is dropped. */
   private ownBrowserPid: number | null = null;
+  /** When this connection took the seat (the seat record's `since`); null while disconnected. */
+  private seatSince: string | null = null;
+  /** This connect's first /join probe found no joinable world: asleep, launched, or booting. */
+  private woken = false;
 
   constructor(
     private readonly cfg: FoundryConfig,
@@ -263,6 +274,15 @@ export class Foundry implements FoundryBridge {
 
   isReady(): boolean {
     return this.ready && !!this.page && !this.page.isClosed();
+  }
+
+  info(): { serverUrl: string; user: string; since: string | null; woken: boolean } {
+    return {
+      serverUrl: this.cfg.serverUrl,
+      user: this.cfg.user,
+      since: this.seatSince,
+      woken: this.woken,
+    };
   }
 
   /**
@@ -366,6 +386,7 @@ export class Foundry implements FoundryBridge {
     rec.browserPid = await this.browserPid();
     rec.browserExe = rec.browserPid === null ? null : await exeOf(rec.browserPid);
     this.ownBrowserPid = rec.browserPid;
+    this.seatSince = rec.since;
     const others = listHolders(this.cfg.serverUrl, this.cfg.user).filter(h => !h.self);
     for (const h of others) {
       this.log.warn(
@@ -419,6 +440,7 @@ export class Foundry implements FoundryBridge {
   /** Clear what markSeat left, under a short ceiling: a dispose must not wait on a dead page. */
   private async clearSeat(): Promise<void> {
     removeHolder({ serverUrl: this.cfg.serverUrl, user: this.cfg.user, pid: process.pid });
+    this.seatSince = null;
     const page = this.page;
     if (!page || page.isClosed()) return;
     let timer: NodeJS.Timeout | undefined;
@@ -534,8 +556,14 @@ export class Foundry implements FoundryBridge {
     const deadline = Date.now() + budget;
     let lastLaunchAt = 0;
     let lastMagicAt = Date.now(); // wake() just ran
+    let first = true;
     while (Date.now() < deadline) {
       const state = await this.probeJoinState(page);
+      if (first) {
+        // The bridge block's `woken`: the world was not there to join at first sight.
+        this.woken = state !== 'joinable';
+        first = false;
+      }
       if (state === 'joinable') return;
       if (state === 'no-world') {
         if (this.cfg.adminKey) {

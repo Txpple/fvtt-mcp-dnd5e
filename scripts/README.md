@@ -46,14 +46,21 @@ tool proofs:
   names no browser (still named afterwards), and the evicted bridge re-joins on its next call; an
   eviction made while connected leaves the bridge's own browser alone when another record names
   its pid. Touches no world document.
+- `verify-bridge-status` — `get-world-info`'s `bridge` block through the registry's own dispatch:
+  the renderer, the canvas, the three Open Roll 5e modules, the seat's `since`, the server version
+  and `toolsets`; a second registry built `readonly` warns that the joined user can write. Touches
+  no world document.
 - `prove-bridge` — the smallest possible live round trip (connect, one `foundry.call`, dispose).
 - `smoke-bridge` (`npm run smoke:bridge`) — the upgrade review's live check: joins as the bridge
-  user, prints one PASS/FAIL line with the host kind and its Foundry and dnd5e versions (no URL, no
-  world name, so it can go in a public issue). Read-only.
+  user, prints one PASS/FAIL line with the host kind, its Foundry and dnd5e versions, Chromium's
+  renderer and the Open Roll 5e modules (no URL, no world name, so it can go in a public issue).
+  Read-only.
 - `doctor` (`npm run doctor`) — the setup check, one line per item, exit 1 on any ✗: Node, the
   build, Playwright's Chromium, the `.env`, the Foundry app (local), Foundry, the admin key (only
-  with no world running), the world, a login as `FOUNDRY_USER` with its role. Read-only; it never
-  launches a world (the admin key is withheld from its login) and does not wake a sleeping box.
+  with no world running), the world, a login as `FOUNDRY_USER` with its role, the bridge's
+  renderer and modules (a ! when it renders in software or a module is not active). Read-only; it
+  never launches a world (the admin key is withheld from its login) and does not wake a sleeping
+  box.
 - `verify-error-contract` — the error contract end to end (read-only): a page-side `PageError`
   code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
   appends one hint per code, a dead URL is `connection`.

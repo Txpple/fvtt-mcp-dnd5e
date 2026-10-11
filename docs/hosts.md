@@ -15,7 +15,12 @@ sees one variable set, `FOUNDRY_*`.
 | `local` | a Foundry install on this machine ([local-sandbox.md](local-sandbox.md)) | none — a local process does not sleep; if it is down the error names the launcher | `FOUNDRY_DATA_DIR` (the install's `Data/`). Never WebDAV. `FOUNDRY_URL` defaults to `http://localhost:30000` |
 
 `get-world-info` reports the host it is on: `host: { kind, label, files }` — `files` is the plane
-the asset tools are using (`local filesystem`, `WebDAV`, or `bridge (FilePicker)`).
+the asset tools are using (`local filesystem`, `WebDAV`, or `bridge (FilePicker)`). Its `bridge`
+block reports the bridge itself: this server's version, the join user and since when it holds the
+seat, whether the call had to wake or launch the world (`woken`), Chromium's renderer (`GPU: …` or
+`software: …`), whether the canvas is ready, the Open Roll 5e modules (a version, or `not active`),
+the registration's `toolsets`, and `warnings` for what needs a look; `npm run doctor` and
+`npm run smoke:bridge` print the renderer and the modules too.
 
 ## The facts (the variables)
 

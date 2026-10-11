@@ -175,6 +175,16 @@ export function resolveRegistration(selected: readonly string[]): {
   return { toolsets: new Set(TOOLSET_NAMES), readOnly: true };
 }
 
+/**
+ * How a registration reads in a report (get-world-info's bridge block): `readonly`, `all`, or the
+ * toolsets it enables beyond the always-on one, in the order given (`chat,combat`).
+ */
+export function registrationLabel(toolsets: ReadonlySet<ToolsetName>, readOnly: boolean): string {
+  if (readOnly) return READONLY;
+  if (toolsets.size === TOOLSET_NAMES.length) return 'all';
+  return [...toolsets].filter(s => s !== ALWAYS_ON).join(',') || ALWAYS_ON;
+}
+
 /** Parse the FOUNDRY_TOOLSETS env value (comma-separated). */
 export function parseToolsetsEnv(value: string | undefined): string[] {
   return (value ?? '')

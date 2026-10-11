@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { MANAGE_SCENES, SceneTools } from './scene.js';
+import { MANAGE_SCENES, SceneTools, type SceneToolsOptions } from './scene.js';
 import { makeLogger, makeFoundry } from './test-helpers.js';
 
 function build(response: any = {}) {
@@ -602,6 +602,152 @@ describe('handleGetWorldInfo', () => {
     expect(out).not.toHaveProperty('description');
     expect(out).not.toHaveProperty('background');
     expect(out.title).toBe(worldData.title);
+  });
+});
+
+describe('get-world-info: the bridge block (issue #9)', () => {
+  const GPU = 'ANGLE (Intel, Intel(R) UHD Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)';
+  const facts = (over: any = {}) => ({
+    renderer: { name: GPU, gpu: true },
+    canvasReady: true,
+    viewport: { width: 1920, height: 1080 },
+    modules: {
+      battleflow: { active: true, version: '2.17.0' },
+      areasounds: { active: true, version: '2.0.1' },
+      openserver: { active: true, version: '1.2.0' },
+    },
+    ...over,
+  });
+  /** A world on the tested line, joined as an Assistant GM, with every family module active. */
+  const world = (over: any = {}) => ({
+    id: 'w',
+    title: 'T',
+    system: 'dnd5e',
+    systemVersion: '6.0.6',
+    foundryVersion: '14.369',
+    users: [],
+    bridgeUser: { name: 'MCP-Claude', role: 'ASSISTANT' },
+    bridge: facts(),
+    ...over,
+  });
+  const run = (data: any, opts: Partial<SceneToolsOptions> = {}) => {
+    const { foundry } = makeFoundry(data);
+    return new SceneTools({ foundry, logger: makeLogger(), ...opts }).handleGetWorldInfo({});
+  };
+
+  it('reports the server, the seat, the renderer, the canvas, the modules and the registration', async () => {
+    const out = await run(world(), {
+      registration: { toolsets: 'all', readOnly: false },
+      serverVersion: '4.4.0',
+    });
+    expect(out.bridge).toEqual({
+      version: '4.4.0',
+      user: 'MCP-Claude',
+      since: '2026-10-11T12:00:00.000Z',
+      woken: false,
+      renderer: `GPU: ${GPU}`,
+      canvasReady: true,
+      modules: { battleflow: '2.17.0', areasounds: '2.0.1', openserver: '1.2.0' },
+      toolsets: 'all',
+    });
+    // all is well: no warnings key at all; the block sits between host and the users
+    const keys = Object.keys(out);
+    expect(keys.indexOf('bridge')).toBe(keys.indexOf('users') - 1);
+  });
+
+  it('reports the seat as the bridge has it: since when, and whether this connect woke the world', async () => {
+    const { foundry } = makeFoundry(world());
+    foundry.info = () => ({
+      serverUrl: 'http://localhost:30000',
+      user: 'MCP-Claude',
+      since: '2026-10-11T13:05:00.000Z',
+      woken: true,
+    });
+    const out = await new SceneTools({ foundry, logger: makeLogger() }).handleGetWorldInfo({});
+    expect(out.bridge).toMatchObject({
+      since: '2026-10-11T13:05:00.000Z',
+      woken: true,
+      version: '?', // no version handed in
+      toolsets: 'all', // no registration handed in: nothing filtered
+    });
+  });
+
+  it('warns about a software renderer', async () => {
+    const out = await run(
+      world({ bridge: facts({ renderer: { name: 'Google SwiftShader', gpu: false } }) })
+    );
+    expect(out.bridge.renderer).toBe('software: Google SwiftShader');
+    expect(out.bridge.warnings).toEqual([
+      "Chromium renders in software: screenshots are slow and carry Foundry's hardware-acceleration banner",
+    ]);
+  });
+
+  it('warns about each family module that is not active, naming what needs it', async () => {
+    const modules = {
+      battleflow: { active: false, version: null },
+      areasounds: { active: false, version: '2.0.1' },
+      openserver: { active: false, version: null },
+    };
+    const out = await run(world({ bridge: facts({ modules }) }));
+    expect(out.bridge.modules).toEqual({
+      battleflow: 'not active',
+      areasounds: 'not active',
+      openserver: 'not active',
+    });
+    expect(out.bridge.warnings).toEqual([
+      'Battle Flow is not active in this world: the combat report needs it',
+      'Area Sounds is not active in this world: configure-area-sounds needs it',
+      'Open Server is not active in this world: set-landing-scene needs it',
+    ]);
+  });
+
+  it('warns when a read-only registration joined as a user that can write', async () => {
+    const readonly = { registration: { toolsets: 'readonly', readOnly: true } };
+    for (const [role, name] of [
+      ['ASSISTANT', 'Assistant GM'],
+      ['GAMEMASTER', 'Gamemaster'],
+    ]) {
+      const out = await run(world({ bridgeUser: { name: 'Reader', role } }), readonly);
+      expect(out.bridge.toolsets).toBe('readonly');
+      expect(out.bridge.warnings).toEqual([
+        `read-only registration joined as ${name}: the role is the boundary, not the server's ` +
+          'refusals; join as a Player or Trusted Player user',
+      ]);
+    }
+    // the pairings: read-only as a Player, a full registration as an Assistant GM
+    const player = await run(world({ bridgeUser: { name: 'Reader', role: 'PLAYER' } }), readonly);
+    expect(player.bridge).not.toHaveProperty('warnings');
+    expect((await run(world())).bridge).not.toHaveProperty('warnings');
+  });
+
+  it('warns when Foundry or dnd5e is below the tested line, and not at or above it', async () => {
+    const old = await run(world({ foundryVersion: '14.367', systemVersion: '6.0.4' }));
+    expect(old.bridge.warnings).toEqual([
+      'Foundry 14.367 is below the tested 14.368',
+      'dnd5e 6.0.4 is below the tested 6.0.5',
+    ]);
+    const tested = await run(world({ foundryVersion: '14.368', systemVersion: '6.0.5' }));
+    expect(tested.bridge).not.toHaveProperty('warnings');
+    // the dnd5e line is a dnd5e world's: another system's version is not compared to it
+    const other = await run(world({ system: 'pf2e', systemVersion: '1.0.0' }));
+    expect(other.bridge).not.toHaveProperty('warnings');
+  });
+
+  it('a result without the page facts reads as unknown, and warns about nothing it cannot know', async () => {
+    const out = await run(world({ bridge: undefined }));
+    expect(out.bridge).toMatchObject({
+      renderer: 'unknown',
+      canvasReady: false,
+      modules: { battleflow: 'not active', areasounds: 'not active', openserver: 'not active' },
+    });
+    expect(out.bridge).not.toHaveProperty('warnings');
+  });
+
+  it('stays small: no viewport, and no world fact the result already carries', async () => {
+    const out = await run(world());
+    expect(Object.keys(out.bridge).sort()).toEqual(
+      ['canvasReady', 'modules', 'renderer', 'since', 'toolsets', 'user', 'version', 'woken'].sort()
+    );
   });
 });
 

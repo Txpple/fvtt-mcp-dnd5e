@@ -11,7 +11,14 @@
 // /auth and /setup redirect to /join) or a role-4 GAMEMASTER session — the bridge user is a
 // role-3 ASSISTANT and stays that way by decision. Don't rebuild this without revisiting that.
 
+import {
+  type BridgeFacts,
+  type FamilyModuleKey,
+  type ModuleFact,
+  rendererOnGpu,
+} from '../utils/bridge-facts.js';
 import { PREMIUM_BOOK_PREFIXES } from '../utils/compendium-sources.js';
+import { AREASOUNDS_MODULE_ID } from './areasounds.js';
 import { readCalendar } from './dnd5e/calendar.js';
 import { readDnd5eSettings } from './dnd5e/settings.js';
 
@@ -48,6 +55,69 @@ function calendarSummary(): Record<string, unknown> {
   };
 }
 
+/** The family modules' package ids; their names and what needs each: utils/bridge-facts.ts. */
+const FAMILY_MODULE_IDS: Record<FamilyModuleKey, string> = {
+  battleflow: 'fvtt-mod-battleflow',
+  areasounds: AREASOUNDS_MODULE_ID,
+  openserver: 'fvtt-mod-openserver',
+};
+
+/** A read off the client, or `fallback` when it throws: the bridge report never fails on one. */
+function tryRead<T>(read: () => T, fallback: T): T {
+  try {
+    return read();
+  } catch {
+    return fallback;
+  }
+}
+
+/** The canvas's unmasked WebGL renderer (WEBGL_debug_renderer_info), or null when unreadable. */
+function rendererName(): string | null {
+  return tryRead(() => {
+    const gl = (globalThis as any).canvas?.app?.renderer?.gl;
+    const ext = gl?.getExtension?.('WEBGL_debug_renderer_info');
+    const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null;
+    return typeof name === 'string' && name.trim() ? name.trim() : null;
+  }, null);
+}
+
+/** A module in this world (game.modules): active, and its version; absent = not active, no version. */
+function moduleFact(id: string): ModuleFact {
+  return tryRead(
+    () => {
+      const m = game.modules?.get?.(id);
+      const version = typeof m?.version === 'string' && m.version ? m.version : null;
+      return { active: m?.active === true, version };
+    },
+    { active: false, version: null }
+  );
+}
+
+/**
+ * The bridge's own client (issue #9): Chromium's renderer (the GPU, or software, which makes every
+ * screenshot slow and stamps it with Foundry's hardware-acceleration banner; issue #2), whether the
+ * canvas is ready, the window's size, and the Open Roll 5e modules the skills lean on. Every read is
+ * fenced: this never throws.
+ */
+function bridgeFacts(): BridgeFacts {
+  const name = rendererName();
+  return {
+    renderer: { name, gpu: rendererOnGpu(name) },
+    canvasReady: tryRead(() => (globalThis as any).canvas?.ready === true, false),
+    viewport: tryRead(() => {
+      const w = (globalThis as any).window;
+      const width = Number(w?.innerWidth);
+      const height = Number(w?.innerHeight);
+      return width > 0 && height > 0 ? { width, height } : null;
+    }, null),
+    modules: {
+      battleflow: moduleFact(FAMILY_MODULE_IDS.battleflow),
+      areasounds: moduleFact(FAMILY_MODULE_IDS.areasounds),
+      openserver: moduleFact(FAMILY_MODULE_IDS.openserver),
+    },
+  };
+}
+
 interface WorldUser {
   id: string;
   name: string;
@@ -70,15 +140,19 @@ interface WorldInfo {
   library?: Record<string, 'present' | 'missing'> | undefined;
   /** dnd5e 6.0 automation switches + the calendar (present on a dnd5e world only). */
   automation?: Record<string, unknown> | undefined;
+  /** The bridge's own client: renderer, canvas, window, the family modules (issue #9). */
+  bridge: BridgeFacts;
 }
 
 /**
- * Basic world/system metadata.
+ * Basic world/system metadata, and the bridge's own client: its renderer, canvas and window, and
+ * the Open Roll 5e modules.
  *
  * Shape contract (consumed by SceneTools.formatWorldResponse and
  * detectGameSystem): { id, title, system, systemVersion, foundryVersion,
- * users: [{ id, name, active, isGM }] }. `system` is the bare system id
- * string; the Node side rolls users up into counts + an activeUsers list.
+ * users: [{ id, name, active, isGM }], bridge }. `system` is the bare system id
+ * string; the Node side rolls users up into counts + an activeUsers list, and
+ * reads `bridge` into get-world-info's bridge block.
  */
 export function getWorldInfo(): WorldInfo {
   // dnd5e 6.0: the automation switches ride along so start-session / session-audit can reason
@@ -111,5 +185,6 @@ export function getWorldInfo(): WorldInfo {
       active: user.active,
       isGM: user.isGM,
     })),
+    bridge: bridgeFacts(),
   };
 }

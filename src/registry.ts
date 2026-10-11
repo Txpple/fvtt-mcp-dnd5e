@@ -19,6 +19,7 @@ import {
   READONLY,
   TOOLSETS,
   TOOLSET_NAMES,
+  registrationLabel,
   resolveRegistration,
   toolsetOf,
   type ToolsetName,
@@ -122,6 +123,11 @@ export interface ToolRegistryDeps {
   serverUrl?: string;
   /** Where receipts are kept (default: the OS temp dir); a test points it at its own. */
   receiptsDir?: string;
+  /**
+   * This server's version (src/config.ts reads it from package.json; the server passes it), which
+   * get-world-info's bridge block reports. Default `?`.
+   */
+  serverVersion?: string;
 }
 
 /**
@@ -143,7 +149,15 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const actorTools = new ActorTools({ foundry, logger });
   const itemTools = new ItemTools({ foundry, logger });
   const compendiumTools = new CompendiumTools({ foundry, logger });
-  const sceneTools = new SceneTools({ foundry, logger, host });
+  // get-world-info's bridge block reports what this registration advertises and this server's
+  // version (issue #9).
+  const sceneTools = new SceneTools({
+    foundry,
+    logger,
+    host,
+    registration: { toolsets: registrationLabel(enabledToolsets, readOnly), readOnly },
+    serverVersion: deps.serverVersion ?? '?',
+  });
   const placeableTools = new PlaceableTools({ foundry, logger });
   const actorCreationTools = new ActorCreationTools({ foundry, logger });
 

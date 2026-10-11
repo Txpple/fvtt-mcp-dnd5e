@@ -23,9 +23,10 @@ node scripts/install-skills.mjs ~/my-campaign   # optional: link the skills into
 
 `npm run doctor` checks, in order: Node, the build, Playwright's Chromium, the `.env` (as the
 server reads it), the Foundry app (local host), that Foundry answers, the admin key (when no world
-is running), the world, and a login as `FOUNDRY_USER` with its role. Every ✗ line names its fix,
-and any ✗ exits non-zero. It never launches or stops a world; the login is the same short join a
-tool call makes, so it is safe against a live instance.
+is running), the world, a login as `FOUNDRY_USER` with its role, and the bridge's renderer and
+Open Roll 5e modules. Every ✗ line names its fix, and any ✗ exits non-zero. It never launches or
+stops a world; the login is the same short join a tool call makes, so it is safe against a live
+instance.
 
 Registration (`.mcp.json`, or `mcpServers` in `~/.claude.json` for every project) names the
 full Node path, `"command": "C:/Program Files/nodejs/node.exe"` on Windows, since the client
@@ -37,8 +38,10 @@ In Foundry, create the user the server joins as (Gamemaster or Assistant GM; def
 `MCP-Claude`), or set `FOUNDRY_USER` to an existing Gamemaster or Assistant GM user; a name the
 world does not have is refused at the first tool call, with the users it does have. Start Claude
 Code and say **"start the world"**: the server wakes the instance if it sleeps, launches the world
-if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the host, its role and which premium
-books it found. Then ask for content.
+if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the host, its role, which premium
+books it found, and the bridge's state (Chromium's renderer, the Open Roll 5e modules it found
+active, the toolsets it advertises, and a warning for anything that needs a look). Then ask for
+content.
 
 For a cautious first run, register with `"FOUNDRY_TOOLSETS": "readonly"` and a Player or Trusted
 Player user: the server then reads the world and refuses every write (the `foundry-readonly`

@@ -600,6 +600,21 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
     ).toThrow(/"sceens" is not a toolset \(one of: session, settings, actors/);
   });
 
+  it("get-world-info's bridge block reports the registration and the server's version (issue #9)", async () => {
+    const report = async (deps: Record<string, unknown>) => {
+      const { foundry } = makeFoundry({ id: 'w', title: 'T', system: 'dnd5e', users: [] });
+      const registry = buildToolRegistry({ foundry, logger: makeLogger(), host, ...deps });
+      return (await registry.dispatch('get-world-info', {})).bridge;
+    };
+    expect(await report({})).toMatchObject({ toolsets: 'all', version: '?' });
+    expect((await report({ serverVersion: '4.4.0' })).version).toBe('4.4.0');
+    expect((await report({ toolsets: ['chat', ' combat '] })).toolsets).toBe('chat,combat');
+    expect((await report({ toolsets: ['session'] })).toolsets).toBe('session');
+    expect((await report({ toolsets: TOOLSET_NAMES })).toolsets).toBe('all');
+    expect((await report({ toolsets: ['readonly'] })).toolsets).toBe('readonly');
+    expect((await report({ readOnly: true })).toolsets).toBe('readonly');
+  });
+
   it('parseToolsetsEnv splits a comma list and ignores blanks', () => {
     expect(parseToolsetsEnv(undefined)).toEqual([]);
     expect(parseToolsetsEnv('')).toEqual([]);

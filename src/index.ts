@@ -72,6 +72,8 @@ async function main(): Promise<void> {
     readOnly: config.readOnly,
     // with the world id, the key of the receipt store (src/receipts.ts)
     serverUrl: config.host.serverUrl,
+    // get-world-info's bridge block reports it
+    serverVersion: config.server.version,
   });
   logger.info('Tool surface', { tools: tools.length, toolsets: [...enabledToolsets], readOnly });
 
