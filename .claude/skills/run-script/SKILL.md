@@ -58,7 +58,10 @@ return { placed };
   reads, stubs every write (each returns `{ dryRun: true }`) and lists the writes it reached. Show
   the user that list; then run for real.
 - **Caps**: 150 writes and 30 deletes per run, 60 s. Raise `maxWrites` / `maxDeletes` /
-  `timeoutSeconds` only when the job's size is known and the user has seen it.
+  `timeoutSeconds` only when the job's size is known and the user has seen it. A script that never
+  yields (a synchronous loop) cannot be timed out from inside: the bridge cuts it about 35 s past
+  its timeout and closes the page (the receipts in it go too), and the outcome is unknown. Read
+  the world before running it again.
 - **Batch**: one `createActorFromCompendium` with `quantity: 6` beats six calls; one
   `addActorItems` with the whole list beats one per item. The write count is calls, not documents.
 - **The receipt**: every run returns `receipt rcpt_…: N created, N updated, N deleted`. Undo it with

@@ -2,8 +2,9 @@
 //   FOUNDRY_HOST=local node scripts/verify-run-script.mjs
 // Reads, a dry run (stubbing by the op table: a remap is a write, an area-sounds list a read), a
 // real run with a receipt (create / update / delete), undo, the caps, the timeout, the shadowed
-// globals and the static refusal. Temp documents are ZZ-* and deleted in finally. Needs a built
-// dist/ (the tool class and the page bundle come from there).
+// globals, the static refusal, and last a synchronous loop cut by the bridge's op cap (the page is
+// closed and the next call re-joins: ~40 s plus a join). Temp documents are ZZ-* and deleted in
+// finally. Needs a built dist/ (the tool class and the page bundle come from there).
 import { connectFoundry } from '../dist/client.js';
 import { Logger } from '../dist/logger.js';
 import { ScriptTools } from '../dist/tools/script.js';
@@ -208,6 +209,32 @@ try {
   check(
     'the tool prints the receipt line and the result',
     /receipt rcpt_/.test(text) && /"n": \d+/.test(text)
+  );
+
+  // 11. A script stuck in a synchronous loop (issue #16). Its own timeout cannot preempt it, so the
+  // bridge's op cap does: the timeout + 30 s, then a 5 s probe the wedged page cannot answer; the
+  // page is closed, the op's outcome is unknown, and the next call reconnects on its own. Last,
+  // because it re-joins.
+  const t0 = Date.now();
+  let wedged = '';
+  try {
+    await f.call('runScript', { src: 'while (true) {}', timeoutMs: 5000 });
+    wedged = 'it returned';
+  } catch (e) {
+    wedged = e.message;
+  }
+  const cutAt = (Date.now() - t0) / 1000;
+  check(
+    'a synchronous loop is cut at its timeout + 30 s + the probe, its outcome unknown',
+    /outcome of this op is unknown/.test(wedged) && cutAt >= 39 && cutAt < 55 && !f.isReady(),
+    `${cutAt.toFixed(1)} s: ${wedged.slice(0, 140)}`
+  );
+  const t1 = Date.now();
+  const info = await f.call('getWorldInfo').catch(e => ({ error: e.message }));
+  check(
+    'the next call reconnects on its own and answers',
+    typeof info?.id === 'string' && info.id.length > 0 && f.isReady(),
+    `${((Date.now() - t1) / 1000).toFixed(1)} s to reconnect${info?.error ? `: ${info.error}` : ''}`
   );
 } finally {
   if (receiptId) await tool.handleRunScript({ undo: receiptId }).catch(() => {});

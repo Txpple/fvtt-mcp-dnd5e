@@ -34,6 +34,7 @@ import {
   readJoinForm,
 } from './join-form.js';
 import { clearSystemCache } from './utils/system-detection.js';
+import { OpCapError, raceWithCap } from './op-cap.js';
 import {
   describeHolder,
   evictHolder,
@@ -175,6 +176,35 @@ export interface FoundryConfig {
    * The next call reconnects, exactly as after disconnect-bridge.
    */
   idleLogoutMs?: number;
+  /**
+   * Ms a page op runs before the bridge asks the page whether it still answers (default 600000,
+   * 10 min; run-script's cap is its own timeout + 30 s). A page that answers keeps waiting, asked
+   * again each interval, up to 30 min in all; one that does not is closed, the call fails with
+   * its outcome unknown, and the next call reconnects (issue #16; src/op-cap.ts). It never bounds
+   * the connect: the wake and ready budgets above are the connect's.
+   */
+  opCapMs?: number;
+}
+
+/** How long a page has to answer "are you there?" once an op outlives its cap. */
+const OP_PROBE_MS = 5_000;
+/** No page op is waited on longer than this, however responsive the page. */
+const OP_CEILING_MS = 30 * 60_000;
+/** run-script's own timeout when the call names none (src/page/run-script.ts), and its grace. */
+const SCRIPT_TIMEOUT_MS = 60_000;
+const SCRIPT_GRACE_MS = 30_000;
+
+/**
+ * The cap on one call: run-script's own timeout (clamped as the page clamps it) plus its grace, so
+ * the script's own timeout always answers first; any other op, the configured cap (10 min).
+ */
+function opCapFor(name: string, args: unknown, opCapMs: number | undefined): number {
+  if (name !== 'runScript') return opCapMs ?? 600_000;
+  const timeout = Number((args as { timeoutMs?: unknown } | null | undefined)?.timeoutMs);
+  return (
+    (Number.isFinite(timeout) ? Math.max(1_000, Math.floor(timeout)) : SCRIPT_TIMEOUT_MS) +
+    SCRIPT_GRACE_MS
+  );
 }
 
 export interface FoundryLogger {
@@ -740,6 +770,9 @@ export class Foundry implements FoundryBridge {
       try {
         return await this.invoke<PageResult<N>>(name, args[0]);
       } catch (err) {
+        // The op outlived its cap and its page was closed: its outcome is unknown, so it is never
+        // run a second time (a retried write could land twice). The next call reconnects.
+        if (err instanceof OpCapError) throw asCallError(name, err);
         // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page
         // stays open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge
         // has vanished, recover once (re-inject in place, or full reconnect if the session itself
@@ -759,19 +792,61 @@ export class Foundry implements FoundryBridge {
     });
   }
 
-  /** Single page-side dispatch into the injected window.__fvtt bridge. */
+  /**
+   * Single page-side dispatch into the injected window.__fvtt bridge, under the op cap (issue #16,
+   * src/op-cap.ts): past its cap the page is asked whether it still answers; a page that does not
+   * is closed (the browser and context stay, so the next call only re-joins) and the op fails with
+   * its outcome unknown. Only the evaluate is capped, never the connect in front of it.
+   */
   private async invoke<T>(name: string, args?: unknown): Promise<T> {
     // Capture the page locally: a concurrent call entering recover() can null this.page mid-flight,
     // and `this.page!` would then throw a TypeError on the deref.
     const page = this.page!;
-    return (await page.evaluate(
+    const work = page.evaluate(
       ({ n, a }) => {
         const fn = window.__fvtt?.[n];
         if (typeof fn !== 'function') throw new Error(`Unknown page function: ${n}`);
         return fn(a);
       },
       { n: name, a: args }
-    )) as T;
+    ) as Promise<T>;
+    try {
+      return await raceWithCap(work, () => page.evaluate(() => 1), {
+        capMs: opCapFor(name, args, this.cfg.opCapMs),
+        probeMs: OP_PROBE_MS,
+        hardMs: OP_CEILING_MS,
+        onSlow: ms =>
+          this.log.warn(
+            `'${name}' still running after ${Math.round(ms / 1000)} s; the page answers, so it keeps its time`
+          ),
+      });
+    } catch (err) {
+      if (!(err instanceof OpCapError)) throw err;
+      const why =
+        err.reason === 'unresponsive'
+          ? 'the page stopped answering'
+          : `it ran into the ${OP_CEILING_MS / 60_000}-minute ceiling`;
+      const message =
+        `'${name}' did not finish within ${Math.round(err.elapsedMs / 1000)} s and ${why}, so ` +
+        'the bridge closed its page; the next call reconnects. The outcome of this op is unknown: ' +
+        'a write may or may not have landed.';
+      this.log.warn(message);
+      if (this.page === page) {
+        this.ready = false;
+        this.page = undefined;
+      }
+      // A page wedged in a synchronous loop still closes (the browser ends its renderer); the
+      // ceiling keeps a close that never returns from holding the call.
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        page.close().catch(() => {}),
+        new Promise<void>(resolve => {
+          timer = setTimeout(resolve, 10_000);
+        }),
+      ]);
+      clearTimeout(timer);
+      throw new OpCapError(message, err.elapsedMs, err.reason, { cause: err });
+    }
   }
 
   /** Is the injected page bridge (window.__fvtt) currently present on a live page? */

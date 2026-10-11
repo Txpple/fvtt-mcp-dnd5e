@@ -49,6 +49,14 @@ What changed for a user of the tools and skills, release by release. The measure
   shadowing. The tool's description, the refusal and the skill no longer call the facade a
   boundary. Decided: no Worker-based runner, and `scripting` stays advertised by default,
   because undo lives on this tool.
+- **A page op has a cap** (issue #16). A call that hangs in the page no longer holds the bridge's
+  seat until `disconnect-bridge`: past its cap (10 min; `run-script`: its timeout + 30 s) the
+  bridge asks the page whether it still answers. A page that answers is slow, not stuck, and the
+  op keeps its time (asked again each interval, 30 min at most); a page that does not is closed,
+  the call fails saying its outcome is unknown (a write may or may not have landed) and is never
+  retried, and the next call reconnects. A script stuck in `while (true) {}` with a 5 s timeout
+  now fails at about 40 s. The connect is never capped (a cold box keeps its wake and ready
+  budgets). Library: `Foundry` takes `opCapMs`.
 - Budgets after: tools/list 204,719 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
