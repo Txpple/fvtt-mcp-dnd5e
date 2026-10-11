@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased — the last pass before sharing: receipts on every write, readonly, init, the bridge in get-world-info
+## 4.4.0 — 2026-10-11 — the last pass before sharing: receipts on every write, readonly, init, the bridge in get-world-info
 
 - **Every write tool answers with a receipt** (issue #6). The bridge reaches every page op through
   one choke point: a write runs under the page's write lock, one at a time, while Foundry's own
