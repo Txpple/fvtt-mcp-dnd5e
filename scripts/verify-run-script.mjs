@@ -39,12 +39,12 @@ try {
     JSON.stringify(read.receipt)
   );
 
-  // 2. The globals are shadowed.
+  // 2. The habitual globals are shadowed (an accident guard, not a boundary: issue #15).
   const shadow = await f.call('runScript', {
     src: 'return [typeof game, typeof canvas, typeof window, typeof fromUuid, typeof Actor].join(",");',
   });
   check(
-    'the globals are out of reach',
+    'the shadowed globals read undefined',
     shadow.ok && shadow.result === 'undefined,undefined,undefined,undefined,undefined',
     String(shadow.result)
   );

@@ -9,11 +9,11 @@ description: >-
 # run-script — one program, one round trip
 
 **The tool runs JavaScript you write inside the GM's Foundry page**, against `fvtt.*`: the same
-page functions every other tool calls, with the same argument shapes. The script's `return` value
-and a receipt come back; nothing else enters the conversation. The reference of every function —
-155 of them, with their arguments one level deep and their return types — is
-[`docs/run-script-api.md`](../../../docs/run-script-api.md), generated from the code. Read the entry
-for each function you call; the shapes are the tools' own.
+page functions every other tool calls, with the same argument shapes, and with the rights of the
+user the bridge joined as. The script's `return` value and a receipt come back; nothing else
+enters the conversation. The reference of every function — 155 of them, with their arguments one
+level deep and their return types — is [`docs/run-script-api.md`](../../../docs/run-script-api.md),
+generated from the code. Read the entry for each function you call; the shapes are the tools' own.
 
 ## When a script, when a tool
 
@@ -25,9 +25,14 @@ for each function you call; the shapes are the tools' own.
 ## How the program is shaped
 
 The body of an async function. `fvtt.<name>(args)` for every call, `log(...)` for lines you want
-printed with the result, `return` the value you need (JSON-able, small). Nothing else is reachable:
-`game`, `canvas`, `window`, `document`, `fromUuid`, the document classes, `fetch`, `import`,
-`eval` are all out, by design — the facade is the whole surface.
+printed with the result, `return` the value you need (JSON-able, small). The facade is the
+surface: what goes around it skips the caps, the receipt and the dry run. To catch that by habit,
+`game`, `canvas`, `window`, `document`, `fromUuid`, the document classes and `fetch` are shadowed
+(they read `undefined`), and `import`, `eval`, `constructor`, `Reflect`, `__proto__` and their kin
+are refused as code before the script travels (in strings and comments they are only words).
+Neither is a security boundary: the bridge user's role is, so a write the role allows, a script
+can make. Decided in issue #15: no Worker-based runner, and the `scripting` toolset stays
+advertised by default, because undo lives on this tool.
 
 ```js
 const camp = { x: 2400, y: 1800 };

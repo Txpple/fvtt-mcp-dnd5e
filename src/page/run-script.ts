@@ -1,11 +1,16 @@
 // Page-side: run-script (issue #4). A short program the model wrote runs HERE, in the GM's page,
 // against the page functions behind every tool (window.__fvtt, offered to the script as `fvtt`),
 // so a loop of a dozen steps is one round trip and the intermediate data never enters the
-// conversation. What makes it bearable to hand a script GM rights:
-//   - the globals are shadowed (`game`, `canvas`, `window`, `document`, every document class,
-//     `fromUuid`, `fetch`, …): the facade is the whole surface (`eval` cannot be a strict-mode
-//     parameter name; the Node side refuses the word before the script travels);
-//   - writes are counted and capped (writes, deletes, seconds);
+// conversation. The facade is the intended surface. A script runs with the rights of the user the
+// bridge joined as, and that role is the boundary (issue #15): what is below guards against
+// accidents and makes a run reviewable and reversible, it does not contain a script.
+//   - the globals a script would reach for by habit are shadowed (`game`, `canvas`, `window`,
+//     `document`, every document class, `fromUuid`, `fetch`, …) and read `undefined`, so a habit
+//     fails instead of stepping around the facade. Not a wall: any function's constructor still
+//     compiles code in the real global scope. The Node side (src/tools/script.ts) refuses that
+//     spelling and the obvious others before the script travels (`eval` cannot be a strict-mode
+//     parameter name, so it is refused there too);
+//   - writes are counted and capped (writes, deletes, seconds), by each op's tag (./_ops.ts);
 //   - every document the run creates, updates or deletes is recorded through Foundry's own hooks
 //     into a receipt, with the pre-image of what it changed or deleted;
 //   - a dry run stubs the writes (each returns `{ dryRun: true }`) and lists them;
@@ -17,8 +22,10 @@ import { opKind } from './_ops.js';
 import { invalid, notFound } from './errors.js';
 
 /**
- * The globals a script cannot see: shadowed as parameters of the compiled function, so the only
- * door to the world is `fvtt`. Document classes come from CONFIG at run time (`documentNames`).
+ * The globals a script does not see by name: shadowed as parameters of the compiled function, so
+ * `game.actors` in a script is a TypeError instead of a write past the facade's caps and receipt.
+ * An accident guard, not a wall (see the header). Document classes come from CONFIG at run time
+ * (`documentNames`).
  */
 export const SHADOWED = [
   'game',
@@ -257,7 +264,7 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
     if (log.length > 500) log.splice(0, log.length - 500);
   };
 
-  // Compile with every reachable global shadowed; `"use strict"` makes a stray assignment throw.
+  // Compile with the habitual globals shadowed; `"use strict"` makes a stray assignment throw.
   const shadow = [...new Set([...SHADOWED, ...documentNames()])];
   let body: (...a: unknown[]) => Promise<unknown>;
   try {

@@ -8,9 +8,12 @@ import { toInputSchema } from '../utils/schema.js';
  * it, the page runs it against `fvtt.*` — the page functions behind every tool — and only the
  * return value plus a receipt come back: a loop of a dozen steps in one round trip, with none of
  * the intermediate data in the conversation. The guard rails live in the page (src/page/run-script.ts):
- * shadowed globals, counted and capped writes, a receipt of every document touched, a dry run that
- * stubs the writes, and `undo` by receipt id. The static check here is the cheap first door: the
- * words that reach outside the facade are refused before anything travels.
+ * counted and capped writes, a receipt of every document touched, a dry run that stubs the writes,
+ * and `undo` by receipt id. The facade is the intended surface. The check here refuses, before
+ * anything travels, the words that step around it — in code, never in a string or a comment — and
+ * the page shadows the globals a script would reach for by habit. Both guard against accidents and
+ * close the obvious doors; neither is a security boundary (issue #15). A script runs with the
+ * rights of the user the bridge joined as: that role is the boundary.
  */
 
 const RunScriptSchema = z
@@ -62,9 +65,9 @@ const RunScriptSchema = z
   });
 
 /**
- * Words a script may not use: the ways out of the facade that shadowing cannot close (a dynamic
- * `import()`, `require`) and the ones worth refusing by name before the page sees them. Property
- * access (`x.fetch`) and object keys (`fetch:`) are not matches; the page shadows the rest.
+ * Words a script may not use as code: the ways around the facade that shadowing cannot close (a
+ * dynamic `import()`, `require`) and the ones worth refusing by name before the page sees them.
+ * Property access (`x.fetch`) and object keys (`fetch:`) are not matches; the page shadows the rest.
  */
 const FORBIDDEN = [
   'import',
@@ -81,10 +84,100 @@ const FORBIDDEN = [
 ];
 const FORBIDDEN_RE = new RegExp(`(?<![.\\w$])\\b(${FORBIDDEN.join('|')})\\b(?!\\s*:)`, 'g');
 
-/** The forbidden words a script uses, each once, in order of appearance. */
+/**
+ * The way back to the page's real globals past the shadowing: any function's constructor compiles
+ * code in the global scope (`[].constructor.constructor('return this')()`), and the prototype
+ * walks reach it. Refused as code tokens anywhere (after a dot, as a key), and as a computed key
+ * written with a literal (`x['constructor']`, `x[ "__proto__" ]`, backticks too).
+ */
+const ESCAPES = ['constructor', 'Reflect', 'getPrototypeOf', '__proto__'];
+const ESCAPE_RE = new RegExp(`\\b(${ESCAPES.join('|')})\\b`, 'g');
+const COMPUTED_RE = new RegExp(`\\[\\s*(['"\`])(${ESCAPES.join('|')})\\1\\s*\\]`, 'g');
+
+/**
+ * The script with the text of every string literal, every template literal and every comment
+ * replaced by spaces (newlines kept), so a word check reads code only and nothing shifts. A
+ * `${ … }` inside a template literal stays code, nested braces and templates included. Regex
+ * literals are not recognized: their text reads as code, so a `/fetch/` literal is refused (rare),
+ * and a quote inside one throws the blanking off. A check built on this closes the obvious doors
+ * and is porous by nature (a key assembled from pieces, a string handed to `setTimeout`).
+ */
+export function blankLiterals(src: string): string {
+  const out = src.split('');
+  const blank = (i: number) => {
+    if (i < out.length && out[i] !== '\n') out[i] = ' ';
+  };
+  // One entry per open `${`: the depth of the braces opened inside it since.
+  const exprs: number[] = [];
+  let inTemplate = false;
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (inTemplate) {
+      if (c === '\\') {
+        blank(i);
+        blank(i + 1);
+        i += 2;
+      } else if (c === '`') {
+        inTemplate = false;
+        i++;
+      } else if (c === '$' && src[i + 1] === '{') {
+        exprs.push(0);
+        inTemplate = false;
+        i += 2;
+      } else {
+        blank(i);
+        i++;
+      }
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') blank(i++);
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      while (i < stop) blank(i++);
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      i++;
+      while (i < src.length && src[i] !== c && src[i] !== '\n') {
+        if (src[i] === '\\') blank(i++);
+        blank(i++);
+      }
+      i++;
+      continue;
+    }
+    const depth = exprs.length - 1;
+    if (c === '`') {
+      inTemplate = true;
+    } else if (depth >= 0 && c === '{') {
+      exprs[depth] += 1;
+    } else if (depth >= 0 && c === '}') {
+      if (exprs[depth] === 0) {
+        exprs.pop();
+        inTemplate = true;
+      } else {
+        exprs[depth] -= 1;
+      }
+    }
+    i++;
+  }
+  return out.join('');
+}
+
+/** The refused words a script uses as code, each once, in order of appearance. */
 export function forbiddenWords(script: string): string[] {
+  const code = blankLiterals(script);
+  const hits: Array<[number, string]> = [];
+  for (const m of code.matchAll(FORBIDDEN_RE)) hits.push([m.index, m[1]!]);
+  for (const m of code.matchAll(ESCAPE_RE)) hits.push([m.index, m[1]!]);
+  for (const m of script.matchAll(COMPUTED_RE)) hits.push([m.index, m[2]!]);
+  hits.sort((a, b) => a[0] - b[0]);
   const out: string[] = [];
-  for (const m of script.matchAll(FORBIDDEN_RE)) if (!out.includes(m[1]!)) out.push(m[1]!);
+  for (const [, word] of hits) if (!out.includes(word)) out.push(word);
   return out;
 }
 
@@ -109,8 +202,8 @@ export class ScriptTools {
         description:
           'Run a short JavaScript program in the GM page against `fvtt.*`, the page functions behind ' +
           'every tool (the run-script skill lists them): loops and bulk jobs in one round trip, only ' +
-          'the return value comes back. Globals are shadowed, writes are counted and capped, every ' +
-          'document touched is recorded; `dryRun` stubs the writes, `undo` reverses a receipt.',
+          'the return value comes back. Writes are counted, capped and recorded; `dryRun` stubs ' +
+          'them, `undo` reverses a receipt. It runs with the bridge user’s rights.',
         inputSchema: toInputSchema(RunScriptSchema),
       },
     ];
@@ -129,8 +222,10 @@ export class ScriptTools {
     const bad = forbiddenWords(script);
     if (bad.length) {
       throw new Error(
-        `run-script refused: the script uses ${bad.map(w => `\`${w}\``).join(', ')} — the facade ` +
-          '(`fvtt.*`) is the whole surface; there is no way out of it by design.'
+        `run-script refused: the script uses ${bad.map(w => `\`${w}\``).join(', ')} as code — ` +
+          'write it against `fvtt.*`, the intended surface (words in strings and comments are ' +
+          'fine). The check and the shadowed globals guard against accidents; they are not a ' +
+          'security boundary: a script runs with the rights of the user the bridge joined as.'
       );
     }
     this.logger.info('run-script', { chars: script.length, dryRun: !!a.dryRun });

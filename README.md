@@ -96,7 +96,8 @@ tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`,
   `bulk-delete`.
 - **Scripting**: `run-script` — a short program against the page functions behind every tool
   (`fvtt.*`, [the reference](docs/run-script-api.md)): a loop or a bulk job in one round trip, with
-  the globals shadowed, writes capped and recorded, a dry run, and undo by receipt.
+  writes capped and recorded, a dry run, and undo by receipt. It runs with the bridge user's
+  rights: that user's role, not the facade, is the boundary.
 
 A list answers one line per record, a `get` answers JSON, a miss is an error, an unknown argument
 is refused by name. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`

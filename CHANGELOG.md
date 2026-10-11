@@ -23,14 +23,15 @@ What changed for a user of the tools and skills, release by release. The measure
 - **`run-script`** (issue #4, the `scripting` toolset): one tool whose argument is a short JavaScript
   program. It runs in the GM's page against `fvtt.*` — the page functions behind every tool, with
   the tools' own argument shapes — so a loop or a bulk job is one round trip and only the return
-  value comes back. The globals are shadowed (`game`, `canvas`, `window`, the document classes,
-  `fromUuid`, `fetch`; `import`/`eval` refused before the script travels), writes are counted and
-  capped (150 writes, 30 deletes, 60 s; raisable), every document created, updated or deleted is
-  recorded through Foundry's hooks into a receipt with pre-images, `dryRun` stubs the writes and
-  lists them, and `undo: "<receipt>"` reverses a run newest write first. Receipts live in the
-  bridge's page (the last 50). The `run-script` skill carries the rules; the facade's reference,
-  `docs/run-script-api.md` (155 functions), is generated from the program by
-  `scripts/measure/run-script-api.mjs`.
+  value comes back. It runs with the bridge user's rights, and that user's role is the boundary:
+  the shadowed globals (`game`, `canvas`, `window`, the document classes, `fromUuid`, `fetch`) and
+  the words refused before the script travels (`import`, `eval`, …) guard against accidents and
+  are not a sandbox (issue #15). Writes are counted and capped (150 writes, 30 deletes, 60 s;
+  raisable), every document created, updated or deleted is recorded through Foundry's hooks into
+  a receipt with pre-images, `dryRun` stubs the writes and lists them, and `undo: "<receipt>"`
+  reverses a run newest write first. Receipts live in the bridge's page (the last 50). The
+  `run-script` skill carries the rules; the facade's reference, `docs/run-script-api.md` (155
+  functions), is generated from the program by `scripts/measure/run-script-api.mjs`.
 - **What a run-script call does is declared per function** (issue #14): every `fvtt.*` function
   is tagged read, write or delete by what its handler does (`src/page/_ops.ts`), where a verb
   guessed from its name used to decide. A dry run had executed `remapSceneTeleporters` for real,
@@ -40,7 +41,15 @@ What changed for a user of the tools and skills, release by release. The measure
   (`configureDnd5eSettings`, `configureCombatTracker`, `configurePrimaryParty`), and a
   `bulkDelete` / `relinkAsset` preview (`dryRun: true`). `configureAreaSounds` `remove` counts
   against the delete cap. A page function added without a tag does not compile.
-- Budgets after: tools/list 204,734 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
+- **run-script's word check reads code, not prose** (issue #15). Strings, template-literal text
+  and comments are blanked before the check (a `${…}` expression stays code), so a content job
+  with `'Go fetch the relic'` or `'<p>Trade goods import duties</p>'` in it is no longer refused.
+  `constructor`, `Reflect`, `getPrototypeOf` and `__proto__` are refused as code and as a
+  computed key (`x['constructor']`): the obvious way back to the page's real globals past the
+  shadowing. The tool's description, the refusal and the skill no longer call the facade a
+  boundary. Decided: no Worker-based runner, and `scripting` stays advertised by default,
+  because undo lives on this tool.
+- Budgets after: tools/list 204,719 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 

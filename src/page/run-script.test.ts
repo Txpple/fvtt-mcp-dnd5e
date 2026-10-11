@@ -1,13 +1,14 @@
 /**
  * run-script's page half, offline: the shadow list, and a run against a stubbed page API with
  * stubbed hooks — the facade counts, the dry run stubs, the receipt records, the cap refuses, the
- * globals are out of reach. What counts as a write is the op table's (./_ops.test.ts).
+ * shadowed globals read undefined. What counts as a write is the op table's (./_ops.test.ts). The
+ * shadowing is an accident guard, not a boundary (issue #15): the join user's role is.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runScript, SHADOWED, undoScript } from './run-script.js';
 
 describe('the shadow list', () => {
-  it('shadows the doors out of the facade', () => {
+  it('shadows the globals a script would reach for by habit', () => {
     for (const name of [
       'game',
       'canvas',
@@ -171,7 +172,7 @@ describe('runScript against a stubbed page', () => {
     expect(calls.filter(c => c[0] === 'createActorFromCompendium')).toHaveLength(3);
   });
 
-  it('the globals are out of reach, and a script that throws reports its error', async () => {
+  it('a shadowed global reads undefined, and a script that throws reports its error', async () => {
     const r = await runScript({
       src: `return typeof game + " " + typeof window + " " + typeof fetch;`,
     });
