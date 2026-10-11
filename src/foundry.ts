@@ -34,6 +34,15 @@ import {
   readJoinForm,
 } from './join-form.js';
 import { clearSystemCache } from './utils/system-detection.js';
+import {
+  describeHolder,
+  evictHolder,
+  type Holder,
+  holderRecord,
+  listHolders,
+  removeHolder,
+  writeHolder,
+} from './holders.js';
 
 /**
  * Chromium flags that put the page's WebGL on the GPU. Headless Chromium defaults to software
@@ -107,6 +116,17 @@ export interface FoundryBridge {
    * disconnect-bridge tool log out without ending the MCP process.
    */
   dispose(): Promise<void>;
+  /**
+   * Every process on this machine holding this bridge's seat (same server URL and user), this one
+   * included — the records src/holders.ts keeps while a session is open. Offline: reads files.
+   */
+  holders(): Holder[];
+  /**
+   * End every OTHER holder's browser on this machine (their MCP servers keep running and reconnect
+   * lazily on their next call) and drop their records. The cure for "a GM seat is taken by a bridge
+   * nobody in this session opened" (issue #12), without a walk through the process table.
+   */
+  evictOtherHolders(): { evicted: Holder[]; pids: number[] };
 }
 
 export interface FoundryConfig {
@@ -144,6 +164,17 @@ export interface FoundryConfig {
   readyTimeoutMs?: number;
   /** Overall budget to bring a cold box up (wake + optional launch) before joining (default 600000). */
   wakeTimeoutMs?: number;
+  /**
+   * What to call this holder in the seat record and on the User document (FOUNDRY_BRIDGE_LABEL);
+   * default: the Claude Code session that started the server, else the pid (src/holders.ts).
+   */
+  label?: string;
+  /**
+   * Log out on our own after this long with no call (FOUNDRY_IDLE_LOGOUT_MIN, default 20 min;
+   * 0 disables), so a forgotten session's seat does not block a suite an hour later (issue #12).
+   * The next call reconnects, exactly as after disconnect-bridge.
+   */
+  idleLogoutMs?: number;
 }
 
 export interface FoundryLogger {
@@ -171,6 +202,10 @@ export class Foundry implements FoundryBridge {
   private liveWorldId: string | undefined;
   /** The world /setup discovery settled on (kept for the next launch of this process). */
   private discoveredWorldId: string | undefined;
+  /** Calls in flight (the idle logout never fires under one) and when the last one ended. */
+  private inflight = 0;
+  private lastUsed = 0;
+  private idleTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly cfg: FoundryConfig,
@@ -246,7 +281,107 @@ export class Foundry implements FoundryBridge {
           'tool will be refused by Foundry. Give the user the Gamemaster or Assistant GM role.'
       );
     }
+    await this.markSeat();
     this.warmIndexes();
+    this.lastUsed = Date.now();
+    this.armIdle();
+  }
+
+  /**
+   * Leave the record of who holds this seat: a file on this machine (src/holders.ts) and the same
+   * facts on the User document (`flags.world.fvttMcpBridge`, readable from any client — the suites'
+   * preflight prints it). Other live holders of the seat on this machine are named here, once, so a
+   * second bridge never joins silently as the same user. Best effort: a seat record is a courtesy.
+   */
+  private async markSeat(): Promise<void> {
+    const rec = holderRecord(this.cfg.serverUrl, this.cfg.user);
+    if (this.cfg.label) rec.label = this.cfg.label;
+    const others = listHolders(this.cfg.serverUrl, this.cfg.user).filter(h => !h.self);
+    for (const h of others) {
+      this.log.warn(
+        `the seat "${this.cfg.user}" is also held on this machine by ${describeHolder(h)} — two ` +
+          'sessions joined as one user; disconnect-bridge { all: true } ends every other holder'
+      );
+    }
+    writeHolder(rec);
+    await this.page
+      ?.evaluate(
+        async marker => {
+          const user = (globalThis as any).game?.user;
+          await user?.update({ 'flags.world.fvttMcpBridge': marker });
+        },
+        {
+          pid: rec.pid,
+          host: rec.host,
+          label: rec.label,
+          session: rec.session,
+          since: rec.since,
+        }
+      )
+      .catch((err: Error) => this.log.debug(`seat marker not written — ${err.message}`));
+  }
+
+  /** Clear what markSeat left, under a short ceiling: a dispose must not wait on a dead page. */
+  private async clearSeat(): Promise<void> {
+    removeHolder({ serverUrl: this.cfg.serverUrl, user: this.cfg.user, pid: process.pid });
+    const page = this.page;
+    if (!page || page.isClosed()) return;
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      page
+        .evaluate(async () => {
+          const user = (globalThis as any).game?.user;
+          await user?.update({ 'flags.world.-=fvttMcpBridge': null });
+        })
+        .catch(() => {}),
+      new Promise<void>(r => {
+        timer = setTimeout(r, 3_000);
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+
+  holders(): Holder[] {
+    return listHolders(this.cfg.serverUrl, this.cfg.user);
+  }
+
+  evictOtherHolders(): { evicted: Holder[]; pids: number[] } {
+    const evicted = this.holders().filter(h => !h.self);
+    const pids: number[] = [];
+    for (const h of evicted) pids.push(...evictHolder(h));
+    return { evicted, pids };
+  }
+
+  /** (Re)arm the idle logout from the last call's end; a call in flight pushes it out. */
+  private armIdle(): void {
+    const ms = this.cfg.idleLogoutMs ?? 0;
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
+    if (!(ms > 0)) return;
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = undefined;
+      if (!this.isReady()) return;
+      if (this.inflight > 0 || Date.now() - this.lastUsed < ms) {
+        this.armIdle();
+        return;
+      }
+      const idle = ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : `${Math.round(ms / 1000)} s`;
+      this.log.info(`idle for ${idle} — logging the bridge out (the next call reconnects)`);
+      void this.dispose();
+    }, ms);
+    this.idleTimer.unref();
+  }
+
+  /** Every seam call rides this: counts the call for the idle logout and stamps its end. */
+  private async track<T>(work: () => Promise<T>): Promise<T> {
+    this.inflight++;
+    try {
+      return await work();
+    } finally {
+      this.inflight--;
+      this.lastUsed = Date.now();
+      this.armIdle();
+    }
   }
 
   async worldId(): Promise<string> {
@@ -600,25 +735,28 @@ export class Foundry implements FoundryBridge {
    * session was lost under the call) as `code` — see src/bridge-error.ts.
    */
   async call<N extends keyof PageApi>(name: N, ...args: PageArgs<N>): Promise<PageResult<N>> {
-    await this.ensureReady();
-    try {
-      return await this.invoke<PageResult<N>>(name, args[0]);
-    } catch (err) {
-      // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page stays
-      // open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge has
-      // vanished, recover once (re-inject in place, or full reconnect if the session itself dropped)
-      // and retry — so a mid-session reload self-heals instead of wedging until a process restart.
-      if (!(await this.bridgeAlive())) {
-        this.log.warn(`page bridge missing on '${name}' — recovering and retrying`);
-        await this.recover();
-        try {
-          return await this.invoke<PageResult<N>>(name, args[0]);
-        } catch (err2) {
-          throw asCallError(name, err2);
+    return this.track(async () => {
+      await this.ensureReady();
+      try {
+        return await this.invoke<PageResult<N>>(name, args[0]);
+      } catch (err) {
+        // A world reload / "Return to Setup" can wipe the injected window.__fvtt while the page
+        // stays open. Distinguish that (the bridge is gone) from a genuine tool error: if the bridge
+        // has vanished, recover once (re-inject in place, or full reconnect if the session itself
+        // dropped) and retry — so a mid-session reload self-heals instead of wedging until a
+        // process restart.
+        if (!(await this.bridgeAlive())) {
+          this.log.warn(`page bridge missing on '${name}' — recovering and retrying`);
+          await this.recover();
+          try {
+            return await this.invoke<PageResult<N>>(name, args[0]);
+          } catch (err2) {
+            throw asCallError(name, err2);
+          }
         }
+        throw asCallError(name, err);
       }
-      throw asCallError(name, err);
-    }
+    });
   }
 
   /** Single page-side dispatch into the injected window.__fvtt bridge. */
@@ -673,17 +811,21 @@ export class Foundry implements FoundryBridge {
    * (view + fit + optional marker overlay) to shoot a specific scene for visual QA.
    */
   async screenshot(outPath: string): Promise<void> {
-    await this.ensureReady();
-    const page = this.page!; // capture before any await can null this.page (see invoke()).
-    await page.screenshot({ path: outPath, type: 'png' });
+    return this.track(async () => {
+      await this.ensureReady();
+      const page = this.page!; // capture before any await can null this.page (see invoke()).
+      await page.screenshot({ path: outPath, type: 'png' });
+    });
   }
 
   /** Escape hatch for one-off page logic (used sparingly; prefer named page functions). */
   async evaluate<T, A>(fn: (arg: A) => T, arg: A): Promise<T> {
-    await this.ensureReady();
-    const page = this.page!; // capture before any await can null this.page (see invoke()).
-    // Playwright's PageFunction generic is overly strict here; the escape hatch is rare.
-    return page.evaluate(fn as any, arg as any);
+    return this.track(async () => {
+      await this.ensureReady();
+      const page = this.page!; // capture before any await can null this.page (see invoke()).
+      // Playwright's PageFunction generic is overly strict here; the escape hatch is rare.
+      return page.evaluate(fn as any, arg as any);
+    });
   }
 
   private async ensureReady(): Promise<void> {
@@ -699,6 +841,9 @@ export class Foundry implements FoundryBridge {
     // call is still joining) must not tear down half a session and leave a freshly-opened browser
     // orphaned: let the connect settle either way, then close everything it opened.
     await this.connecting?.catch(() => {});
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
+    await this.clearSeat();
     this.ready = false;
     await this.context?.close().catch(() => {});
     await this.browser?.close().catch(() => {});

@@ -52,7 +52,13 @@ async function main(): Promise<void> {
   // The live bridge. Lazy: it connects (wake -> /join -> game.ready -> inject)
   // on the first foundry.call(). Its own diagnostics go to stderr.
   // Admin-key + world-id enable remote world-launch when the instance is up but no world is active.
-  const foundry = new Foundry({ ...bridgeConfigOf(config.host), host });
+  const foundry = new Foundry({
+    ...bridgeConfigOf(config.host),
+    host,
+    // The seat record names this session; the idle logout frees the seat when nobody is calling.
+    ...(config.bridgeLabel ? { label: config.bridgeLabel } : {}),
+    idleLogoutMs: Math.round(config.idleLogoutMin * 60_000),
+  });
 
   // The whole tool surface: definitions + dispatch, wired in one place (src/registry.ts).
   const { tools, dispatch, enabledToolsets } = buildToolRegistry({

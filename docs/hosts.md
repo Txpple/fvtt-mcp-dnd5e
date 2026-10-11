@@ -34,6 +34,14 @@ Every host reads the same names; a preset only changes the defaults and which on
 - **A direct file plane** (optional) — `FOUNDRY_DATA_DIR` (the install's `Data/`, when it is on
   this machine) or `FOUNDRY_WEBDAV_URL` / `_USER` / `_PASSWORD` (a WebDAV endpoint over `Data/`).
 - **`FOUNDRY_TOOLSETS`** — per registration, a comma list of the toolsets to advertise (below).
+- **`FOUNDRY_IDLE_LOGOUT_MIN`** — minutes with no tool call before the bridge logs itself out
+  (default 20; `0` keeps the seat until `disconnect-bridge`). The next call reconnects. A
+  forgotten session's seat used to block the suites' sole-GM preflight an hour later.
+- **`FOUNDRY_BRIDGE_LABEL`** — what this bridge calls itself in the seat record it leaves while
+  connected (default: the Claude Code session that started it, else the pid). The record — one file
+  per process under the OS temp dir, keyed by server URL and user, plus the same facts on the User
+  document as `flags.world.fvttMcpBridge` — is how `disconnect-bridge` names any other session
+  holding the seat on this machine, and how `{ "all": true }` ends them.
 
 The 2.x names (`MOLTEN_*`, `LOCAL_*`, `FOUNDRY_PROFILE`) are still read as aliases under their own
 host and logged once at startup; `.env.example` lists the mapping. An alias wins over the

@@ -60,6 +60,9 @@ export type {
 } from './hosts/index.js';
 export { FilePlaneError } from './hosts/index.js';
 export { Logger } from './logger.js';
+// Who holds a bridge seat on this machine (issue #12): the suites' preflight names the holder.
+export { describeHolder, listHolders, seatKey } from './holders.js';
+export type { Holder } from './holders.js';
 
 /**
  * Who the client joins as.

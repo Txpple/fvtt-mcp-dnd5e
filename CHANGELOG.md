@@ -3,6 +3,25 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased — the bridge names its holder, and logs itself out when idle
+
+- **The seat has a record** (issue #12). While connected, the bridge leaves one file per process
+  under the OS temp dir (`fvtt-mcp-dnd5e/holders/`, keyed by server URL and user) and the same
+  facts on its User document (`flags.world.fvttMcpBridge`: pid, host, label, Claude Code session,
+  since), cleared on disconnect. A second bridge joining the same seat on the same machine names
+  the first in its log instead of joining silently; the Battle Flow suites' preflight prints
+  *held by pid N — Claude Code session S — since T* instead of a bare user name. The label is
+  `FOUNDRY_BRIDGE_LABEL`, default the Claude Code session that started the server.
+- **`disconnect-bridge` names the other holders and takes `{ "all": true }`**, which ends every
+  other session's browser on this seat on this machine (their servers keep running and reconnect
+  on their next call) — the cure that used to run through the process table.
+- **Idle logout.** A bridge that has served no call for `FOUNDRY_IDLE_LOGOUT_MIN` minutes
+  (default 20; 0 disables) logs out on its own; the next call reconnects, exactly as after
+  `disconnect-bridge`. A forgotten session's seat no longer blocks a battery an hour later.
+- Library: `listHolders`, `describeHolder`, `seatKey` and the `Holder` type are exported from
+  `fvtt-mcp-dnd5e/client`; `Foundry` takes `label` and `idleLogoutMs`.
+- Budgets after: tools/list 203,459 chars (≤ 205,000), names 6,078, skills 7,534, always-on 1,778.
+
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 
 - **The companion module is renamed** `fvtt-mod-soundscape` → `fvtt-mod-areasounds` (Open Roll 5e:

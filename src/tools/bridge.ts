@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { FoundryBridge } from '../foundry.js';
+import { describeHolder } from '../holders.js';
 import { Logger } from '../logger.js';
 import { toInputSchema } from '../utils/schema.js';
 
@@ -15,7 +16,14 @@ import { toInputSchema } from '../utils/schema.js';
  * the page. It drives the seam's own lifecycle methods (isReady/dispose) directly.
  */
 
-const DisconnectBridgeSchema = z.object({});
+const DisconnectBridgeSchema = z.object({
+  all: z
+    .boolean()
+    .optional()
+    .describe(
+      'Also end every other session’s bridge on this seat on this machine; they reconnect on their next call.'
+    ),
+});
 
 export interface BridgeToolsOptions {
   foundry: FoundryBridge;
@@ -38,30 +46,50 @@ export class BridgeTools {
         description:
           'Log the bridge user out of the live world: closes the headless browser session so the ' +
           'user drops off the active-player list. The world keeps running and the server stays up; ' +
-          'the next tool call reconnects (wake → join → ready). Already disconnected is a clean no-op.',
+          'the next tool call reconnects. Already disconnected is a no-op. Names any other session ' +
+          'holding the same seat on this machine; `all` ends those too.',
         inputSchema: toInputSchema(DisconnectBridgeSchema),
       },
     ];
   }
 
   async handleDisconnectBridge(args: any): Promise<string> {
-    DisconnectBridgeSchema.parse(args ?? {});
+    const { all } = DisconnectBridgeSchema.parse(args ?? {});
     // Capture the state BEFORE disposing, then dispose unconditionally: isReady() is false while a
     // connect is still in flight, and dispose() (which awaits it) is the only way to make sure that
     // half-open session is torn down too rather than quietly finishing the login.
     const wasConnected = this.foundry.isReady();
-    this.logger.info('Disconnecting the bridge session', { wasConnected });
+    this.logger.info('Disconnecting the bridge session', { wasConnected, all });
     await this.foundry.dispose();
+
+    // The other holders of this seat on this machine (src/holders.ts): named always, ended on `all`.
+    // The seat the preflight finds taken is almost always one of these, not ours (issue #12).
+    let others: string;
+    if (all) {
+      const { evicted, pids } = this.foundry.evictOtherHolders();
+      others = evicted.length
+        ? `\nEnded ${evicted.length} other holder(s) of this seat on this machine (${pids.length} browser process(es)):\n` +
+          evicted.map(h => `  • ${describeHolder(h)}`).join('\n') +
+          '\nTheir servers keep running and reconnect on their next call.'
+        : '\nNo other session holds this seat on this machine.';
+    } else {
+      const rest = this.foundry.holders().filter(h => !h.self);
+      others = rest.length
+        ? `\n⚠️ ${rest.length} other session(s) still hold this seat on this machine — the user stays connected:\n` +
+          rest.map(h => `  • ${describeHolder(h)}`).join('\n') +
+          '\nRun disconnect-bridge with { "all": true } to end them.'
+        : '';
+    }
 
     if (!wasConnected) {
       return (
         'ℹ️ Bridge already disconnected — no live Foundry session was open. ' +
-        'The next tool call will connect fresh.'
+        `The next tool call will connect fresh.${others}`
       );
     }
     return (
       '✅ Disconnected — the bridge user has logged out of the Foundry world and is now ' +
-      'inactive. The world keeps running; the next tool call reconnects automatically.'
+      `inactive. The world keeps running; the next tool call reconnects automatically.${others}`
     );
   }
 }

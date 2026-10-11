@@ -19,14 +19,68 @@ function build(overrides?: (foundry: any) => void) {
 }
 
 describe('BridgeTools', () => {
-  it('advertises disconnect-bridge with an empty (no-argument) input schema', () => {
+  it('advertises disconnect-bridge with one optional argument, `all`', () => {
     const { tools } = build();
     const defs = tools.getToolDefinitions();
     expect(defs).toHaveLength(1);
     expect(defs[0]!.name).toBe('disconnect-bridge');
     expect(defs[0]!.inputSchema.type).toBe('object');
-    expect(defs[0]!.inputSchema.properties).toEqual({});
+    expect(Object.keys(defs[0]!.inputSchema.properties)).toEqual(['all']);
     expect(defs[0]!.inputSchema.required).toEqual([]);
+  });
+
+  it('names the other holders of the seat on this machine, and does not end them without `all`', async () => {
+    const other = {
+      pid: 28560,
+      ppid: 1,
+      host: 'box',
+      label: 'Claude Code session s2',
+      session: 's2',
+      since: '2026-10-10T23:21:01.000Z',
+      serverUrl: 'http://localhost:30000',
+      user: 'Assistant DM',
+      alive: true,
+      self: false,
+      file: 'x.json',
+    };
+    const { tools, foundry } = build(f => {
+      f.holders = () => [{ ...other, pid: process.pid, self: true }, other];
+    });
+    const result = await tools.handleDisconnectBridge({});
+    expect(foundry.evictOtherHolders).not.toHaveBeenCalled();
+    expect(result).toContain('1 other session(s) still hold this seat');
+    expect(result).toContain(
+      'pid 28560 on box — Claude Code session s2 — since 2026-10-10T23:21:01.000Z'
+    );
+    expect(result).toContain('"all": true');
+  });
+
+  it('with `all`, ends every other holder and reports what it ended', async () => {
+    const { tools, foundry } = build(f => {
+      f.evictOtherHolders = () => ({
+        evicted: [
+          {
+            pid: 28560,
+            host: 'box',
+            label: 'Claude Code session s2',
+            since: '2026-10-10T23:21:01.000Z',
+          },
+        ],
+        pids: [30680, 38680],
+      });
+    });
+    const result = await tools.handleDisconnectBridge({ all: true });
+    expect(foundry.dispose).toHaveBeenCalledTimes(1);
+    expect(result).toContain(
+      'Ended 1 other holder(s) of this seat on this machine (2 browser process(es))'
+    );
+    expect(result).toContain('pid 28560 on box');
+  });
+
+  it('with `all` and nobody else, says so', async () => {
+    const { tools } = build();
+    const result = await tools.handleDisconnectBridge({ all: true });
+    expect(result).toContain('No other session holds this seat on this machine.');
   });
 
   it('disposes a live session and reports the logout + auto-reconnect contract', async () => {

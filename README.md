@@ -124,6 +124,10 @@ every tool call runs inside that live page through Foundry's own client APIs. Th
 lazy: the first real tool call is what wakes and joins. The other Open Roll 5e servers and the
 modules' live suites drive a world through the same bridge as a library:
 `import { connectFoundry } from 'fvtt-mcp-dnd5e/client'` ([`docs/contracts.md`](docs/contracts.md)).
+While connected the bridge leaves a seat record (a file on the machine, a marker on its User
+document) naming the session that holds it; `disconnect-bridge` names any other holder and ends
+them with `{ "all": true }`, and a bridge idle for 20 minutes logs itself out
+(`FOUNDRY_IDLE_LOGOUT_MIN`) — [`docs/hosts.md`](docs/hosts.md).
 
 ## Development
 

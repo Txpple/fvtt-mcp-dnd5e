@@ -48,6 +48,18 @@ const ConfigSchema = z.object({
    * Validated by the registry against src/toolsets.ts — the single source of truth for the names.
    */
   toolsets: z.array(z.string().min(1)).default([]),
+  /**
+   * Minutes with no tool call before the bridge logs itself out (FOUNDRY_IDLE_LOGOUT_MIN, default
+   * 20; 0 keeps the seat until disconnect-bridge). A forgotten session's seat used to block the
+   * suites' sole-GM preflight an hour later (issue #12).
+   */
+  idleLogoutMin: z
+    .number()
+    .min(0)
+    .max(24 * 60)
+    .default(20),
+  /** What this bridge calls itself in the seat record (FOUNDRY_BRIDGE_LABEL); default: the session. */
+  bridgeLabel: z.string().optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & {
@@ -75,6 +87,10 @@ const rawConfig = {
     version: process.env.SERVER_VERSION || readPackageVersion(),
   },
   toolsets: parseToolsetsEnv(process.env.FOUNDRY_TOOLSETS),
+  idleLogoutMin: process.env.FOUNDRY_IDLE_LOGOUT_MIN
+    ? Number.parseFloat(process.env.FOUNDRY_IDLE_LOGOUT_MIN)
+    : 20,
+  bridgeLabel: process.env.FOUNDRY_BRIDGE_LABEL?.trim() || undefined,
 };
 
 const notes: string[] = [];

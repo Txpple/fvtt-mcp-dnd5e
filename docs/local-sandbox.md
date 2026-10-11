@@ -179,7 +179,7 @@ back over the fresh copy after the pull finishes. The script's local guard catch
 world*, but stopping the process is the actual requirement:
 
 1. `curl -s http://localhost:30000/api/status` — is a world active, and how many users?
-2. If the MCP bridge is one of them, `disconnect-bridge` first so no Playwright session is
+2. If the MCP bridge is one of them, `disconnect-bridge` first (`{ "all": true }` if another session holds the seat) so no Playwright session is
    dangling (`list-users` shows who is really connected — check no human is mid-session).
 3. Stop the server **gracefully**. Headless: `node scripts/local-foundry.mjs stop`. Desktop app:
    close it with `CloseMainWindow()` on the process, never `Stop-Process` — it shuts the world

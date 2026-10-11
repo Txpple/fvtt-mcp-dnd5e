@@ -48,6 +48,9 @@ export function makeFoundry(response: any = {}): {
     dispose: vi.fn(async () => {}),
     // The live world's id (world-scoped default paths, e.g. send-chat-message's image folder).
     worldId: vi.fn(async () => 'w'),
+    // The seat records (src/holders.ts): nobody else holds the seat unless a test says so.
+    holders: vi.fn(() => []),
+    evictOtherHolders: vi.fn(() => ({ evicted: [], pids: [] })),
   };
   return { foundry, calls };
 }
