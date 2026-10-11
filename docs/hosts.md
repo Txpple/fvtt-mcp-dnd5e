@@ -78,7 +78,7 @@ panel is never scripted; only the wake GET, WebDAV and the Foundry server itself
 
 ## Toolsets — advertise less
 
-The full surface is 80 tools, ~56k tokens of `tools/list`. A client that loads MCP schemas
+The full surface is 81 tools, ~57k tokens of `tools/list`. A client that loads MCP schemas
 eagerly pays that per registration before the first word (Claude Code defers them and lists only
 names). A registration that only does part of the job can say so:
 
@@ -94,6 +94,7 @@ names). A registration that only does part of the job can say so:
 | `items` · `compendium` · `journals` · `tables` · `cards` · `audio` | the document families |
 | `scenes` | scenes, who-sees-what routing, every placeable kind |
 | `chat` · `combat` | the chat log; the combat tracker |
+| `scripting` | `run-script` — a short program against the page API, one round trip, with a dry run and undo |
 | `assets` | the Plane-B file tools + reference integrity |
 | `organization` | folders, moves, bulk delete, macros |
 

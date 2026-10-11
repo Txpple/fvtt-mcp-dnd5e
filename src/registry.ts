@@ -56,6 +56,7 @@ import { CombatTrackerTools } from './tools/combat-tracker.js';
 import { OrganizationTools } from './tools/organization.js';
 import { PackReaderTools } from './tools/pack-reader.js';
 import { BridgeTools } from './tools/bridge.js';
+import { ScriptTools } from './tools/script.js';
 
 export interface ToolRegistry {
   /**
@@ -145,6 +146,10 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   // reconnects lazily. Drives the seam's isReady/dispose directly — no foundry.call().
   const bridgeTools = new BridgeTools({ foundry, logger });
 
+  // run-script (issue #4): a short program against the page API — loops and bulk jobs in one
+  // round trip, with a receipt and undo. The guard rails are in src/page/run-script.ts.
+  const scriptTools = new ScriptTools({ foundry, logger });
+
   // Unified add-feature tool: composes the three mode schemas (feature / compendium-features /
   // items) — each generated from the owning handler's zod — into a single-entry `add-feature`.
   const addFeatureTool = buildAddFeatureTool();
@@ -175,6 +180,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     ...ownershipTools.getToolDefinitions(),
     ...assetFileTools.getToolDefinitions(),
     ...assetBridgeTools.getToolDefinitions(),
+    ...scriptTools.getToolDefinitions(),
     ...playlistTools.getToolDefinitions(),
     ...areaSoundsTools.getToolDefinitions(),
     ...tableTools.getToolDefinitions(),
@@ -352,6 +358,9 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
 
     // Bridge session lifecycle (courtesy logout — the next tool call reconnects)
     'disconnect-bridge': args => bridgeTools.handleDisconnectBridge(args),
+
+    // run-script: one program, one round trip (issue #4)
+    'run-script': args => scriptTools.handleRunScript(args),
 
     // Organization & batch — the folders are ONE tool (action; M8)
     'manage-folders': args => organizationTools.handleManageFolders(args),

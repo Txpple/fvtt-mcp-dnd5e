@@ -10,6 +10,7 @@
 // foundry-mcp-bridge.<name> methods 1:1, so the Node tools rewire mechanically.
 
 import { guardSerialization } from './_shared.js';
+import { runScript, undoScript } from './run-script.js';
 import { getWorldInfo } from './world.js';
 import {
   getActiveScene,
@@ -365,6 +366,9 @@ const api = {
   manageGroupMembers,
   getGroupInfo,
   configurePrimaryParty,
+  // run-script (issue #4): a short program against the API above, with a receipt and undo.
+  runScript,
+  undoScript,
 } satisfies Record<string, (...args: any[]) => unknown>;
 
 /**

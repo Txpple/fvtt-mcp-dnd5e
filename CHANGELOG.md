@@ -20,7 +20,18 @@ What changed for a user of the tools and skills, release by release. The measure
   `disconnect-bridge`. A forgotten session's seat no longer blocks a battery an hour later.
 - Library: `listHolders`, `describeHolder`, `seatKey` and the `Holder` type are exported from
   `fvtt-mcp-dnd5e/client`; `Foundry` takes `label` and `idleLogoutMs`.
-- Budgets after: tools/list 203,459 chars (≤ 205,000), names 6,078, skills 7,534, always-on 1,778.
+- **`run-script`** (issue #4, the `scripting` toolset): one tool whose argument is a short JavaScript
+  program. It runs in the GM's page against `fvtt.*` — the page functions behind every tool, with
+  the tools' own argument shapes — so a loop or a bulk job is one round trip and only the return
+  value comes back. The globals are shadowed (`game`, `canvas`, `window`, the document classes,
+  `fromUuid`, `fetch`; `import`/`eval` refused before the script travels), writes are counted and
+  capped (150 writes, 30 deletes, 60 s; raisable), every document created, updated or deleted is
+  recorded through Foundry's hooks into a receipt with pre-images, `dryRun` stubs the writes and
+  lists them, and `undo: "<receipt>"` reverses a run newest write first. Receipts live in the
+  bridge's page (the last 50). The `run-script` skill carries the rules; the facade's reference,
+  `docs/run-script-api.md` (155 functions), is generated from the program by
+  `scripts/measure/run-script-api.mjs`.
+- Budgets after: tools/list 204,734 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 

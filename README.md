@@ -77,7 +77,7 @@ nothing about one table lives here.
 
 ## Tools
 
-**80 tools.** One family tool per document type, selected by `action`: `manage-actors`,
+**81 tools.** One family tool per document type, selected by `action`: `manage-actors`,
 `manage-scenes`, `manage-placeables` (with a `kind`: walls, lights, tokens, regions, sounds,
 tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`, `manage-cards`,
 `manage-playlists`, `manage-folders`, `manage-macros`. Around them:
@@ -94,10 +94,13 @@ tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`,
   own file picker, faster with a direct plane.
 - **Users and organization**: ownership, groups and the primary party, `move-documents`,
   `bulk-delete`.
+- **Scripting**: `run-script` — a short program against the page functions behind every tool
+  (`fvtt.*`, [the reference](docs/run-script-api.md)): a loop or a bulk job in one round trip, with
+  the globals shadowed, writes capped and recorded, a dry run, and undo by receipt.
 
 A list answers one line per record, a `get` answers JSON, a miss is an error, an unknown argument
 is refused by name. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
-lets a registration advertise a subset (`chat,combat` is 11 tools instead of 80).
+lets a registration advertise a subset (`chat,combat` is 11 tools instead of 81).
 
 Two tools need a companion module and warn when it is absent: `configure-area-sounds`
 ([Open Roll 5e: Area Sounds](https://github.com/Txpple/fvtt-mod-areasounds)) and `set-landing-scene`

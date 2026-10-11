@@ -107,6 +107,8 @@ export const TOOLSETS = {
   ],
   /** Folders, moves, bulk deletes, macros. */
   organization: ['manage-folders', 'move-documents', 'bulk-delete', 'manage-macros'],
+  /** A short program against the page API: loops and bulk jobs in one round trip, with undo. */
+  scripting: ['run-script'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type ToolsetName = keyof typeof TOOLSETS;
