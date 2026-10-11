@@ -339,6 +339,30 @@ try {
   );
 
   // ── 5. Two writes in flight at once ────────────────────────────────────────────────────────────
+  console.log("\n# create-pc: the build's own advancement switch is not part of the receipt");
+  const pc = await tool('create-pc', {
+    name: `${TAG} PC`,
+    className: 'Fighter',
+    level: 1,
+    acceptDefaults: true,
+    defaultArt: false,
+  });
+  check(
+    'create-pc answers a receipt with the actor only, not the dnd5e.disableAdvancements switch (4.4.1)',
+    !!pc.id && /1 created/.test(pc.line) && !/Setting/.test(pc.line),
+    pc.line
+  );
+  if (pc.id) {
+    const pcUndo = await undo(pc.id);
+    check(
+      'undoing the PC build removes the actor and touches no setting',
+      /1 deleted/.test(pcUndo.line) &&
+        !/Setting/.test(pcUndo.line) &&
+        (await actorsNamed(`${TAG} PC`)).length === 0,
+      pcUndo.line
+    );
+  }
+
   console.log('\n# two writes in flight');
   const [p, q] = await Promise.all([
     tool('create-actor-from-compendium', createArgs([`${TAG} Pair P`])),

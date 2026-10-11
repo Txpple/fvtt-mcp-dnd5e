@@ -32,6 +32,14 @@ import {
 import { addSpellsToActor } from './spells.js';
 import { readDarkvision, TOKEN_DISPOSITION, tokenDefaults } from './token-defaults.js';
 import { ambiguous, invalid, notFound, unsupported } from '../errors.js';
+import { UNRECORDED } from '../_receipts.js';
+
+/**
+ * The build's own switch (`dnd5e.disableAdvancements`: on for the build, restored in `finally`) is
+ * written UNRECORDED (src/page/_receipts.ts): it is not part of the call's receipt, where it read as
+ * "1 updated (Setting …)" even on a refused build, and an undo had nothing to put back (4.4.1).
+ */
+const OWN_SWITCH = { [UNRECORDED]: true } as const;
 
 /**
  * Resolve a PC's target folder to a real Folder **id**. Accepts a folder id OR an exact folder name
@@ -884,7 +892,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
   try {
     try {
       priorDisable = game.settings.get('dnd5e', 'disableAdvancements');
-      await game.settings.set('dnd5e', 'disableAdvancements', true);
+      await game.settings.set('dnd5e', 'disableAdvancements', true, OWN_SWITCH);
       disableTouched = true;
     } catch (e) {
       warnings.push(
@@ -1096,7 +1104,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
     }
     if (disableTouched) {
       try {
-        await game.settings.set('dnd5e', 'disableAdvancements', priorDisable);
+        await game.settings.set('dnd5e', 'disableAdvancements', priorDisable, OWN_SWITCH);
       } catch {
         /* best-effort restore */
       }
@@ -1192,7 +1200,7 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   try {
     try {
       priorDisable = game.settings.get('dnd5e', 'disableAdvancements');
-      await game.settings.set('dnd5e', 'disableAdvancements', true);
+      await game.settings.set('dnd5e', 'disableAdvancements', true, OWN_SWITCH);
       disableTouched = true;
     } catch (e) {
       warnings.push(
@@ -1292,7 +1300,7 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   } finally {
     if (disableTouched) {
       try {
-        await game.settings.set('dnd5e', 'disableAdvancements', priorDisable);
+        await game.settings.set('dnd5e', 'disableAdvancements', priorDisable, OWN_SWITCH);
       } catch {
         /* best-effort restore */
       }

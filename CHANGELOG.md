@@ -3,6 +3,17 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.4.1 — 2026-10-11 — the PC builder's own switch leaves the receipt
+
+- **`create-pc` and `level-up-pc` no longer report their advancement switch in the receipt.** The
+  builder turns `dnd5e.disableAdvancements` on for the build and restores it in `finally`; that
+  toggle rode into the call's receipt as `1 updated (Setting "dnd5e.disableAdvancements": value)`,
+  also on a refused build that persisted nothing, and an undo had nothing to put back. The switch
+  is now written as the bridge's own bookkeeping (the same `UNRECORDED` option the seat marker
+  uses), so a PC build's receipt names the actor and nothing else. `verify-receipts` holds it
+  (27/27); `verify-pc-build` 70/70.
+- Budgets unchanged: tools/list 204,651 chars (81 tools), always-on 1,778, skill descriptions 7,773.
+
 ## 4.4.0 — 2026-10-11 — the last pass before sharing: receipts on every write, readonly, init, the bridge in get-world-info
 
 - **Every write tool answers with a receipt** (issue #6). The bridge reaches every page op through
