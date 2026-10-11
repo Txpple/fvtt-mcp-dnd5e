@@ -2,6 +2,8 @@
 // installed package; only the existence test is stubbed.
 // The op cap on a fake page (issue #16): a wedged page is closed and the op is not retried; a slow
 // op on a page that answers is never killed; run-script's cap is its timeout + 30 s.
+// The role warning at connect, on a fake page (issue #8): a read-only registration wants a Player
+// or Trusted Player, a full one a Gamemaster or Assistant GM.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BridgeError } from './bridge-error.js';
 import { chromiumProblem, Foundry, type FoundryConfig } from './foundry.js';
@@ -156,5 +158,72 @@ describe('the op cap (issue #16)', () => {
     expect(run.error).toMatchObject({ code: 'not-found', detail: 'Actor "Gren" not found' });
     expect(page.close).not.toHaveBeenCalled();
     expect(retried).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A connect over a fake page, without a browser: the steps before the role read (wake, the world
+ * check, the join, the inject) and after it (the seat record, the index warm-up, the idle timer)
+ * are stubbed; the page answers the role read with `role`.
+ */
+function connecting(role: number, cfg: Partial<FoundryConfig>) {
+  const page = {
+    setDefaultTimeout: vi.fn(),
+    evaluate: vi.fn(async () => ({ worldId: 'w', role })),
+    isClosed: () => false,
+  };
+  const log = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  const f = Object.create(Foundry.prototype) as Foundry;
+  const step = vi.fn(async () => {});
+  Object.assign(f, {
+    cfg: { serverUrl: 'http://localhost:30000', user: 'Bridge', idleLogoutMs: 0, ...cfg },
+    log,
+    browser: { isConnected: () => true },
+    context: { newPage: async () => page },
+    ready: false,
+    inflight: 0,
+    lastUsed: 0,
+    wake: step,
+    ensureWorldReady: step,
+    joinWorld: step,
+    injectBundle: step,
+    markSeat: step,
+    warmIndexes: vi.fn(),
+    armIdle: vi.fn(),
+  });
+  return { f, log };
+}
+
+describe('the role warning at connect (issue #8)', () => {
+  it('a read-only registration joined as a Gamemaster or Assistant GM is warned: the role is the boundary', async () => {
+    for (const role of [3, 4]) {
+      const { f, log } = connecting(role, { expectReadOnly: true });
+      await f.connect();
+      expect(f.isReady()).toBe(true);
+      expect(log.warn).toHaveBeenCalledTimes(1);
+      const warning = log.warn.mock.calls[0]![0] as string;
+      expect(warning).toContain('on a read-only registration (FOUNDRY_TOOLSETS=readonly)');
+      expect(warning).toContain('the role of the join user is the real boundary');
+      expect(warning).toContain('Player or Trusted Player');
+    }
+  });
+
+  it('a read-only registration joined as a Player or Trusted Player is the pairing: no warning', async () => {
+    for (const role of [1, 2]) {
+      const { f, log } = connecting(role, { expectReadOnly: true });
+      await f.connect();
+      expect(log.warn).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a full registration still wants a Gamemaster or Assistant GM', async () => {
+    const player = connecting(1, {});
+    await player.f.connect();
+    expect(player.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('(below Assistant GM) — every write tool will be refused by Foundry')
+    );
+    const gm = connecting(4, {});
+    await gm.f.connect();
+    expect(gm.log.warn).not.toHaveBeenCalled();
   });
 });

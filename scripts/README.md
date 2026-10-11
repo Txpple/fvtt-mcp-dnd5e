@@ -37,7 +37,9 @@ tool proofs:
   `/setup` launch → `/join`); it refuses to run without an explicit `FOUNDRY_HOST`.
 - `verify-asset-plane` — the file plane on the selected host: the direct plane (WebDAV / the
   local `Data/`) and the bridge plane (Foundry's own FilePicker through the page).
-- `verify-toolsets` — the `FOUNDRY_TOOLSETS` registration filter (offline).
+- `verify-toolsets` — the `FOUNDRY_TOOLSETS` registration filter (offline): a selection, a
+  misspelt name, and `readonly` (only the reads advertised, a write refused by name before the
+  bridge connects, `readonly` beside a toolset refused at startup).
 - `verify-holders` — the seat records: two bridges on one seat (one in a forked child), and
   `disconnect-bridge { all }` from one ends the other's browser by its recorded pid and
   executable, leaves a decoy record whose pid runs another program alone, and the evicted bridge

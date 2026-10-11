@@ -40,6 +40,10 @@ Code and say **"start the world"**: the server wakes the instance if it sleeps, 
 if `FOUNDRY_ADMIN_KEY` is set, joins, and reports the world, the host, its role and which premium
 books it found. Then ask for content.
 
+For a cautious first run, register with `"FOUNDRY_TOOLSETS": "readonly"` and a Player or Trusted
+Player user: the server then reads the world and refuses every write (the `foundry-readonly`
+entry in `.mcp.json.example`; Tools, below).
+
 **Requirements:** Node.js 22+ · Foundry 14.368+ with dnd5e 6.0.5+ (6.0.0–6.0.3 delete every
 effect without an expiry on a rest; the tools refuse a pre-6.0 world; an older world is upgraded
 Foundry-first, then dnd5e:
@@ -102,6 +106,9 @@ tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`,
 A list answers one line per record, a `get` answers JSON, a miss is an error, an unknown argument
 is refused by name. The full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
 lets a registration advertise a subset (`chat,combat` is 11 tools instead of 81).
+`FOUNDRY_TOOLSETS=readonly` advertises every toolset's reads (41 tools) and refuses every other
+call by name before it runs; pair it with a Player or Trusted Player join user, whose role is the
+real boundary ([`docs/hosts.md`](docs/hosts.md#toolsets--advertise-less)).
 
 Two tools need a companion module and warn when it is absent: `configure-area-sounds`
 ([Open Roll 5e: Area Sounds](https://github.com/Txpple/fvtt-mod-areasounds)) and `set-landing-scene`

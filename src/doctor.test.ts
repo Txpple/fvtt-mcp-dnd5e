@@ -1,6 +1,6 @@
 // The doctor's readings of Foundry's answers (src/doctor.ts). The live run is `npm run doctor`.
 import { describe, expect, it } from 'vitest';
-import { legacyNamesLine, readAdminAuth, readApiStatus, roleName } from './doctor.js';
+import { legacyNamesLine, loginLine, readAdminAuth, readApiStatus, roleName } from './doctor.js';
 
 describe('readApiStatus — GET /api/status', () => {
   it('reads a running world', () => {
@@ -47,6 +47,29 @@ describe('the doctor’s wording', () => {
     expect(roleName(3)).toBe('Assistant GM');
     expect(roleName(1)).toBe('Player');
     expect(roleName(9)).toBe('role 9');
+  });
+
+  it('the login line: a full registration needs a GM role, a read-only one wants a player', () => {
+    expect(loginLine('MCP-Claude', 4, '2.1', false)).toEqual({
+      mark: 'ok',
+      text: 'login: "MCP-Claude" joined as Gamemaster in 2.1 s, then disconnected',
+    });
+    expect(loginLine('Reader', 1, '2.1', false)).toMatchObject({
+      mark: 'fail',
+      text: expect.stringContaining('every write tool needs Gamemaster or Assistant GM'),
+    });
+    // FOUNDRY_TOOLSETS=readonly: a role that can write is a warning (not a failure) naming the fix
+    const gm = loginLine('MCP-Claude', 3, '2.1', true);
+    expect(gm.mark).toBe('warn');
+    expect(gm.text).toContain('joined as Assistant GM in 2.1 s');
+    expect(gm.text).toContain('FOUNDRY_TOOLSETS=readonly, but this user can write');
+    expect(gm.text).toContain('give the user the Player or Trusted Player role');
+    expect(loginLine('Reader', 2, '2.1', true)).toEqual({
+      mark: 'ok',
+      text:
+        'login: "Reader" joined as Trusted Player in 2.1 s, then disconnected — ' +
+        'FOUNDRY_TOOLSETS=readonly, and the role keeps it so',
+    });
   });
 
   it('folds the selector’s alias notes into one line', () => {

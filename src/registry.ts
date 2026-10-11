@@ -9,9 +9,17 @@
 import type { FoundryBridge } from './foundry.js';
 import type { Host } from './hosts/types.js';
 import {
+  TOOL_KINDS,
+  readActionsOf,
+  readOnlyRefusal,
+  toolKind,
+  type ToolKind,
+} from './tool-kinds.js';
+import {
+  READONLY,
   TOOLSETS,
   TOOLSET_NAMES,
-  resolveToolsets,
+  resolveRegistration,
   toolsetOf,
   type ToolsetName,
 } from './toolsets.js';
@@ -67,12 +75,15 @@ export interface ToolRegistry {
   /** Tool name -> handler. The single source of truth; `tools` is derived from its keys. */
   handlers: Record<string, (args: any) => Promise<any>>;
   /**
-   * Route a tool call to its handler. Throws `Unknown tool` for an unregistered name, and a
-   * by-name refusal (which toolset, how to enable it) for a tool outside the enabled toolsets.
+   * Route a tool call to its handler. Throws `Unknown tool` for an unregistered name, a by-name
+   * refusal (which toolset, how to enable it) for a tool outside the enabled toolsets, and, on a
+   * read-only registration, a by-name refusal for any call that is not a read (src/tool-kinds.ts).
    */
   dispatch(name: string, args: any): Promise<any>;
   /** The toolsets this registry advertises. */
   enabledToolsets: ReadonlySet<ToolsetName>;
+  /** FOUNDRY_TOOLSETS=readonly: the reads are advertised, and every other call is refused. */
+  readOnly: boolean;
 }
 
 export interface ToolRegistryDeps {
@@ -82,6 +93,8 @@ export interface ToolRegistryDeps {
   host: Host;
   /** Toolset names to advertise (FOUNDRY_TOOLSETS). Empty/omitted = all; `session` is always on. */
   toolsets?: readonly string[];
+  /** A read-only registration (src/config.ts): `readonly` in `toolsets` says the same. */
+  readOnly?: boolean;
 }
 
 /**
@@ -91,7 +104,12 @@ export interface ToolRegistryDeps {
  */
 export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const { foundry, logger, host } = deps;
-  const enabledToolsets = resolveToolsets(deps.toolsets ?? []);
+  // `readonly` stands alone whichever way it arrives (the flag, or the name in the list): a toolset
+  // beside it fails here, at startup.
+  const selected = deps.toolsets ?? [];
+  const { toolsets: enabledToolsets, readOnly } = resolveRegistration(
+    deps.readOnly && !selected.some(s => s.trim() === READONLY) ? [...selected, READONLY] : selected
+  );
 
   const actorTools = new ActorTools({ foundry, logger });
   const itemTools = new ItemTools({ foundry, logger });
@@ -392,6 +410,16 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
         throw new Error(`Toolset "${set}" lists "${name}", which has no handler`);
     }
   }
+  // Every dispatchable tool says whether it reads or writes (src/tool-kinds.ts): the read-only
+  // registration's list and its refusals stand on that table, so a gap fails here the same way.
+  for (const name of Object.keys(handlers)) {
+    if (!Object.hasOwn(TOOL_KINDS, name)) {
+      throw new Error(`Tool "${name}" has a handler but no read/write tag (src/tool-kinds.ts)`);
+    }
+  }
+  for (const name of Object.keys(TOOL_KINDS)) {
+    if (!handlers[name]) throw new Error(`src/tool-kinds.ts tags "${name}", which has no handler`);
+  }
   const isEnabled = (name: string): boolean => enabledToolsets.has(toolsetByTool.get(name)!);
 
   // The advertised top level is closed (toInputSchema sets additionalProperties:false): an unknown
@@ -419,15 +447,15 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
 
   // Advertise exactly what we can dispatch (within the enabled toolsets); a handler with no
   // matching definition is a wiring bug that should fail loudly at startup, not ship a tool that
-  // can't describe itself.
+  // can't describe itself. A read-only registration advertises the reads only (readOnlyView).
   const tools = Object.keys(handlers)
     .filter(isEnabled)
-    .map(name => {
+    .flatMap(name => {
       const def = defByName.get(name);
       if (!def) {
         throw new Error(`Tool "${name}" has a handler but no advertised definition`);
       }
-      return def;
+      return readOnly ? readOnlyView(def) : [def];
     });
 
   const dispatch = async (name: string, args: any): Promise<any> => {
@@ -445,9 +473,66 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
           'the MCP registration (or unset it for the whole surface) and restart the client.'
       );
     }
+    // Read-only: every call passes here before its handler, advertised or not, so a write (a write
+    // tool, a family tool's write action, a configure call naming a field) is refused by name.
+    if (readOnly && toolKind(name, args) !== 'read') {
+      throw new FormattedToolError(readOnlyRefusal(name, args));
+    }
     refuseUnknownArgs(name, args);
     return handler(args ?? {});
   };
 
-  return { tools, handlers, dispatch, enabledToolsets };
+  return { tools, handlers, dispatch, enabledToolsets, readOnly };
+}
+
+/**
+ * A tool as a read-only registration advertises it (src/tool-kinds.ts): a read whole, a write not
+ * at all, a tool that reads without its write fields whole (the dispatcher refuses the write
+ * form), a tool that reads by `action` narrowed to its read actions.
+ */
+function readOnlyView(def: any): any[] {
+  const kind: ToolKind | undefined = (TOOL_KINDS as Record<string, ToolKind>)[def.name];
+  if (kind === 'read') return [def];
+  if (kind === undefined || kind === 'write') return [];
+  const actions = readActionsOf(def.name);
+  return [actions ? narrowToActions(def, actions) : def];
+}
+
+/**
+ * The advertised schema cut to `actions`, a view over the JSON the tool classes advertise (they
+ * are untouched). A union tool (src/tools/_union.ts) keeps the members whose `action` is one of
+ * them; each discriminator's enum keeps the values a kept member selects, and a root leaf no kept
+ * member takes is dropped. An action-enum tool keeps those values of its `action` enum.
+ */
+function narrowToActions(def: any, actions: readonly string[]): any {
+  const schema = def.inputSchema;
+  if (Array.isArray(schema.anyOf)) {
+    const members = schema.anyOf.filter((m: any) => actions.includes(m.properties?.action?.const));
+    const taken = new Set(members.flatMap((m: any) => Object.keys(m.properties)));
+    const discriminators = new Set<string>(schema.required ?? []);
+    const properties: Record<string, unknown> = {};
+    for (const [key, leaf] of Object.entries<any>(schema.properties ?? {})) {
+      if (!taken.has(key)) continue;
+      if (!discriminators.has(key) || !Array.isArray(leaf.enum)) {
+        properties[key] = leaf;
+        continue;
+      }
+      const selected = new Set(members.map((m: any) => m.properties[key]?.const));
+      properties[key] = { ...leaf, enum: leaf.enum.filter((v: unknown) => selected.has(v)) };
+    }
+    return { ...def, inputSchema: { ...schema, properties, anyOf: members } };
+  }
+  const action = schema.properties?.action;
+  if (!Array.isArray(action?.enum)) return def;
+  const narrowed = {
+    ...action,
+    enum: action.enum.filter((v: unknown) => actions.includes(v as string)),
+  };
+  if (narrowed.default !== undefined && !narrowed.enum.includes(narrowed.default)) {
+    delete narrowed.default;
+  }
+  return {
+    ...def,
+    inputSchema: { ...schema, properties: { ...schema.properties, action: narrowed } },
+  };
 }

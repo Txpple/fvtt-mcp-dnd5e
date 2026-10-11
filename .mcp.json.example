@@ -1,5 +1,6 @@
 {
   "_comment": "Copy this to a .mcp.json that Claude Code reads (your project root, or merge into ~/.claude.json mcpServers), then set ABSOLUTE paths. One registration per Foundry instance: its env block names the instance and beats the shared .env. command is the full node.exe path: an MCP client started from a desktop app often does not have Node on PATH. The .mcp.json itself is gitignored.",
+  "_comment_readonly": "foundry-readonly is your world read-only: every toolset's reads, every write refused by name. Join it as a Player or Trusted Player user (FOUNDRY_USER, plus FOUNDRY_PASSWORD if it has one): that role is the real boundary.",
   "mcpServers": {
     "foundry": {
       "command": "C:/Program Files/nodejs/node.exe",
@@ -10,6 +11,15 @@
       "command": "C:/Program Files/nodejs/node.exe",
       "args": ["C:/Users/<you>/path/to/fvtt-mcp-dnd5e/dist/index.js"],
       "env": { "FOUNDRY_HOST": "local" }
+    },
+    "foundry-readonly": {
+      "command": "C:/Program Files/nodejs/node.exe",
+      "args": ["C:/Users/<you>/path/to/fvtt-mcp-dnd5e/dist/index.js"],
+      "env": {
+        "FOUNDRY_URL": "https://your-box.example.com",
+        "FOUNDRY_USER": "<a Player or Trusted Player user>",
+        "FOUNDRY_TOOLSETS": "readonly"
+      }
     }
   }
 }

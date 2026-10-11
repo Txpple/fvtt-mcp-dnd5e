@@ -58,16 +58,19 @@ async function main(): Promise<void> {
     // The seat record names this session; the idle logout frees the seat when nobody is calling.
     ...(config.bridgeLabel ? { label: config.bridgeLabel } : {}),
     idleLogoutMs: Math.round(config.idleLogoutMin * 60_000),
+    // A read-only registration: the connect warns when the join user's role could write anyway.
+    expectReadOnly: config.readOnly,
   });
 
   // The whole tool surface: definitions + dispatch, wired in one place (src/registry.ts).
-  const { tools, dispatch, enabledToolsets } = buildToolRegistry({
+  const { tools, dispatch, enabledToolsets, readOnly } = buildToolRegistry({
     foundry,
     logger,
     host,
     toolsets: config.toolsets,
+    readOnly: config.readOnly,
   });
-  logger.info('Tool surface', { tools: tools.length, toolsets: [...enabledToolsets] });
+  logger.info('Tool surface', { tools: tools.length, toolsets: [...enabledToolsets], readOnly });
 
   // Central error mapper for the dispatch wrapper: a coded BridgeError (the page's PageError code,
   // or `connection`) keeps its words and gains one hint; everything else is its raw message; a

@@ -24,7 +24,8 @@ Every host reads the same names; a preset only changes the defaults and which on
 - **`FOUNDRY_URL`** — required; the placeholder in `.env.example` is refused at startup.
 - **`FOUNDRY_USER`** / **`FOUNDRY_PASSWORD`** — the dedicated user the bridge joins as (create it in
   Foundry: Users → Create User, role Gamemaster or Assistant GM; default name `MCP-Claude`). A
-  lower role is warned about at connect and every write fails.
+  lower role is warned about at connect and every write fails. A `readonly` registration (below)
+  wants the reverse, a Player or Trusted Player, and warns about a role that can write.
 - **`FOUNDRY_ADMIN_KEY`** — the admin access key. With it the bridge launches the world itself when
   the instance is up but no world is active; without it you launch the world by hand.
 - **`FOUNDRY_WORLD_ID`** — only when `/setup` lists more than one world; unset = the one world there
@@ -33,7 +34,8 @@ Every host reads the same names; a preset only changes the defaults and which on
   error. A host without one is expected to be up.
 - **A direct file plane** (optional) — `FOUNDRY_DATA_DIR` (the install's `Data/`, when it is on
   this machine) or `FOUNDRY_WEBDAV_URL` / `_USER` / `_PASSWORD` (a WebDAV endpoint over `Data/`).
-- **`FOUNDRY_TOOLSETS`** — per registration, a comma list of the toolsets to advertise (below).
+- **`FOUNDRY_TOOLSETS`** — per registration, a comma list of the toolsets to advertise, or
+  `readonly` (below).
 - **`FOUNDRY_IDLE_LOGOUT_MIN`** — minutes with no tool call before the bridge logs itself out
   (default 20; `0` keeps the seat until `disconnect-bridge`). The next call reconnects. A
   forgotten session's seat used to block the suites' sole-GM preflight an hour later.
@@ -53,9 +55,10 @@ registrations.
 A registration's `env` block beats the shared `.env`, so one `.env` serves every registration and
 each registration sets only what differs — which instance (`FOUNDRY_URL`) and how it is reached
 (`FOUNDRY_HOST`). Which instance a tool call touches is fixed by which server it goes to; there is
-no runtime "switch instance" state. The documented pair is in [`.mcp.json.example`](../.mcp.json.example):
-`foundry` (your world) and `foundry-local5e` (`FOUNDRY_HOST=local`). The skills name tools bare;
-when more than one Foundry is registered they use the one you named.
+no runtime "switch instance" state. The documented registrations are in
+[`.mcp.json.example`](../.mcp.json.example): `foundry` (your world), `foundry-local5e`
+(`FOUNDRY_HOST=local`) and `foundry-readonly` (your world, read-only, as a Player). The skills
+name tools bare; when more than one Foundry is registered they use the one you named.
 
 ## The two planes
 
@@ -97,11 +100,27 @@ names). A registration that only does part of the job can say so:
 | `scripting` | `run-script` — a short program against the page API, one round trip, with a dry run and undo |
 | `assets` | the Plane-B file tools + reference integrity |
 | `organization` | folders, moves, bulk delete, macros |
+| `readonly` | not a toolset but a mode over all of them: every toolset's reads, nothing that writes. It stands alone |
 
 Unset = everything (the bundled skills need the whole surface). A call to a tool outside the
 enabled set is refused **by name** — which toolset it is in and how to enable it — never as
 "unknown tool"; a misspelt toolset stops the server at startup with the valid names. The table is
 [`src/toolsets.ts`](../src/toolsets.ts).
+
+**`readonly` is the recommended first registration** for a cautious DM, and the one for a
+registration players use. It advertises the read tools whole and each family tool narrowed to its
+read actions (`manage-actors` lists, gets and exports; `manage-placeables` lists every kind):
+41 tools, about 15.7k tokens of `tools/list`. Every other call is refused **by name** at dispatch,
+before its handler runs, whether or not the client was shown the tool: `manage-actors action
+"delete" is not a read: this registration is read-only (FOUNDRY_TOOLSETS=readonly); use a
+registration without it.` What reads is tagged per tool and per action in
+[`src/tool-kinds.ts`](../src/tool-kinds.ts); a configure tool reads only when called without its
+fields, and `run-script` is never a read. `readonly` beside a toolset (`readonly,chat`) stops the
+server at startup. Pair it with a join user whose role is **Player or Trusted Player**: the server
+refuses only the calls it is asked to make, and the role of the join user is the boundary it
+cannot cross, since Foundry refuses that user's writes itself; its reads see what that user may
+see. A read-only registration that joins as a Gamemaster or Assistant GM is warned about at
+connect and by `npm run doctor`.
 
 ## Bringing a world up to the 3.0 line
 

@@ -14,6 +14,8 @@ import { buildToolRegistry } from '../registry.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
 import { TOOLSETS, TOOLSET_NAMES, parseToolsetsEnv } from '../toolsets.js';
+import { TOOL_KINDS, type ToolKind, toolKind } from '../tool-kinds.js';
+import { opKind } from '../page/_ops.js';
 import { createHost, resolveHostConfig } from '../hosts/index.js';
 
 /** A generic host (no wake, no file plane) — enough for the registry to wire every tool. */
@@ -597,5 +599,314 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
     expect(parseToolsetsEnv(undefined)).toEqual([]);
     expect(parseToolsetsEnv('')).toEqual([]);
     expect(parseToolsetsEnv(' settings, chat ,,assets ')).toEqual(['settings', 'chat', 'assets']);
+  });
+});
+
+describe('FOUNDRY_TOOLSETS=readonly — the reads only, every other call refused (src/tool-kinds.ts)', () => {
+  const READ_ONLY_REFUSAL =
+    'this registration is read-only (FOUNDRY_TOOLSETS=readonly); use a registration without it.';
+  const kinds = TOOL_KINDS as Record<string, ToolKind>;
+
+  function buildReadOnly(response: any = {}) {
+    const { foundry, calls } = makeFoundry(response);
+    const registry = buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      toolsets: ['readonly'],
+    });
+    return { ...registry, calls };
+  }
+
+  /** The `action` values a tool advertises: its union members' consts, or its `action` enum. */
+  function actionsOf(tool: any): string[] {
+    const s = tool.inputSchema;
+    if (Array.isArray(s.anyOf)) return s.anyOf.map((m: any) => m.properties.action?.const);
+    return s.properties?.action?.enum ?? [];
+  }
+
+  it('every dispatchable tool is tagged read or write, and every tag names a tool', () => {
+    const { handlers } = build();
+    expect(
+      Object.keys(handlers).filter(n => !Object.hasOwn(kinds, n)),
+      'handlers with no tag'
+    ).toEqual([]);
+    expect(
+      Object.keys(kinds).filter(n => !handlers[n]),
+      'tags with no handler'
+    ).toEqual([]);
+  });
+
+  it('every read action is one the tool advertises, every readIfAbsent key an argument it takes', () => {
+    const byName = new Map(build().tools.map(t => [t.name, t]));
+    // A tool that reads without its write fields: what else it takes is reviewed here, so a new
+    // argument is a decision — a write field joins readIfAbsent, a read-safe one joins this list.
+    const READ_SAFE: Record<string, string[]> = {
+      'configure-dnd5e-settings': [],
+      'configure-combat-tracker': [],
+      'set-primary-party': [],
+      'export-chat-log': ['format', 'localPath', 'limit', 'sinceTimestamp', 'overwrite'],
+      // with no action the calendar reads, whatever else the call names
+      'manage-calendar': [
+        'rounds',
+        'minutes',
+        'hours',
+        'days',
+        'seconds',
+        'year',
+        'month',
+        'day',
+        'hour',
+        'minute',
+      ],
+    };
+    for (const [name, kind] of Object.entries(kinds)) {
+      if (typeof kind === 'string') continue;
+      const tool = byName.get(name)!;
+      for (const action of kind.readActions ?? []) {
+        expect(actionsOf(tool), `${name} reads with action "${action}"`).toContain(action);
+      }
+      if (!kind.readIfAbsent) continue;
+      const takes = Object.keys(tool.inputSchema.properties);
+      for (const key of kind.readIfAbsent) expect(takes, `${name}.${key}`).toContain(key);
+      const rest = takes.filter(k => !kind.readIfAbsent!.includes(k) && k !== 'action');
+      expect(rest.sort(), `${name}: arguments neither in readIfAbsent nor reviewed`).toEqual(
+        [...(READ_SAFE[name] ?? ['(unreviewed)'])].sort()
+      );
+    }
+  });
+
+  it('advertises no write tool and no write member or action, in valid closed schemas', () => {
+    const { tools, readOnly, enabledToolsets } = buildReadOnly();
+    expect(readOnly).toBe(true);
+    expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
+    const names = tools.map(t => t.name);
+    expect(names).not.toContain('run-script');
+    expect(names).not.toContain('author-npc');
+    for (const name of TOOLSETS.session) expect(names, `session: ${name}`).toContain(name);
+    for (const tool of tools) {
+      const kind = kinds[tool.name];
+      expect(kind, `${tool.name} is a write`).not.toBe('write');
+      const reads = typeof kind === 'object' ? kind.readActions : undefined;
+      if (reads) {
+        const advertised = actionsOf(tool);
+        expect(
+          advertised.every(a => reads.includes(a)),
+          `${tool.name}: ${advertised}`
+        ).toBe(true);
+        expect([...tool.inputSchema.properties.action.enum].sort(), tool.name).toEqual(
+          [...new Set(advertised)].sort()
+        );
+      }
+      // every leaf at the root of a narrowed union is still taken by a member it kept
+      for (const m of tool.inputSchema.anyOf ?? []) expect(m.additionalProperties).toBe(false);
+      if (Array.isArray(tool.inputSchema.anyOf)) {
+        const taken = new Set(
+          tool.inputSchema.anyOf.flatMap((m: any) => Object.keys(m.properties))
+        );
+        for (const key of Object.keys(tool.inputSchema.properties))
+          expect(taken.has(key), `${tool.name}.${key}`).toBe(true);
+      }
+    }
+    // every tool tagged read is there, whole
+    const full = new Map(build().tools.map(t => [t.name, t]));
+    for (const [name, kind] of Object.entries(kinds)) {
+      if (kind === 'read')
+        expect(
+          tools.find(t => t.name === name),
+          name
+        ).toEqual(full.get(name));
+    }
+    expect(tools.flatMap(t => draft2020Violations(t.inputSchema, t.name))).toEqual([]);
+  });
+
+  it('advertises the family tools narrowed to their read actions', () => {
+    const { tools } = buildReadOnly();
+    const tool = (name: string) => tools.find(t => t.name === name)!.inputSchema;
+    const actors = tool('manage-actors');
+    expect(actors.properties.action.enum).toEqual(['list', 'get', 'get-entity', 'export']);
+    expect(actors.anyOf.map((m: any) => m.properties.action.const)).toEqual([
+      'list',
+      'get',
+      'get-entity',
+      'export',
+    ]);
+    // kind × action keeps every kind, with its list member only
+    const placeables = tool('manage-placeables');
+    expect(placeables.properties.kind.enum).toHaveLength(8);
+    expect(placeables.properties.action.enum).toEqual(['list']);
+    expect(placeables.anyOf).toHaveLength(8);
+    // a leaf only the write members took is gone from the root (manage-cards' folderName)
+    expect(Object.keys(tool('manage-cards').properties)).toEqual(['action']);
+    expect(tool('manage-effect').properties.action.enum).toEqual(['list']);
+    expect(tool('manage-calendar').properties.action).toMatchObject({
+      enum: ['read'],
+      default: 'read',
+    });
+    expect(tool('configure-area-sounds').properties.action.enum).toEqual(['list', 'library']);
+  });
+
+  it('refuses a write by name before its handler runs, and lets a read through to the bridge', async () => {
+    const { dispatch, calls } = buildReadOnly({ system: 'dnd5e' });
+    await expect(
+      dispatch('manage-actors', { action: 'delete', identifiers: ['Gren'] })
+    ).rejects.toThrow(
+      `manage-actors action "delete" is not a read: ${READ_ONLY_REFUSAL} It reads with action "list", "get", "get-entity", "export".`
+    );
+    await expect(dispatch('manage-actors', {})).rejects.toThrow(
+      `manage-actors with no action is not a read: ${READ_ONLY_REFUSAL}`
+    );
+    // not advertised, in an enabled toolset: the read-only refusal, not "unknown tool"
+    await expect(dispatch('author-npc', { name: 'Goblin' })).rejects.toThrow(
+      `author-npc is not a read: ${READ_ONLY_REFUSAL}`
+    );
+    await expect(dispatch('run-script', { script: 'return 1' })).rejects.toThrow(READ_ONLY_REFUSAL);
+    await expect(
+      dispatch('manage-placeables', { kind: 'walls', action: 'create', walls: [] })
+    ).rejects.toThrow(
+      `manage-placeables action "create" is not a read: ${READ_ONLY_REFUSAL} It reads with action "list".`
+    );
+    expect(calls).toEqual([]);
+
+    await dispatch('manage-actors', { action: 'list' });
+    await dispatch('get-world-info', {});
+    expect(calls.map(([op]) => op)).toEqual(['listActors', 'getWorldInfo']);
+    await expect(dispatch('no-such-tool', {})).rejects.toThrow(/Unknown tool/);
+  });
+
+  it('refuses a configure call that names a field, and reads the one that names none', async () => {
+    clearSystemCache(); // configure-dnd5e-settings → assertDnd5e probes getWorldInfo (cached)
+    const { dispatch, calls } = buildReadOnly((name: string) =>
+      name === 'getWorldInfo' ? { system: 'dnd5e' } : { settings: {}, changed: [] }
+    );
+    await expect(dispatch('configure-dnd5e-settings', { disableFalling: true })).rejects.toThrow(
+      `configure-dnd5e-settings with "disableFalling" is not a read: ${READ_ONLY_REFUSAL} It reads without "disableFalling".`
+    );
+    await expect(
+      dispatch('export-chat-log', { localPath: '/tmp/x.md', remotePath: 'exports/x.md' })
+    ).rejects.toThrow(
+      `export-chat-log with "remotePath" is not a read: ${READ_ONLY_REFUSAL} It reads without "remotePath".`
+    );
+    await expect(dispatch('manage-calendar', { action: 'advance', days: 1 })).rejects.toThrow(
+      `manage-calendar action "advance" is not a read: ${READ_ONLY_REFUSAL}`
+    );
+    await expect(dispatch('set-primary-party', { clear: true })).rejects.toThrow(READ_ONLY_REFUSAL);
+    expect(calls).toEqual([]);
+
+    await dispatch('configure-dnd5e-settings', {});
+    expect(calls.map(([op]) => op)).toEqual(['getWorldInfo', 'configureDnd5eSettings']);
+    expect(calls[1]![1]).toEqual({});
+  });
+
+  it('every read form it advertises reaches only page ops tagged read (src/page/_ops.ts)', async () => {
+    // The two tag layers agree: each advertised form (a union member, an action value, a plain
+    // tool) is called with its required arguments made up from its schema, and every page op the
+    // handler reaches must be a read by the page's own table.
+    const fill = (leaf: any): unknown => {
+      if (leaf.const !== undefined) return leaf.const;
+      if (Array.isArray(leaf.enum)) return leaf.enum[0];
+      if (leaf.type === 'array') return [fill(leaf.items ?? {})];
+      if (leaf.type === 'number' || leaf.type === 'integer') return 1;
+      if (leaf.type === 'boolean') return true;
+      if (leaf.type === 'object') return {};
+      return 'ZZ-x';
+    };
+    const formArgs = (schema: any, extra: Record<string, unknown> = {}) => {
+      const args: Record<string, unknown> = { ...extra };
+      for (const key of schema.required ?? []) args[key] ??= fill(schema.properties[key]);
+      return args;
+    };
+    // writes a file on this machine (an absolute localPath), or never reaches the page
+    const SKIP = new Set([
+      'download-asset',
+      'export-chat-log',
+      'read-pack',
+      'manage-actors export',
+    ]);
+    const NO_PAGE_OP = new Set(['disconnect-bridge', 'asset-url']);
+    // a refinement the advertised schema cannot say (one of className / classUuid, ...)
+    const EXTRA: Record<string, Record<string, unknown>> = {
+      'inspect-pc-advancement': { className: 'Wizard' },
+      'manage-effect': { actorIdentifier: 'ZZ-x' },
+    };
+    // the page tag reads only an empty call, and the tool's zod default sends `clear: false`
+    const PAGE_TAG_STRICTER = new Set(['configurePrimaryParty']);
+
+    clearSystemCache();
+    const { tools, dispatch, calls } = buildReadOnly((name: string) =>
+      name === 'getWorldInfo' ? { system: 'dnd5e' } : {}
+    );
+    const reached: string[] = [];
+    const problems: string[] = [];
+    for (const tool of tools) {
+      const s = tool.inputSchema;
+      const extra = EXTRA[tool.name] ?? {};
+      const forms: Array<[string, Record<string, unknown>]> = Array.isArray(s.anyOf)
+        ? s.anyOf.map((m: any) => [
+            `${tool.name} ${m.properties.action?.const ?? m.properties.type?.const}`,
+            formArgs(m, extra),
+          ])
+        : (s.properties?.action?.enum ?? [undefined]).map((action: string | undefined) => [
+            `${tool.name}${action ? ` ${action}` : ''}`,
+            formArgs(s, action ? { ...extra, action } : extra),
+          ]);
+      for (const [label, args] of forms) {
+        if (SKIP.has(label) || SKIP.has(tool.name)) continue;
+        calls.length = 0;
+        let error = '';
+        // a fake answer may trip a formatter after the call; what matters is what was called
+        await dispatch(tool.name, args).catch(e => {
+          error = String(e?.message ?? e).slice(0, 120);
+        });
+        const ops = calls.map(([op, a]) => [op, opKind(op, a)] as const);
+        if (!NO_PAGE_OP.has(tool.name) && ops.length === 0) {
+          problems.push(`${label} ${JSON.stringify(args)}: no page op (${error})`);
+        }
+        for (const [op, kind] of ops) {
+          if (kind !== 'read' && !PAGE_TAG_STRICTER.has(op))
+            problems.push(`${label} → ${op} is a ${kind}`);
+        }
+        reached.push(label);
+      }
+    }
+    expect(problems, problems.join('\n')).toEqual([]);
+    expect(reached.length).toBeGreaterThan(50);
+  });
+
+  it('a call is a read by its tag: the action, or the write fields it leaves out', () => {
+    expect(toolKind('get-world-info', {})).toBe('read');
+    expect(toolKind('author-npc', {})).toBe('write');
+    expect(toolKind('not-a-tool', {})).toBe('write');
+    expect(toolKind('manage-items', { action: 'get' })).toBe('read');
+    expect(toolKind('manage-items', { action: 'import' })).toBe('write');
+    expect(toolKind('manage-calendar', {})).toBe('read');
+    expect(toolKind('manage-calendar', { action: 'read' })).toBe('read');
+    expect(toolKind('manage-calendar', { action: 'set', day: 3 })).toBe('write');
+    expect(toolKind('configure-combat-tracker', {})).toBe('read');
+    expect(toolKind('configure-combat-tracker', { turnMarker: {} })).toBe('write');
+    expect(toolKind('export-chat-log', { localPath: '/tmp/x.md' })).toBe('read');
+    expect(toolKind('export-chat-log', { remotePath: 'x.md' })).toBe('write');
+    expect(toolKind('set-primary-party', undefined)).toBe('read');
+    expect(toolKind('set-primary-party', { groupIdentifier: 'Party' })).toBe('write');
+  });
+
+  it('readonly stands alone: beside a toolset it fails at build, naming the rule', () => {
+    const { foundry } = makeFoundry();
+    const rule = /FOUNDRY_TOOLSETS: "readonly" stands alone \(got "readonly,chat"\)/;
+    expect(() =>
+      buildToolRegistry({ foundry, logger: makeLogger(), host, toolsets: ['readonly', 'chat'] })
+    ).toThrow(rule);
+    expect(() =>
+      buildToolRegistry({ foundry, logger: makeLogger(), host, toolsets: ['chat'], readOnly: true })
+    ).toThrow(/"readonly" stands alone \(got "chat,readonly"\)/);
+    // the flag and the name are the same registration
+    const byFlag = buildToolRegistry({ foundry, logger: makeLogger(), host, readOnly: true });
+    expect(byFlag.readOnly).toBe(true);
+    expect(byFlag.tools).toEqual(buildReadOnly().tools);
+    expect(build().readOnly).toBe(false);
+    // an unknown name says readonly exists
+    expect(() =>
+      buildToolRegistry({ foundry, logger: makeLogger(), host, toolsets: ['read-only'] })
+    ).toThrow(/"read-only" is not a toolset \(one of: .*scripting; or "readonly" alone\)/);
   });
 });

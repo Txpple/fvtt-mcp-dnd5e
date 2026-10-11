@@ -23,7 +23,7 @@ import {
 import { buildToolRegistry } from './registry.js';
 import { ACTOR_TARGET, ACTOR_TARGET_STRICT, ITEM_TARGET, SCENE_TARGET } from './tools/_targets.js';
 import { makeFoundry, makeLogger } from './tools/test-helpers.js';
-import { ALWAYS_ON } from './toolsets.js';
+import { ALWAYS_ON, READONLY } from './toolsets.js';
 
 /** The ratchets (chars). The comment names the milestone that lowers each one and its target. */
 const BUDGET = {
@@ -55,6 +55,9 @@ describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
   const tools = surface();
   const list = decomposeToolsList(tools);
   const alwaysOn = jsonChars(surface([ALWAYS_ON]));
+  // FOUNDRY_TOOLSETS=readonly (issue #8): a different registration's list — reported, no ceiling
+  const readOnlyTools = surface([READONLY]);
+  const readOnly = jsonChars(readOnlyTools);
   const offenders = proseOffenders(tools);
   const names = measureNames(tools, DEFAULT_REGISTRATIONS);
   const skills = readSkillDescriptions();
@@ -82,6 +85,11 @@ describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
       `  leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description + list.totals.memberDescriptions)} · ` +
         `structural ${fmt(list.totals.structural)} · longest leaf ${fmt(list.totals.longestLeafDescription)}`,
       line(`always-on (${ALWAYS_ON})`, alwaysOn, `(≤ ${fmt(BUDGET.alwaysOnChars)})`),
+      line(
+        READONLY,
+        readOnly,
+        `(${readOnlyTools.length} tools; ${((100 * readOnly) / list.chars).toFixed(1)}% of the full list; reported, no ceiling)`
+      ),
       `  prose budget: ${offenders.length} tools over (leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}; M7 done)`,
     ].join('\n')
   );

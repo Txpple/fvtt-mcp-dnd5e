@@ -188,6 +188,12 @@ export interface FoundryConfig {
    * the connect: the wake and ready budgets above are the connect's.
    */
   opCapMs?: number;
+  /**
+   * The registration is read-only (FOUNDRY_TOOLSETS=readonly): the connect warns when the join
+   * user is an Assistant GM or Gamemaster, since that role, not the server's refusals, is the
+   * boundary a write would have to cross. Such a user is expected to be a Player or Trusted Player.
+   */
+  expectReadOnly?: boolean;
 }
 
 /** How long a page has to answer "are you there?" once an op outlives its cap. */
@@ -316,7 +322,16 @@ export class Foundry implements FoundryBridge {
     this.log.info(`connected as "${this.cfg.user}" — game.ready (world "${this.liveWorldId}")`);
     // Nearly every tool writes as a GM; a lower role fails call by call with Foundry's own
     // permission errors, so say it once here (CONST.USER_ROLES: ASSISTANT = 3, GAMEMASTER = 4).
-    if (who.role < 3) {
+    // A read-only registration is the reverse: it wants a Player or Trusted Player, because the
+    // server's refusals stop the calls it is asked to make and the role stops everything else.
+    if (this.cfg.expectReadOnly && who.role >= 3) {
+      this.log.warn(
+        `bridge user "${this.cfg.user}" has role ${who.role} (${who.role >= 4 ? 'Gamemaster' : 'Assistant GM'}) ` +
+          'on a read-only registration (FOUNDRY_TOOLSETS=readonly) — the server refuses writes, but ' +
+          'this user could make them: the role of the join user is the real boundary. Give it the ' +
+          'Player or Trusted Player role.'
+      );
+    } else if (!this.cfg.expectReadOnly && who.role < 3) {
       this.log.warn(
         `bridge user "${this.cfg.user}" has role ${who.role} (below Assistant GM) — every write ` +
           'tool will be refused by Foundry. Give the user the Gamemaster or Assistant GM role.'

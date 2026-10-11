@@ -1,9 +1,10 @@
 // Acceptance for FOUNDRY_TOOLSETS over the REAL stdio server (dist/index.js), no world needed:
-// tools/list never touches Foundry, and a call outside the enabled set is refused by the registry
-// before the bridge is consulted. Spawns the server three times — unset, a selection, a bad name —
-// and speaks JSON-RPC to it.
+// tools/list never touches Foundry, and a call outside the enabled set, or a write on a read-only
+// registration, is refused by the registry before the bridge is consulted. Spawns the server five
+// times — unset, a selection, a bad name, readonly, readonly beside a toolset — and speaks JSON-RPC
+// to it.
 //
-//   node scripts/verify-toolsets.mjs
+//   FOUNDRY_HOST=local node scripts/verify-toolsets.mjs
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -143,6 +144,76 @@ console.log(
   check(
     /"sceens" is not a toolset \(one of: session, settings, actors/.test(stderr),
     'startup error names the valid toolsets',
+    stderr.slice(0, 200)
+  );
+  check(code !== 0, `exit code ${code}`);
+}
+
+console.log(
+  "[4] FOUNDRY_TOOLSETS=readonly → every toolset's reads; a write is refused by name, before the bridge"
+);
+{
+  const callActorDelete = {
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: { name: 'manage-actors', arguments: { action: 'delete', identifiers: ['ZZ-never'] } },
+  };
+  const { responses, stderr } = await rpc({ FOUNDRY_TOOLSETS: 'readonly' }, [
+    init,
+    list,
+    callScene,
+    callActorDelete,
+  ]);
+  const tools = responses.get(2)?.result?.tools ?? [];
+  const names = tools.map(t => t.name);
+  check(names.includes('get-world-info'), 'session is advertised');
+  const actions = tools.find(t => t.name === 'manage-actors')?.inputSchema?.properties?.action
+    ?.enum;
+  check(
+    JSON.stringify(actions) === JSON.stringify(['list', 'get', 'get-entity', 'export']),
+    'manage-actors is advertised with its read actions only',
+    JSON.stringify(actions)
+  );
+  check(
+    !names.includes('run-script') && !names.includes('author-npc'),
+    'no write tool is advertised (run-script, author-npc)'
+  );
+  const bytes = JSON.stringify(tools).length;
+  console.log(
+    `      (${tools.length} tools; tools/list payload: ${bytes} chars ≈ ${Math.round(bytes / 3.6)} tokens)`
+  );
+  const readOnly =
+    /is not a read: this registration is read-only \(FOUNDRY_TOOLSETS=readonly\); use a registration without it\./;
+  for (const [id, label, head] of [
+    [3, 'manage-scenes create', 'manage-scenes action "create"'],
+    [4, 'manage-actors delete', 'manage-actors action "delete"'],
+  ]) {
+    const call = responses.get(id)?.result;
+    const text = call?.content?.[0]?.text ?? '';
+    check(
+      call?.isError === true && text.includes(head) && readOnly.test(text),
+      `tools/call ${label} → refused by the read-only message`,
+      text.slice(0, 200)
+    );
+  }
+  check(
+    !/\[foundry\]/.test(stderr),
+    'no bridge connect (the bridge said nothing)',
+    stderr.slice(0, 200)
+  );
+}
+
+console.log('[5] FOUNDRY_TOOLSETS=readonly,chat → the server refuses to start, naming the rule');
+{
+  const { responses, stderr, code } = await rpc({ FOUNDRY_TOOLSETS: 'readonly,chat' }, [
+    init,
+    list,
+  ]);
+  check(!responses.get(2)?.result, 'no tools/list answer');
+  check(
+    /FOUNDRY_TOOLSETS: "readonly" stands alone \(got "readonly,chat"\)/.test(stderr),
+    'startup error names the rule',
     stderr.slice(0, 200)
   );
   check(code !== 0, `exit code ${code}`);

@@ -28,6 +28,7 @@ import {
   targetLabel,
 } from './client.js';
 import { chromiumProblem } from './foundry.js';
+import { parseToolsetsEnv, resolveRegistration } from './toolsets.js';
 import { majorVersion, REQUIRED_DND5E_MAJOR } from './utils/system-detection.js';
 
 export type Mark = 'ok' | 'fail' | 'warn' | 'skip';
@@ -95,6 +96,39 @@ export function roleName(role: number): string {
   return ['None', 'Player', 'Trusted Player', 'Assistant GM', 'Gamemaster'][role] ?? `role ${role}`;
 }
 
+/**
+ * The login line: the joined role against what the registration needs. A full registration needs
+ * a Gamemaster or Assistant GM (the write tools run as one); a read-only one
+ * (FOUNDRY_TOOLSETS=readonly) wants a Player or Trusted Player, whose role keeps it from writing.
+ */
+export function loginLine(
+  name: string,
+  role: number,
+  secs: string,
+  readOnly: boolean
+): { mark: Mark; text: string } {
+  const joined = `login: "${name}" joined as ${roleName(role)} in ${secs} s, then disconnected`;
+  if (readOnly) {
+    return role >= 3
+      ? {
+          mark: 'warn',
+          text:
+            `${joined} — FOUNDRY_TOOLSETS=readonly, but this user can write: the server refuses ` +
+            'writes by name, and the role of the join user is the boundary it cannot cross; give ' +
+            'the user the Player or Trusted Player role (User Management)',
+        }
+      : { mark: 'ok', text: `${joined} — FOUNDRY_TOOLSETS=readonly, and the role keeps it so` };
+  }
+  return role >= 3
+    ? { mark: 'ok', text: joined }
+    : {
+        mark: 'fail',
+        text:
+          `login: "${name}" joined as ${roleName(role)} — every write tool needs Gamemaster ` +
+          'or Assistant GM; change its role in Foundry (User Management)',
+      };
+}
+
 /** The selector's alias notes (`LOCAL_X is a legacy alias of FOUNDRY_X — …`) as one line. */
 export function legacyNamesLine(notes: string[]): string | undefined {
   if (!notes.length) return undefined;
@@ -155,6 +189,14 @@ export async function runDoctor(io: DoctorIO): Promise<number> {
   if (problem) {
     fail(`config: ${problem}`);
     return failed;
+  }
+  // FOUNDRY_TOOLSETS as the server resolves it: a bad value stops the server at startup, and a
+  // read-only registration wants a different role at the login below.
+  let readOnly = false;
+  try {
+    readOnly = resolveRegistration(parseToolsetsEnv(env.FOUNDRY_TOOLSETS)).readOnly;
+  } catch (err) {
+    fail(`config: ${firstLine(err)}`);
   }
   if (existsSync(path)) {
     io.say('ok', `config: ${path}, host ${targetLabel(kind)}, bridge user "${hostConfig.user}"`);
@@ -284,17 +326,9 @@ export async function runDoctor(io: DoctorIO): Promise<number> {
       await dispose();
     }
     const secs = ((Date.now() - started) / 1000).toFixed(1);
-    if (who.role >= 3) {
-      io.say(
-        'ok',
-        `login: "${who.name}" joined as ${roleName(who.role)} in ${secs} s, then disconnected`
-      );
-    } else {
-      fail(
-        `login: "${who.name}" joined as ${roleName(who.role)} — every write tool needs Gamemaster ` +
-          'or Assistant GM; change its role in Foundry (User Management)'
-      );
-    }
+    const login = loginLine(who.name, who.role, secs, readOnly);
+    if (login.mark === 'fail') fail(login.text);
+    else io.say(login.mark, login.text);
   } catch (err) {
     fail(`login: ${firstLine(err)}`);
   }

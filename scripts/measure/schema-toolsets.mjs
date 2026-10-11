@@ -1,11 +1,12 @@
 // What each toolset buys: tools/list bytes per single toolset (every registration always carries
-// `world`), computed offline from the registry, plus the skill-driven combinations a narrow
-// registration would set in FOUNDRY_TOOLSETS. The always-on set's size is M7's ≤ 2,100 target.
+// `session`), computed offline from the registry, plus the skill-driven combinations a narrow
+// registration would set in FOUNDRY_TOOLSETS. The always-on set's size is M7's ≤ 2,100 target;
+// the read-only registration (FOUNDRY_TOOLSETS=readonly, issue #8) is reported after it.
 //
 //   node scripts/measure/schema-toolsets.mjs
 //
 // Offline (builds the registry from dist/; run `npm run build` first).
-import { ALWAYS_ON, TOOLSET_NAMES, TOOLSETS } from '../../dist/toolsets.js';
+import { ALWAYS_ON, READONLY, TOOLSET_NAMES, TOOLSETS } from '../../dist/toolsets.js';
 import { approxTokens, buildRegistry, fmt, jsonChars, pct } from './lib.mjs';
 
 const full = buildRegistry().tools;
@@ -35,6 +36,12 @@ console.log(
 );
 console.log(
   `always-on (${alwaysOn.join(',')}): ${fmt(alwaysOnBytes)} chars — every registration carries this (M7 → ≤ 2,100)`
+);
+const readOnly = buildRegistry([READONLY]).tools;
+const readOnlyBytes = jsonChars(readOnly);
+console.log(
+  `${READONLY} (FOUNDRY_TOOLSETS=${READONLY}): ${readOnly.length} tools, ${fmt(readOnlyBytes)} chars ≈ ` +
+    `${fmt(approxTokens(readOnlyBytes))} tokens (${pct(readOnlyBytes, allBytes)} of full) — every toolset's reads`
 );
 
 const combos = [

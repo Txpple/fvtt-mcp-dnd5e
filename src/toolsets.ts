@@ -1,15 +1,18 @@
 // Toolsets — the named slices of the tool surface a registration can choose to advertise.
 //
-// Why: the full surface is ~150 tools, ~57k tokens of tools/list. A client that loads MCP schemas
+// Why: the full surface is 81 tools, ~57k tokens of tools/list. A client that loads MCP schemas
 // eagerly pays that before the first word — twice, when prod and the sandbox are both registered.
 // A registration that only ever narrates a session, or only ever manages files, can say so:
 //
-//     "env": { "FOUNDRY_TOOLSETS": "world,chat,combat" }
+//     "env": { "FOUNDRY_TOOLSETS": "chat,combat" }
 //
 // and advertise just those. Unset = everything (the skills need the whole surface). `session` is
 // always on — get-world-info / disconnect-bridge are the session's lifeline whatever else is off;
 // the world-level writes (`settings`) are opt-in like every other family, so a narrow
 // registration does not carry them (M7 of the 3.0 plan: the always-on set ≤ 2,100 chars).
+//
+// `readonly` is a mode, not a toolset (issue #8): every toolset's reads (src/tool-kinds.ts), and
+// a dispatcher that refuses every other call by name. It stands alone.
 //
 // This table is the single source of truth: every dispatchable tool belongs to exactly ONE
 // toolset, and registry.test.ts fails the build if a tool is unlisted, listed twice, or listed
@@ -118,6 +121,9 @@ export const TOOLSET_NAMES = Object.keys(TOOLSETS) as ToolsetName[];
 /** The toolset that is advertised whatever a registration asks for. */
 export const ALWAYS_ON: ToolsetName = 'session';
 
+/** The read-only mode's FOUNDRY_TOOLSETS value: every toolset's reads, nothing that writes. */
+export const READONLY = 'readonly';
+
 /** tool name → its toolset. */
 export function toolsetOf(): Map<string, ToolsetName> {
   const out = new Map<string, ToolsetName>();
@@ -138,12 +144,35 @@ export function resolveToolsets(selected: readonly string[]): Set<ToolsetName> {
   for (const s of clean) {
     if (!(TOOLSET_NAMES as string[]).includes(s)) {
       throw new Error(
-        `FOUNDRY_TOOLSETS: "${s}" is not a toolset (one of: ${TOOLSET_NAMES.join(', ')}).`
+        `FOUNDRY_TOOLSETS: "${s}" is not a toolset (one of: ${TOOLSET_NAMES.join(', ')}; ` +
+          `or "${READONLY}" alone).`
       );
     }
     out.add(s as ToolsetName);
   }
   return out;
+}
+
+/**
+ * Resolve a registration: the toolsets it enables, and whether it is read-only. `readonly` enables
+ * every toolset (the registry then advertises their reads only) and stands alone: combined with a
+ * toolset it fails loudly at startup, like an unknown name.
+ */
+export function resolveRegistration(selected: readonly string[]): {
+  toolsets: Set<ToolsetName>;
+  readOnly: boolean;
+} {
+  const clean = selected.map(s => s.trim()).filter(Boolean);
+  if (!clean.includes(READONLY)) return { toolsets: resolveToolsets(clean), readOnly: false };
+  const others = clean.filter(s => s !== READONLY);
+  if (others.length) {
+    throw new Error(
+      `FOUNDRY_TOOLSETS: "${READONLY}" stands alone (got "${clean.join(',')}"): it is a mode over ` +
+        'every toolset, their reads only, not a toolset to combine. Set FOUNDRY_TOOLSETS=readonly, ' +
+        'or list toolsets without it.'
+    );
+  }
+  return { toolsets: new Set(TOOLSET_NAMES), readOnly: true };
 }
 
 /** Parse the FOUNDRY_TOOLSETS env value (comma-separated). */

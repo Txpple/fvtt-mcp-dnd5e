@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { envFileWarnings, envPath, repoRoot } from './env.js';
 import { hostConfigProblem, resolveHostConfig, type HostConfig } from './hosts/env.js';
-import { parseToolsetsEnv } from './toolsets.js';
+import { parseToolsetsEnv, READONLY } from './toolsets.js';
 
 // Layer the family's .env (src/env.ts: <repo>/.env, or FVTT_MCP_ENV) UNDER process.env, whatever
 // the process's cwd — the server is launched by an MCP client from anywhere. dotenv never
@@ -49,6 +49,12 @@ const ConfigSchema = z.object({
    */
   toolsets: z.array(z.string().min(1)).default([]),
   /**
+   * FOUNDRY_TOOLSETS=readonly: a mode, not a toolset (issue #8). The registry advertises every
+   * toolset's reads and refuses every other call by name; the bridge warns at connect when the
+   * join user's role could write anyway. The registry refuses it beside a toolset.
+   */
+  readOnly: z.boolean().default(false),
+  /**
    * Minutes with no tool call before the bridge logs itself out (FOUNDRY_IDLE_LOGOUT_MIN, default
    * 20; 0 keeps the seat until disconnect-bridge). A forgotten session's seat used to block the
    * suites' sole-GM preflight an hour later (issue #12).
@@ -76,6 +82,8 @@ export type Config = z.infer<typeof ConfigSchema> & {
   notes: string[];
 };
 
+const toolsets = parseToolsetsEnv(process.env.FOUNDRY_TOOLSETS);
+
 const rawConfig = {
   logLevel: process.env.LOG_LEVEL || 'warn',
   logFormat: process.env.LOG_FORMAT || 'simple',
@@ -86,7 +94,8 @@ const rawConfig = {
     name: process.env.SERVER_NAME || 'foundry-mcp-server',
     version: process.env.SERVER_VERSION || readPackageVersion(),
   },
-  toolsets: parseToolsetsEnv(process.env.FOUNDRY_TOOLSETS),
+  toolsets,
+  readOnly: toolsets.includes(READONLY),
   idleLogoutMin: process.env.FOUNDRY_IDLE_LOGOUT_MIN
     ? Number.parseFloat(process.env.FOUNDRY_IDLE_LOGOUT_MIN)
     : 20,

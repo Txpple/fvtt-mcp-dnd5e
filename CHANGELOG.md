@@ -66,7 +66,20 @@ What changed for a user of the tools and skills, release by release. The measure
   bridge's next call re-joins with a new browser; it used to fail on the dead one (`Target page,
   context or browser has been closed`) until its server restarted. Library: `Holder` carries
   `browserPid` / `browserExe`, and `evictOtherHolders()` returns one entry per holder.
-- Budgets after: tools/list 204,719 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778.
+- **`FOUNDRY_TOOLSETS=readonly`: a registration that only reads** (issue #8). It advertises every
+  toolset's reads: the read tools whole, and each family tool narrowed to its read actions
+  (`manage-actors` `list` / `get` / `get-entity` / `export`, `manage-placeables` `list` for every
+  kind), 41 tools, 56,627 chars ≈ 15,730 tokens (27.7% of the full list). Every other call,
+  advertised or not, is refused by name before its handler runs (`manage-actors action "delete" is
+  not a read: this registration is read-only (FOUNDRY_TOOLSETS=readonly); use a registration
+  without it.`). A configure call that names a field and an `export-chat-log` copy into `Data/`
+  (`remotePath`) are writes; `run-script` is never a read. `readonly` stands alone: beside a
+  toolset it stops the server at startup. Pair it with a Player or Trusted Player join user,
+  whose role is the boundary the server cannot cross: the bridge warns at connect, and
+  `npm run doctor` on its login line, when a read-only registration joins as a Gamemaster or
+  Assistant GM. The tags, per tool and per action, are `src/tool-kinds.ts`; `.mcp.json.example`
+  carries a `foundry-readonly` entry.
+- Budgets after: tools/list 204,719 chars (≤ 205,000), names 6,143, skills see `npm test`, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 
