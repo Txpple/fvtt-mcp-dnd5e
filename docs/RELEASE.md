@@ -17,12 +17,15 @@
    npm run knip
    ```
 
-2. **The release set green** — twelve live verify scripts, run **one at a time** (never in
-   parallel: two drivers on one world race each other's writes), against the sandbox:
+2. **The release set green** — fourteen verify scripts, run **one at a time** (never in
+   parallel: two drivers on one world race each other's writes), against the sandbox.
+   `verify-receipts` is in it because a receipt rides every write path; `verify-toolsets` speaks
+   to the real stdio server and needs no world, so it is cheap:
 
    ```sh
    for s in effects-6 region-effects activities-6 settings-calendar item-tooling actor-tooling \
-            pc-build teleporter-scene-fields placeables-tooling scene-tools cast-activity region-tooling; do
+            pc-build teleporter-scene-fields placeables-tooling scene-tools cast-activity region-tooling \
+            receipts toolsets; do
      FOUNDRY_HOST=local node scripts/verify-$s.mjs || break
    done
    ```

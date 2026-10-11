@@ -3,8 +3,114 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased — the bridge names its holder, and logs itself out when idle
+## Unreleased — the last pass before sharing: receipts on every write, readonly, init, the bridge in get-world-info
 
+- **Every write tool answers with a receipt** (issue #6). The bridge reaches every page op through
+  one choke point: a write runs under the page's write lock, one at a time, while Foundry's own
+  document hooks record each document it creates, updates or deletes, with the pre-image an undo
+  needs (an update keeps the prior value of each path it changes, a delete the whole document). The
+  server groups one call's writes into one receipt and appends one line to the answer, also when
+  the call failed after it wrote:
+  `receipt rcpt_ab12cd: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value) · undo: run-script { "undo": "rcpt_ab12cd" }`.
+  `run-script { "undo": … }` reverses any receipt, a tool call's or a run's, newest write first:
+  it deletes what the call created, puts back the paths it changed (removing the ones it added)
+  and re-creates what it deleted with its id. An undo answers with its own receipt
+  (`reverses rcpt_…`), so it can be undone in turn (a redo); a receipt is undone once, and only
+  when every write of it was reversed: an undo that cannot reverse them all names the ones it
+  could not and says `receipt rcpt_… stays undoable` (its own receipt `partly reverses` it), and
+  undoing it again leaves alone what is already back. An undo that finds every value already back
+  (put back by hand) writes nothing, keeps no receipt of its own and says `nothing to put back`;
+  the receipt counts as undone. Receipts are kept on the bridge's machine, not in the page
+  (`fvtt-mcp-dnd5e/receipts/` under the OS temp dir, keyed by server URL and world id), the newest
+  50 per world for a day and 64 MB at most, never the one just written, so they survive a
+  `disconnect-bridge` and a restart and are never applied to another world. Not undoable: a
+  pre-image over 2 MB (8 MB per call, across all of its page writes; the line counts them), the
+  file plane, chat already seen, a pulled view. A registration without `scripting` gets the line
+  with how to enable the undo. A sibling harness driving `fvtt-mcp-dnd5e/client` asks for no
+  receipt and pays nothing. Two sessions on one seat keep separate receipts but still interleave
+  their writes at the server, where no write lock reaches: an undo puts back a value the other
+  session has changed since, as the seat warning at connect says. The delete tools
+  (`manage-actors` `delete`, `bulk-delete`, `delete-chat-messages`) no longer say a delete cannot
+  be undone. Measured in the page on the sandbox: the recorder's hooks cost 0.07 ms per write, a
+  delete's pre-image 0.15 ms for a 26 kB actor, and a real update's time is unchanged within its
+  noise (8–9 ms). `scripts/verify-receipts.mjs`: 25/25.
+- **`FOUNDRY_TOOLSETS=readonly`: a registration that only reads** (issue #8). It advertises every
+  toolset's reads: the read tools whole, and each family tool narrowed to its read actions
+  (`manage-actors` `list` / `get` / `get-entity` / `export`, `manage-placeables` `list` for every
+  kind), 41 tools, 56,627 chars ≈ 15,730 tokens (27.7% of the full list). Every other call,
+  advertised or not, is refused by name before its handler runs (`manage-actors action "delete" is
+  not a read: this registration is read-only (FOUNDRY_TOOLSETS=readonly); use a registration
+  without it.`). A configure call that names a field and an `export-chat-log` copy into `Data/`
+  (`remotePath`) are writes; `run-script` is never a read. `readonly` stands alone: beside a
+  toolset it stops the server at startup. Pair it with a Player or Trusted Player join user,
+  whose role is the boundary the server cannot cross: the bridge warns at connect, and
+  `npm run doctor` on its login line, when a read-only registration joins as a Gamemaster or
+  Assistant GM. The tags, per tool and per action, are `src/tool-kinds.ts`; `.mcp.json.example`
+  carries a `foundry-readonly` entry.
+- **`npm run init`: from a built clone to a checked registration in one command** (issue #7). It
+  says first what it cannot do (the Foundry user the bridge joins as must exist in the world), then
+  asks for the host (`local`, `molten`, `generic`), the URL, that user and its password, the admin
+  password, the host's extras (Molten's wake URL and File Manager password; a local install's
+  `Data` folder, offered at the platform's default), whether the first run is read-only, and where
+  the registration goes: this clone's `.mcp.json`, another project's, or `~/.claude.json` (copied
+  to `.bak-<time>` first; only its `mcpServers` entry changes). Every answer is also a flag; `--yes`
+  asks nothing, and a missing required answer exits 2 naming its flag. Secrets go only to the
+  `.env`: a new one gets the minimal block `.env.example` opens with, an existing one is copied to
+  `.bak` and changed in place where an answer differs (on the 2.x alias's line when that is what
+  the host reads, so the answer is not shadowed), every other line kept. The registration is the
+  full Node path, `dist/index.js` and an env block that names the instance (`FOUNDRY_HOST`,
+  `FOUNDRY_URL`, `FOUNDRY_TOOLSETS`, and `FVTT_MCP_ENV` for a `.env` that is not the repo's). Then
+  it runs the doctor, whose lines are the join report, and prints the entry as an `mcpServers`
+  block for any other MCP client; Claude Code's config is the only one it writes. `AGENTS.md`
+  ships beside `CLAUDE.md`. The legacy names are one table in the host selector (`legacyNameOf`),
+  and `runDoctor` takes the environment it reads as an argument.
+- **`get-world-info` reports the bridge itself** (issue #9): a `bridge` block after `host` with
+  this server's version, since when it holds the seat (the join user is `bridgeUser`'s), `woken`
+  (this connect found the world asleep, not launched, or booting), Chromium's renderer
+  (`GPU: <name>` or `software: <name>`, the canvas's unmasked WebGL renderer), `canvasReady`, the
+  Open Roll 5e modules the skills lean on (Battle Flow, Area Sounds, Open Server: a version, or
+  `not active`), the registration's `toolsets` (`all`, `readonly`, or the list), and `warnings` for
+  whatever of it is amber: a software renderer, an inactive family module (naming what needs it),
+  a read-only registration joined as a user that can write, Foundry below 14.368 or dnd5e below
+  6.0.5 (the README's requirements line). It stands in for the proposed `bridge-status` tool: a
+  tool would have pushed tools/list (204,714 of 205,000) and the always-on set (1,778 of 2,100)
+  past their ceilings, where a block in a result costs neither. `npm run doctor` prints a
+  `bridge:` line after the login (a ! for a software renderer or an inactive module),
+  `npm run smoke:bridge`'s line gains the renderer and the modules, and the `start-session` skill
+  reports the block and surfaces every warning. Library: `FoundryBridge.info()` (server URL, user,
+  since, woken); the page's `getWorldInfo` result carries `bridge` (renderer, canvasReady,
+  viewport, modules). `scripts/verify-bridge-status.mjs`: 13/13.
+- **A journal page can carry an NPC's stat block** (issue #11): an `html` block holding
+  `@Embed[<uuid> statblock]`, which dnd5e draws from the live actor when the page renders (its own
+  stat-block template: title, tags, abilities, actions, in a figure captioned with the name;
+  `inline`, `caption=false` and `label="…"` as the system reads them), so a later edit to the actor
+  shows on the page. The quest tools already store enricher text as written (4.2.0), so no tool or
+  schema changed (0 chars of tools/list): `journal-builder` documents the block, where its uuid
+  comes from (`search-compendium` for a book creature, `manage-actors` `list` for a world NPC), that
+  it is NPC only (a `character`'s embed is its description) and that the page's visibility is the
+  only gate; `bestiary-builder` appends one beside a creature's lore when the table wants it.
+  `scripts/verify-journal-tooling.mjs` holds the rendered classes, 54/54 (was 48), and now removes
+  the `ZZ-JOURNAL-IT Journals` folder its first section used to leave behind.
+- **What a run-script call does is declared per function** (issue #14): every `fvtt.*` function
+  is tagged read, write or delete by what its handler does (`src/page/_ops.ts`), where a verb
+  guessed from its name used to decide. A dry run had executed `remapSceneTeleporters` for real,
+  uncounted; it is now listed and stubbed like every write. Reads a dry run now runs instead of
+  stubbing: `configureAreaSounds` `list` / `library`, `rollOnTable` (it neither draws nor posts),
+  `manageCalendar` without an action, a configure function called with no field
+  (`configureDnd5eSettings`, `configureCombatTracker`, `configurePrimaryParty`), and a
+  `bulkDelete` / `relinkAsset` preview (`dryRun: true`). `configureAreaSounds` `remove` counts
+  against the delete cap. A page function added without a tag does not compile.
+- **`run-script`** (issue #4, the `scripting` toolset): one tool whose argument is a short JavaScript
+  program. It runs in the GM's page against `fvtt.*` — the page functions behind every tool, with
+  the tools' own argument shapes — so a loop or a bulk job is one round trip and only the return
+  value comes back. It runs with the bridge user's rights, and that user's role is the boundary:
+  the shadowed globals (`game`, `canvas`, `window`, the document classes, `fromUuid`, `fetch`) and
+  the words refused before the script travels (`import`, `eval`, …) guard against accidents and
+  are not a sandbox (issue #15). Writes are counted and capped (150 writes, 30 deletes, 60 s;
+  raisable), a run's writes land in one receipt with their pre-images (the one every write tool
+  answers with, above), and `dryRun` stubs the writes and lists them. The `run-script` skill
+  carries the rules; the facade's reference, `docs/run-script-api.md` (155 functions), is
+  generated from the program by `scripts/measure/run-script-api.mjs`.
 - **The seat has a record** (issue #12). While connected, the bridge leaves one file per process
   under the OS temp dir (`fvtt-mcp-dnd5e/holders/`, keyed by server URL and user) and the same
   facts on its User document (`flags.world.fvttMcpBridge`: pid, host, label, Claude Code session,
@@ -20,28 +126,6 @@ What changed for a user of the tools and skills, release by release. The measure
   `disconnect-bridge`. A forgotten session's seat no longer blocks a battery an hour later.
 - Library: `listHolders`, `describeHolder`, `seatKey` and the `Holder` type are exported from
   `fvtt-mcp-dnd5e/client`; `Foundry` takes `label` and `idleLogoutMs`.
-- **`run-script`** (issue #4, the `scripting` toolset): one tool whose argument is a short JavaScript
-  program. It runs in the GM's page against `fvtt.*` — the page functions behind every tool, with
-  the tools' own argument shapes — so a loop or a bulk job is one round trip and only the return
-  value comes back. It runs with the bridge user's rights, and that user's role is the boundary:
-  the shadowed globals (`game`, `canvas`, `window`, the document classes, `fromUuid`, `fetch`) and
-  the words refused before the script travels (`import`, `eval`, …) guard against accidents and
-  are not a sandbox (issue #15). Writes are counted and capped (150 writes, 30 deletes, 60 s;
-  raisable), every document created, updated or deleted is recorded through Foundry's hooks into
-  the run's receipt with pre-images, `dryRun` stubs the writes and lists them, and
-  `undo: "<receipt>"` reverses a run newest write first. A run's receipt is the one every write
-  tool now answers with (below), kept on the bridge's machine, not in the page. The `run-script`
-  skill carries the rules; the facade's reference, `docs/run-script-api.md` (155 functions), is
-  generated from the program by `scripts/measure/run-script-api.mjs`.
-- **What a run-script call does is declared per function** (issue #14): every `fvtt.*` function
-  is tagged read, write or delete by what its handler does (`src/page/_ops.ts`), where a verb
-  guessed from its name used to decide. A dry run had executed `remapSceneTeleporters` for real,
-  uncounted; it is now listed and stubbed like every write. Reads a dry run now runs instead of
-  stubbing: `configureAreaSounds` `list` / `library`, `rollOnTable` (it neither draws nor posts),
-  `manageCalendar` without an action, a configure function called with no field
-  (`configureDnd5eSettings`, `configureCombatTracker`, `configurePrimaryParty`), and a
-  `bulkDelete` / `relinkAsset` preview (`dryRun: true`). `configureAreaSounds` `remove` counts
-  against the delete cap. A page function added without a tag does not compile.
 - **run-script's word check reads code, not prose** (issue #15). Strings, template-literal text
   and comments are blanked before the check (a `${…}` expression stays code), so a content job
   with `'Go fetch the relic'` or `'<p>Trade goods import duties</p>'` in it is no longer refused.
@@ -58,6 +142,12 @@ What changed for a user of the tools and skills, release by release. The measure
   retried, and the next call reconnects. A script stuck in `while (true) {}` with a 5 s timeout
   now fails at about 40 s. The connect is never capped (a cold box keeps its wake and ready
   budgets). Library: `Foundry` takes `opCapMs`.
+- **A write is never run twice after the page went away** (issue #16's review). A call whose page
+  bridge vanished under it (a world reload, a page the op cap closed under another call) was
+  recovered and run again; now only a read is. A write fails as a `connection` error saying its
+  outcome is unknown, and the bridge reconnects for the next call.
+- **A run abandoned at its timeout can write no more** (issue #16's review): every `fvtt.*` call
+  after the timeout is refused, where the script's body used to keep writing, unrecorded.
 - **`disconnect-bridge { "all": true }` ends only the recorded browser** (issue #17). A seat record
   names the bridge's browser by pid and executable path (the pid from a CDP `SystemInfo` call, the
   path from the operating system), and eviction ends that pid only while it still runs that
@@ -77,111 +167,35 @@ What changed for a user of the tools and skills, release by release. The measure
   asynchronously (on Windows a PowerShell start, which held the server's event loop on every
   connect), and an eviction never ends the evicting bridge's own browser when another record
   names its pid. Library: `evictOtherHolders()` returns a promise, and each entry carries `kept`.
-- **`FOUNDRY_TOOLSETS=readonly`: a registration that only reads** (issue #8). It advertises every
-  toolset's reads: the read tools whole, and each family tool narrowed to its read actions
-  (`manage-actors` `list` / `get` / `get-entity` / `export`, `manage-placeables` `list` for every
-  kind), 41 tools, 56,627 chars ≈ 15,730 tokens (27.7% of the full list). Every other call,
-  advertised or not, is refused by name before its handler runs (`manage-actors action "delete" is
-  not a read: this registration is read-only (FOUNDRY_TOOLSETS=readonly); use a registration
-  without it.`). A configure call that names a field and an `export-chat-log` copy into `Data/`
-  (`remotePath`) are writes; `run-script` is never a read. `readonly` stands alone: beside a
-  toolset it stops the server at startup. Pair it with a Player or Trusted Player join user,
-  whose role is the boundary the server cannot cross: the bridge warns at connect, and
-  `npm run doctor` on its login line, when a read-only registration joins as a Gamemaster or
-  Assistant GM. The tags, per tool and per action, are `src/tool-kinds.ts`; `.mcp.json.example`
-  carries a `foundry-readonly` entry.
-- **Every write tool answers with a receipt** (issue #6). The bridge reaches every page op through
-  one choke point: a write runs under the page's write lock, one at a time, while Foundry's own
-  document hooks record each document it creates, updates or deletes, with the pre-image an undo
-  needs (an update keeps the prior value of each path it changes, a delete the whole document). The
-  server groups one call's writes into one receipt and appends one line to the answer, also when
-  the call failed after it wrote:
-  `receipt rcpt_ab12cd: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value) · undo: run-script { "undo": "rcpt_ab12cd" }`.
-  `run-script { "undo": … }` reverses any receipt, a tool call's or a run's, newest write first:
-  it deletes what the call created, puts back the paths it changed (removing the ones it added)
-  and re-creates what it deleted with its id. An undo answers with its own receipt
-  (`reverses rcpt_…`), so it can be undone in turn (a redo); a receipt is undone once, and only
-  when every write of it was reversed: an undo that cannot reverse them all names the ones it
-  could not and says `receipt rcpt_… stays undoable` (its own receipt `partly reverses` it), and
-  undoing it again leaves alone what is already back. Receipts are kept on the bridge's machine
-  (`fvtt-mcp-dnd5e/receipts/` under the OS temp dir, keyed by server URL and world id), the newest
-  50 per world for a day and 64 MB at most, never the one just written, so they survive a
-  `disconnect-bridge` and a restart and are never applied to another world. Not undoable: a
-  pre-image over 2 MB (8 MB per call, across all of its page writes; the line counts them), the
-  file plane, chat already seen, a pulled view. A registration without `scripting` gets the line
-  with how to enable the undo. A sibling harness driving `fvtt-mcp-dnd5e/client` asks for no
-  receipt and pays nothing. A receipt holds its own call's writes and no other's (issue #6's
-  review): a `run-script` run that ends, or is abandoned at its timeout, with a call still in
-  flight waits for it (15 s at most) with its lock held, so those writes land in its own receipt
-  and never in the next call's, and a call its script makes after the run ended is refused; a
-  create made by another session joined as the same user no longer lands in this session's
-  receipt, whose undo would delete it; two writes from one session wait for each other in the
-  server, so a write's op cap no longer counts the time it queued, while writes issued together
-  still share one connect (and fail together when it fails, instead of each paying the wake in
-  turn), and a call that arrives during a connect joins it instead of failing it; a call that wrote
-  and then lost its page answers with its receipt without reconnecting first; a read that views a
-  scene no longer puts the previous scene's fog into an open receipt; and an undo that finds every
-  value already back (put back by hand) marks the receipt undone, saying `nothing to put back`. Two sessions on one seat still
-  interleave their writes at the server, where no write lock reaches: an undo puts back a value
-  the other session has changed since, as the seat warning at connect now says. Measured in the
-  page on the sandbox: the recorder's hooks cost 0.07 ms per write, a delete's pre-image 0.15 ms
-  for a 26 kB actor, and a real update's time is unchanged within its noise (8–9 ms). The delete
-  tools (`manage-actors` `delete`, `bulk-delete`, `delete-chat-messages`) no longer say a delete
-  cannot be undone. `scripts/verify-receipts.mjs`: 25/25.
-- **A write is never run twice after the page went away** (issue #16's review). A call whose page
-  bridge vanished under it (a world reload, a page the op cap closed under another call) was
-  recovered and run again; now only a read is. A write fails as a `connection` error saying its
-  outcome is unknown, and the bridge reconnects for the next call.
-- **A run abandoned at its timeout can write no more** (issue #16's review): every `fvtt.*` call
-  after the timeout is refused, where the script's body used to keep writing, unrecorded.
+- **A receipt holds its own call's writes and no other's** (issue #6's review). A `run-script` run
+  that ends, or is abandoned at its timeout, with a call still in flight waits for it (15 s at
+  most) with its lock held, so those writes land in its own receipt and never in the next call's,
+  and a call its script makes after the run ended is refused; a create made by another session
+  joined as the same user no longer lands in this session's receipt, whose undo would delete it;
+  two writes from one session wait for each other in the server, so a write's op cap no longer
+  counts the time it queued, while writes issued together still share one connect (and fail
+  together when it fails, instead of each paying the wake in turn), and a call that arrives during
+  a connect joins it instead of failing it; a call that wrote and then lost its page answers with
+  its receipt without reconnecting first; and a read that views a scene no longer puts the
+  previous scene's fog into an open receipt.
 - `set-primary-party` with no arguments sends an empty call, which the page's op table reads as
   the read it is (it sent `clear: false` and counted as a write).
-- **`get-world-info` reports the bridge itself** (issue #9): a `bridge` block after `host` with
-  this server's version, since when it holds the seat (the join user is `bridgeUser`'s), `woken`
-  (this connect found the world asleep, not launched, or booting), Chromium's renderer (`GPU: <name>` or
-  `software: <name>`, the canvas's unmasked WebGL renderer), `canvasReady`, the Open Roll 5e
-  modules the skills lean on (Battle Flow, Area Sounds, Open Server: a version, or `not active`),
-  the registration's `toolsets` (`all`, `readonly`, or the list), and `warnings` for whatever of
-  it is amber: a software renderer, an inactive family module (naming what needs it), a read-only
-  registration joined as a user that can write, Foundry below 14.368 or dnd5e below 6.0.5 (the
-  README's requirements line). It stands in for the proposed `bridge-status` tool: a tool would
-  have pushed tools/list (204,714 of 205,000) and the always-on set (1,778 of 2,100) past their
-  ceilings, where a block in a result costs neither. `npm run doctor` prints a `bridge:` line
-  after the login (a ! for a software renderer or an inactive module), `npm run smoke:bridge`'s
-  line gains the renderer and the modules, and the `start-session` skill reports the block and
-  surfaces every warning. Library: `FoundryBridge.info()` (server URL, user, since, woken); the
-  page's `getWorldInfo` result carries `bridge` (renderer, canvasReady, viewport, modules).
-  `scripts/verify-bridge-status.mjs`: 13/13.
-- **`npm run init`: from a built clone to a checked registration in one command** (issue #7). It
-  says first what it cannot do (the Foundry user the bridge joins as must exist in the world), then
-  asks for the host (`local`, `molten`, `generic`), the URL, that user and its password, the admin
-  password, the host's extras (Molten's wake URL and File Manager password; a local install's
-  `Data` folder, offered at the platform's default), whether the first run is read-only, and where
-  the registration goes: this clone's `.mcp.json`, another project's, or `~/.claude.json` (copied
-  to `.bak-<time>` first; only its `mcpServers` entry changes). Every answer is also a flag; `--yes`
-  asks nothing, and a missing required answer exits 2 naming its flag. Secrets go only to the
-  `.env`: a new one gets the minimal block `.env.example` opens with, an existing one is copied to
-  `.bak` and changed in place where an answer differs (on the 2.x alias's line when that is what
-  the host reads, so the answer is not shadowed), every other line kept. The registration is the
-  full Node path, `dist/index.js` and an env block that names the instance (`FOUNDRY_HOST`,
-  `FOUNDRY_URL`, `FOUNDRY_TOOLSETS`, and `FVTT_MCP_ENV` for a `.env` that is not the repo's). Then
-  it runs the doctor, whose lines are the join report, and prints the entry as an `mcpServers`
-  block for any other MCP client; Claude Code's config is the only one it writes (issue #5, closed
-  as not planned). `AGENTS.md` ships beside `CLAUDE.md`. The legacy names are one table in the host
-  selector (`legacyNameOf`), and `runDoctor` takes the environment it reads as an argument.
-- **A journal page can carry an NPC's stat block** (issue #11): an `html` block holding
-  `@Embed[<uuid> statblock]`, which dnd5e draws from the live actor when the page renders (its own
-  stat-block template: title, tags, abilities, actions, in a figure captioned with the name;
-  `inline`, `caption=false` and `label="…"` as the system reads them), so a later edit to the actor
-  shows on the page. The quest tools already store enricher text as written (4.2.0), so no tool or
-  schema changed (0 chars of tools/list): `journal-builder` documents the block, where its uuid
-  comes from (`search-compendium` for a book creature, `manage-actors` `list` for a world NPC), that
-  it is NPC only (a `character`'s embed is its description) and that the page's visibility is the
-  only gate; `bestiary-builder` appends one beside a creature's lore when the table wants it.
-  `scripts/verify-journal-tooling.mjs` holds the rendered classes, 54/54 (was 48), and now removes
-  the `ZZ-JOURNAL-IT Journals` folder its first section used to leave behind.
-- Budgets after: tools/list 204,651 chars (≤ 205,000; the `undo` leaf is 5 chars shorter, the delete
-  tools 63), names 6,143, skill descriptions 7,773, always-on 1,778, readonly 56,627 (41 tools; reported, no ceiling).
+- **Not planned here:** pre-images in a world journal and the dry run as an approval hash (issue
+  #13: receipts are kept on the bridge's machine instead); the client-neutral set (issue #5:
+  skills as MCP prompts, a neutral default user, a registration for every client; `npm run init`
+  writes Claude Code's and prints the generic `mcpServers` block for the rest); the Linux GPU
+  check (issue #10) is a row of the suite's Ubuntu issue (Txpple/fvtt-suite-openroll5e#5), and
+  `GPU_ARGS` gets a Linux flag in a patch release only if its numbers say so.
+- Budgets (`npm test`), 4.3.0 → now: tools/list 203,259 → 204,651 chars (80 → 81 tools:
+  run-script; ≤ 205,000; the `undo` leaf is 5 chars shorter than it was, the delete tools 63),
+  names ×2 6,078 → 6,143, skill descriptions 7,534 → 7,773 (16 → 17 skills; ≤ 8,000), always-on
+  1,578 → 1,778 (≤ 2,100), readonly 56,627 (41 tools; reported, no ceiling). No ceiling was
+  raised.
+- Release set on the sandbox (Foundry 14.369, dnd5e 6.0.6), 14 / 14 scripts, 536 / 536:
+  effects-6 51/51, region-effects 37/37, activities-6 37/37, settings-calendar 52/52, item-tooling
+  24/24, actor-tooling 51/51, pc-build 70/70, teleporter-scene-fields 13/13, placeables-tooling
+  87/87, scene-tools 23/23, cast-activity 25/25, region-tooling 22/22, receipts 25/25, toolsets
+  19/19. Live integration: 7 suites, 78 passed, 8 skipped.
 
 ## 4.3.0 — 2026-10-10 — Soundscape is now Area Sounds
 

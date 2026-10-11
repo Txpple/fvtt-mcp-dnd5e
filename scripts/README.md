@@ -7,7 +7,7 @@ placeholder is refused before any connect). Build first (`npm run build`): the s
 built bridge, never the MCP process, so they exercise a fresh `dist/` without a Claude Code
 restart. One world-driver at a time; temp documents are tagged `ZZ-*` and cleaned in `finally`.
 
-## The release set (12) — `docs/RELEASE.md`
+## The release set (14) — `docs/RELEASE.md`
 
 `FOUNDRY_HOST=local node scripts/<name>.mjs`, sequentially; counts go into the commit message.
 
@@ -25,8 +25,10 @@ restart. One world-driver at a time; temp documents are tagged `ZZ-*` and cleane
 | `verify-scene-tools` | `manage-scenes` `create` (sidecar by `placeablesPath`) / `update`, the view tools |
 | `verify-cast-activity` | `add-free-cast` and the cast activity |
 | `verify-region-tooling` | the regions kind of `manage-placeables`: create / add-behavior / update |
+| `verify-receipts` | the receipt every write answers with (issue #6), through the registry as the server answers: an actor, a light and a journal page, each created, updated and deleted and undone by its receipt id; the redo, once; a run-script run; two writes in flight, each undo only its own; the store's refusal of a wrong id; a partial undo, which leaves its receipt undoable; an undo with nothing to put back (the value restored by hand), which still marks its receipt undone; a run abandoned at its timeout with its creates in flight, which land in its own receipt; two run-script calls issued together, run one after the other with no op-cap time lost to the wait (about 35 s); the cost of the page's choke point, timed in the page |
+| `verify-toolsets` | the `FOUNDRY_TOOLSETS` registration filter over the real stdio server, no world needed: a selection, a misspelt name, and `readonly` (only the reads advertised, a write refused by name before the bridge connects, `readonly` beside a toolset refused at startup) |
 
-## The other tool verifies (≈ 45)
+## The other tool verifies (49)
 
 `verify-<family>.mjs` — one script per tool family or per fix that needed a live proof
 (`verify-cards-tooling`, `verify-journal-tooling`, `verify-token-reskin`, …). Same conventions;
@@ -37,9 +39,6 @@ tool proofs:
   `/setup` launch → `/join`); it refuses to run without an explicit `FOUNDRY_HOST`.
 - `verify-asset-plane` — the file plane on the selected host: the direct plane (WebDAV / the
   local `Data/`) and the bridge plane (Foundry's own FilePicker through the page).
-- `verify-toolsets` — the `FOUNDRY_TOOLSETS` registration filter (offline): a selection, a
-  misspelt name, and `readonly` (only the reads advertised, a write refused by name before the
-  bridge connects, `readonly` beside a toolset refused at startup).
 - `verify-holders` — the seat records: two bridges on one seat (one in a forked child; the second
   to join warns that the seat is held twice, and what that means for receipts), and
   `disconnect-bridge { all }` from one ends the other's browser by its recorded pid and
@@ -72,14 +71,6 @@ tool proofs:
 - `verify-error-contract` — the error contract end to end (read-only): a page-side `PageError`
   code crosses `page.evaluate` in the Error's name, comes back as a `BridgeError`, the mapper
   appends one hint per code, a dead URL is `connection`.
-- `verify-receipts` — the receipt every write answers with (issue #6), through the registry as the
-  server answers: an actor, a light and a journal page, each created, updated and deleted and
-  undone by its receipt id; the redo, once; a run-script run; two writes in flight, each undo only
-  its own; the store's refusal of a wrong id; a partial undo, which leaves its receipt undoable; an
-  undo with nothing to put back (the value restored by hand), which still marks its receipt undone; a
-  run abandoned at its timeout with its creates in flight, which land in its own receipt; two
-  run-script calls issued together, run one after the other with no op-cap time lost to the wait
-  (about 35 s); the cost of the page's choke point, timed in the page.
 
 ## The sandbox toolkit (`docs/local-sandbox.md`, `docs/hosts.md`)
 
