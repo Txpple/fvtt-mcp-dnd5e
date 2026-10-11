@@ -42,8 +42,10 @@ tool proofs:
   bridge connects, `readonly` beside a toolset refused at startup).
 - `verify-holders` — the seat records: two bridges on one seat (one in a forked child), and
   `disconnect-bridge { all }` from one ends the other's browser by its recorded pid and
-  executable, leaves a decoy record whose pid runs another program alone, and the evicted bridge
-  re-joins on its next call. Touches no world document.
+  executable, leaves a decoy record whose pid runs another program alone, keeps a record that
+  names no browser (still named afterwards), and the evicted bridge re-joins on its next call; an
+  eviction made while connected leaves the bridge's own browser alone when another record names
+  its pid. Touches no world document.
 - `prove-bridge` — the smallest possible live round trip (connect, one `foundry.call`, dispose).
 - `smoke-bridge` (`npm run smoke:bridge`) — the upgrade review's live check: joins as the bridge
   user, prints one PASS/FAIL line with the host kind and its Foundry and dnd5e versions (no URL, no

@@ -1,7 +1,8 @@
 /**
  * The seat records (issue #12): one file per holding process, listed with liveness, pruned when
  * the process is gone, named from the Claude Code session that started the server. Eviction
- * (issue #17) ends a holder's browser only while its pid still runs the recorded executable.
+ * (issue #17) ends a holder's browser only while its pid still runs the recorded executable, never
+ * this bridge's own, and drops a record only when its browser was ended or is gone (the review).
  */
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -105,15 +106,32 @@ describe('the records', () => {
 });
 
 describe('exeOf', () => {
-  it("names a running process's executable, and nothing for a pid that runs nothing", () => {
-    const exe = exeOf(process.pid);
+  it("names a running process's executable, and nothing for a pid that runs nothing", async () => {
+    const exe = await exeOf(process.pid);
     if (process.platform === 'win32' || process.platform === 'linux') {
       expect(exe?.toLowerCase()).toBe(process.execPath.toLowerCase());
     }
-    expect(exeOf(999_999_999)).toBeNull();
-    expect(exeOf(0)).toBeNull();
-    expect(exeOf(-1)).toBeNull();
+    expect(await exeOf(999_999_999)).toBeNull();
+    expect(await exeOf(0)).toBeNull();
+    expect(await exeOf(-1)).toBeNull();
   }, 30_000);
+
+  // The connect path asks it for the seat record: a synchronous PowerShell spawn held the event loop
+  // through PowerShell's startup, and no timer fired until it returned (issue #17's review).
+  it.runIf(process.platform === 'win32')(
+    'asks without holding the event loop: timers fire while PowerShell starts',
+    async () => {
+      let ticks = 0;
+      const timer = setInterval(() => ticks++, 10);
+      try {
+        expect(await exeOf(process.pid)).not.toBeNull();
+      } finally {
+        clearInterval(timer);
+      }
+      expect(ticks).toBeGreaterThan(0);
+    },
+    30_000
+  );
 });
 
 describe('evictHolder', () => {
@@ -130,6 +148,13 @@ describe('evictHolder', () => {
     const file = writeHolder(rec, dir) ?? '';
     return { ...rec, alive: true, self: false, file };
   };
+  /** The OS, injected: whether the browser pid is alive, what it runs, and the kill. */
+  const os = (o: { alive?: boolean; exe?: string | null } = {}) => ({
+    dir,
+    alive: vi.fn((_pid: number) => o.alive ?? true),
+    exe: vi.fn(async (_pid: number) => (o.exe === undefined ? BROWSER : o.exe)),
+    kill: vi.fn((_pid: number) => {}),
+  });
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'holders-'));
   });
@@ -137,46 +162,99 @@ describe('evictHolder', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('ends the recorded browser while its pid still runs the recorded executable', () => {
-    const kill = vi.fn();
+  it('ends the recorded browser while its pid still runs the recorded executable, and drops the record', async () => {
+    const o = os();
     const h = holder();
-    const e = evictHolder(h, dir, () => BROWSER, kill);
-    expect(kill).toHaveBeenCalledWith(5151);
-    expect(e).toEqual({ holder: h, ended: 5151 });
+    const e = await evictHolder(h, o);
+    expect(o.kill).toHaveBeenCalledWith(5151);
+    expect(e).toEqual({ holder: h, ended: 5151, kept: false });
     expect(readdirSync(dir)).toEqual([]); // the record is gone
   });
 
-  it('leaves a reused pid alone: another executable is not the recorded browser', () => {
-    const kill = vi.fn();
-    const e = evictHolder(
-      holder(),
-      dir,
-      () => 'C:\\Program Files\\Google\\Chrome\\chrome.exe',
-      kill
-    );
-    expect(kill).not.toHaveBeenCalled();
-    expect(e.ended).toBeNull();
+  it('leaves a reused pid alone: another executable means the recorded browser is gone, so is the record', async () => {
+    const o = os({ exe: 'C:\\Program Files\\Google\\Chrome\\chrome.exe' });
+    const e = await evictHolder(holder(), o);
+    expect(o.kill).not.toHaveBeenCalled();
+    expect(e).toMatchObject({ ended: null, kept: false });
     expect(e.skipped).toMatch(/left pid 5151 alone \(it now runs another program/);
     expect(readdirSync(dir)).toEqual([]);
   });
 
-  it('kills nothing when the browser is gone, or was never recorded', () => {
-    const kill = vi.fn();
-    expect(evictHolder(holder(), dir, () => null, kill).skipped).toBe(
-      'nothing to end (browser pid 5151 is gone)'
-    );
-    const exe = vi.fn(() => BROWSER);
-    expect(evictHolder(holder({ browserPid: null }), dir, exe, kill).skipped).toBe(
-      'nothing to end (no browser recorded)'
-    );
-    expect(evictHolder(holder({ browserExe: null }), dir, exe, kill).skipped).toBe(
-      'left pid 5151 alone (no browser path recorded)'
-    );
-    // a record an older server wrote has neither field
-    const { browserPid: _pid, browserExe: _exe, ...old } = holder();
-    expect(evictHolder(old as Holder, dir, exe, kill).ended).toBeNull();
-    expect(kill).not.toHaveBeenCalled();
-    expect(exe).not.toHaveBeenCalled();
+  it('drops the record of a browser whose pid is dead, and asks nothing more', async () => {
+    const o = os({ alive: false });
+    expect(await evictHolder(holder(), o)).toMatchObject({
+      ended: null,
+      kept: false,
+      skipped: 'nothing to end (browser pid 5151 is gone)',
+    });
+    expect(await evictHolder(holder({ browserExe: null }), o)).toMatchObject({ kept: false });
+    expect(o.exe).not.toHaveBeenCalled();
+    expect(o.kill).not.toHaveBeenCalled();
     expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('keeps a record that names no browser and kills nothing: its holder is still named', async () => {
+    const o = os();
+    expect(await evictHolder(holder({ browserPid: null }), o)).toMatchObject({
+      ended: null,
+      kept: true,
+      skipped: 'record kept, nothing ended (it names no browser)',
+    });
+    // a record a server from before issue #17 wrote has neither field
+    const { browserPid: _pid, browserExe: _exe, ...old } = holder();
+    expect(await evictHolder(old as Holder, o)).toMatchObject({ ended: null, kept: true });
+    expect(o.alive).not.toHaveBeenCalled();
+    expect(o.exe).not.toHaveBeenCalled();
+    expect(o.kill).not.toHaveBeenCalled();
+    expect(listHolders(URL, USER, dir, () => true).map(h => h.pid)).toEqual([4242]); // still named
+  });
+
+  it('keeps the record of a live browser pid it cannot check: no path recorded, or its program unreadable', async () => {
+    const noPath = os();
+    expect(await evictHolder(holder({ browserExe: null }), noPath)).toMatchObject({
+      ended: null,
+      kept: true,
+      skipped: 'record kept, left pid 5151 alone (no browser path recorded to check it against)',
+    });
+    expect(noPath.exe).not.toHaveBeenCalled();
+    const unreadable = os({ exe: null }); // the lookup failed, timed out, or this OS has none
+    expect(await evictHolder(holder(), unreadable)).toMatchObject({
+      ended: null,
+      kept: true,
+      skipped: 'record kept, left pid 5151 alone (what it runs could not be read)',
+    });
+    expect(noPath.kill).not.toHaveBeenCalled();
+    expect(unreadable.kill).not.toHaveBeenCalled();
+    expect(readdirSync(dir)).toHaveLength(1);
+  });
+
+  it('drops the record when the lookup finds nothing because the browser exited meanwhile', async () => {
+    const o = os({ exe: null });
+    o.alive.mockReturnValueOnce(true).mockReturnValueOnce(false);
+    expect(await evictHolder(holder(), o)).toMatchObject({
+      kept: false,
+      skipped: 'nothing to end (browser pid 5151 is gone)',
+    });
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("never ends this bridge's own browser: a record whose browser pid is ours names one that is gone", async () => {
+    const o = os(); // the pid runs the recorded executable: the path check alone would end it
+    const e = await evictHolder(holder(), { ...o, ownBrowserPid: 5151 });
+    expect(o.kill).not.toHaveBeenCalled();
+    expect(o.exe).not.toHaveBeenCalled();
+    expect(e).toMatchObject({ ended: null, kept: false });
+    expect(e.skipped).toBe(
+      "left pid 5151 alone (this session's own browser runs under it; the recorded one is gone)"
+    );
+    expect(readdirSync(dir)).toEqual([]);
+    // another holder's browser is still ended beside it
+    const other = os();
+    const ended = await evictHolder(holder({ browserPid: 6262 }), {
+      ...other,
+      ownBrowserPid: 5151,
+    });
+    expect(ended).toMatchObject({ ended: 6262, kept: false });
+    expect(other.kill).toHaveBeenCalledWith(6262);
   });
 });

@@ -50,7 +50,7 @@ export function makeFoundry(response: any = {}): {
     worldId: vi.fn(async () => 'w'),
     // The seat records (src/holders.ts): nobody else holds the seat unless a test says so.
     holders: vi.fn(() => []),
-    evictOtherHolders: vi.fn(() => []),
+    evictOtherHolders: vi.fn(async () => []),
   };
   return { foundry, calls };
 }

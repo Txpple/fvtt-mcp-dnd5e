@@ -7,6 +7,7 @@
 // The receipts' seam (issue #6): the page is asked to record only inside a tool call, and what it
 // reports joins that call, a failed write's included. After the page bridge vanished under a call,
 // only a read is run again (issue #16's review): a write fails with its outcome unknown.
+// Eviction never ends this bridge's own browser while it is connected (issue #17's review).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BridgeError } from './bridge-error.js';
 import { chromiumProblem, Foundry, type FoundryConfig } from './foundry.js';
@@ -332,5 +333,46 @@ describe('a vanished page bridge: only a read is run again (issue #16 review)', 
     const again = vanishing();
     expect(await again.f.call('configurePrimaryParty', {})).toEqual({ id: 'w' });
     expect(again.answer).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("evictOtherHolders never ends this bridge's own browser (issue #17 review)", () => {
+  // Another server's record whose browser pid our own headless shell now runs under: the same
+  // executable, so the path check alone would end our browser. A seat no real bridge holds.
+  const other = {
+    pid: 4242,
+    ppid: 1,
+    host: 'box',
+    label: 'B',
+    session: null,
+    since: '2026-10-11T00:00:00.000Z',
+    serverUrl: 'http://foundry.unit.test',
+    user: 'Bridge',
+    browserPid: 999_999_998,
+    browserExe: '/x/chromium_headless_shell-1228/chrome-linux/headless_shell',
+    alive: true,
+    self: false,
+    file: 'x.json',
+  };
+  function bridge(connected: boolean) {
+    const f = Object.create(Foundry.prototype) as Foundry;
+    Object.assign(f, {
+      browser: { isConnected: () => connected },
+      ownBrowserPid: other.browserPid,
+      holders: () => [{ ...other, pid: process.pid, self: true }, other],
+    });
+    return f;
+  }
+
+  it('while our browser is connected, a record naming its pid is left alone, and dropped', async () => {
+    const evictions = await bridge(true).evictOtherHolders();
+    expect(evictions).toHaveLength(1); // our own record is never a candidate
+    expect(evictions[0]).toMatchObject({ ended: null, kept: false });
+    expect(evictions[0]!.skipped).toContain("this session's own browser runs under it");
+  });
+
+  it('once our browser is gone the guard is off: the record is judged on its own', async () => {
+    const [e] = await bridge(false).evictOtherHolders();
+    expect(e!.skipped).toBe('nothing to end (browser pid 999999998 is gone)');
   });
 });

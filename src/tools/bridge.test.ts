@@ -63,12 +63,13 @@ describe('BridgeTools', () => {
       since: '2026-10-10T23:21:01.000Z',
     });
     const { tools, foundry } = build(f => {
-      f.evictOtherHolders = () => [
-        { holder: holder(28560, 'Claude Code session s2'), ended: 30680 },
+      f.evictOtherHolders = async () => [
+        { holder: holder(28560, 'Claude Code session s2'), ended: 30680, kept: false },
         {
           holder: holder(31000, 'Claude Code session s3'),
           ended: null,
           skipped: 'left pid 31500 alone (it now runs another program, not the recorded browser)',
+          kept: false,
         },
       ];
     });
@@ -81,6 +82,29 @@ describe('BridgeTools', () => {
       'pid 31000 on box — Claude Code session s3 — since 2026-10-10T23:21:01.000Z: left pid 31500 alone'
     );
     expect(result).toContain('Every record above is cleared');
+  });
+
+  it('with `all`, says which records it kept: a holder whose browser it could not check stays named', async () => {
+    const { tools } = build(f => {
+      f.evictOtherHolders = async () => [
+        {
+          holder: {
+            pid: 31000,
+            host: 'box',
+            label: 'old build',
+            since: '2026-10-10T23:21:01.000Z',
+          },
+          ended: null,
+          skipped: 'record kept, nothing ended (it names no browser)',
+          kept: true,
+        },
+      ];
+    });
+    const result = await tools.handleDisconnectBridge({ all: true });
+    expect(result).toContain('Ended 0 of 1 other holder(s)');
+    expect(result).toContain('old build — since 2026-10-10T23:21:01.000Z: record kept');
+    expect(result).toContain('1 record(s) kept: nothing showed their browser ended or gone');
+    expect(result).not.toContain('Every record above is cleared');
   });
 
   it('with `all` and nobody else, says so', async () => {

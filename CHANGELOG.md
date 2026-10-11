@@ -67,6 +67,16 @@ What changed for a user of the tools and skills, release by release. The measure
   bridge's next call re-joins with a new browser; it used to fail on the dead one (`Target page,
   context or browser has been closed`) until its server restarted. Library: `Holder` carries
   `browserPid` / `browserExe`, and `evictOtherHolders()` returns one entry per holder.
+- **A seat record stays until its browser is known ended or gone** (issue #17's review).
+  `disconnect-bridge { "all": true }` dropped every other holder's record, also when it ended
+  nothing: a record from a server on an older build (no browser recorded), from a lookup that
+  failed at its connect, or from macOS (where the lookup has no answer) went while its browser
+  kept the seat, and the next preflight could no longer name the holder. Such a record now stays,
+  nothing is killed, and the answer says `record kept` and why; a record goes when its browser was
+  ended, its pid is dead, or its pid now runs another program. The browser's executable is read
+  asynchronously (on Windows a PowerShell start, which held the server's event loop on every
+  connect), and an eviction never ends the evicting bridge's own browser when another record
+  names its pid. Library: `evictOtherHolders()` returns a promise, and each entry carries `kept`.
 - **`FOUNDRY_TOOLSETS=readonly`: a registration that only reads** (issue #8). It advertises every
   toolset's reads: the read tools whole, and each family tool narrowed to its read actions
   (`manage-actors` `list` / `get` / `get-entity` / `export`, `manage-placeables` `list` for every

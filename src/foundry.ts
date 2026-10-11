@@ -130,12 +130,13 @@ export interface FoundryBridge {
   holders(): Holder[];
   /**
    * End every OTHER holder's browser on this machine (their MCP servers keep running and reconnect
-   * lazily on their next call) and drop their records. The cure for "a GM seat is taken by a bridge
-   * nobody in this session opened" (issue #12), without a walk through the process table. A browser
-   * is ended only while its recorded pid still runs its recorded executable (issue #17); each
-   * holder's entry says what was ended or why nothing was.
+   * lazily on their next call). The cure for "a GM seat is taken by a bridge nobody in this session
+   * opened" (issue #12), without a walk through the process table. A browser is ended only while
+   * its recorded pid still runs its recorded executable, never when that pid is this bridge's own
+   * browser, and a record is dropped only when its browser was ended or is gone (issue #17); each
+   * holder's entry says what was ended or why nothing was, and whether its record stays.
    */
-  evictOtherHolders(): Eviction[];
+  evictOtherHolders(): Promise<Eviction[]>;
 }
 
 export interface FoundryConfig {
@@ -250,6 +251,8 @@ export class Foundry implements FoundryBridge {
   private inflight = 0;
   private lastUsed = 0;
   private idleTimer: NodeJS.Timeout | undefined;
+  /** The pid of the browser this bridge launched, from markSeat; null once that browser is dropped. */
+  private ownBrowserPid: number | null = null;
 
   constructor(
     private readonly cfg: FoundryConfig,
@@ -302,6 +305,7 @@ export class Foundry implements FoundryBridge {
     if (this.browser && !this.browser.isConnected()) {
       this.browser = undefined;
       this.context = undefined;
+      this.ownBrowserPid = null;
     }
     this.browser ??= await chromium.launch({
       headless: this.cfg.headless ?? true,
@@ -357,9 +361,11 @@ export class Foundry implements FoundryBridge {
     const rec = holderRecord(this.cfg.serverUrl, this.cfg.user);
     if (this.cfg.label) rec.label = this.cfg.label;
     // The browser by pid and path, so another session's disconnect-bridge { all } can end it and
-    // nothing else (issue #17).
+    // nothing else (issue #17). The path lookup is asynchronous: on Windows it is a PowerShell
+    // start, which a synchronous spawn made every connect wait out with the event loop held.
     rec.browserPid = await this.browserPid();
-    rec.browserExe = rec.browserPid === null ? null : exeOf(rec.browserPid);
+    rec.browserExe = rec.browserPid === null ? null : await exeOf(rec.browserPid);
+    this.ownBrowserPid = rec.browserPid;
     const others = listHolders(this.cfg.serverUrl, this.cfg.user).filter(h => !h.self);
     for (const h of others) {
       this.log.warn(
@@ -434,10 +440,16 @@ export class Foundry implements FoundryBridge {
     return listHolders(this.cfg.serverUrl, this.cfg.user);
   }
 
-  evictOtherHolders(): Eviction[] {
-    return this.holders()
-      .filter(h => !h.self)
-      .map(h => evictHolder(h));
+  async evictOtherHolders(): Promise<Eviction[]> {
+    // Another record is told from ours by its server pid, but its browser pid may since have been
+    // reused by our own headless shell, which passes the path check: our browser, while it is
+    // connected, is never ended (issue #17's review).
+    const own = this.browser?.isConnected() ? this.ownBrowserPid : null;
+    return Promise.all(
+      this.holders()
+        .filter(h => !h.self)
+        .map(h => evictHolder(h, { ownBrowserPid: own }))
+    );
   }
 
   /** (Re)arm the idle logout from the last call's end; a call in flight pushes it out. */
@@ -1024,6 +1036,7 @@ export class Foundry implements FoundryBridge {
     await this.browser?.close().catch(() => {});
     this.context = undefined;
     this.browser = undefined;
+    this.ownBrowserPid = null;
     this.page = undefined;
   }
 

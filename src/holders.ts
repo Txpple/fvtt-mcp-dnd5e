@@ -13,13 +13,19 @@
  * never the MCP server itself, which reconnects lazily on its next call. The record names that
  * browser by pid AND executable path (issue #17): a pid alone can be reused by an unrelated
  * process after a hard-killed server leaves its record behind, so a pid is ended only while the
- * process running under it is still the recorded executable.
+ * process running under it is still the recorded executable. A record goes only when its browser
+ * was ended or is gone: one that names no browser, or whose browser cannot be checked, stays, so
+ * the holder is still named (issue #17's review).
  */
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readlink } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 export interface HolderRecord {
   pid: number;
@@ -173,15 +179,19 @@ export function describeHolder(h: Pick<HolderRecord, 'pid' | 'label' | 'since' |
 }
 
 /**
- * The executable a running process was started from, or null (no such process, not readable, or
- * a platform with neither lookup). Windows asks CIM (~0.25 s); Linux reads `/proc/<pid>/exe`.
- * Never throws. Elsewhere it answers null, so eviction there ends nothing (and says so).
+ * The executable a running process was started from, or null when there is no answer: no such
+ * process, not readable, a lookup that failed or ran out of time, or a platform with neither
+ * lookup. Windows asks CIM (~0.25 s, most of it PowerShell's startup); Linux reads
+ * `/proc/<pid>/exe`; elsewhere it answers null. Asynchronous: the connect path asks it for the seat
+ * record, where a synchronous spawn held the event loop through PowerShell's startup on every
+ * connect (issue #17's review). Never throws. A null is not proof the process is gone; eviction
+ * asks `isAlive` before it drops a record on one.
  */
-export function exeOf(pid: number): string | null {
+export async function exeOf(pid: number): Promise<string | null> {
   if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
     if (process.platform === 'win32') {
-      const r = spawnSync(
+      const { stdout } = await execFileAsync(
         'powershell',
         [
           '-NoProfile',
@@ -191,9 +201,9 @@ export function exeOf(pid: number): string | null {
         ],
         { encoding: 'utf8', timeout: 20_000, windowsHide: true }
       );
-      return (r.stdout ?? '').trim() || null;
+      return stdout.trim() || null;
     }
-    return readlinkSync(`/proc/${pid}/exe`) || null;
+    return (await readlink(`/proc/${pid}/exe`)) || null;
   } catch {
     return null;
   }
@@ -229,49 +239,78 @@ export function killBrowser(pid: number): void {
   }
 }
 
-/** What evicting one holder did: the browser pid it ended, or why it ended nothing. */
+/** What evicting one holder did: the browser pid it ended, or why it ended none, and its record. */
 export interface Eviction {
   holder: Holder;
   /** The browser pid ended; null when nothing was killed. */
   ended: number | null;
   /** Why nothing was killed, when nothing was. */
   skipped?: string;
+  /**
+   * The record stays: nothing showed its browser ended or gone (it names no browser, or no path to
+   * check one against, or what the pid runs could not be read), so its holder is still named.
+   */
+  kept: boolean;
+}
+
+/** How `evictHolder` reaches the OS; every field defaults to the real thing, so a test injects it. */
+export interface EvictOptions {
+  /** This bridge's own browser, while it is connected: never ended, whatever a record says. */
+  ownBrowserPid?: number | null;
+  dir?: string;
+  exe?: (pid: number) => Promise<string | null>;
+  kill?: (pid: number) => void;
+  alive?: (pid: number) => boolean;
 }
 
 /**
  * Evict a holder: end the browser it launched, but only while its pid still runs the recorded
- * executable, and drop its record either way. The holding MCP server itself keeps running and
- * reconnects lazily on its next tool call, exactly as after its own disconnect-bridge. `exe` and
- * `kill` are injectable for the unit test.
+ * executable. The record is dropped only when that browser was ended or is gone (its pid is dead,
+ * or now runs another program). When nothing can be known (no browser or no path recorded, as by
+ * a server from before the check or a lookup that failed at its connect, or what the pid runs
+ * cannot be read) nothing is killed and the record stays, so the next preflight still names the
+ * holder. A record whose browser pid is this bridge's own is never acted on: our browser runs under
+ * that pid, so the one it recorded is gone, and the record goes (issue #17's review). The holding
+ * MCP server itself keeps running and reconnects lazily on its next tool call, exactly as after
+ * its own disconnect-bridge.
  */
-export function evictHolder(
-  h: Holder,
-  dir: string = holderDir(),
-  exe: (pid: number) => string | null = exeOf,
-  kill: (pid: number) => void = killBrowser
-): Eviction {
+export async function evictHolder(h: Holder, opts: EvictOptions = {}): Promise<Eviction> {
+  const { dir = holderDir(), exe = exeOf, kill = killBrowser, alive = isAlive } = opts;
   const pid = h.browserPid ?? null;
   const recorded = h.browserExe ?? null;
-  let out: Eviction;
-  if (pid === null) {
-    out = { holder: h, ended: null, skipped: 'nothing to end (no browser recorded)' };
-  } else if (recorded === null) {
-    out = { holder: h, ended: null, skipped: `left pid ${pid} alone (no browser path recorded)` };
-  } else {
-    const live = exe(pid);
-    if (live === null) {
-      out = { holder: h, ended: null, skipped: `nothing to end (browser pid ${pid} is gone)` };
-    } else if (!sameExe(live, recorded)) {
-      out = {
-        holder: h,
-        ended: null,
-        skipped: `left pid ${pid} alone (it now runs another program, not the recorded browser)`,
-      };
-    } else {
-      kill(pid);
-      out = { holder: h, ended: pid };
-    }
+  const keep = (skipped: string): Eviction => ({ holder: h, ended: null, skipped, kept: true });
+  const drop = (ended: number | null, skipped?: string): Eviction => {
+    removeHolder(h, dir);
+    return { holder: h, ended, ...(skipped === undefined ? {} : { skipped }), kept: false };
+  };
+  const gone = `nothing to end (browser pid ${pid} is gone)`;
+
+  if (pid === null) return keep('record kept, nothing ended (it names no browser)');
+  if (pid === opts.ownBrowserPid) {
+    return drop(
+      null,
+      `left pid ${pid} alone (this session's own browser runs under it; the recorded one is gone)`
+    );
   }
-  removeHolder(h, dir);
-  return out;
+  if (!alive(pid)) return drop(null, gone);
+  if (recorded === null) {
+    return keep(
+      `record kept, left pid ${pid} alone (no browser path recorded to check it against)`
+    );
+  }
+  const live = await exe(pid);
+  if (live === null) {
+    // It was alive a moment ago: it has exited since, or the lookup failed.
+    return alive(pid)
+      ? keep(`record kept, left pid ${pid} alone (what it runs could not be read)`)
+      : drop(null, gone);
+  }
+  if (!sameExe(live, recorded)) {
+    return drop(
+      null,
+      `left pid ${pid} alone (it now runs another program, not the recorded browser)`
+    );
+  }
+  kill(pid);
+  return drop(pid);
 }
