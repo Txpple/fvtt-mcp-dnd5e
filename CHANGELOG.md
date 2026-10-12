@@ -3,6 +3,16 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **Lights read back whole.** `manage-placeables` `kind: "lights"` `list` returned only the centre,
+  radii, colour, angle and the animation's type, so a light someone tuned by hand could not be
+  read and copied. It now also returns `alpha`, `luminosity`, `attenuation`, `animationSpeed`,
+  `animationIntensity`, `darknessMin` / `darknessMax` and `elevation`, under the same names the
+  create and update inputs take, so a read row can be passed straight back as a patch.
+- Budgets: tools/list 204,651 → 204,720 chars (81 tools); always-on 1,778, skill descriptions
+  7,773 unchanged.
+
 ## 4.5.0 — 2026-10-11 — Battle Flow is By the Books
 
 - **The bridge reports By the Books.** Battle Flow became Open Roll 5e: By the Books

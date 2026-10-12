@@ -91,6 +91,37 @@ describe('lightDescriptor.dump', () => {
     });
   });
 
+  it('reads back every settable field under its input name', () => {
+    const doc = {
+      id: 'l3',
+      x: 1,
+      y: 2,
+      elevation: 0,
+      config: {
+        dim: 17.5,
+        bright: 8.75,
+        alpha: 0.5,
+        luminosity: 0.45,
+        attenuation: 0.9,
+        animation: { type: 'flame', speed: 4, intensity: 5 },
+        darkness: { min: 0.1, max: 1 },
+      },
+    };
+    expect(lightDescriptor.dump(doc)).toMatchObject({
+      dim: 17.5,
+      bright: 8.75,
+      alpha: 0.5,
+      luminosity: 0.45,
+      attenuation: 0.9,
+      animation: 'flame',
+      animationSpeed: 4,
+      animationIntensity: 5,
+      darknessMin: 0.1,
+      darknessMax: 1,
+      elevation: 0,
+    });
+  });
+
   it('serializes a v14 Color instance to its CSS hex (plain-JSON seam rule)', () => {
     // Mimic foundry.utils.Color: a Number subclass carrying .css — NOT plain-JSON serializable.
     const color = Object.assign(Object.create(Number.prototype), { css: '#fcd674' });

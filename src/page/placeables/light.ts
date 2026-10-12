@@ -122,7 +122,18 @@ function dump(doc: any): Record<string, unknown> {
     // the node↔page seam rejects non-plain returns. Pre-Color string data passes through as-is.
     color: c.color?.css ?? c.color ?? null,
     angle: c.angle,
+    // Every other field the inputs can set, under the input names, so a light reads back whole
+    // (a list that dropped alpha / attenuation / the animation's speed left a reference light
+    // impossible to copy, 2026-10-11).
+    alpha: c.alpha,
+    luminosity: c.luminosity,
+    attenuation: c.attenuation,
     animation: c.animation?.type ?? null,
+    animationSpeed: c.animation?.speed,
+    animationIntensity: c.animation?.intensity,
+    darknessMin: c.darkness?.min,
+    darknessMax: c.darkness?.max,
+    elevation: doc.elevation,
   };
 }
 

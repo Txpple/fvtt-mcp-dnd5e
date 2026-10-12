@@ -111,8 +111,9 @@ export const lightKindModule: PlaceableKindFactory = foundry => ({
     placeableAction({
       action: 'list',
       description:
-        'Every ambient light on a scene: id, center, rotation, hidden, walls / vision, dim / ' +
-        'bright, color, angle, animation.',
+        'Every ambient light on a scene, read back whole under the create field names: center, ' +
+        'radii, color, alpha, luminosity, attenuation, animation (type / speed / intensity), ' +
+        'darkness range.',
       schema: ListLightsSchema,
       handler: async parsed => {
         const result = await foundry.call('listSceneLights', parsed);
