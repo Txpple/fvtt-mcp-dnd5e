@@ -14,6 +14,7 @@
 // name→id resolution, the coordinate anchor) lives in the descriptor, NOT here — same "tools own
 // correctness" rule as the rest of src/page.
 
+import { deleteEmbeddedStrict } from './_shared.js';
 import { resolveTargetScene } from './scenes.js';
 import { invalid, unsupported } from './errors.js';
 
@@ -259,8 +260,7 @@ export async function crudDelete(
   const notFoundIds = args.ids.filter(id => !coll?.get?.(id));
   let deleted = 0;
   if (present.length > 0) {
-    const made = await scene.deleteEmbeddedDocuments(desc.docName, present);
-    deleted = made?.length ?? present.length;
+    deleted = (await deleteEmbeddedStrict(scene, desc.docName, present, desc.docName)).length;
   }
   return {
     success: true,

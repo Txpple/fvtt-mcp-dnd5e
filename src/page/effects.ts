@@ -21,7 +21,13 @@
 //  - An effect created without `type` is dnd5e's "base" type; "condition" effects are the system's
 //    own (apply-condition) and "enchantment" effects belong to enchant activities — not authored here.
 
-import { resolveActorFuzzy, resolveActorItem, resolveWorldItem, toSource } from './_shared.js';
+import {
+  deleteEmbeddedStrict,
+  resolveActorFuzzy,
+  resolveActorItem,
+  resolveWorldItem,
+  toSource,
+} from './_shared.js';
 import {
   EMPTY_CONDITIONS,
   normalizeChange,
@@ -175,7 +181,7 @@ export async function manageEffect(params: {
       if (!id) throw invalid('effectId is required to delete an effect.');
       const eff = parent.effects?.get?.(id);
       if (!eff) throw notFound(`Effect "${id}" not found on "${parent.name}".`);
-      await parent.deleteEmbeddedDocuments('ActiveEffect', [id]);
+      await deleteEmbeddedStrict(parent, 'ActiveEffect', [id], 'effect');
       return { ...base, action: 'delete', effectId: id };
     }
 

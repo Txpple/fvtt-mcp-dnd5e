@@ -22,6 +22,7 @@ import {
   findUnresolvedScaleTokens,
   assertPlainSerializable,
   guardSerialization,
+  deleteEmbeddedStrict,
 } from './_shared.js';
 
 describe('normalizeAssetPath', () => {
@@ -550,5 +551,64 @@ describe('guardSerialization (the registration-time seam guard)', () => {
   it('awaits async handlers before asserting (a promise of a Map still rejects)', async () => {
     const api = guardSerialization({ asyncMap: async () => new Map() });
     await expect(api.asyncMap()).rejects.toThrow(/non-serializable Map/);
+  });
+});
+
+describe('deleteEmbeddedStrict', () => {
+  // A parent whose embedded collection a preDelete veto can keep a document in: Foundry resolves
+  // deleteEmbeddedDocuments without the vetoed one (Document#delete answers undefined).
+  const parentWith = (names: Record<string, string>, vetoed: string[] = []) => {
+    const docs = new Map(Object.entries(names).map(([id, name]) => [id, { id, name }]));
+    return {
+      name: 'Familiar Tester',
+      docs,
+      async deleteEmbeddedDocuments(_type: string, ids: string[]) {
+        const gone = ids.filter(id => !vetoed.includes(id) && docs.has(id));
+        const out = gone.map(id => docs.get(id));
+        for (const id of gone) docs.delete(id);
+        return out;
+      },
+      getEmbeddedDocument(_type: string, id: string) {
+        return docs.get(id);
+      },
+    };
+  };
+
+  it('answers the ids deleted when every delete lands', async () => {
+    const parent = parentWith({ e1: 'Bless', e2: 'Bane' });
+    await expect(
+      deleteEmbeddedStrict(parent, 'ActiveEffect', ['e1', 'e2'], 'effect')
+    ).resolves.toEqual(['e1', 'e2']);
+    expect(parent.docs.size).toBe(0);
+  });
+
+  it('throws a coded refusal naming the effect a preDelete hook vetoed', async () => {
+    const parent = parentWith({ e1: 'Familiar: Owl (Fey)' }, ['e1']);
+    const err = await deleteEmbeddedStrict(parent, 'ActiveEffect', ['e1'], 'effect').catch(e => e);
+    expect(err.name).toBe('PageError:unsupported');
+    expect(err.message).toContain("module's preDeleteActiveEffect hook vetoed it");
+    expect(err.message).toContain('"Familiar: Owl (Fey)" (e1) still on "Familiar Tester"');
+    expect(err.message).toContain('nothing was deleted');
+    expect(parent.docs.has('e1')).toBe(true);
+  });
+
+  it('says how many others went when only part of a batch is refused', async () => {
+    const parent = parentWith({ i1: 'Rope', i2: 'Owl', i3: 'Torch' }, ['i2']);
+    const err = await deleteEmbeddedStrict(parent, 'Item', ['i1', 'i2', 'i3'], 'item').catch(
+      e => e
+    );
+    expect(err.message).toContain('item "Owl" (i2) still on');
+    expect(err.message).toContain('2 other item(s) were deleted');
+    expect([...parent.docs.keys()]).toEqual(['i2']);
+  });
+
+  it('trusts the answer when the parent cannot be looked into', async () => {
+    const answered = {
+      name: 'P',
+      deleteEmbeddedDocuments: async () => [],
+    };
+    await expect(deleteEmbeddedStrict(answered, 'Tile', ['t1'], 'Tile')).rejects.toThrow(/vetoed/);
+    const silent = { name: 'P', deleteEmbeddedDocuments: async () => undefined };
+    await expect(deleteEmbeddedStrict(silent, 'Tile', ['t1'], 'Tile')).resolves.toEqual(['t1']);
   });
 });

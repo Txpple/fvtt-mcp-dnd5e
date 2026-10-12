@@ -3,6 +3,16 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **A vetoed delete is an error, not a success.** A module may refuse a delete from its
+  `preDelete<Doc>` hook (By the Books keeps a standing companion's effect); Foundry then skips the
+  document and resolves as if nothing were wrong, and `manage-effect` `delete` answered "Deleted"
+  with the effect still on the actor. `manage-effect` `delete`, `remove-from-actor`,
+  `manage-journals` `delete-page` and `manage-placeables` `delete` now check that each document went
+  and refuse naming the ones that did not (`[unsupported]`); a refused document is in no receipt,
+  and the receipt of a batch keeps only the deletes that happened.
+
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 
 - **Lights read and write whole.** `manage-placeables` `kind: "lights"` `list` returned only the

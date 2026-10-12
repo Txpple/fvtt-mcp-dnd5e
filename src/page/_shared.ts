@@ -7,7 +7,7 @@
 // so it must remain browser-only: no Node, no Playwright — only browser + Foundry
 // globals (see foundry-globals.d.ts).
 
-import { invalid, notFound } from './errors.js';
+import { invalid, notFound, unsupported } from './errors.js';
 
 // Foundry's Folder document class isn't declared in foundry-globals.d.ts; reach
 // it off globalThis (the established sibling-page-file pattern).
@@ -544,6 +544,52 @@ export function resolveWorldItem(identifier: string): any {
 export function toDeletionKey(path: string): string {
   const idx = path.lastIndexOf('.');
   return idx < 0 ? `-=${path}` : `${path.slice(0, idx)}.-=${path.slice(idx + 1)}`;
+}
+
+/**
+ * Delete embedded documents and prove they went. Foundry skips a document whose `_preDelete` or a
+ * `preDelete<Doc>` hook answers false (a module's veto: By the Books keeps a standing companion's
+ * effect) and resolves as if nothing were wrong, so a caller that trusts the await reports a delete
+ * that never happened. An id neither in the answer nor gone from the parent was refused: the call
+ * throws naming it, and the recorder (its pre hook runs last) never saw it, so no receipt claims it.
+ * Answers the ids deleted. `noun` names one document in the message ("effect", "item", …).
+ */
+export async function deleteEmbeddedStrict(
+  parent: any,
+  docName: string,
+  ids: string[],
+  noun: string
+): Promise<string[]> {
+  const answer = await parent.deleteEmbeddedDocuments(docName, ids);
+  const went = new Set<string>(
+    Array.isArray(answer) ? answer.map((d: any) => d?.id ?? d?._id).filter(Boolean) : []
+  );
+  const stillThere = (id: string): boolean => {
+    // no way to look: trust the answer when there is one
+    if (typeof parent.getEmbeddedDocument !== 'function') return Array.isArray(answer);
+    try {
+      return !!parent.getEmbeddedDocument(docName, id);
+    } catch {
+      return false;
+    }
+  };
+  const refused = ids.filter(id => !went.has(id) && stillThere(id));
+  if (refused.length > 0) {
+    const label = (id: string): string => {
+      let name: unknown;
+      try {
+        name = parent.getEmbeddedDocument?.(docName, id)?.name;
+      } catch {}
+      return typeof name === 'string' && name ? `"${name}" (${id})` : id;
+    };
+    const deleted = ids.length - refused.length;
+    throw unsupported(
+      `The deletion was refused — a module's preDelete${docName} hook vetoed it: ` +
+        `${noun} ${refused.map(label).join(', ')} still on "${parent.name}"` +
+        (deleted > 0 ? `; ${deleted} other ${noun}(s) were deleted.` : '; nothing was deleted.')
+    );
+  }
+  return ids.filter(id => !refused.includes(id));
 }
 
 /** Resolve a JournalEntry by exact id then exact name (STRICT — no fuzzy/substring). */

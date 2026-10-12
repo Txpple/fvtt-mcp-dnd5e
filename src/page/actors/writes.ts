@@ -12,6 +12,7 @@ import {
   MCP_FLAG_SCOPE,
   MCP_FOLDER_CREATION_COLORS,
   toSource,
+  deleteEmbeddedStrict,
 } from '../_shared.js';
 import {
   readDarkvision,
@@ -828,9 +829,11 @@ export async function removeActorItems(params: {
     type: i.type,
   }));
 
-  await actor.deleteEmbeddedDocuments(
+  await deleteEmbeddedStrict(
+    actor,
     'Item',
-    removed.map(r => r.id)
+    removed.map(r => r.id),
+    'item'
   );
 
   return { actorId: actor.id, actorName: actor.name, removed, notFound };

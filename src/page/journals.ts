@@ -9,7 +9,12 @@
 // @2969-3022, deleteJournals @3022-3083) and the contracts the Node tools in
 // src/tools/quest-creation.ts + its tests expect.
 
-import { resolveJournalStrict, getOrCreateFolder, normalizeAssetPath } from './_shared.js';
+import {
+  deleteEmbeddedStrict,
+  resolveJournalStrict,
+  getOrCreateFolder,
+  normalizeAssetPath,
+} from './_shared.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { invalid, notFound } from './errors.js';
 
@@ -530,7 +535,7 @@ export async function deleteJournalPage(args: { journalId: string; pageId: strin
     return { success: true, deleted: false as const, notFound: args.pageId };
   }
   const info = { id: page.id ?? args.pageId, name: page.name ?? '' };
-  await journal.deleteEmbeddedDocuments('JournalEntryPage', [args.pageId]);
+  await deleteEmbeddedStrict(journal, 'JournalEntryPage', [args.pageId], 'page');
   return { success: true, deleted: true as const, page: info };
 }
 
