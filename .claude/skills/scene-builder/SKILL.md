@@ -129,6 +129,14 @@ choices, not silent defaults. Keep it to broad strokes:
 | Night exterior / moonlit | `darkness: 0.6–0.8`, `globalLight: false` |
 | Rain / storm sky | `weather: "rain"` (heavy → `"rainStorm"`) |
 
+**Height and layers (owner rule 2026-10-12).** On every map that goes in, and every change that is
+evaluated, sort what is painted by height. Floor-level things stay painted. Anything a token should
+pass *under* (shoring beams and lintels, arches, hanging racks, bridges, canopies, roofs) is
+overhead: baked in, a token walks on top of it. Name them to the owner, then paint them out and put
+each back as an overhead tile (`manage-placeables` `kind: "tiles"`, `elevation` 20, `occlusionMode`
+1 = Fade, `occlusionAlpha` 0.25), which ghosts the whole tile while a token is under it. The
+paint-out and cut recipe is imagegen's `illustration-builder` skill, "Overhead features".
+
 **Placing lights by hand** (`manage-placeables` `kind: "lights"`): every emission field is FLAT —
 `dim`, `bright`, `color`, `alpha`, `luminosity`, `attenuation`, `animationType` / `animationSpeed` /
 `animationIntensity`, `darknessMin` / `darknessMax`. A nested `config: {...}` is silently dropped on
