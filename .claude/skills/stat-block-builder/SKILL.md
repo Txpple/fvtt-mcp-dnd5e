@@ -349,8 +349,15 @@ If not set in Step 3, `manage-actors` `update` `biography` (HTML) — lore, tact
 ## Step 10 — Finishing pass
 
 - **Art** → `set-actor-art` (portrait + token texture from a Data-relative path; upload first if needed).
-  A hand-authored NPC (`author-npc`) already gets a real creatureType portrait + token from the tool, so
-  this is only to upgrade it to specific art.
+  **Every new actor gets its own imagegen token and a matching imagegen portrait (owner rule
+  2026-10-11)**. Never ship the compendium's or the library's art as-is. The token is a library token
+  (the owner's token library) restyled with the imagegen server's `edit-image` `kind: "token"`, matched
+  to the campaign's finished tokens with a `style` reference. Pick a base that is already steeply
+  overhead, since the restyle keeps its angle. The portrait is `generate-image` `kind: "portrait"`
+  in the campaign's house style (its `art/SHELF.md`), with the new token attached as `character` so
+  the two match. Show both to the owner and install only on approval. Then upload: the token to
+  `assets/tokens/<kind>/<slug>.png`, the portrait to `assets/portraits/<slug>.png`. Recipe and lessons:
+  the imagegen `illustration-builder` skill.
 - **Ownership** → `set-actor-ownership` (most NPCs stay GM-only; grant the party observer access to a
   visible ally if wanted).
 - **Folder** → `move-documents` to file the finished NPC somewhere findable.
