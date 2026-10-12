@@ -133,14 +133,19 @@ choices, not silent defaults. Keep it to broad strokes:
 `dim`, `bright`, `color`, `alpha`, `luminosity`, `attenuation`, `animationType` / `animationSpeed` /
 `animationIntensity`, `darknessMin` / `darknessMax`. A nested `config: {...}` is silently dropped on
 create and refused on update (2026-10-11: a whole evening of "flickering" fires came out steady and a
-config-only light came out with radius 0); read `animation` back in the `list` to confirm. **The fade comes from bright vs dim (owner pattern, 2026-10-11): set `bright` to about half of `dim`**
-(the owner's reference light: dim 17.5, bright 8.75). Bright 0 gives one hard circle at the dim
-edge however high `attenuation` is; the bright→dim step is what reads as a gradual falloff. Then:
-soft firelight `dim` ~22–26 with `bright` 0 (a fire's own flame tile is its centre; a big bright core blows out the middle — owner, 2026-10-11), `attenuation` 1, `alpha` ~0.3, `luminosity` ~0.45,
-`animationType: "flame"` (speed 4–5, intensity 5–6; "torch" is barely visible). Hearth fungus and
-glows: `dim` ~10 / `bright` ~5, `color` a saturated teal (`#2fd6c0`), `alpha` ~0.55, no animation
-(a low alpha plus luminosity washes the tint out to grey-white, and "pulse" muddied it).
-A darker scene makes every edge harsher: 0.5 darkness reads softer than 0.7. Overlapping big radii
+config-only light came out with radius 0); read `animation` back in the `list` to confirm. **Soft light recipe (owner-approved on Party Camp, 2026-10-12).** The hard ring is the dim edge
+meeting scene darkness; soften it by layering, not by one big light.
+- **Campfire:** a core light `dim` 22 / `bright` 4 (a small hot centre; a big bright blows out the
+  middle), `color` #ff9a40, `alpha` 0.4, `luminosity` 0.4, `attenuation` 0.8, `animationType`
+  "flame" speed 4 / intensity 5 ("torch" barely shows). Plus a wide faint halo on the same spot:
+  `dim` 34 / `bright` 0, `alpha` 0.15, `luminosity` 0.2, `attenuation` 1, flame speed 2 / intensity 2.
+  The halo carries the glow past the core's edge, so neither edge shows.
+- **Fungus / glows:** `dim` 8 / `bright` 3, saturated teal `#2fd6c0`, `alpha` 0.6, `luminosity`
+  0.35 (higher luminosity washes the tint to white), `attenuation` 0.8, `saturation` 0.3, no
+  animation ("pulse" muddied the colour).
+- **Scene darkness** ~0.5 for a lived-in cave; darker makes every edge harsher.
+- Read a light back with `list` (every field comes back under its input name) before copying it.
+Overlapping big radii
 wash a room out in orange; keep them small.
 
 Don't stack five effects. Pick the one or two that define the scene and confirm. Weather keys are
