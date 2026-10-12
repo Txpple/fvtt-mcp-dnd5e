@@ -20,7 +20,7 @@
 // remote call raced against a timeout, plus a process-level watchdog. Leaves the world UP.
 //
 // NOTE: installing does not ENABLE the module in the world — that is a separate
-// core.moduleConfiguration write (see enable-module.mjs). Run FOREGROUND.
+// core.moduleConfiguration write (scripts/configure-modules.mjs). Run FOREGROUND.
 import { chromium } from 'playwright';
 import { loadEnv } from '../dist/env.js';
 import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
