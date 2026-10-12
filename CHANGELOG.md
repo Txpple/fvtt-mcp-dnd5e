@@ -5,12 +5,19 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
-- **Lights read back whole.** `manage-placeables` `kind: "lights"` `list` returned only the centre,
-  radii, colour, angle and the animation's type, so a light someone tuned by hand could not be
-  read and copied. It now also returns `alpha`, `luminosity`, `attenuation`, `animationSpeed`,
-  `animationIntensity`, `darknessMin` / `darknessMax` and `elevation`, under the same names the
-  create and update inputs take, so a read row can be passed straight back as a patch.
-- Budgets: tools/list 204,651 → 204,720 chars (81 tools); always-on 1,778, skill descriptions
+- **Lights read and write whole.** `manage-placeables` `kind: "lights"` `list` returned only the
+  centre, radii, colour, angle and the animation's type, so a light someone tuned by hand could
+  not be read or copied, and several of its settings could not be written at all. Every field of
+  the v14 AmbientLight now reads back under the name its input takes, so a read row passes
+  straight back as a patch: `alpha`, `luminosity`, `attenuation`, `coloration`, `saturation`,
+  `contrast`, `shadows`, `negative`, `priority`, `animationSpeed`, `animationIntensity`,
+  `animationReverse`, `darknessMin` / `darknessMax`, `elevation`, `locked`. The ones that had no
+  input (`coloration`, `saturation`, `contrast`, `shadows`, `negative`, `priority`,
+  `animationReverse`, `locked`) are now settable on create and update.
+- **`animationType: ""` (or `"none"`) clears an animation.** It was documented as "none" but
+  silently ignored, so a light's animation could never be removed.
+- The light field descriptions are shorter, to pay for the new fields inside the tools/list ceiling.
+- Budgets: tools/list 204,651 → 204,894 chars (81 tools); always-on 1,778, skill descriptions
   7,773 unchanged.
 
 ## 4.5.0 — 2026-10-11 — Battle Flow is By the Books

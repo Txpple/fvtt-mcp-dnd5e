@@ -13,47 +13,31 @@ import {
 import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_module.js';
 
 const lightFields = {
-  rotation: z.number().optional().describe('Emission-cone rotation in degrees.'),
-  walls: z.boolean().optional().describe('Confine the light within walls (default true).'),
-  vision: z.boolean().optional().describe('This light provides vision (default false).'),
-  hidden: z.boolean().optional().describe('Hide the light from players (GM-only).'),
-  elevation: z.number().optional().describe('Light elevation in grid-distance units.'),
-  dim: z.number().optional().describe('Dim radius in grid-distance units (e.g. ft).'),
-  bright: z.number().optional().describe('Bright radius in grid-distance units (e.g. ft).'),
-  color: z.string().optional().describe('Tint color hex, e.g. "#fcd674" (warm torch).'),
-  alpha: z.number().min(0).max(1).optional().describe('Tint intensity 0–1 (default ~0.3).'),
-  angle: z.number().optional().describe('Emission cone angle in degrees (360 = full circle).'),
-  luminosity: z
-    .number()
-    .optional()
-    .describe('Luminosity -1..1 (0.5 default; lower = softer glow).'),
-  attenuation: z.number().min(0).max(1).optional().describe('Falloff 0–1 (higher = softer edge).'),
-  animationType: z
-    .string()
-    .optional()
-    .describe('Animation key, e.g. "torch", "flame", "pulse", "" for none (steady).'),
-  animationSpeed: z.number().int().min(0).max(10).optional().describe('Animation speed 0–10.'),
-  animationIntensity: z
-    .number()
-    .int()
-    .min(0)
-    .max(10)
-    .optional()
-    .describe('Animation intensity 0–10.'),
-  darknessMin: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe(
-      'Only emit when scene darkness ≥ this (0–1). Use ~0.1 for a torch that lights at dusk.'
-    ),
-  darknessMax: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe('Only emit when scene darkness ≤ this (0–1).'),
+  rotation: z.number().optional().describe('Rotation in degrees.'),
+  walls: z.boolean().optional().describe('Walls block it (default true).'),
+  vision: z.boolean().optional().describe('Grants vision (default false).'),
+  hidden: z.boolean().optional().describe('GM-only.'),
+  elevation: z.number().optional().describe('Elevation (grid units).'),
+  dim: z.number().optional().describe('Dim radius (grid units).'),
+  bright: z.number().optional().describe('Bright radius (grid units).'),
+  color: z.string().optional().describe('Tint hex, e.g. "#fcd674".'),
+  alpha: z.number().min(0).max(1).optional().describe('Tint intensity 0–1.'),
+  angle: z.number().optional().describe('Cone angle (360 = full).'),
+  luminosity: z.number().optional().describe('Luminosity -1..1 (0.5 default).'),
+  attenuation: z.number().min(0).max(1).optional().describe('Falloff 0–1 (higher = softer).'),
+  animationType: z.string().optional().describe('"torch", "flame", "pulse" …; "" clears.'),
+  animationSpeed: z.number().int().min(0).max(10).optional().describe('Speed 0–10.'),
+  animationIntensity: z.number().int().min(0).max(10).optional().describe('Intensity 0–10.'),
+  darknessMin: z.number().min(0).max(1).optional().describe('Emit at darkness ≥ this.'),
+  darknessMax: z.number().min(0).max(1).optional().describe('Emit at darkness ≤ this.'),
+  coloration: z.number().int().optional().describe('Coloration id.'),
+  saturation: z.number().optional().describe('-1..1.'),
+  contrast: z.number().optional().describe('-1..1.'),
+  shadows: z.number().optional().describe('0..1.'),
+  negative: z.boolean().optional().describe('Darkness source.'),
+  priority: z.number().int().optional().describe('Draw priority.'),
+  animationReverse: z.boolean().optional().describe('Reverse the animation.'),
+  locked: z.boolean().optional().describe('Locked in the canvas.'),
 };
 
 const CreateLightsSchema = z.object({
@@ -110,10 +94,7 @@ export const lightKindModule: PlaceableKindFactory = foundry => ({
     }),
     placeableAction({
       action: 'list',
-      description:
-        'Every ambient light on a scene, read back whole under the create field names: center, ' +
-        'radii, color, alpha, luminosity, attenuation, animation (type / speed / intensity), ' +
-        'darkness range.',
+      description: 'Every ambient light on a scene, read back whole under the create field names.',
       schema: ListLightsSchema,
       handler: async parsed => {
         const result = await foundry.call('listSceneLights', parsed);

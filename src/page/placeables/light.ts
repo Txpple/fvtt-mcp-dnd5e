@@ -41,7 +41,18 @@ export interface LightInput {
   animationIntensity?: number | undefined;
   darknessMin?: number | undefined;
   darknessMax?: number | undefined;
+  coloration?: number | undefined;
+  saturation?: number | undefined;
+  contrast?: number | undefined;
+  shadows?: number | undefined;
+  negative?: boolean | undefined;
+  priority?: number | undefined;
+  animationReverse?: boolean | undefined;
+  locked?: boolean | undefined;
 }
+
+/** "" or "none" clears the animation (Foundry stores no animation as type null). */
+const animationNone = (t: string) => t.trim() === '' || t.trim().toLowerCase() === 'none';
 
 /** Build the nested `config` emission object from the flat inputs (only-supplied fields). */
 function lightConfig(l: LightInput): Record<string, unknown> {
@@ -53,9 +64,13 @@ function lightConfig(l: LightInput): Record<string, unknown> {
   if (typeof l.angle === 'number') c.angle = l.angle;
   if (typeof l.luminosity === 'number') c.luminosity = l.luminosity;
   if (typeof l.attenuation === 'number') c.attenuation = l.attenuation;
+  for (const k of ['coloration', 'saturation', 'contrast', 'shadows', 'priority'] as const)
+    if (typeof l[k] === 'number') c[k] = l[k];
+  if (typeof l.negative === 'boolean') c.negative = l.negative;
   const anim: Record<string, unknown> = {};
-  if (typeof l.animationType === 'string' && l.animationType.trim() !== '')
-    anim.type = l.animationType;
+  if (typeof l.animationType === 'string')
+    anim.type = animationNone(l.animationType) ? null : l.animationType;
+  if (typeof l.animationReverse === 'boolean') anim.reverse = l.animationReverse;
   if (typeof l.animationSpeed === 'number') anim.speed = l.animationSpeed;
   if (typeof l.animationIntensity === 'number') anim.intensity = l.animationIntensity;
   if (Object.keys(anim).length > 0) c.animation = anim;
@@ -76,6 +91,7 @@ function toCreateDoc(input: LightInput): CreateDocResult {
   if (typeof input.vision === 'boolean') doc.vision = input.vision;
   if (typeof input.hidden === 'boolean') doc.hidden = input.hidden;
   if (typeof input.elevation === 'number') doc.elevation = input.elevation;
+  if (typeof input.locked === 'boolean') doc.locked = input.locked;
   return { doc };
 }
 
@@ -88,6 +104,7 @@ function buildPatch(_existing: any, p: LightInput & { id: string }): PatchResult
   if (typeof p.vision === 'boolean') patch.vision = p.vision;
   if (typeof p.hidden === 'boolean') patch.hidden = p.hidden;
   if (typeof p.elevation === 'number') patch.elevation = p.elevation;
+  if (typeof p.locked === 'boolean') patch.locked = p.locked;
   // Emission nests under config — write config.* dot-paths so a partial change never wipes the rest.
   if (typeof p.dim === 'number') patch['config.dim'] = p.dim;
   if (typeof p.bright === 'number') patch['config.bright'] = p.bright;
@@ -96,8 +113,13 @@ function buildPatch(_existing: any, p: LightInput & { id: string }): PatchResult
   if (typeof p.angle === 'number') patch['config.angle'] = p.angle;
   if (typeof p.luminosity === 'number') patch['config.luminosity'] = p.luminosity;
   if (typeof p.attenuation === 'number') patch['config.attenuation'] = p.attenuation;
-  if (typeof p.animationType === 'string' && p.animationType.trim() !== '')
-    patch['config.animation.type'] = p.animationType;
+  for (const k of ['coloration', 'saturation', 'contrast', 'shadows', 'priority'] as const)
+    if (typeof p[k] === 'number') patch[`config.${k}`] = p[k];
+  if (typeof p.negative === 'boolean') patch['config.negative'] = p.negative;
+  if (typeof p.animationType === 'string')
+    patch['config.animation.type'] = animationNone(p.animationType) ? null : p.animationType;
+  if (typeof p.animationReverse === 'boolean')
+    patch['config.animation.reverse'] = p.animationReverse;
   if (typeof p.animationSpeed === 'number') patch['config.animation.speed'] = p.animationSpeed;
   if (typeof p.animationIntensity === 'number')
     patch['config.animation.intensity'] = p.animationIntensity;
@@ -133,7 +155,15 @@ function dump(doc: any): Record<string, unknown> {
     animationIntensity: c.animation?.intensity,
     darknessMin: c.darkness?.min,
     darknessMax: c.darkness?.max,
+    coloration: c.coloration,
+    saturation: c.saturation,
+    contrast: c.contrast,
+    shadows: c.shadows,
+    negative: c.negative,
+    priority: c.priority,
+    animationReverse: c.animation?.reverse,
     elevation: doc.elevation,
+    locked: doc.locked,
   };
 }
 

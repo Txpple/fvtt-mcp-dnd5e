@@ -105,9 +105,23 @@ describe('lightDescriptor.dump', () => {
         attenuation: 0.9,
         animation: { type: 'flame', speed: 4, intensity: 5 },
         darkness: { min: 0.1, max: 1 },
+        coloration: 1,
+        saturation: 0.2,
+        contrast: -0.1,
+        shadows: 0.3,
+        negative: false,
+        priority: 2,
       },
+      locked: true,
     };
     expect(lightDescriptor.dump(doc)).toMatchObject({
+      coloration: 1,
+      saturation: 0.2,
+      contrast: -0.1,
+      shadows: 0.3,
+      negative: false,
+      priority: 2,
+      locked: true,
       dim: 17.5,
       bright: 8.75,
       alpha: 0.5,
@@ -119,6 +133,27 @@ describe('lightDescriptor.dump', () => {
       darknessMin: 0.1,
       darknessMax: 1,
       elevation: 0,
+    });
+  });
+
+  it('writes the extra emission fields as config dot-paths and clears an animation with ""', () => {
+    const r = lightDescriptor.buildPatch(
+      {},
+      {
+        id: 'l1',
+        saturation: 0.5,
+        negative: true,
+        animationType: '',
+        animationReverse: true,
+        locked: false,
+      }
+    );
+    expect(r.patch).toMatchObject({
+      'config.saturation': 0.5,
+      'config.negative': true,
+      'config.animation.type': null,
+      'config.animation.reverse': true,
+      locked: false,
     });
   });
 
