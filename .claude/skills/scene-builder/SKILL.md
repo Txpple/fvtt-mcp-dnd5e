@@ -136,7 +136,7 @@ create and refused on update (2026-10-11: a whole evening of "flickering" fires 
 config-only light came out with radius 0); read `animation` back in the `list` to confirm. **The fade comes from bright vs dim (owner pattern, 2026-10-11): set `bright` to about half of `dim`**
 (the owner's reference light: dim 17.5, bright 8.75). Bright 0 gives one hard circle at the dim
 edge however high `attenuation` is; the bright→dim step is what reads as a gradual falloff. Then:
-soft firelight `dim` ~22–26 / `bright` ~11–13, `attenuation` 1, `alpha` ~0.3, `luminosity` ~0.45,
+soft firelight `dim` ~22–26 with `bright` 0 (a fire's own flame tile is its centre; a big bright core blows out the middle — owner, 2026-10-11), `attenuation` 1, `alpha` ~0.3, `luminosity` ~0.45,
 `animationType: "flame"` (speed 4–5, intensity 5–6; "torch" is barely visible). Hearth fungus and
 glows: `dim` ~10 / `bright` ~5, `color` a saturated teal (`#2fd6c0`), `alpha` ~0.55, no animation
 (a low alpha plus luminosity washes the tint out to grey-white, and "pulse" muddied it).
