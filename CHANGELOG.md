@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 
 - **Lights read and write whole.** `manage-placeables` `kind: "lights"` `list` returned only the
   centre, radii, colour, angle and the animation's type, so a light someone tuned by hand could
@@ -21,8 +21,19 @@ What changed for a user of the tools and skills, release by release. The measure
   judged the way the table sees it; the GM's all-seeing view hid the hard ring at a light's dim
   radius. Every shot now releases controlled tokens first, so it never leaves one selected.
 - The light field descriptions are shorter, to pay for the new fields inside the tools/list ceiling.
-- Budgets: tools/list 204,651 → 204,987 chars (81 tools); always-on 1,778, skill descriptions
-  7,773 unchanged.
+- **`scene-builder` lights by the darkness floor.** A dim global light floors the darkness and
+  kills the hard ring at a light's dim radius; campfires keep bright 0 with a layered core and
+  halo, glows take bright ≈ half of dim in a saturated teal without a pulse; emission fields are
+  flat (a nested config is dropped); a re-light keeps each light's animation and centres on the
+  painted flame; lights are judged with `screenshot-scene` `asToken`.
+- **`stat-block-builder`'s finishing pass makes the art.** Every new actor gets an imagegen token
+  (a library token restyled with `edit-image` `kind: "token"`, matched to the campaign's finished
+  tokens with a `style` reference) and a matching `generate-image` `kind: "portrait"` in the
+  campaign's house style, the token attached as `character`. Both are shown for approval before
+  install; the compendium's or the library's art never ships as-is. Recipe: the imagegen
+  `illustration-builder` skill.
+- Budgets: tools/list 204,651 → 204,987 chars (81 tools; 13 under the 205,000 ceiling); always-on
+  1,778, skill descriptions 7,773 unchanged.
 
 ## 4.5.0 — 2026-10-11 — Battle Flow is By the Books
 
