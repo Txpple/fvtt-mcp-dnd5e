@@ -143,7 +143,13 @@ meeting scene darkness; soften it by layering, not by one big light.
 - **Fungus / glows:** `dim` 8 / `bright` 3, saturated teal `#2fd6c0`, `alpha` 0.6, `luminosity`
   0.35 (higher luminosity washes the tint to white), `attenuation` 0.8, `saturation` 0.3, no
   animation ("pulse" muddied the colour).
-- **Scene darkness** ~0.5 for a lived-in cave; darker makes every edge harsher.
+- **The ring is the darkness, not the light (owner-approved 2026-10-12).** At the dim edge a light
+  meets full scene darkness, and no light setting hides that step. Turn on a dim global light so
+  the darkness has a floor: `manage-scenes` `environment: {darknessLevel: 0.55, globalLight:
+  {enabled: true, bright: false, alpha: 0.5, darkness: {min: 0, max: 1}}}` (0.65 for a fight
+  scene). Then each light only adds colour and glow on top, and fades with no edge.
+- **Judge it as a player sees it**: `screenshot-scene` with `asToken` (a token on the scene). The
+  GM's all-seeing view hides the ring.
 - Read a light back with `list` (every field comes back under its input name) before copying it.
 Overlapping big radii
 wash a room out in orange; keep them small.
