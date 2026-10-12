@@ -129,6 +129,15 @@ choices, not silent defaults. Keep it to broad strokes:
 | Night exterior / moonlit | `darkness: 0.6–0.8`, `globalLight: false` |
 | Rain / storm sky | `weather: "rain"` (heavy → `"rainStorm"`) |
 
+**Placing lights by hand** (`manage-placeables` `kind: "lights"`): every emission field is FLAT —
+`dim`, `bright`, `color`, `alpha`, `luminosity`, `attenuation`, `animationType` / `animationSpeed` /
+`animationIntensity`, `darknessMin` / `darknessMax`. A nested `config: {...}` is silently dropped on
+create and refused on update (2026-10-11: a whole evening of "flickering" fires came out steady and a
+config-only light came out with radius 0); read `animation` back in the `list` to confirm. For a soft
+firelight: `attenuation` ~0.9, low `alpha` (~0.2), small `bright`, `animationType: "torch"`. Hearth
+fungus and glows: `dim` ≤ 10, `alpha` ~0.15, `animationType: "pulse"` slow. Overlapping big radii
+wash a room out in orange; keep them small.
+
 Don't stack five effects. Pick the one or two that define the scene and confirm. Weather keys are
 validated live by the tool — if you guess wrong, its error lists the valid keys; case doesn't matter.
 
