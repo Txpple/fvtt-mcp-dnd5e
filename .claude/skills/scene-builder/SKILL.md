@@ -148,6 +148,12 @@ meeting scene darkness; soften it by layering, not by one big light.
   the darkness has a floor: `manage-scenes` `environment: {darknessLevel: 0.55, globalLight:
   {enabled: true, bright: false, alpha: 0.5, darkness: {min: 0, max: 1}}}` (0.65 for a fight
   scene). Then each light only adds colour and glow on top, and fades with no edge.
+- **Re-lighting a scene: change the darkness floor, not the lights (owner, 2026-10-12).** A pass that
+  re-tuned every light on four scenes (flame on every lamp, halos added) was reverted: animation
+  can't be judged in a still, and lamps that had none came out as flicker the owner never asked
+  for. Keep each light's own animation; add a light only where the map paints a source; centre a
+  fire's light on the painted flame by looking at a crop of the map, not by a brightness centroid
+  (orange-painted floor pulls it off). Ask before a sweep over existing lights.
 - **Judge it as a player sees it**: `screenshot-scene` with `asToken` (a token on the scene). The
   GM's all-seeing view hides the ring.
 - Read a light back with `list` (every field comes back under its input name) before copying it.
