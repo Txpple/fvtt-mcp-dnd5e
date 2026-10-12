@@ -373,6 +373,11 @@ const ScreenshotSceneSchema = z.object({
     .boolean()
     .default(false)
     .describe('Draw a numbered marker over each note pin (view-only overlay).'),
+  asToken: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Token id or name to see through: the player's view, its vision and lighting."),
 });
 
 export class SceneTools {
@@ -526,9 +531,8 @@ export class SceneTools {
       {
         name: 'screenshot-scene',
         description:
-          'Render a scene in the headless bridge to a local PNG: the whole map fitted (or the saved ' +
-          'camera with fit:false), numbered note-pin markers with mark:true. Returns the file path ' +
-          'and scene metadata. GM-only.',
+          'Render a scene in the headless bridge to a PNG: the map fitted (fit:false keeps the ' +
+          "camera), note-pin markers with mark:true, a token's view with asToken. GM-only.",
         inputSchema: toInputSchema(ScreenshotSceneSchema),
       },
     ];
@@ -606,6 +610,7 @@ export class SceneTools {
       sceneIdentifier: parsed.sceneIdentifier,
       fit: parsed.fit,
       mark: parsed.mark,
+      asToken: parsed.asToken,
     });
     if (!meta?.found) {
       return `Scene not found: "${meta?.notFound ?? parsed.sceneIdentifier}". Nothing captured.`;
@@ -620,6 +625,11 @@ export class SceneTools {
     return (
       `Captured "${meta.sceneName}" (${meta.sceneId}) → ${outPath}` +
       (parsed.mark ? `\n  marked ${meta.noteCount ?? 0} note pin(s)` : '') +
+      (parsed.asToken
+        ? meta.asToken
+          ? `\n  seen through token "${meta.asToken}"`
+          : `\n  ⚠ token "${parsed.asToken}" not on the scene: GM view captured`
+        : '') +
       dims +
       '\n  (open or Read the file to view the image)'
     );

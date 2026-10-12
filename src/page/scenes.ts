@@ -1066,9 +1066,11 @@ export async function prepareSceneShot(args: {
   sceneIdentifier: string;
   fit?: boolean | undefined;
   mark?: boolean | undefined;
+  asToken?: string | undefined;
 }): Promise<{
   found: boolean;
   notFound?: string | undefined;
+  asToken?: string | undefined;
   sceneId?: string | undefined;
   sceneName?: string | undefined;
   noteCount?: number | undefined;
@@ -1098,6 +1100,22 @@ export async function prepareSceneShot(args: {
     const sh = w?.innerHeight || 1080;
     const scale = Math.min(sw / d.width, sh / d.height) * 0.95;
     canvas.pan({ x: d.width / 2, y: d.height / 2, scale });
+  }
+
+  // See through one token (the player's view: its vision, fog and lighting), or release every
+  // token so the shot is the GM's whole-map view. A shot never leaves a token controlled.
+  let seenThrough: string | undefined;
+  const toks: any[] = canvas.tokens?.placeables ?? [];
+  canvas.tokens?.releaseAll?.();
+  if (args.asToken) {
+    const want = args.asToken.trim().toLowerCase();
+    const tok =
+      toks.find((t: any) => t.id === args.asToken) ??
+      toks.find((t: any) => String(t.document?.name ?? '').toLowerCase() === want);
+    if (tok) {
+      tok.control({ releaseOthers: true });
+      seenThrough = tok.document?.name ?? tok.id;
+    }
   }
 
   // Clear any prior QA overlay (repeated shots must not stack), then optionally redraw markers.
@@ -1131,8 +1149,8 @@ export async function prepareSceneShot(args: {
     }
     canvas.notes.addChild(overlay);
   }
-  // Let the pan settle + the overlay draw before the screenshot.
-  await new Promise(r => setTimeout(r, 600));
+  // Let the pan settle + the overlay draw (and a token's vision refresh) before the screenshot.
+  await new Promise(r => setTimeout(r, seenThrough ? 1500 : 600));
 
   let renderer = 'unknown';
   try {
@@ -1147,6 +1165,7 @@ export async function prepareSceneShot(args: {
     sceneName: scene.name,
     noteCount: canvas.notes?.placeables?.length ?? 0,
     renderer,
+    asToken: seenThrough,
     dimensions: { width: d.width, height: d.height, sceneX: d.sceneX, sceneY: d.sceneY },
   };
 }

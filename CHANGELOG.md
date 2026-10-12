@@ -16,8 +16,12 @@ What changed for a user of the tools and skills, release by release. The measure
   `animationReverse`, `locked`) are now settable on create and update.
 - **`animationType: ""` (or `"none"`) clears an animation.** It was documented as "none" but
   silently ignored, so a light's animation could never be removed.
+- **`screenshot-scene` can see through a token.** `asToken` (a token id or name on the scene)
+  captures the player's view (that token's vision, fog and lighting), so a light's edge can be
+  judged the way the table sees it; the GM's all-seeing view hid the hard ring at a light's dim
+  radius. Every shot now releases controlled tokens first, so it never leaves one selected.
 - The light field descriptions are shorter, to pay for the new fields inside the tools/list ceiling.
-- Budgets: tools/list 204,651 → 204,894 chars (81 tools); always-on 1,778, skill descriptions
+- Budgets: tools/list 204,651 → 204,987 chars (81 tools); always-on 1,778, skill descriptions
   7,773 unchanged.
 
 ## 4.5.0 — 2026-10-11 — Battle Flow is By the Books
