@@ -133,9 +133,14 @@ choices, not silent defaults. Keep it to broad strokes:
 `dim`, `bright`, `color`, `alpha`, `luminosity`, `attenuation`, `animationType` / `animationSpeed` /
 `animationIntensity`, `darknessMin` / `darknessMax`. A nested `config: {...}` is silently dropped on
 create and refused on update (2026-10-11: a whole evening of "flickering" fires came out steady and a
-config-only light came out with radius 0); read `animation` back in the `list` to confirm. For a soft
-firelight: `attenuation` ~0.9, low `alpha` (~0.2), small `bright`, `animationType: "torch"`. Hearth
-fungus and glows: `dim` ≤ 10, `alpha` ~0.15, `animationType: "pulse"` slow. Overlapping big radii
+config-only light came out with radius 0); read `animation` back in the `list` to confirm. **The fade comes from bright vs dim (owner pattern, 2026-10-11): set `bright` to about half of `dim`**
+(the owner's reference light: dim 17.5, bright 8.75). Bright 0 gives one hard circle at the dim
+edge however high `attenuation` is; the bright→dim step is what reads as a gradual falloff. Then:
+soft firelight `dim` ~22–26 / `bright` ~11–13, `attenuation` 1, `alpha` ~0.3, `luminosity` ~0.45,
+`animationType: "flame"` (speed 4–5, intensity 5–6; "torch" is barely visible). Hearth fungus and
+glows: `dim` ~10 / `bright` ~5, `color` a saturated teal (`#2fd6c0`), `alpha` ~0.55, no animation
+(a low alpha plus luminosity washes the tint out to grey-white, and "pulse" muddied it).
+A darker scene makes every edge harsher: 0.5 darkness reads softer than 0.7. Overlapping big radii
 wash a room out in orange; keep them small.
 
 Don't stack five effects. Pick the one or two that define the scene and confirm. Weather keys are
