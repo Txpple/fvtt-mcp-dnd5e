@@ -19,6 +19,10 @@ What changed for a user of the tools and skills, release by release. The measure
   ones keep `flags["fvtt-mod-battleflow"]`; `docs/contracts.md` names both.
 - Docs that state current facts follow the rename (the contracts row, the sandbox deploy example,
   the start-session and scene-builder skills); dated history stays as written.
+- **The sandbox server starts in its data folder.** `node scripts/local-foundry.mjs start` spawned the
+  headless server in the caller's folder, and a process pins its working folder for its whole life:
+  one started inside a module's clone blocked renaming that clone (the Battle Flow rename,
+  2026-10-11). It now starts in the Foundry data folder, wherever it is launched from.
 - Budgets unchanged: tools/list 204,651 chars (81 tools), always-on 1,778, skill descriptions 7,773.
 
 ## 4.4.1 — 2026-10-11 — the PC builder's own switch leaves the receipt

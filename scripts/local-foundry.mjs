@@ -226,7 +226,11 @@ function spawnServer() {
   writeFileSync(fd, `\n===== headless start ${new Date().toISOString()} =====\n`);
   const serverArgs = [appMain, `--dataPath=${dataPath}`];
   if (adminKey) serverArgs.push(`--adminPassword=${adminKey}`);
+  // cwd: the data folder, never the caller's. A server started from inside a repo pins that folder for
+  // its whole life (Windows refuses to rename a directory a process is in), which blocked the
+  // 2026-10-11 rename of Battle Flow's clone until the server was stopped.
   const child = spawn(process.execPath, serverArgs, {
+    cwd: dataPath,
     detached: true,
     stdio: ['ignore', fd, fd],
     windowsHide: true,
