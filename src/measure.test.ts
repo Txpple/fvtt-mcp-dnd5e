@@ -76,38 +76,18 @@ const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
   settings: 6_900, // 6,809
   actors: 75_000, // 74,911
   items: 4_700, // 4,615
-  compendium: 6_600, // 6,541
+  compendium: 6_700, // 6,541; 6,662 once the four searches share one `limit` leaf (2026-10-15)
   scenes: 62_500, // 62,106; 62,398 with manage-placeables' per-kind keys (2026-10-15)
-  journals: 14_400, // 14,380
-  tables: 6_000, // 5,935
+  journals: 14_700, // 14,380; 14,635 once the members share one `name` and one `pageId` leaf
+  tables: 6_200, // 5,935; 6,138 once create and update share their five leaves (2026-10-15)
   cards: 2_100, // 2,009
   audio: 5_200, // 5,119
   chat: 6_300, // 6,254
   combat: 1_200, // 1,141
   assets: 6_400, // 6,372
-  organization: 5_800, // 5,775
+  organization: 5_900, // 5,775; 5,806 once the folder members share `name` and `parentFolder`
   scripting: 1_300, // 1,256
 };
-
-/**
- * (b) the keys the flatten loses today, each fixed by the commit that follows (manage-placeables'
- * four went with its per-kind keys); the list only shrinks, and the rule is that it is empty.
- */
-const LOSSY_TODAY = [
-  'manage-scenes.name ×2',
-  'search-compendium.limit ×3',
-  'manage-rolltables.name ×2',
-  'manage-rolltables.formula ×2',
-  'manage-rolltables.replacement ×2',
-  'manage-rolltables.displayRoll ×2',
-  'manage-rolltables.results ×2',
-  'manage-journals.name ×2',
-  'manage-journals.pageId ×3',
-  'manage-cards.name ×2',
-  'manage-playlists.name ×2',
-  'manage-folders.name ×2',
-  'manage-folders.parentFolder ×2',
-];
 
 function surface(toolsets: readonly string[] = []) {
   const host = createHost(resolveHostConfig({}, 'generic'), makeLogger());
@@ -157,7 +137,7 @@ describe('context budgets (three, each with the client that pays it)', () => {
         flat.largest.chars,
         `(${flat.largest.name}, ${flat.largest.members} members, ${fmt(flat.largest.advertisedChars)} advertised; ≤ ${fmt(BUDGET.perFetch)})`
       ),
-      `    every tool once     ${fmt(flat.chars).padStart(8)} chars (advertised ${fmt(list.chars)}); lossy keys: ${flat.lossy.length} (${LOSSY_TODAY.length} known; the rule is none)`,
+      `    every tool once     ${fmt(flat.chars).padStart(8)} chars (advertised ${fmt(list.chars)}); lossy keys: ${flat.lossy.length} (the rule is none)`,
       ...flat.lossy.map(k => `      ${k}`),
       '  (c) the eager list — a client that loads every schema at connect',
       line('tools/list', list.chars, `(${list.count} tools; ≤ ${fmt(BUDGET.toolsListChars)})`),
@@ -201,7 +181,7 @@ describe('context budgets (three, each with the client that pays it)', () => {
   });
 
   it('(b) flatten-safety: no key is described in two shapes across a union (the merge would show one)', () => {
-    expect(flat.lossy, flat.lossy.join('\n')).toEqual(LOSSY_TODAY);
+    expect(flat.lossy, flat.lossy.join('\n')).toEqual([]);
   });
 
   // (c) the eager list

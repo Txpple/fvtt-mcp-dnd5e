@@ -59,14 +59,29 @@ function stripUuidEnrichers(text: string): string {
 
 // Single source of truth for each action's input contract: the member parses with these schemas
 // and the advertised JSON Schema is derived from the same zod.
+// The leaves create and update share, one each:
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const tableName = z.string().min(1).describe('Table name.');
+const tableDescription = z.string().describe('Table description.');
+const tableFormula = z.string().min(1).describe('Roll formula (default 1d<total weight>).');
+const tableReplacement = z.boolean().describe('Draw with replacement (default true).');
+const tableDisplayRoll = z.boolean().describe('Show the roll when drawing (default true).');
+const tableResults = z
+  .array(resultSchema)
+  .min(1)
+  .describe(
+    'Table entries; on update, replaces every entry (ranges reassigned); one: editResults.'
+  );
+
 const CreateRollTableSchema = z.object({
-  name: z.string().min(1).describe('Table name.'),
-  description: z.string().optional(),
-  formula: z.string().optional().describe('Roll formula (default 1d<total weight>).'),
-  replacement: z.boolean().optional().describe('Draw with replacement (default true).'),
-  displayRoll: z.boolean().optional().describe('Show the roll when drawing (default true).'),
+  name: tableName,
+  description: tableDescription.optional(),
+  formula: tableFormula.optional(),
+  replacement: tableReplacement.optional(),
+  displayRoll: tableDisplayRoll.optional(),
   folderName: z.string().optional(),
-  results: z.array(resultSchema).min(1).describe('Table entries.'),
+  results: tableResults,
 });
 
 const ListRollTablesSchema = z.object({});
@@ -120,15 +135,12 @@ const resultEditSchema = z
 const UpdateRollTableSchema = z
   .object({
     identifier: z.string().min(1),
-    name: z.string().min(1).optional().describe('New table name.'),
-    description: z.string().optional().describe('New description.'),
-    formula: z.string().min(1).optional().describe('New roll formula.'),
-    replacement: z.boolean().optional().describe('Draw with replacement.'),
-    displayRoll: z.boolean().optional().describe('Show the roll when drawing.'),
-    results: z
-      .array(resultSchema)
-      .optional()
-      .describe('Replaces every result (ranges reassigned); one entry: editResults.'),
+    name: tableName.optional(),
+    description: tableDescription.optional(),
+    formula: tableFormula.optional(),
+    replacement: tableReplacement.optional(),
+    displayRoll: tableDisplayRoll.optional(),
+    results: tableResults.optional(),
     editResults: z
       .array(resultEditSchema)
       .min(1)

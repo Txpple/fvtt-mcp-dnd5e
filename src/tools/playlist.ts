@@ -20,8 +20,13 @@ const PLAYLIST_MODES = ['sequential', 'shuffle', 'simultaneous', 'soundboard', '
 
 // Single source of truth for each action's input contract: the member parses with these schemas
 // and the advertised JSON Schema is derived from the same zod.
+// The name leaf create and update share:
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const playlistName = z.string().min(1).describe('Playlist name.');
+
 const CreatePlaylistSchema = z.object({
-  name: z.string().min(1).describe('Playlist name.'),
+  name: playlistName,
   soundPaths: z
     .array(z.string().min(1))
     .min(1)
@@ -36,7 +41,7 @@ const ListPlaylistsSchema = z.object({});
 
 const UpdatePlaylistSchema = z.object({
   identifier: z.string().min(1).describe('Playlist id or exact name.'),
-  name: z.string().min(1).optional().describe('New playlist name.'),
+  name: playlistName.optional(),
   mode: z.enum(PLAYLIST_MODES).optional(),
   fade: z.number().min(0).optional().describe('Crossfade in ms.'),
 });

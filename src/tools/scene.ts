@@ -295,8 +295,13 @@ const sceneGeometryFields = {
 
 const sceneSharedFields = { ...sceneGeometryFields, ...sceneMoodFields, ...sceneCommonFields };
 
+// The name leaf create and update share:
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const sceneName = z.string().min(1).describe('Scene name.');
+
 const CreateSceneSchema = z.object({
-  name: z.string().min(1).describe('Scene name.'),
+  name: sceneName,
   walls: z
     .array(SidecarWallSchema)
     .optional()
@@ -335,7 +340,7 @@ const ListScenesSchema = z.object({
 
 const UpdateSceneSchema = z.object({
   sceneIdentifier: sceneTargetRequired,
-  name: z.string().min(1).optional().describe('New scene name.'),
+  name: sceneName.optional(),
   navName: z.string().optional().describe('Navigation-bar label.'),
   ...sceneSharedFields,
 });

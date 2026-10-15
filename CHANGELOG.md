@@ -32,6 +32,20 @@ What changed for a user of the tools and skills, release by release. The measure
   36,758 chars (was 13,164 showing one kind's shapes; ceiling 36,800 — the view is now right for
   every kind, paid once per session that uses the tool); tools/list 204,987 → 205,279, the scenes
   row 62,106 → 62,398 (ceiling 62,500); the lossy keys 17 → 13.
+- **The other lossy keys are gone: one leaf per shared key.** Where two members of a union
+  described the same key differently (`manage-scenes`, `manage-cards`, `manage-playlists`,
+  `manage-journals` and `manage-folders` on `name`; `manage-folders` on `parentFolder`;
+  `manage-journals` on `pageId`; `manage-rolltables` on `name`, `formula`, `replacement`,
+  `displayRoll` and `results`; `search-compendium` on `limit`), the members now share one zod
+  leaf, so every client sees one shape. What changed for a caller: `search-compendium` takes
+  `limit` up to 500 for every `type` (the name search was capped at 50; a numeric string is
+  accepted everywhere); `manage-rolltables` `update` refuses an empty `formula` or an empty
+  `results` (a replacement set has at least one entry; one entry: `editResults`);
+  `manage-journals` `update` refuses an empty `name`, and `get` / `update` an empty `pageId`.
+  The flatten-safety assertion holds an empty list from here. Budgets: tools/list 205,279 →
+  205,873; the rows that grew, the same prose now on both members: compendium 6,541 → 6,662
+  (ceiling 6,700), journals 14,380 → 14,635 (14,700), tables 5,935 → 6,138 (6,200),
+  organization 5,775 → 5,806 (5,900).
 - **A vetoed delete is an error, not a success.** A module may refuse a delete from its
   `preDelete<Doc>` hook (By the Books keeps a standing companion's effect); Foundry then skips the
   document and resolves as if nothing were wrong, and `manage-effect` `delete` answered "Deleted"

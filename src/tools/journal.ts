@@ -66,9 +66,21 @@ const ListJournalsSchema = z.object({
   filterQuests: z.boolean().optional().describe('Quest-like journals only.'),
 });
 
+// The leaves the manage-journals members share, one each:
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const journalName = z.string().min(1).describe('Journal entry name.');
+const journalPageId = z
+  .string()
+  .min(1)
+  .describe(
+    'Page id: get reads that page, update writes it (default the first text page), delete-page ' +
+      'removes it.'
+  );
+
 const GetJournalSchema = z.object({
   journalId: z.string().min(1),
-  pageId: z.string().optional().describe('Read this page instead of the entry.'),
+  pageId: journalPageId.optional(),
 });
 
 const SearchJournalsSchema = z.object({
@@ -109,7 +121,7 @@ const createJournalPageSchema = z
   });
 
 const CreateJournalSchema = z.object({
-  name: z.string().min(1).describe('Journal entry name.'),
+  name: journalName,
   pages: z.array(createJournalPageSchema).min(1).describe('The pages, in order.'),
   folderName: z.string().optional().describe('Folder (created if absent).'),
 });
@@ -130,9 +142,9 @@ function isQuestRelated(journalName: string): boolean {
 const UpdateJournalSchema = z
   .object({
     journalId: z.string().min(1, 'Journal ID is required'),
-    name: z.string().optional().describe('Rename the entry.'),
+    name: journalName.optional(),
     content: z.string().optional().describe('HTML that replaces the target page.'),
-    pageId: z.string().optional().describe('The target page id; default the first text page.'),
+    pageId: journalPageId.optional(),
     newPageName: z.string().optional().describe('Without pageId: a new page of this name.'),
     playerVisible: z
       .boolean()
@@ -154,7 +166,7 @@ const SetJournalPageVisibilitySchema = z.object({
 
 const DeleteJournalPageSchema = z.object({
   journalId: z.string().min(1, 'Journal ID is required'),
-  pageId: z.string().min(1).describe('Page id.'),
+  pageId: journalPageId,
 });
 
 const DeleteJournalSchema = z.object({

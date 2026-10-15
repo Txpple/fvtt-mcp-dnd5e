@@ -18,13 +18,31 @@ import { unionMember, unionTool, type UnionTool } from './_union.js';
 
 export const SEARCH_COMPENDIUM = 'search-compendium';
 
+// The one `limit` leaf of the four searches, lenient (a number or a numeric string):
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const searchLimit = z
+  .union([
+    z.number().min(1).max(500),
+    z
+      .string()
+      .refine(val => {
+        const num = parseInt(val, 10);
+        return !Number.isNaN(num) && num >= 1 && num <= 500;
+      })
+      .transform(val => parseInt(val, 10)),
+  ])
+  .optional()
+  .default(50)
+  .describe('Max results (default 50); totalFound is the full count.');
+
 const SearchCompendiumSchema = z.object({
   query: z
     .string()
     .min(2, 'Search query must be at least 2 characters')
     .describe('Name terms (all must appear); descriptions are not searched.'),
   packType: z.string().optional().describe('Pack document type ("Item", "Actor", "JournalEntry").'),
-  limit: z.number().min(1).max(50).default(50).describe('Max results.'),
+  limit: searchLimit,
 });
 
 const GetCompendiumEntrySchema = z.object({
@@ -110,20 +128,7 @@ const ListCreaturesByCriteriaSchema = z.object({
     .optional()
     .describe('Legendary-action creatures only (an approximate index flag).'),
 
-  limit: z
-    .union([
-      z.number().min(1).max(500),
-      z
-        .string()
-        .refine(val => {
-          const num = parseInt(val, 10);
-          return !Number.isNaN(num) && num >= 1 && num <= 500;
-        })
-        .transform(val => parseInt(val, 10)),
-    ])
-    .optional()
-    .default(50)
-    .describe('Max results (default 50); totalFound is the full count.'),
+  limit: searchLimit,
 });
 
 const ListCompendiumPacksSchema = z.object({
@@ -180,19 +185,7 @@ const SearchCompendiumSpellsSchema = z.object({
     .string()
     .optional()
     .describe('Damage type dealt ("fire"); a second pass over the facet-filtered candidates.'),
-  limit: z
-    .union([
-      z.number().min(1).max(200),
-      z
-        .string()
-        .refine(val => {
-          const num = parseInt(val, 10);
-          return !Number.isNaN(num) && num >= 1 && num <= 200;
-        })
-        .transform(val => parseInt(val, 10)),
-    ])
-    .default(50)
-    .describe('Max results (default 50).'),
+  limit: searchLimit,
 });
 
 // Thin typed facade over the faceted engine for GEAR. documentType narrows the item family
@@ -227,19 +220,7 @@ const SearchCompendiumItemsSchema = z.object({
     ])
     .optional()
     .describe('Magical items only ("mgc").'),
-  limit: z
-    .union([
-      z.number().min(1).max(200),
-      z
-        .string()
-        .refine(val => {
-          const num = parseInt(val, 10);
-          return !Number.isNaN(num) && num >= 1 && num <= 200;
-        })
-        .transform(val => parseInt(val, 10)),
-    ])
-    .default(50)
-    .describe('Max results (default 50).'),
+  limit: searchLimit,
 });
 
 /**

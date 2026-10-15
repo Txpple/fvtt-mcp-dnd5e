@@ -15,8 +15,13 @@ export const MANAGE_CARDS = 'manage-cards';
 
 // Single source of truth for each action's input contract: the member parses with these schemas
 // and the advertised JSON Schema is derived from the same zod.
+// The name leaf create and import share:
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const stackName = z.string().min(1).describe('Stack name.');
+
 const CreateCardsSchema = z.object({
-  name: z.string().min(1).describe('Stack name.'),
+  name: stackName,
   type: z.enum(['deck', 'hand', 'pile']).optional().describe('Default deck.'),
   description: z.string().optional(),
   folderName: z.string().optional(),
@@ -40,7 +45,7 @@ const ListCardsSchema = z.object({});
 
 const ImportCardsSchema = z.object({
   preset: z.string().min(1).describe('Core preset deck key ("pokerDark" / "pokerLight").'),
-  name: z.string().min(1).optional().describe('Name for the stack.'),
+  name: stackName.optional(),
   folderName: z.string().optional(),
 });
 

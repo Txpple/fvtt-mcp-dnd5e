@@ -177,11 +177,15 @@ describe('handleSearchCompendium', () => {
     await expect(tools.handleSearchCompendium({ type: 'any' })).rejects.toThrow();
   });
 
-  it('rejects a limit above the maximum of 50', async () => {
+  it('rejects a limit above the maximum of 500 (the one leaf every search type shares)', async () => {
     const { tools } = build();
     await expect(
-      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 51 })
+      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 501 })
     ).rejects.toThrow();
+    // the cap was 50 for the name search alone until the four searches shared one leaf
+    await expect(
+      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 51 })
+    ).resolves.toBeTruthy();
   });
 
   it('rejects a limit below the minimum of 1', async () => {
@@ -506,9 +510,9 @@ describe('handleSearchCompendiumSpells', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects a limit above the maximum of 200', async () => {
+  it('rejects a limit above the maximum of 500 (the one leaf every search type shares)', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({ type: 'spells', limit: 201 })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'spells', limit: 501 })).rejects.toThrow();
   });
 });
 
@@ -599,9 +603,9 @@ describe('handleSearchCompendiumItems', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects a limit above the maximum of 200', async () => {
+  it('rejects a limit above the maximum of 500 (the one leaf every search type shares)', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({ type: 'items', limit: 201 })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'items', limit: 501 })).rejects.toThrow();
   });
 });
 

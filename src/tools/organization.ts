@@ -39,10 +39,18 @@ const ListFoldersSchema = z.object({
   type: z.enum(DOC_TYPES).optional(),
 });
 
+// The leaves create and update share, one each:
+// a key two members describe differently is shown in one shape by a deferred client
+// (src/measure.ts flattenTool), so the members share one leaf.
+const folderName = z.string().min(1).describe('Folder name.');
+const parentFolder = z
+  .string()
+  .describe('Parent folder id or exact name (same type); on update, "" = the root.');
+
 const CreateFolderSchema = z.object({
-  name: z.string().min(1).describe('Folder name.'),
+  name: folderName,
   type: z.enum(DOC_TYPES),
-  parentFolder: z.string().optional().describe('Parent folder id or exact name (same type).'),
+  parentFolder: parentFolder.optional(),
   color: z.string().optional().describe('Hex color.'),
 });
 
@@ -50,12 +58,9 @@ const UpdateFolderSchema = z
   .object({
     identifier: z.string().min(1).describe('Folder id or exact name.'),
     type: z.enum(DOC_TYPES).default('Actor'),
-    name: z.string().min(1).optional().describe('Rename.'),
+    name: folderName.optional(),
     color: z.string().optional().describe('Hex color.'),
-    parentFolder: z
-      .string()
-      .optional()
-      .describe('Reparent under this folder id or exact name (same type); "" = the root.'),
+    parentFolder: parentFolder.optional(),
     sort: z
       .number()
       .int()
