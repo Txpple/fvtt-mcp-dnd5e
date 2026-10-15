@@ -47,9 +47,12 @@ const BUDGET = {
   // 11,147 at 2.2.0; 6,153 after M8 (151 names → 81; the target was ≤ 7,000, now the ceiling)
   nameChars: 7_000,
   skillDescriptionChars: 8_000, // 15,381 at 2.2.0; 7,998 after M3 (all 17 rewritten, 120/120 trigger phrases kept)
-  // (b) per fetch, Claude Code: the largest single tool flattened — manage-placeables, 13,164 on
-  // 2026-10-15 with one kind's shapes under `items` / `patches` / `ids` (the lossy view).
-  perFetch: 13_200,
+  // (b) per fetch, Claude Code: the largest single tool flattened — manage-placeables. 13,164 on
+  // 2026-10-15 with one kind's shapes under `items` / `patches` / `ids` (the lossy view: the tiles'
+  // fields shown for every kind); 36,758 the same day once each kind's entries ride its own key
+  // (tiles / tilePatches / tileIds …), so the view carries every kind's real fields — the cost of
+  // a view that is right, paid once per session that uses the tool.
+  perFetch: 36_800,
   // (c) the eager list: 283,945 at 2.2.0; +4,379 for the closed top level
   // (`additionalProperties:false` × 151, M2 — the cost the plan accepted for refusing unknown
   // arguments); 205,248 after M7 (the prose diet: every leaf ≤ 120, every description ≤ 400 — the
@@ -74,7 +77,7 @@ const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
   actors: 75_000, // 74,911
   items: 4_700, // 4,615
   compendium: 6_600, // 6,541
-  scenes: 62_200, // 62,106
+  scenes: 62_500, // 62,106; 62,398 with manage-placeables' per-kind keys (2026-10-15)
   journals: 14_400, // 14,380
   tables: 6_000, // 5,935
   cards: 2_100, // 2,009
@@ -87,14 +90,10 @@ const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
 };
 
 /**
- * (b) the keys the flatten loses today, each fixed by a commit that follows (manage-placeables'
- * per-kind keys first, then the rest); the list only shrinks, and the rule is that it is empty.
+ * (b) the keys the flatten loses today, each fixed by the commit that follows (manage-placeables'
+ * four went with its per-kind keys); the list only shrinks, and the rule is that it is empty.
  */
 const LOSSY_TODAY = [
-  'manage-placeables.items ×8',
-  'manage-placeables.patches ×7',
-  'manage-placeables.ids ×9',
-  'manage-placeables.name ×2',
   'manage-scenes.name ×2',
   'search-compendium.limit ×3',
   'manage-rolltables.name ×2',

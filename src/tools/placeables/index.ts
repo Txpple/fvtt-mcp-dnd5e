@@ -51,9 +51,9 @@ export class PlaceableTools {
       description:
         'Scene placeables: kind × action (create / list / update / delete; regions also ' +
         'create-teleporter / add-behavior / remap-teleporters). sceneIdentifier omitted = the ' +
-        'ACTIVE scene; a scene miss is an error. create / update take one entry per placeable, ' +
-        'one bad entry does not fail the batch, create returns the ids, unresolved ids are ' +
-        'reported, never fatal. GM-only.',
+        'ACTIVE scene; a scene miss is an error. create / update take one entry per placeable ' +
+        "under the kind's key (tiles, tilePatches, tileIds …); a bad entry never fails the batch, " +
+        'create returns the ids, unresolved ids are reported. GM-only.',
       discriminators: ['kind', 'action'],
       shared: { sceneIdentifier: sceneTarget },
       members: kinds.flatMap(k =>

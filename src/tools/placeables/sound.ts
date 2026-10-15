@@ -61,7 +61,7 @@ const soundFields = {
 
 const CreateSoundsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  sounds: z
     .array(
       z.object({
         path: z
@@ -98,12 +98,18 @@ const UpdateSoundSchema = z
 
 const UpdateSoundsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z.array(UpdateSoundSchema).min(1).describe('One patch per sound; each targets one id.'),
+  soundPatches: z
+    .array(UpdateSoundSchema)
+    .min(1)
+    .describe('One patch per sound; each targets one id.'),
 });
 
 const DeleteSoundsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z.array(z.string().min(1)).min(1).describe('AmbientSound ids to delete (from action list).'),
+  soundIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('AmbientSound ids to delete (from action list).'),
 });
 
 export const soundKindModule: PlaceableKindFactory = foundry => ({
@@ -116,8 +122,8 @@ export const soundKindModule: PlaceableKindFactory = foundry => ({
         'pixels, radius in grid distance (feet), volume, repeat, walls, easing, a darkness range, ' +
         'listener effects. A 404 path keeps the path with a warning.',
       schema: CreateSoundsSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneSounds', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, sounds }) => {
+        const result = await foundry.call('createSceneSounds', { sceneIdentifier, items: sounds });
         return formatCreatePlaceables(result, 'sound');
       },
     }),
@@ -136,8 +142,11 @@ export const soundKindModule: PlaceableKindFactory = foundry => ({
       action: 'update',
       description: 'Edit placed ambient sounds by id; only the fields passed change.',
       schema: UpdateSoundsSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneSounds', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, soundPatches }) => {
+        const result = await foundry.call('updateSceneSounds', {
+          sceneIdentifier,
+          patches: soundPatches,
+        });
         return formatUpdatePlaceables(result, 'sound');
       },
     }),
@@ -145,8 +154,8 @@ export const soundKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Delete ambient sounds by id.',
       schema: DeleteSoundsSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneSounds', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, soundIds }) => {
+        const result = await foundry.call('deleteSceneSounds', { sceneIdentifier, ids: soundIds });
         return formatDeletePlaceables(result, 'sound');
       },
     }),

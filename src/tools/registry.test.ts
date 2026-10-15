@@ -159,7 +159,11 @@ describe('tool registry', () => {
     const union = tools.find(t => t.name === 'manage-placeables')!.inputSchema;
     expect(union.properties.kind.enum).toContain('notes');
     await expect(
-      dispatch('manage-placeables', { kind: 'notes', action: 'update', patches: [{ id: 'n1' }] })
+      dispatch('manage-placeables', {
+        kind: 'notes',
+        action: 'update',
+        notePatches: [{ id: 'n1' }],
+      })
     ).rejects.toThrow('Provide at least one field to change besides id');
   });
 

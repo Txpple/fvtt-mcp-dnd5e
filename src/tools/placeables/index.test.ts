@@ -3,11 +3,12 @@
  *
  * These handlers own: zod input parsing (required create fields; update needs one field beyond id;
  * delete needs ids), the exact page-op names + arg SHAPE forwarded across the bridge
- * (create/list/update/deleteScene<Kind> with items/patches/ids), and the output shaping via
- * utils/placeable-format. The consolidated kinds (tiles, lights, walls, drawings) ride ONE tool,
- * manage-placeables, selected by kind × action (src/tools/_union.ts); the rest are still their
- * pre-M8 per-op tools. The page-side kernel + descriptors are unit-tested next to their files and
- * live-verified.
+ * (create/list/update/deleteScene<Kind> with items/patches/ids) from the tool's own per-kind keys
+ * (tiles / tilePatches / tileIds, and so for every kind — one shape per key across the union, so a
+ * deferred client's flattened view is right for every kind), and the output shaping via
+ * utils/placeable-format. All eight kinds ride ONE tool, manage-placeables, selected by kind ×
+ * action (src/tools/_union.ts). The page-side kernel + descriptors are unit-tested next to their
+ * files and live-verified.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -89,7 +90,7 @@ describe('PlaceableTools.getToolDefinitions', () => {
 });
 
 describe('manage-placeables — tiles', () => {
-  it('create forwards {sceneIdentifier, items} and formats the created ids', async () => {
+  it('create forwards tiles as {sceneIdentifier, items} and formats the created ids', async () => {
     const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
@@ -99,7 +100,7 @@ describe('manage-placeables — tiles', () => {
     });
     const out = await manage('tiles', 'create', {
       sceneIdentifier: 'Cave',
-      items: [{ src: 'worlds/w/props/blood.png', x: 100, y: 200, width: 280, height: 320 }],
+      tiles: [{ src: 'worlds/w/props/blood.png', x: 100, y: 200, width: 280, height: 320 }],
     });
     expect(calls[0][0]).toBe('createSceneTiles');
     expect(calls[0][1]).toEqual({
@@ -121,7 +122,7 @@ describe('manage-placeables — tiles', () => {
     });
     const out = await manage('tiles', 'create', {
       sceneIdentifier: 'Cave',
-      items: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
+      tiles: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
     });
     expect(out).toContain('Created 0 tile(s)');
     expect(out).toContain('⚠ Tile 0: src (texture path) is required');
@@ -133,14 +134,14 @@ describe('manage-placeables — tiles', () => {
     await expect(
       manage('tiles', 'create', {
         sceneIdentifier: 'Nowhere',
-        items: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
+        tiles: [{ src: 'x.png', x: 0, y: 0, width: 10, height: 10 }],
       })
     ).rejects.toThrow('Scene not found: "Nowhere". No tiles created.');
     await expect(
-      manage('tiles', 'create', { sceneIdentifier: 'Cave', items: [{ src: 'x.png', x: 0, y: 0 }] })
+      manage('tiles', 'create', { sceneIdentifier: 'Cave', tiles: [{ src: 'x.png', x: 0, y: 0 }] })
     ).rejects.toThrow();
     await expect(
-      manage('tiles', 'create', { sceneIdentifier: 'Cave', items: [] })
+      manage('tiles', 'create', { sceneIdentifier: 'Cave', tiles: [] })
     ).rejects.toThrow();
   });
 
@@ -193,7 +194,7 @@ describe('manage-placeables — tiles', () => {
     expect(c3[0][1]).toEqual({});
   });
 
-  it('update forwards {patches}, reports matched/updated + unresolved ids, rejects an empty patch', async () => {
+  it('update forwards tilePatches as {patches}, reports matched/updated + unresolved ids, rejects an empty patch', async () => {
     const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
@@ -203,7 +204,7 @@ describe('manage-placeables — tiles', () => {
     });
     const out = await manage('tiles', 'update', {
       sceneIdentifier: 'Cave',
-      patches: [{ id: 't1', width: 400, height: 460 }],
+      tilePatches: [{ id: 't1', width: 400, height: 460 }],
     });
     expect(calls[0][0]).toBe('updateSceneTiles');
     expect(calls[0][1]).toEqual({
@@ -222,17 +223,17 @@ describe('manage-placeables — tiles', () => {
     });
     const out2 = await m2('tiles', 'update', {
       sceneIdentifier: 'Cave',
-      patches: [{ id: 'ghostTile', x: 5 }],
+      tilePatches: [{ id: 'ghostTile', x: 5 }],
     });
     expect(out2).toContain('No tiles matched');
     expect(out2).toContain('not found: ghostTile');
 
     await expect(
-      manage('tiles', 'update', { sceneIdentifier: 'Cave', patches: [{ id: 't1' }] })
+      manage('tiles', 'update', { sceneIdentifier: 'Cave', tilePatches: [{ id: 't1' }] })
     ).rejects.toThrow('Provide at least one field to change besides id');
   });
 
-  it('delete forwards {ids} and reports count + missing ids', async () => {
+  it('delete forwards tileIds as {ids} and reports count + missing ids', async () => {
     const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
@@ -240,7 +241,10 @@ describe('manage-placeables — tiles', () => {
       deleted: 1,
       notFoundIds: ['ghost'],
     });
-    const out = await manage('tiles', 'delete', { sceneIdentifier: 'Cave', ids: ['t1', 'ghost'] });
+    const out = await manage('tiles', 'delete', {
+      sceneIdentifier: 'Cave',
+      tileIds: ['t1', 'ghost'],
+    });
     expect(calls[0][0]).toBe('deleteSceneTiles');
     expect(calls[0][1]).toEqual({ sceneIdentifier: 'Cave', ids: ['t1', 'ghost'] });
     expect(out).toContain('Deleted 1 tile(s) from "Cave" (sc1)');
@@ -258,17 +262,18 @@ describe('manage-placeables — tiles', () => {
     await expect(tools.handle(MANAGE_PLACEABLES, { action: 'list' })).rejects.toThrow(
       'kind must be one of "tiles", "lights", "walls", "drawings", "sounds", "notes", "tokens", "regions" (got nothing)'
     );
-    // the old per-kind key is an unknown argument now — refused, never silently dropped
+    // the shared key of the 4.6 line is an unknown argument now (each kind has its own) —
+    // refused, never silently dropped
     await expect(
-      manage('tiles', 'delete', { sceneIdentifier: 'Cave', tileIds: ['t1'] })
+      manage('tiles', 'delete', { sceneIdentifier: 'Cave', ids: ['t1'] })
     ).rejects.toThrow(
-      'manage-placeables (kind "tiles", action "delete"): unknown argument "tileIds" — it takes: kind, action, sceneIdentifier, ids.'
+      'manage-placeables (kind "tiles", action "delete"): unknown argument "ids" — it takes: kind, action, sceneIdentifier, tileIds.'
     );
   });
 });
 
 describe('manage-placeables — lights', () => {
-  it('create forwards {items}; update {patches}; delete {ids}', async () => {
+  it('create forwards lights as {items}; update lightPatches as {patches}; delete lightIds as {ids}', async () => {
     const { calls, manage } = build({
       success: true,
       sceneId: 'sc1',
@@ -281,7 +286,7 @@ describe('manage-placeables — lights', () => {
     });
     const out = await manage('lights', 'create', {
       sceneIdentifier: 'Tavern',
-      items: [{ x: 100, y: 100, dim: 40, bright: 20, animationType: 'torch' }],
+      lights: [{ x: 100, y: 100, dim: 40, bright: 20, animationType: 'torch' }],
     });
     expect(calls[0][0]).toBe('createSceneLights');
     expect(calls[0][1]).toMatchObject({
@@ -292,7 +297,7 @@ describe('manage-placeables — lights', () => {
 
     await manage('lights', 'update', {
       sceneIdentifier: 'Tavern',
-      patches: [{ id: 'l1', dim: 60, animationType: 'flame' }],
+      lightPatches: [{ id: 'l1', dim: 60, animationType: 'flame' }],
     });
     expect(calls[1][0]).toBe('updateSceneLights');
     expect(calls[1][1]).toMatchObject({
@@ -300,7 +305,10 @@ describe('manage-placeables — lights', () => {
       patches: [{ id: 'l1', dim: 60, animationType: 'flame' }],
     });
 
-    const out3 = await manage('lights', 'delete', { sceneIdentifier: 'Tavern', ids: ['a', 'b'] });
+    const out3 = await manage('lights', 'delete', {
+      sceneIdentifier: 'Tavern',
+      lightIds: ['a', 'b'],
+    });
     expect(calls[2][0]).toBe('deleteSceneLights');
     expect(calls[2][1]).toMatchObject({ sceneIdentifier: 'Tavern', ids: ['a', 'b'] });
     expect(out3).toContain('Deleted 2 light(s)');
@@ -337,10 +345,10 @@ describe('manage-placeables — lights', () => {
   it('rejects a light create missing a center coord and a patch with no field beyond id', async () => {
     const { manage } = build();
     await expect(
-      manage('lights', 'create', { sceneIdentifier: 'Tavern', items: [{ x: 100, dim: 40 }] })
+      manage('lights', 'create', { sceneIdentifier: 'Tavern', lights: [{ x: 100, dim: 40 }] })
     ).rejects.toThrow();
     await expect(
-      manage('lights', 'update', { sceneIdentifier: 'Tavern', patches: [{ id: 'l1' }] })
+      manage('lights', 'update', { sceneIdentifier: 'Tavern', lightPatches: [{ id: 'l1' }] })
     ).rejects.toThrow();
   });
 });
@@ -356,7 +364,7 @@ describe('manage-placeables — sounds', () => {
     });
     const out = await manage('sounds', 'create', {
       sceneIdentifier: 'Falls',
-      items: [
+      sounds: [
         {
           path: 'worlds/w/audio/waterfall.ogg',
           x: 1200,
@@ -387,19 +395,19 @@ describe('manage-placeables — sounds', () => {
     });
     await manage('sounds', 'update', {
       sceneIdentifier: 'Falls',
-      patches: [{ id: 's1', volume: 0.8, radius: 45 }],
+      soundPatches: [{ id: 's1', volume: 0.8, radius: 45 }],
     });
     expect(calls[0][0]).toBe('updateSceneSounds');
     expect(calls[0][1]).toMatchObject({ patches: [{ id: 's1', volume: 0.8, radius: 45 }] });
 
-    await manage('sounds', 'delete', { sceneIdentifier: 'Falls', ids: ['s1'] });
+    await manage('sounds', 'delete', { sceneIdentifier: 'Falls', soundIds: ['s1'] });
     expect(calls[1][0]).toBe('deleteSceneSounds');
     expect(calls[1][1]).toMatchObject({ ids: ['s1'] });
 
     await expect(
       manage('sounds', 'create', {
         sceneIdentifier: 'Falls',
-        items: [{ path: 'a.ogg', x: 0, y: 0 }],
+        sounds: [{ path: 'a.ogg', x: 0, y: 0 }],
       })
     ).rejects.toThrow();
   });
@@ -440,7 +448,7 @@ describe('manage-placeables — drawings', () => {
     });
     const out = await manage('drawings', 'create', {
       sceneIdentifier: 'Cave',
-      items: [
+      drawings: [
         {
           x: 400,
           y: 500,
@@ -471,19 +479,19 @@ describe('manage-placeables — drawings', () => {
     });
     await manage('drawings', 'update', {
       sceneIdentifier: 'Cave',
-      patches: [{ id: 'd1', width: 800, text: '' }],
+      drawingPatches: [{ id: 'd1', width: 800, text: '' }],
     });
     expect(calls[0][0]).toBe('updateSceneDrawings');
     expect(calls[0][1]).toMatchObject({ patches: [{ id: 'd1', width: 800, text: '' }] });
 
-    await manage('drawings', 'delete', { sceneIdentifier: 'Cave', ids: ['d1'] });
+    await manage('drawings', 'delete', { sceneIdentifier: 'Cave', drawingIds: ['d1'] });
     expect(calls[1][0]).toBe('deleteSceneDrawings');
     expect(calls[1][1]).toMatchObject({ ids: ['d1'] });
 
     await expect(
       manage('drawings', 'create', {
         sceneIdentifier: 'Cave',
-        items: [{ x: 0, y: 0, shapeType: 'blob' }],
+        drawings: [{ x: 0, y: 0, shapeType: 'blob' }],
       })
     ).rejects.toThrow();
   });
@@ -526,7 +534,7 @@ describe('manage-placeables — walls', () => {
     });
     const out = await manage('walls', 'create', {
       sceneIdentifier: 'Cave',
-      items: [{ x0: 1000, y0: 1000, x1: 1100, y1: 1000, door: 1, ds: 0 }],
+      walls: [{ x0: 1000, y0: 1000, x1: 1100, y1: 1000, door: 1, ds: 0 }],
     });
     expect(calls[0][0]).toBe('createSceneWalls');
     expect(calls[0][1]).toMatchObject({
@@ -586,7 +594,7 @@ describe('manage-placeables — walls', () => {
     });
     const out = await manage('walls', 'update', {
       sceneIdentifier: 'Cave',
-      patches: [
+      wallPatches: [
         { id: 'w1', door: 2, ds: 2 },
         { id: 'w2', ds: 1 },
       ],
@@ -600,7 +608,7 @@ describe('manage-placeables — walls', () => {
     });
     expect(out).toContain('Updated 2 of 2 matched wall(s)');
 
-    await manage('walls', 'delete', { sceneIdentifier: 'Cave', ids: ['w9'] });
+    await manage('walls', 'delete', { sceneIdentifier: 'Cave', wallIds: ['w9'] });
     expect(calls[1][0]).toBe('deleteSceneWalls');
     expect(calls[1][1]).toMatchObject({ ids: ['w9'] });
   });
@@ -653,7 +661,7 @@ describe('manage-placeables — tokens', () => {
     });
     const out = await manage('tokens', 'create', {
       sceneIdentifier: 'Bridge',
-      items: [
+      tokens: [
         { actor: 'Hobgoblin Captain', x: 1400, y: 980, disposition: 'hostile' },
         { actor: 'Hobgoblin Warrior', x: 1540, y: 980, hidden: true },
       ],
@@ -680,18 +688,18 @@ describe('manage-placeables — tokens', () => {
     });
     const out = await manage('tokens', 'create', {
       sceneIdentifier: 'Bridge',
-      items: [{ actor: 'Ghost', x: 0, y: 0 }],
+      tokens: [{ actor: 'Ghost', x: 0, y: 0 }],
     });
     expect(out).toContain('⚠ Token 0: actor not found');
     await expect(
       manage('tokens', 'create', {
         sceneIdentifier: 'Bridge',
-        items: [{ actor: 'A', x: 0, y: 0, disposition: 'buddy' }],
+        tokens: [{ actor: 'A', x: 0, y: 0, disposition: 'buddy' }],
       })
     ).rejects.toThrow();
   });
 
-  it('update forwards targets (ids as tokenIds, actorIds) + the one patch and formats matched/updated with the unlock warning', async () => {
+  it('update forwards targets (tokenIds, actorIds) + the one patch and formats matched/updated with the unlock warning', async () => {
     const { calls, manage } = build({
       success: true,
       matched: 2,
@@ -724,9 +732,9 @@ describe('manage-placeables — tokens', () => {
     const { manage } = build();
     await expect(
       manage('tokens', 'update', { sceneIdentifier: 'Bridge', rotation: 90 })
-    ).rejects.toThrow('Provide at least one target: ids and/or actorIds.');
+    ).rejects.toThrow('Provide at least one target: tokenIds and/or actorIds.');
     await expect(
-      manage('tokens', 'update', { sceneIdentifier: 'Bridge', ids: ['tk1'] })
+      manage('tokens', 'update', { sceneIdentifier: 'Bridge', tokenIds: ['tk1'] })
     ).rejects.toThrow('Provide at least one field to change');
   });
 
@@ -751,7 +759,7 @@ describe('manage-placeables — tokens', () => {
     });
     const out = await manage('tokens', 'update', {
       sceneIdentifier: 'Cave',
-      ids: ['tk1'],
+      tokenIds: ['tk1'],
       imagePath: 'assets/tokens/wisp.webm',
     });
     expect(calls[0][0]).toBe('updateSceneTokens');
@@ -771,7 +779,7 @@ describe('manage-placeables — tokens', () => {
     expect(
       await manage('tokens', 'update', {
         sceneIdentifier: 'Cave',
-        ids: ['ghost'],
+        tokenIds: ['ghost'],
         actorIds: ['Nobody'],
         hidden: true,
       })
@@ -781,7 +789,7 @@ describe('manage-placeables — tokens', () => {
   it('update reports a scene miss as an error (design.md §3), never a success-shaped string', async () => {
     const { manage } = build({ success: true, notFound: 'Ghost', matched: 0, updated: 0 });
     await expect(
-      manage('tokens', 'update', { sceneIdentifier: 'Ghost', ids: ['tk1'], hidden: true })
+      manage('tokens', 'update', { sceneIdentifier: 'Ghost', tokenIds: ['tk1'], hidden: true })
     ).rejects.toThrow('Scene not found: "Ghost". Nothing changed.');
   });
 
@@ -794,7 +802,7 @@ describe('manage-placeables — tokens', () => {
     });
     const out = await manage('tokens', 'delete', {
       sceneIdentifier: 'Bridge',
-      ids: ['a', 'b', 'c'],
+      tokenIds: ['a', 'b', 'c'],
     });
     expect(calls[0][0]).toBe('deleteSceneTokens');
     expect(calls[0][1]).toEqual({ sceneIdentifier: 'Bridge', ids: ['a', 'b', 'c'] });
@@ -813,7 +821,7 @@ describe('manage-placeables — notes', () => {
     });
     const out = await manage('notes', 'create', {
       sceneIdentifier: 'Iris',
-      items: [{ journal: 'Temple Keys', x: 1, y: 2, label: '1 — Entry' }],
+      notes: [{ journal: 'Temple Keys', x: 1, y: 2, label: '1 — Entry' }],
     });
     expect(calls[0][0]).toBe('createSceneNotes');
     expect(calls[0][1]).toEqual({
@@ -835,14 +843,14 @@ describe('manage-placeables — notes', () => {
     });
     const out = await manage('notes', 'create', {
       sceneIdentifier: 'Iris',
-      items: [{ journal: 'Temple Keys', x: 1, y: 2, icon: 'x/nope.webp' }],
+      notes: [{ journal: 'Temple Keys', x: 1, y: 2, icon: 'x/nope.webp' }],
     });
     expect(out).toContain('⚠ Note 1: No journal found');
     expect(out).toContain('warning(s):');
 
     const { manage: m2 } = build({ success: true, created: 0, notFound: 'Ghost' });
     await expect(
-      m2('notes', 'create', { sceneIdentifier: 'Ghost', items: [{ journal: 'X', x: 1, y: 2 }] })
+      m2('notes', 'create', { sceneIdentifier: 'Ghost', notes: [{ journal: 'X', x: 1, y: 2 }] })
     ).rejects.toThrow('Scene not found: "Ghost". No notes created.');
   });
 
@@ -880,7 +888,7 @@ describe('manage-placeables — notes', () => {
     });
     const out = await manage('notes', 'update', {
       sceneIdentifier: 'Iris',
-      patches: [{ id: 'note9', x: 150, label: '1 — Antechamber' }],
+      notePatches: [{ id: 'note9', x: 150, label: '1 — Antechamber' }],
     });
     expect(calls[0][0]).toBe('updateSceneNotes');
     expect(calls[0][1]).toEqual({
@@ -899,7 +907,7 @@ describe('manage-placeables — notes', () => {
     });
     const out2 = await m2('notes', 'update', {
       sceneIdentifier: 'Iris',
-      patches: [{ id: 'note9', x: 1 }],
+      notePatches: [{ id: 'note9', x: 1 }],
     });
     expect(out2).toContain('No notes matched on "Iris" (sc1)');
     expect(out2).toContain('not found: note9');
@@ -915,13 +923,13 @@ describe('manage-placeables — notes', () => {
     });
     const out3 = await m3('notes', 'update', {
       sceneIdentifier: 'Iris',
-      patches: [{ id: 'note9', icon: 'bad.webp' }],
+      notePatches: [{ id: 'note9', icon: 'bad.webp' }],
     });
     expect(out3).toContain('Updated 0 of 1 matched note(s)');
     expect(out3).toContain('warning(s)');
 
     await expect(
-      manage('notes', 'update', { sceneIdentifier: 'Iris', patches: [{ id: 'note9' }] })
+      manage('notes', 'update', { sceneIdentifier: 'Iris', notePatches: [{ id: 'note9' }] })
     ).rejects.toThrow('Provide at least one field to change besides id');
   });
 
@@ -933,16 +941,19 @@ describe('manage-placeables — notes', () => {
       sceneName: 'Iris',
       notFoundIds: ['ghost'],
     });
-    const out = await manage('notes', 'delete', { sceneIdentifier: 'Iris', ids: ['a', 'ghost'] });
+    const out = await manage('notes', 'delete', {
+      sceneIdentifier: 'Iris',
+      noteIds: ['a', 'ghost'],
+    });
     expect(calls[0][0]).toBe('deleteSceneNotes');
     expect(calls[0][1]).toEqual({ sceneIdentifier: 'Iris', ids: ['a', 'ghost'] });
     expect(out).toContain('Deleted 1 note(s) from "Iris" (sc1)');
     expect(out).toContain('1 id(s) not found: ghost');
 
     const { manage: m2 } = build({ success: true, deleted: 0, notFound: 'Ghost' });
-    await expect(m2('notes', 'delete', { sceneIdentifier: 'Ghost', ids: ['a'] })).rejects.toThrow(
-      'Scene not found: "Ghost". Nothing deleted.'
-    );
+    await expect(
+      m2('notes', 'delete', { sceneIdentifier: 'Ghost', noteIds: ['a'] })
+    ).rejects.toThrow('Scene not found: "Ghost". Nothing deleted.');
   });
 });
 
@@ -957,7 +968,7 @@ describe('manage-placeables — regions', () => {
     });
     const out = await manage('regions', 'create', {
       sceneIdentifier: 'Cave',
-      items: [
+      regions: [
         { name: 'Trap', shapes: [{ type: 'rectangle', x: 0, y: 0, width: 140, height: 140 }] },
       ],
     });
@@ -970,12 +981,12 @@ describe('manage-placeables — regions', () => {
   it('create rejects a region with no shapes (schema) and reports a missing scene', async () => {
     const { manage } = build({ success: true, created: 0, notFound: 'Nowhere' });
     await expect(
-      manage('regions', 'create', { sceneIdentifier: 'Cave', items: [{ name: 'X', shapes: [] }] })
+      manage('regions', 'create', { sceneIdentifier: 'Cave', regions: [{ name: 'X', shapes: [] }] })
     ).rejects.toThrow();
     await expect(
       manage('regions', 'create', {
         sceneIdentifier: 'Nowhere',
-        items: [{ shapes: [{ type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }] }],
+        regions: [{ shapes: [{ type: 'rectangle', x: 0, y: 0, width: 1, height: 1 }] }],
       })
     ).rejects.toThrow('Scene not found');
   });
@@ -998,7 +1009,7 @@ describe('manage-placeables — regions', () => {
     });
     const out = await manage('regions', 'update', {
       sceneIdentifier: 'Cave',
-      patches: [{ id: 'r1', rect: { x: 910, y: 910, widthCells: 3 } }],
+      regionPatches: [{ id: 'r1', rect: { x: 910, y: 910, widthCells: 3 } }],
     });
     expect(calls[0][0]).toBe('updateSceneRegions');
     expect(calls[0][1]).toEqual({
@@ -1019,12 +1030,12 @@ describe('manage-placeables — regions', () => {
     });
     const out = await manage('regions', 'update', {
       sceneIdentifier: 'Cave',
-      patches: [{ id: 'rZ', name: 'x' }],
+      regionPatches: [{ id: 'rZ', name: 'x' }],
     });
     expect(out).toContain('No regions matched');
     expect(out).toContain('not found: rZ');
     await expect(
-      manage('regions', 'update', { sceneIdentifier: 'Cave', patches: [{ id: 'r1' }] })
+      manage('regions', 'update', { sceneIdentifier: 'Cave', regionPatches: [{ id: 'r1' }] })
     ).rejects.toThrow('Provide at least one field to change besides id');
   });
 
@@ -1039,7 +1050,10 @@ describe('manage-placeables — regions', () => {
         'teleporter "Teleporter → Cave" on "Bridge" still points at deleted region r1 — …',
       ],
     });
-    const out = await manage('regions', 'delete', { sceneIdentifier: 'Cave', ids: ['r1', 'rZ'] });
+    const out = await manage('regions', 'delete', {
+      sceneIdentifier: 'Cave',
+      regionIds: ['r1', 'rZ'],
+    });
     expect(calls[0][0]).toBe('deleteSceneRegions');
     expect(calls[0][1]).toEqual({ sceneIdentifier: 'Cave', ids: ['r1', 'rZ'] });
     expect(out).toContain('Deleted 1 region');

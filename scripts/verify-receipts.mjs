@@ -226,7 +226,7 @@ try {
     const r = await tool('manage-placeables', {
       kind: 'lights',
       action: 'create',
-      items: [{ x: scene.x + 150, y: scene.y + 150, dim: 20, bright: 10 }],
+      lights: [{ x: scene.x + 150, y: scene.y + 150, dim: 20, bright: 10 }],
     });
     const id = /•\s+(\w{16})/.exec(String(r.result))?.[1] ?? null;
     if (id) lights.add(id);
@@ -244,7 +244,7 @@ try {
   const lup = await tool('manage-placeables', {
     kind: 'lights',
     action: 'update',
-    patches: [{ id: l2.lightId, dim: 30 }],
+    lightPatches: [{ id: l2.lightId, dim: 30 }],
   });
   const mid = await lightOf(l2.lightId);
   const luu = await undo(lup.id);
@@ -257,7 +257,7 @@ try {
   const ldel = await tool('manage-placeables', {
     kind: 'lights',
     action: 'delete',
-    ids: [l2.lightId],
+    lightIds: [l2.lightId],
   });
   const dark = (await lightOf(l2.lightId)) === null;
   const ldu = await undo(ldel.id);

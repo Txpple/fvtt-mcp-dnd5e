@@ -18,6 +18,20 @@ What changed for a user of the tools and skills, release by release. The measure
   220,000, so a family that grows pays in its own row or raises it in the same commit, never in a
   neighbour's prose. `node scripts/measure/schema-decompose.mjs` prints the flattened view and the
   lossy keys of every union tool.
+- **`manage-placeables` is flatten-safe: each kind's entries ride its own key.** A deferred client
+  folds the union into one object, the first owner of a key winning, so `kind: "lights"` showed the
+  tiles' fields under `items`, `patches` and `ids` for every kind. The keys are per kind now:
+  `tiles` / `tilePatches` / `tileIds`, `lights` / `lightPatches` / `lightIds`, `walls`, `drawings`,
+  `sounds`, `notes`, `tokens` and `regions` the same way; the tokens kind's `update` and `delete`
+  take `tokenIds` (was `ids`, beside `actorIds`); `add-behavior` names the behavior with `label`
+  (was `name`, which the tokens kind's `update` takes for the nameplate). The shared keys are
+  refused by name, never silently dropped, so an old call fails loudly with what the kind takes.
+  The page functions (`fvtt.createSceneTiles` and the rest, `run-script`) keep `items` / `patches`
+  / `ids`. Every skill line that named the keys is re-pointed (`tom-cartos-import`, `token-cutout`,
+  `plot-drift-check`, the shared authoring policy). Budgets: the flattened `manage-placeables` is
+  36,758 chars (was 13,164 showing one kind's shapes; ceiling 36,800 — the view is now right for
+  every kind, paid once per session that uses the tool); tools/list 204,987 → 205,279, the scenes
+  row 62,106 → 62,398 (ceiling 62,500); the lossy keys 17 → 13.
 - **A vetoed delete is an error, not a success.** A module may refuse a delete from its
   `preDelete<Doc>` hook (By the Books keeps a standing companion's effect); Foundry then skips the
   document and resolves as if nothing were wrong, and `manage-effect` `delete` answered "Deleted"

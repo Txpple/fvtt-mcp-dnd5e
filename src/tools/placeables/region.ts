@@ -31,7 +31,7 @@ const RegionBehaviorSchema = z
 
 const CreateRegionsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  regions: z
     .array(
       z.object({
         name: z.string().optional().describe('Region label.'),
@@ -96,7 +96,7 @@ const UpdateRegionSchema = z
 
 const UpdateRegionsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z
+  regionPatches: z
     .array(UpdateRegionSchema)
     .min(1)
     .describe('One patch per region; each targets one id.'),
@@ -104,7 +104,7 @@ const UpdateRegionsSchema = z.object({
 
 const DeleteRegionsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z.array(z.string().min(1)).min(1).describe('Region ids to delete.'),
+  regionIds: z.array(z.string().min(1)).min(1).describe('Region ids to delete.'),
 });
 
 const TeleporterEndpointSchema = z.object({
@@ -149,7 +149,9 @@ const AddRegionBehaviorSchema = z.object({
       'Type key, live-validated: core (teleportToken, executeMacro …), ' +
         'dnd5e.applyActiveEffect / difficultTerrain / rotateArea.'
     ),
-  name: z.string().optional().describe("Label (default the type's name)."),
+  // `label`, not `name`: the tokens kind's update takes a top-level `name` of another shape, and
+  // a deferred client shows one shape per key across the union (src/measure.ts flattenTool).
+  label: z.string().optional().describe("The behavior's name (default the type's name)."),
   disabled: z.boolean().optional().describe('Created disabled.'),
   system: z
     .object({})
@@ -237,8 +239,11 @@ export const regionKindModule: PlaceableKindFactory = foundry => ({
         'passed verbatim (a teleportToken needs its destination uuids; create-teleporter and ' +
         'add-behavior resolve those).',
       schema: CreateRegionsSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneRegions', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, regions }) => {
+        const result = await foundry.call('createSceneRegions', {
+          sceneIdentifier,
+          items: regions,
+        });
         return formatCreatePlaceables(result, 'region');
       },
     }),
@@ -259,8 +264,11 @@ export const regionKindModule: PlaceableKindFactory = foundry => ({
         'Edit regions by id: name, color, visibility, shapes, or the rect convenience. Behaviors ' +
         'are untouched.',
       schema: UpdateRegionsSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneRegions', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, regionPatches }) => {
+        const result = await foundry.call('updateSceneRegions', {
+          sceneIdentifier,
+          patches: regionPatches,
+        });
         return formatUpdatePlaceables(result, 'region');
       },
     }),
@@ -269,8 +277,11 @@ export const regionKindModule: PlaceableKindFactory = foundry => ({
       description:
         'Delete regions by id; a teleporter left pointing at a deleted region is warned.',
       schema: DeleteRegionsSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneRegions', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, regionIds }) => {
+        const result = await foundry.call('deleteSceneRegions', {
+          sceneIdentifier,
+          ids: regionIds,
+        });
         return formatDeletePlaceables(result, 'region');
       },
     }),
@@ -307,8 +318,8 @@ export const regionKindModule: PlaceableKindFactory = foundry => ({
         'teleporter, teleportTo resolves the destination and warns when the landing region holds no ' +
         'grid-snapped token position.',
       schema: AddRegionBehaviorSchema,
-      handler: async parsed => {
-        const result = await foundry.call('addRegionBehavior', parsed);
+      handler: async ({ label, ...rest }) => {
+        const result = await foundry.call('addRegionBehavior', { ...rest, name: label });
         if (result?.notFound) {
           throw new FormattedToolError(`Scene not found: "${result.notFound}". Nothing changed.`);
         }

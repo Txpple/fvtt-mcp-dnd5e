@@ -55,9 +55,12 @@ const tileFields = {
   locked: z.boolean().optional().describe('Lock the tile against accidental drag/edit in-app.'),
 };
 
+// The entries ride the kind's own keys (tiles / tilePatches / tileIds, and so for every kind): a
+// deferred client folds the union's members into one object, first owner of a key winning, so a
+// key two kinds share would show one kind's shape for both (src/measure.ts flattenTool).
 const CreateTilesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  tiles: z
     .array(
       z.object({
         src: z
@@ -103,12 +106,15 @@ const UpdateTileSchema = z
 
 const UpdateTilesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z.array(UpdateTileSchema).min(1).describe('One patch per tile; each targets one id.'),
+  tilePatches: z
+    .array(UpdateTileSchema)
+    .min(1)
+    .describe('One patch per tile; each targets one id.'),
 });
 
 const DeleteTilesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z.array(z.string().min(1)).min(1).describe('Tile ids to delete (from action list).'),
+  tileIds: z.array(z.string().min(1)).min(1).describe('Tile ids to delete (from action list).'),
 });
 
 export const tileKindModule: PlaceableKindFactory = foundry => ({
@@ -121,8 +127,8 @@ export const tileKindModule: PlaceableKindFactory = foundry => ({
         'top-left and width / height the on-map size, all in canvas pixels (the center-anchor ' +
         'conversion is done). A 404 texture keeps the path with a warning.',
       schema: CreateTilesSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneTiles', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, tiles }) => {
+        const result = await foundry.call('createSceneTiles', { sceneIdentifier, items: tiles });
         return formatCreatePlaceables(result, 'tile');
       },
     }),
@@ -143,8 +149,11 @@ export const tileKindModule: PlaceableKindFactory = foundry => ({
         'Edit placed tiles by id: move (x / y, the top-left), resize (width / height), and any ' +
         'other tile field. Only the fields passed change.',
       schema: UpdateTilesSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneTiles', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, tilePatches }) => {
+        const result = await foundry.call('updateSceneTiles', {
+          sceneIdentifier,
+          patches: tilePatches,
+        });
         return formatUpdatePlaceables(result, 'tile');
       },
     }),
@@ -152,8 +161,8 @@ export const tileKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Delete tiles by id.',
       schema: DeleteTilesSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneTiles', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, tileIds }) => {
+        const result = await foundry.call('deleteSceneTiles', { sceneIdentifier, ids: tileIds });
         return formatDeletePlaceables(result, 'tile');
       },
     }),

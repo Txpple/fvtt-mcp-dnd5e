@@ -165,7 +165,7 @@ try {
     kind: 'lights',
     action: 'delete',
     sceneIdentifier: fx.sceneId,
-    ids: [fx.lightId],
+    lightIds: [fx.lightId],
   });
   check(
     'manage-placeables delete, vetoed: an error, no receipt, the light still there',

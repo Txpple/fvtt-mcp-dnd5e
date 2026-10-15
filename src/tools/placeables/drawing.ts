@@ -45,7 +45,7 @@ const drawingStyleFields = {
 
 const CreateDrawingsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  drawings: z
     .array(
       z.object({
         x: z.number().describe('Top-left origin X in absolute canvas pixels.'),
@@ -96,7 +96,7 @@ const UpdateDrawingSchema = z
 
 const UpdateDrawingsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z
+  drawingPatches: z
     .array(UpdateDrawingSchema)
     .min(1)
     .describe('One patch per drawing; each targets one id.'),
@@ -104,7 +104,10 @@ const UpdateDrawingsSchema = z.object({
 
 const DeleteDrawingsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z.array(z.string().min(1)).min(1).describe('Drawing ids to delete (from action list).'),
+  drawingIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('Drawing ids to delete (from action list).'),
 });
 
 export const drawingKindModule: PlaceableKindFactory = foundry => ({
@@ -117,8 +120,11 @@ export const drawingKindModule: PlaceableKindFactory = foundry => ({
         'height), circle (radius) or polygon (relative points); stroke, fill, a text label, hidden, ' +
         'interface.',
       schema: CreateDrawingsSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneDrawings', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, drawings }) => {
+        const result = await foundry.call('createSceneDrawings', {
+          sceneIdentifier,
+          items: drawings,
+        });
         return formatCreatePlaceables(result, 'drawing');
       },
     }),
@@ -139,8 +145,11 @@ export const drawingKindModule: PlaceableKindFactory = foundry => ({
         'Edit placed drawings by id (text:"" clears the label); the shape kind cannot change. Only ' +
         'the fields passed change.',
       schema: UpdateDrawingsSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneDrawings', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, drawingPatches }) => {
+        const result = await foundry.call('updateSceneDrawings', {
+          sceneIdentifier,
+          patches: drawingPatches,
+        });
         return formatUpdatePlaceables(result, 'drawing');
       },
     }),
@@ -148,8 +157,11 @@ export const drawingKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Delete drawings by id.',
       schema: DeleteDrawingsSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneDrawings', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, drawingIds }) => {
+        const result = await foundry.call('deleteSceneDrawings', {
+          sceneIdentifier,
+          ids: drawingIds,
+        });
         return formatDeletePlaceables(result, 'drawing');
       },
     }),

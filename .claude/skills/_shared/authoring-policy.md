@@ -77,7 +77,7 @@
       wrong for trimmed art) and reports it; pass `autoRotate: true` once the art's facing is checked.
       Its reply lists the copies already on a scene that still carry the old art or settings —
       prototype edits never reach placed tokens — patch each with `manage-placeables { kind: "tokens",
-      action: "update", ids, scale, ring, lockRotation: false }`, or have the user delete and re-drop.
+      action: "update", tokenIds, scale, ring, lockRotation: false }`, or have the user delete and re-drop.
 
 11. **Run `content-audit` as the finishing check.** Before declaring a build done, scan what you made
     (`actorIdentifiers` for NPCs + their gear, `itemFolders` / `worldItemIds` for loot) with the

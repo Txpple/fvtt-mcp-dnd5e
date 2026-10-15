@@ -295,7 +295,7 @@ For each imported map with its own (non-overview) legend key:
    default `ownership.default:0` IS the secrecy (players can't open it, so the pins don't render for them).
    Add one text page per room named `"NN — Room Name"` with the key's blurb (follow `journal-builder`).
 4. **Place the pins (TOOL).** `manage-placeables { kind:"notes", action:"create", sceneIdentifier,
-   items:[{ journal, page:"NN — Name", x, y, label:"NN — Name" }, …] }`. The `label` carries number + name so a misplaced pin is
+   notes:[{ journal, page:"NN — Name", x, y, label:"NN — Name" }, …] }`. The `label` carries number + name so a misplaced pin is
    self-identifying on review. It returns each created **note id** — keep them for the nudge loop. (GM
    secrecy is the journal's ownership — do **not** rely on `global`, which only controls fog occlusion.)
 5. **Self-check with a screenshot (TOOL, recommended).** `screenshot-scene { sceneIdentifier, mark:true }`
@@ -306,8 +306,8 @@ For each imported map with its own (non-overview) legend key:
    pass.)
 6. **Report + run the nudge loop (SKILL + TOOLS).** List each pin's room + the cell you computed (and what
    the screenshot showed), and confirm with the GM. To correct one, `manage-placeables { kind:"notes",
-   action:"update", sceneIdentifier, patches:[{ id, x?, y?, label? }] }` (move or relabel); to drop one,
-   `manage-placeables { kind:"notes", action:"delete", sceneIdentifier, ids:[…] }`;
+   action:"update", sceneIdentifier, notePatches:[{ id, x?, y?, label? }] }` (move or relabel); to drop one,
+   `manage-placeables { kind:"notes", action:"delete", sceneIdentifier, noteIds:[…] }`;
    re-`screenshot-scene` to confirm. The GM can also drag pins in-app. Don't claim pixel accuracy — this
    review pass is the norm.
 

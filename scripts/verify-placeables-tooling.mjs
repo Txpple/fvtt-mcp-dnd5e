@@ -358,17 +358,17 @@ try {
   const gIds = {};
   // create: one of each kind
   const gCreate = {
-    tiles: { items: [{ src: 'icons/svg/hazard.svg', x: 100, y: 100, width: 200, height: 200 }] },
-    lights: { items: [{ x: 600, y: 600, dim: 30, bright: 15, color: '#ff9900' }] },
-    walls: { items: [{ x0: 0, y0: 0, x1: 300, y1: 0, door: 1, ds: 2 }] },
+    tiles: { tiles: [{ src: 'icons/svg/hazard.svg', x: 100, y: 100, width: 200, height: 200 }] },
+    lights: { lights: [{ x: 600, y: 600, dim: 30, bright: 15, color: '#ff9900' }] },
+    walls: { walls: [{ x0: 0, y0: 0, x1: 300, y1: 0, door: 1, ds: 2 }] },
     drawings: {
-      items: [
+      drawings: [
         { x: 700, y: 700, shapeType: 'rectangle', width: 120, height: 80, text: 'Trap Room' },
       ],
     },
     // a 404 path keeps the path with a warning — no upload needed for the round trip
-    sounds: { items: [{ path: 'sounds/ZZ-no-such-file.ogg', x: 300, y: 300, radius: 20 }] },
-    notes: { items: [{ journal: fx.journalId, x: 400, y: 400, label: '7 — Vault' }] },
+    sounds: { sounds: [{ path: 'sounds/ZZ-no-such-file.ogg', x: 300, y: 300, radius: 20 }] },
+    notes: { notes: [{ journal: fx.journalId, x: 400, y: 400, label: '7 — Vault' }] },
   };
   for (const [kind, args] of Object.entries(gCreate)) {
     const out = await mp(kind, 'create', args);
@@ -403,7 +403,7 @@ try {
       'G — list tokens: the placed token is a row'
     );
     const upd = String(
-      await mp('tokens', 'update', { ids: [fx.tokenId], hidden: true, rotation: 90 })
+      await mp('tokens', 'update', { tokenIds: [fx.tokenId], hidden: true, rotation: 90 })
     );
     assert(
       upd.startsWith('Updated 1 of 1 matched token(s)') &&
@@ -411,7 +411,9 @@ try {
         upd.includes('hidden'),
       `G — update tokens by id: ${upd.split('\n')[0]} / ${upd.split('\n')[1]}`
     );
-    const none = String(await mp('tokens', 'update', { ids: ['ZZghost0000000'], hidden: false }));
+    const none = String(
+      await mp('tokens', 'update', { tokenIds: ['ZZghost0000000'], hidden: false })
+    );
     assert(
       none.includes('No tokens matched') && none.includes('unresolved token ZZghost0000000'),
       `G — update tokens: no match names the unresolved id (${none})`
@@ -441,12 +443,12 @@ try {
   );
   // update: one patch per kind
   const gUpdate = {
-    tiles: { patches: [{ id: gIds.tiles, width: 250 }] },
-    lights: { patches: [{ id: gIds.lights, dim: 45 }] },
-    walls: { patches: [{ id: gIds.walls, ds: 0 }] },
-    drawings: { patches: [{ id: gIds.drawings, text: '' }] },
-    sounds: { patches: [{ id: gIds.sounds, radius: 35 }] },
-    notes: { patches: [{ id: gIds.notes, label: '7 — Antechamber' }] },
+    tiles: { tilePatches: [{ id: gIds.tiles, width: 250 }] },
+    lights: { lightPatches: [{ id: gIds.lights, dim: 45 }] },
+    walls: { wallPatches: [{ id: gIds.walls, ds: 0 }] },
+    drawings: { drawingPatches: [{ id: gIds.drawings, text: '' }] },
+    sounds: { soundPatches: [{ id: gIds.sounds, radius: 35 }] },
+    notes: { notePatches: [{ id: gIds.notes, label: '7 — Antechamber' }] },
   };
   for (const [kind, args] of Object.entries(gUpdate)) {
     const out = await mp(kind, 'update', args);
@@ -461,7 +463,7 @@ try {
   {
     const created = String(
       await mp('regions', 'create', {
-        items: [
+        regions: [
           {
             name: 'ZZ Trap',
             shapes: [{ type: 'rectangle', x: 1000, y: 1000, width: 100, height: 100 }],
@@ -489,7 +491,9 @@ try {
     );
     const upd = String(
       await mp('regions', 'update', {
-        patches: [{ id: regionId, name: 'ZZ Pit', rect: { x: 1050, y: 1050, widthCells: 2 } }],
+        regionPatches: [
+          { id: regionId, name: 'ZZ Pit', rect: { x: 1050, y: 1050, widthCells: 2 } },
+        ],
       })
     );
     assert(upd.startsWith('Updated 1 of 1 matched region(s)'), `G — update regions (rect): ${upd}`);
@@ -552,7 +556,7 @@ try {
       `G — add-behavior: a region miss is an error (${abMiss})`
     );
     // delete: the trap + both pads; the teleporter pointing at a deleted pad is warned
-    const del = String(await mp('regions', 'delete', { ids: [regionId, ...tpIds] }));
+    const del = String(await mp('regions', 'delete', { regionIds: [regionId, ...tpIds] }));
     assert(del.startsWith('Deleted 3 region(s)'), `G — delete regions: ${del.split('\n')[0]}`);
   }
   // refusals by name
@@ -566,8 +570,8 @@ try {
       'action must be one of "create", "list", "update", "delete" for kind "walls" (got "roll")',
     ],
     [
-      { kind: 'tiles', action: 'delete', tileIds: ['x'] },
-      'unknown argument "tileIds" — it takes: kind, action, sceneIdentifier, ids',
+      { kind: 'tiles', action: 'delete', ids: ['x'] },
+      'unknown argument "ids" — it takes: kind, action, sceneIdentifier, tileIds',
     ],
     [
       { kind: 'tiles', action: 'list', sceneIdentifier: 'ZZ-no-such-scene' },
@@ -584,7 +588,9 @@ try {
   }
   // delete: each id, plus a ghost reported not fatal
   for (const kind of Object.keys(gIds)) {
-    const out = await mp(kind, 'delete', { ids: [gIds[kind], 'ZZghost0000000'] });
+    const out = await mp(kind, 'delete', {
+      [`${kind.slice(0, -1)}Ids`]: [gIds[kind], 'ZZghost0000000'],
+    });
     assert(
       String(out).startsWith(`Deleted 1 ${kind.slice(0, -1)}(s)`) &&
         String(out).includes('1 id(s) not found: ZZghost0000000'),

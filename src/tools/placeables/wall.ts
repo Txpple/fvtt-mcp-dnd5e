@@ -82,7 +82,7 @@ const wallChannelFields = {
 
 const CreateWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  walls: z
     .array(
       z.object({
         x0: z.number().optional().describe('Segment start X in absolute canvas pixels.'),
@@ -126,12 +126,15 @@ const UpdateWallSchema = z
 
 const UpdateWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z.array(UpdateWallSchema).min(1).describe('One patch per wall; each targets one id.'),
+  wallPatches: z
+    .array(UpdateWallSchema)
+    .min(1)
+    .describe('One patch per wall; each targets one id.'),
 });
 
 const DeleteWallsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z.array(z.string().min(1)).min(1).describe('Wall ids to delete (from action list).'),
+  wallIds: z.array(z.string().min(1)).min(1).describe('Wall ids to delete (from action list).'),
 });
 
 export const wallKindModule: PlaceableKindFactory = foundry => ({
@@ -144,8 +147,8 @@ export const wallKindModule: PlaceableKindFactory = foundry => ({
         'light / sight / sound channels (omitted = 20, blocking), one-way dir, door kind + state + ' +
         'sound, proximity thresholds.',
       schema: CreateWallsSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneWalls', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, walls }) => {
+        const result = await foundry.call('createSceneWalls', { sceneIdentifier, items: walls });
         return formatCreatePlaceables(result, 'wall');
       },
     }),
@@ -167,8 +170,11 @@ export const wallKindModule: PlaceableKindFactory = foundry => ({
         'whole segment, never a half). Only the fields passed change; an off-enum value skips that ' +
         'patch with a warning.',
       schema: UpdateWallsSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneWalls', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, wallPatches }) => {
+        const result = await foundry.call('updateSceneWalls', {
+          sceneIdentifier,
+          patches: wallPatches,
+        });
         return formatUpdatePlaceables(result, 'wall');
       },
     }),
@@ -176,8 +182,8 @@ export const wallKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Delete walls by id.',
       schema: DeleteWallsSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneWalls', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, wallIds }) => {
+        const result = await foundry.call('deleteSceneWalls', { sceneIdentifier, ids: wallIds });
         return formatDeletePlaceables(result, 'wall');
       },
     }),

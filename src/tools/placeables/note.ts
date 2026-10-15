@@ -13,7 +13,7 @@ import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_modu
 
 const CreateNotesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  notes: z
     .array(
       z.object({
         journal: z.string().min(1).describe('JournalEntry id or exact name the pin opens.'),
@@ -63,12 +63,12 @@ const UpdateNoteSchema = z
 
 const UpdateNotesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z.array(UpdateNoteSchema).min(1).describe('One patch per pin; each targets one id.'),
+  notePatches: z.array(UpdateNoteSchema).min(1).describe('One patch per pin; each targets one id.'),
 });
 
 const DeleteNotesSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z
+  noteIds: z
     .array(z.string().min(1))
     .min(1)
     .describe('Note ids to delete (from action create / list).'),
@@ -84,8 +84,8 @@ export const noteKindModule: PlaceableKindFactory = foundry => ({
         'x / y with a label / icon / size. A pin whose journal does not resolve is skipped and ' +
         'reported.',
       schema: CreateNotesSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneNotes', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, notes }) => {
+        const result = await foundry.call('createSceneNotes', { sceneIdentifier, items: notes });
         return formatCreatePlaceables(result, 'note');
       },
     }),
@@ -106,8 +106,11 @@ export const noteKindModule: PlaceableKindFactory = foundry => ({
         'Edit map-note pins by id: position, label, icon, global, or the journal / page. Only the ' +
         'fields passed change; a dropped (404) icon is a warning, not a change.',
       schema: UpdateNotesSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneNotes', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, notePatches }) => {
+        const result = await foundry.call('updateSceneNotes', {
+          sceneIdentifier,
+          patches: notePatches,
+        });
         return formatUpdatePlaceables(result, 'note');
       },
     }),
@@ -115,8 +118,8 @@ export const noteKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Remove map-note pins by id.',
       schema: DeleteNotesSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneNotes', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, noteIds }) => {
+        const result = await foundry.call('deleteSceneNotes', { sceneIdentifier, ids: noteIds });
         return formatDeletePlaceables(result, 'note');
       },
     }),

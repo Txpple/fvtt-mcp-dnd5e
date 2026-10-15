@@ -18,9 +18,16 @@ import { placeableAction, sceneTarget, type PlaceableKindFactory } from './_modu
 
 const ListTokensSchema = z.object({ sceneIdentifier: sceneTarget });
 
+// The one placed-token id leaf, identical on update and delete: a key two members describe
+// differently is shown in one shape by a deferred client (src/measure.ts flattenTool).
+const tokenIds = z
+  .array(z.string().min(1))
+  .min(1)
+  .describe('Placed-token ids (from action list); the sidebar actor is untouched.');
+
 const PlaceTokensSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  tokens: z
     .array(
       z.object({
         actor: z.string().min(1).describe('Actor id or exact name (its prototype token).'),
@@ -42,21 +49,18 @@ const PlaceTokensSchema = z.object({
 
 const DeleteTokensSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z
-    .array(z.string().min(1))
-    .min(1)
-    .describe('Placed-token ids; the sidebar actor is untouched.'),
+  tokenIds,
 });
 
 // --- update (bespoke — actor→all-copies matching + the lockRotation gotcha) ---
 const UpdateTokensSchema = z
   .object({
     sceneIdentifier: sceneTarget,
-    ids: z.array(z.string().min(1)).optional().describe('Placed-token ids; a union with actorIds.'),
+    tokenIds: tokenIds.optional(),
     actorIds: z
       .array(z.string().min(1))
       .optional()
-      .describe('Actor ids or exact names: every placed copy of each; a union with ids.'),
+      .describe('Actor ids or exact names: every placed copy of each; a union with tokenIds.'),
     rotation: z.number().optional().describe('Facing in degrees (0–359), for every matched token.'),
     randomizeRotation: z
       .boolean()
@@ -120,13 +124,13 @@ const UpdateTokensSchema = z
           'change.'
       ),
   })
-  .refine(v => (v.ids?.length ?? 0) > 0 || (v.actorIds?.length ?? 0) > 0, {
-    message: 'Provide at least one target: ids and/or actorIds.',
+  .refine(v => (v.tokenIds?.length ?? 0) > 0 || (v.actorIds?.length ?? 0) > 0, {
+    message: 'Provide at least one target: tokenIds and/or actorIds.',
   })
   .refine(
     v =>
       Object.keys(v).some(
-        k => !['sceneIdentifier', 'ids', 'actorIds'].includes(k) && (v as any)[k] !== undefined
+        k => !['sceneIdentifier', 'tokenIds', 'actorIds'].includes(k) && (v as any)[k] !== undefined
       ),
     {
       message:
@@ -143,8 +147,8 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
         "Place actors' tokens on a scene from their prototypes, at canvas-pixel x / y, with " +
         'per-copy hidden / elevation / rotation / name / disposition overrides.',
       schema: PlaceTokensSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('placeSceneTokens', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, tokens }) => {
+        const result = await foundry.call('placeSceneTokens', { sceneIdentifier, items: tokens });
         return formatCreatePlaceables(result, 'token');
       },
     }),
@@ -163,14 +167,13 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
     placeableAction({
       action: 'update',
       description:
-        'Edit placed tokens (not the prototype: manage-actors update) by ids and/or actorIds (every placed ' +
-        'copy of an actor) — ONE patch for every match: rotation, scale, art, elevation, hidden, ' +
-        "lockRotation, position, name, nameplate / bar visibility, bars, ring, hp on the token's " +
-        'own delta. Reports each token as it stands.',
+        'Edit placed tokens (not the prototype: manage-actors update) by tokenIds and/or actorIds ' +
+        '(every placed copy of an actor) — ONE patch for every match: rotation, scale, art, ' +
+        'elevation, hidden, lockRotation, position, name, nameplate / bar visibility, bars, ring, ' +
+        "hp on the token's own delta. Reports each token as it stands.",
       schema: UpdateTokensSchema,
       handler: async parsed => {
-        const { ids, ...rest } = parsed;
-        const result = await foundry.call('updateSceneTokens', { ...rest, tokenIds: ids });
+        const result = await foundry.call('updateSceneTokens', parsed);
         if (result?.notFound) {
           throw new FormattedToolError(`Scene not found: "${result.notFound}". Nothing changed.`);
         }
@@ -216,8 +219,8 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Remove placed tokens by id; the sidebar actor survives.',
       schema: DeleteTokensSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneTokens', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, tokenIds }) => {
+        const result = await foundry.call('deleteSceneTokens', { sceneIdentifier, ids: tokenIds });
         return formatDeletePlaceables(result, 'token');
       },
     }),

@@ -42,7 +42,7 @@ const lightFields = {
 
 const CreateLightsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  items: z
+  lights: z
     .array(
       z.object({
         x: z.number().describe('Light center X in absolute canvas pixels.'),
@@ -69,12 +69,18 @@ const UpdateLightSchema = z
 
 const UpdateLightsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  patches: z.array(UpdateLightSchema).min(1).describe('One patch per light; each targets one id.'),
+  lightPatches: z
+    .array(UpdateLightSchema)
+    .min(1)
+    .describe('One patch per light; each targets one id.'),
 });
 
 const DeleteLightsSchema = z.object({
   sceneIdentifier: sceneTarget,
-  ids: z.array(z.string().min(1)).min(1).describe('AmbientLight ids to delete (from action list).'),
+  lightIds: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe('AmbientLight ids to delete (from action list).'),
 });
 
 export const lightKindModule: PlaceableKindFactory = foundry => ({
@@ -87,8 +93,8 @@ export const lightKindModule: PlaceableKindFactory = foundry => ({
         'distance (feet), color, angle, luminosity, attenuation, animation, a darkness activation ' +
         'range, walls, vision.',
       schema: CreateLightsSchema,
-      handler: async ({ sceneIdentifier, items }) => {
-        const result = await foundry.call('createSceneLights', { sceneIdentifier, items });
+      handler: async ({ sceneIdentifier, lights }) => {
+        const result = await foundry.call('createSceneLights', { sceneIdentifier, items: lights });
         return formatCreatePlaceables(result, 'light');
       },
     }),
@@ -107,8 +113,11 @@ export const lightKindModule: PlaceableKindFactory = foundry => ({
         'Edit placed ambient lights by id; only the fields passed change (a partial config never ' +
         'wipes the rest).',
       schema: UpdateLightsSchema,
-      handler: async ({ sceneIdentifier, patches }) => {
-        const result = await foundry.call('updateSceneLights', { sceneIdentifier, patches });
+      handler: async ({ sceneIdentifier, lightPatches }) => {
+        const result = await foundry.call('updateSceneLights', {
+          sceneIdentifier,
+          patches: lightPatches,
+        });
         return formatUpdatePlaceables(result, 'light');
       },
     }),
@@ -116,8 +125,8 @@ export const lightKindModule: PlaceableKindFactory = foundry => ({
       action: 'delete',
       description: 'Delete ambient lights by id.',
       schema: DeleteLightsSchema,
-      handler: async ({ sceneIdentifier, ids }) => {
-        const result = await foundry.call('deleteSceneLights', { sceneIdentifier, ids });
+      handler: async ({ sceneIdentifier, lightIds }) => {
+        const result = await foundry.call('deleteSceneLights', { sceneIdentifier, ids: lightIds });
         return formatDeletePlaceables(result, 'light');
       },
     }),
