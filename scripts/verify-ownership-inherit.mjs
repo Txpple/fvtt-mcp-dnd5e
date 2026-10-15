@@ -179,10 +179,13 @@ try {
   ({ sceneId, unlinkedId, linkedId } = await f.evaluate(
     async ids => {
       const s = await Scene.create({ name: `${ids.tag} Scene`, width: 1000, height: 1000 });
-      const [unlinked, linked] = await s.createEmbeddedDocuments('Token', [
+      // picked by what each token is: the answer's order is not the request's
+      const made = await s.createEmbeddedDocuments('Token', [
         { name: `${ids.tag} Unlinked`, actorId: ids.actorId, actorLink: false, x: 100, y: 100 },
         { name: `${ids.tag} Linked`, actorId: ids.actorId, actorLink: true, x: 300, y: 100 },
       ]);
+      const unlinked = made.find(t => !t.actorLink);
+      const linked = made.find(t => t.actorLink);
       return { sceneId: s.id, unlinkedId: unlinked.id, linkedId: linked.id };
     },
     { tag: TAG, actorId }
@@ -195,6 +198,7 @@ try {
         const a = token.actor;
         return {
           own: token.delta?.ownership ? { ...token.delta.ownership } : null,
+          hp: a.system?.attributes?.hp?.value ?? null,
           effective: a.testUserPermission(user, 'OWNER')
             ? 3
             : a.testUserPermission(user, 'OBSERVER')
@@ -207,6 +211,14 @@ try {
       { sceneId, tokenId, uid }
     );
   const before = await readState(actorId, otherUserId);
+  // the token's own change beside its ownership: an ownership write must not drop it
+  await f.evaluate(
+    async ids => {
+      const token = game.scenes.get(ids.sceneId).tokens.get(ids.tokenId);
+      await token.actor.update({ 'system.attributes.hp.max': 10, 'system.attributes.hp.value': 7 });
+    },
+    { sceneId, tokenId: unlinkedId }
+  );
   const t1 = await tools.handleToolCall('set-actor-ownership', {
     actorIdentifier: unlinkedId,
     playerIdentifier: TAG2,
@@ -226,6 +238,17 @@ try {
     t1Base.stored === before.stored && t1Base.effective === before.effective,
     `the base actor is untouched (bystander still ${t1Base.effective}, was ${before.effective})`
   );
+  // Foundry fills a missing default with NONE when the token's map is written: the write carries
+  // the token's default, so a player who inherits OWNER from the base actor keeps it on the token
+  const t1Other = await tokenState(unlinkedId, userId);
+  assert(
+    t1Other.effective === 3 && t1Token.own?.default === 3,
+    `the other player still inherits OWNER on the token (effective ${t1Other.effective}, token default ${t1Token.own?.default})`
+  );
+  assert(
+    t1Token.hp === 7,
+    `the token's own change (its hit points, 7) survives the ownership write (hp ${t1Token.hp})`
+  );
   const listed = await tools.handleToolCall('list-actor-ownership', {
     actorIdentifier: unlinkedId,
   });
@@ -241,9 +264,10 @@ try {
   });
   const t2Token = await tokenState(unlinkedId, otherUserId);
   assert(
-    t2Token.own === null && t2Token.effective === before.effective,
-    `INHERIT on the token removes its entry: the base actor's applies again (${t2.results?.[0]?.message})`
+    !Object.hasOwn(t2Token.own ?? {}, otherUserId) && t2Token.effective === before.effective,
+    `INHERIT on the token removes its entry: the base actor's applies again (own ${JSON.stringify(t2Token.own)}, effective ${t2Token.effective}; ${t2.results?.[0]?.message})`
   );
+  assert(t2Token.hp === 7, `and survives the INHERIT (hp ${t2Token.hp})`);
   const t3 = await tools.handleToolCall('set-actor-ownership', {
     actorIdentifier: linkedId,
     playerIdentifier: TAG,

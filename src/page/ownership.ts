@@ -5,7 +5,7 @@
 // headless page IS the GM, so it reads and mutates ownership directly.
 
 import { fuzzyTier, resolveActorTarget } from './_shared.js';
-import { notFound } from './errors.js';
+import { notFound, unsupported } from './errors.js';
 
 // Foundry token disposition constant for FRIENDLY (CONST.TOKEN_DISPOSITIONS.FRIENDLY).
 const FRIENDLY_DISPOSITION = 1;
@@ -233,8 +233,15 @@ async function setOwnershipOn(
 
 /**
  * An unlinked token's own ownership: the entries on its ActorDelta, merged per user over its base
- * actor's (Foundry's `ActorDelta.applyDelta`). Only the token's own map is written, whole, so the
- * base actor and the other copies keep theirs, and an empty map is null again (nothing of its own).
+ * actor's (Foundry's `ActorDelta.applyDelta`), so the base actor and the other copies keep theirs.
+ * A set MERGES one entry into the delta (a non-recursive write would rebuild the token's actor
+ * from the base actor plus the ownership alone, dropping the token's other changes, its hit points
+ * among them, on every client); the first entry also carries the token's current default, since
+ * Foundry's ownership field fills a missing `default` with NONE, which would lock every other user
+ * out of the token. INHERIT removes the token's map whole (Foundry's ForcedDeletion; a deletion of
+ * one entry inside it is ignored), which makes Foundry re-derive the token's actor from the base
+ * actor, merges the token's other entries back, and reads the result back: a removal Foundry did
+ * not make is an error, never a success.
  */
 async function setTokenOwnership(
   token: any,
@@ -243,22 +250,50 @@ async function setTokenOwnership(
 ): Promise<{ success: boolean; message: string; target: 'token' }> {
   const delta = token.delta;
   if (!delta) throw notFound(`Token "${token.name}" has no actor data of its own`);
-  const own: Record<string, number> = { ...(delta.ownership ?? {}) };
   const base = game.actors?.get(token.actorId);
   const baseMap: Record<string, number> = base?.ownership ?? {};
+  const baseDefault = typeof baseMap.default === 'number' ? baseMap.default : 0;
+  const own: Record<string, number> = { ...(delta.ownership ?? {}) };
   const levelName = (level: number) => PERMISSION_NAMES[level] ?? String(level);
   const where = `token "${token.name}" (${token.id}, scene ${token.parent?.id ?? '?'})`;
 
   if (permission === null) {
     const hadEntry = Object.hasOwn(own, user.id);
-    delete own[user.id];
-    await delta.update(
-      { ownership: Object.keys(own).length ? own : null },
-      { diff: false, recursive: false }
-    );
+    if (hadEntry) {
+      // Foundry's ownership field ignores a deletion inside it (a ForcedDeletion of one entry
+      // left it, measured on Foundry 14.369), so the token's map goes whole — which makes Foundry
+      // re-derive the token's actor from its base actor on every client — and the token's other
+      // entries, with its default, are merged back.
+      const rest: Record<string, number> = { ...own };
+      delete rest[user.id];
+      if (typeof rest.default !== 'number') {
+        const current = token.actor?.ownership?.default;
+        rest.default = typeof current === 'number' ? current : baseDefault;
+      }
+      const ops = (globalThis as any).foundry?.data?.operators;
+      await delta.update(
+        typeof ops?.ForcedDeletion === 'function'
+          ? { ownership: new ops.ForcedDeletion() }
+          : { ownership: null }
+      );
+      const others = Object.keys(rest).some(k => k !== 'default');
+      if (others || rest.default !== baseDefault) {
+        await delta.update(
+          Object.fromEntries(Object.entries(rest).map(([k, v]) => [`ownership.${k}`, v]))
+        );
+      }
+      // never report a removal Foundry did not make
+      if (Object.hasOwn(token.delta?.ownership ?? {}, user.id)) {
+        throw unsupported(
+          `Foundry kept ${user.name}'s own entry on ${where} (` +
+            `${levelName(token.delta.ownership[user.id])}); nothing else changed. Set the level ` +
+            "the user should have on the token instead, or reset the token's ownership in Foundry."
+        );
+      }
+    }
     const fallback = Object.hasOwn(baseMap, user.id)
       ? `the base actor's entry (${levelName(baseMap[user.id]!)})`
-      : `the default (${levelName(own.default ?? baseMap.default ?? 0)})`;
+      : `the default (${levelName(typeof own.default === 'number' ? own.default : baseDefault)})`;
     return {
       success: true,
       target: 'token',
@@ -268,8 +303,13 @@ async function setTokenOwnership(
     };
   }
 
-  own[user.id] = permission;
-  await delta.update({ ownership: own }, { diff: false, recursive: false });
+  const change: Record<string, number> = { [`ownership.${user.id}`]: permission };
+  // the token's effective default now (its own, else the base actor's): kept through the write
+  if (typeof own.default !== 'number') {
+    const current = token.actor?.ownership?.default;
+    change['ownership.default'] = typeof current === 'number' ? current : baseDefault;
+  }
+  await delta.update(change);
   return {
     success: true,
     target: 'token',
