@@ -155,7 +155,8 @@ What changed for a user of the tools and skills, release by release. The measure
   scene, linked}`). A miss in the page's `setActorOwnership` is a `not-found` error; the tool
   answers the first refusal as its error when no assignment landed. `src/tools/ownership.test.ts`
   holds the token case (the identifier resolving to a token's synthetic actor), the linked case and
-  the ties; `scripts/verify-ownership-inherit.mjs` §7 proves it live (owed on the sandbox).
+  the ties; `scripts/verify-ownership-inherit.mjs` §7 proves it live: 27/27 on the sandbox (Foundry
+  14.369, dnd5e 6.0.6), the token set, the default and the hit points kept, INHERIT and the linked write.
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 
