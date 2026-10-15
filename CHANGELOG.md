@@ -78,6 +78,16 @@ What changed for a user of the tools and skills, release by release. The measure
   **`targetLabel` (`fvtt-mcp-dnd5e/client`) is the host preset's own label**: `local install`,
   `Molten Hosting`, `generic` (was `local sandbox` / `prod (Molten)`), so a script's `target:` line
   and the doctor's `config:` line read that way; library code no longer tells one host from another.
+  **`npm run init` and the doctor name no host either**: they branched on the host kind (init's
+  questions, its flag checks and refusals, its `--help`; the doctor's Foundry-app check) and init
+  printed a host's label and its panel's words. Each preset's onboarding facts now live with the
+  presets (`src/hosts/onboarding.ts`: how init names it, whether Foundry runs on this machine, the
+  URL it shows, the registration name it offers, the extras it asks or takes from a flag, and why
+  another is refused), and init and the doctor read them; what they ask and print is unchanged (the
+  `--host` help line wraps one word later). The bridge's placeholder-URL guard no longer builds a
+  `generic` config to call it. `src/hosts/onboarding.test.ts` fails when a file under `src/` outside
+  `src/hosts` names a host kind or a host's label in its code (proved against the old `init.ts`,
+  `doctor.ts` and `foundry.ts`, and a planted file).
 - **A miss or a refusal is an error, everywhere** (design.md §3). The asset file tools and the chat
   tools answered misses and refusals as successful text ("Refused: …", "Not found: …", "Does not
   exist", "`<tool>` failed: …"), so a client saw a success. They are errors now, with a code and its

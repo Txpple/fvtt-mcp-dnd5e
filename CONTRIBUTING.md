@@ -61,6 +61,9 @@ that needs a connection uses `connectFoundry` / `resolveHostConfig` and reads `F
 `git grep MOLTEN_ src` must keep answering `src/hosts/env.ts` (and its test) only, and
 `src/hosts/env.test.ts` fails when another file names one: a legacy name is read through the
 selector's tables (`namesOf`, `IDENTITY_NAMES`), and a host's label is its preset's (`hostLabel`).
+`npm run init` and the doctor read what they ask and check per host from the presets' onboarding
+facts (`src/hosts/onboarding.ts`), and `src/hosts/onboarding.test.ts` fails when a file outside
+`src/hosts` names a host kind or a host's label in its code.
 
 ## The gates
 

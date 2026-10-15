@@ -316,11 +316,7 @@ export class Foundry implements FoundryBridge {
     // A placeholder URL can never connect — refuse in milliseconds, naming the variable, instead
     // of spending the cold-boot budget on "booting" (the server refuses it at startup too; this
     // covers a script or test that built the config by hand).
-    const problem = hostConfigProblem({
-      kind: 'generic',
-      serverUrl: this.cfg.serverUrl,
-      user: this.cfg.user,
-    });
+    const problem = hostConfigProblem({ serverUrl: this.cfg.serverUrl });
     if (problem) throw new Error(problem);
     this.ready = false;
     // A reconnect (after a "Return to Setup" / box relaunch) could in principle bring up a different

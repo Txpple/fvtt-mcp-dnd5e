@@ -34,15 +34,24 @@ import { Writable } from 'node:stream';
 import { type DoctorIO, type Mark, runDoctor } from './doctor.js';
 import { repoRoot } from './env.js';
 import { type Env, isPlaceholderUrl, legacyNameOf, resolveHostConfig } from './hosts/env.js';
+import { HOST_ONBOARDING, type HostExtra, onboardingOf } from './hosts/onboarding.js';
 import type { HostKind } from './hosts/types.js';
 import { parseToolsetsEnv, resolveRegistration } from './toolsets.js';
 
-const HOSTS: readonly HostKind[] = ['local', 'molten', 'generic'];
+// Every host fact init uses is its preset's (src/hosts/onboarding.ts): init names no host.
+const HOSTS: readonly HostKind[] = HOST_ONBOARDING.map(p => p.kind);
+
+/** `a, b or c` (`and` for `join: 'and'`). */
+function listed(words: readonly string[], join: 'or' | 'and' = 'or'): string {
+  return words.length < 2
+    ? (words[0] ?? '')
+    : `${words.slice(0, -1).join(', ')} ${join} ${words[words.length - 1]}`;
+}
 
 /** The answers, asked or taken from the flags. */
 export interface Answers {
   host: HostKind;
-  /** FOUNDRY_URL: always for molten and generic; for local only with --url. */
+  /** FOUNDRY_URL: always for a host off this machine; on this machine only with --url. */
   url?: string;
   user: string;
   password?: string;
@@ -271,7 +280,7 @@ const CHECKS: Partial<Record<ValueKey, (v: string, ctx: InitContext) => string |
   host: v =>
     (HOSTS as readonly string[]).includes(v.toLowerCase())
       ? undefined
-      : 'not one of local, molten, generic',
+      : `not one of ${HOSTS.join(', ')}`,
   url: v =>
     !httpUrl(v)
       ? 'not an http(s) URL'
@@ -308,18 +317,21 @@ function checkFlags(flags: InitFlags, ctx: InitContext): void {
   }
 }
 
-/** The extras each host reads (the rest of a host's keys are the same everywhere). */
-const EXTRAS: Record<HostKind, Partial<Record<ValueKey, true>>> = {
-  local: { dataDir: true },
-  molten: { wakeUrl: true, webdavPassword: true },
-  generic: { wakeUrl: true, dataDir: true },
+/**
+ * The keys only some hosts read (the rest of a host's keys are the same everywhere): which host
+ * reads which, and why another does not, is its preset's (`extras`, `notHere`). These are the
+ * words for each when a preset has none of its own.
+ */
+const EXTRAS: ReadonlyArray<HostExtra> = ['wakeUrl', 'webdavPassword', 'dataDir'];
+const EXTRA_WORDS: Record<HostExtra, string> = {
+  wakeUrl: 'the URL that wakes a sleeping instance',
+  webdavPassword: 'the WebDAV password',
+  dataDir: "the install's Data folder",
 };
-const NOT_HERE: Record<string, string> = {
-  'local wakeUrl': 'a local install does not sleep',
-  'local webdavPassword': 'a local install is reached through its Data folder (--data-dir)',
-  'molten dataDir': "a hosted box's disk is not this machine's",
-  'generic webdavPassword':
-    'a generic WebDAV plane needs FOUNDRY_WEBDAV_URL and _USER too; set the three in the .env',
+const EXTRA_ENV: Record<HostExtra, string> = {
+  wakeUrl: 'FOUNDRY_WAKE_URL',
+  webdavPassword: 'FOUNDRY_WEBDAV_PASSWORD',
+  dataDir: 'FOUNDRY_DATA_DIR',
 };
 
 // --- the .env ---------------------------------------------------------------------------------
@@ -638,7 +650,7 @@ async function collect(
     (await answer(
       {
         key: 'host',
-        text: 'Where Foundry runs: local (an install on this machine), molten (Molten Hosting) or generic (any URL)',
+        text: `Where Foundry runs: ${listed(HOST_ONBOARDING.map(p => `${p.kind} (${p.says})`))}`,
         fallback: (HOSTS as readonly string[]).includes(was ?? '') ? was : undefined,
         required: true,
       },
@@ -647,9 +659,10 @@ async function collect(
       ctx
     )) as string
   ).toLowerCase() as HostKind;
-  for (const key of ['wakeUrl', 'webdavPassword', 'dataDir'] as const) {
-    if (flags[key] !== undefined && !EXTRAS[host][key]) {
-      const why = NOT_HERE[`${host} ${key}`];
+  const preset = onboardingOf(host);
+  for (const key of EXTRAS) {
+    if (flags[key] !== undefined && !preset.extras[key]) {
+      const why = preset.notHere[key];
       throw new UsageError(
         `${FLAG_OF[key]} does not apply to --host ${host}${why ? ` (${why})` : ''}`
       );
@@ -665,15 +678,14 @@ async function collect(
     name: '',
     target: '',
   };
-  const url =
-    host === 'local'
-      ? flags.url?.trim() || undefined // localhost:30000 unless told
-      : await ask({
-          key: 'url',
-          text: `FOUNDRY_URL, the instance's address (${host === 'molten' ? 'https://<your-box>.moltenhosting.com' : 'https://…'})`,
-          fallback: nowUrl && httpUrl(nowUrl) && !isPlaceholderUrl(nowUrl) ? nowUrl : undefined,
-          required: true,
-        });
+  const url = preset.onThisMachine
+    ? flags.url?.trim() || undefined // the preset's default URL unless told
+    : await ask({
+        key: 'url',
+        text: `FOUNDRY_URL, the instance's address (${preset.url})`,
+        fallback: nowUrl && httpUrl(nowUrl) && !isPlaceholderUrl(nowUrl) ? nowUrl : undefined,
+        required: true,
+      });
   if (url) a.url = url;
   a.user = (await ask({
     key: 'user',
@@ -698,31 +710,29 @@ async function collect(
   const worldId = flags.worldId?.trim();
   if (worldId) a.worldId = worldId;
 
-  if (host === 'molten') {
-    const wakeUrl = await ask({
-      key: 'wakeUrl',
-      text: "FOUNDRY_WAKE_URL, the panel's Server Startup / Magic URL",
-      secret: true,
-      kept: Boolean(now('FOUNDRY_WAKE_URL')),
-    });
-    if (wakeUrl) a.wakeUrl = wakeUrl;
-    const webdavPassword = await ask({
-      key: 'webdavPassword',
-      text: "FOUNDRY_WEBDAV_PASSWORD, the panel's File Manager password",
-      secret: true,
-      kept: Boolean(now('FOUNDRY_WEBDAV_PASSWORD')),
-    });
-    if (webdavPassword) a.webdavPassword = webdavPassword;
-  } else if (flags.wakeUrl?.trim()) {
-    a.wakeUrl = flags.wakeUrl.trim(); // generic: taken, never asked
+  // the secret extras: asked where the preset asks them, else taken from the flag, never asked
+  for (const key of ['wakeUrl', 'webdavPassword'] as const) {
+    const use = preset.extras[key];
+    const given = flags[key]?.trim();
+    if (use?.asked) {
+      const value = await ask({
+        key,
+        text: `${EXTRA_ENV[key]}, ${use.words ?? EXTRA_WORDS[key]}`,
+        secret: true,
+        kept: Boolean(now(EXTRA_ENV[key])),
+      });
+      if (value) a[key] = value;
+    } else if (use && given) {
+      a[key] = given;
+    }
   }
-  if (host === 'local' || flags.dataDir !== undefined) {
+  if (preset.extras.dataDir?.asked || flags.dataDir !== undefined) {
     const platformDir = defaultDataDir(ctx.platform, ctx.home, ctx.env);
     const offered =
       now('FOUNDRY_DATA_DIR')?.value ?? (isDirectory(platformDir) ? platformDir : undefined);
     const dataDir = await ask({
       key: 'dataDir',
-      text: `FOUNDRY_DATA_DIR, the install's Data folder${offered ? '' : ' (Enter for none: no direct file plane)'}`,
+      text: `FOUNDRY_DATA_DIR, ${EXTRA_WORDS.dataDir}${offered ? '' : ' (Enter for none: no direct file plane)'}`,
       fallback: offered,
     });
     if (dataDir) a.dataDir = resolve(ctx.cwd, expandHome(dataDir, ctx.home));
@@ -731,7 +741,7 @@ async function collect(
   a.name = (await ask({
     key: 'name',
     text: 'The registration name',
-    fallback: host === 'local' ? 'foundry-local5e' : 'foundry',
+    fallback: preset.registrationName,
     required: true,
   })) as string;
   if (flags.toolsets !== undefined) {
@@ -764,25 +774,70 @@ const STEP_ZERO = [
   'Player. init cannot create it; the doctor at the end logs in as it.',
 ];
 
+/** One help entry: the flag in its column, its words wrapped under it within 98 columns. */
+function option(flag: string, words: string): string {
+  const lines: string[] = [];
+  let line = `  ${flag.padEnd(28)} `;
+  let fresh = true;
+  for (const word of words.split(' ')) {
+    if (!fresh && line.length + 1 + word.length > 98) {
+      lines.push(line);
+      line = ' '.repeat(31);
+      fresh = true;
+    }
+    line += fresh ? word : ` ${word}`;
+    fresh = false;
+  }
+  lines.push(line);
+  return lines.join('\n');
+}
+
+/** The kinds that read `extra`, and the words for it (the one preset's own, else init's). */
+function extraHelp(extra: HostExtra): string {
+  const readers = HOST_ONBOARDING.filter(p => p.extras[extra]);
+  const own = readers.length === 1 ? readers[0]?.extras[extra]?.words : undefined;
+  return `${listed(readers.map(p => p.kind))}: ${own ?? EXTRA_WORDS[extra]}`;
+}
+
+// The help's host-dependent words, each from the presets.
+const HERE = HOST_ONBOARDING.filter(p => p.onThisMachine);
+const AWAY = HOST_ONBOARDING.filter(p => !p.onThisMachine);
+const HOST_HELP = `where Foundry runs: ${HOST_ONBOARDING.map(p => p.says).join(', ')} (required with --yes)`;
+const URL_HELP =
+  `FOUNDRY_URL (required with --yes for ${listed(
+    AWAY.map(p => p.kind),
+    'and'
+  )}` +
+  HERE.map(p => `; ${p.kind} is ${p.url} unless given`).join('') +
+  ')';
+const DATA_DIR_HELP = `${extraHelp('dataDir')} (${listed(
+  HOST_ONBOARDING.filter(p => p.extras.dataDir?.asked).map(p => `${p.kind}'s`),
+  'and'
+)} default: the platform's, when it exists)`;
+/** The registration name a host off this machine is offered, then each preset offered another. */
+const DEFAULT_NAME = AWAY[0]?.registrationName ?? 'foundry';
+const NAME_HELP = `the registration's name (default ${DEFAULT_NAME}${HOST_ONBOARDING.filter(
+  p => p.registrationName !== DEFAULT_NAME
+)
+  .map(p => `; ${p.kind}: ${p.registrationName}`)
+  .join('')})`;
+
 const USAGE = `Usage: npm run init [-- <flags>]
 
 Writes the .env and the MCP registration for one Foundry instance, then runs the doctor. With no
 flags it asks; every answer is also a flag.
 
-  --host local|molten|generic  where Foundry runs: an install on this machine, Molten Hosting,
-                               any URL (required with --yes)
-  --url <url>                  FOUNDRY_URL (required with --yes for molten and generic; local is
-                               http://localhost:30000 unless given)
+${option(`--host ${HOSTS.join('|')}`, HOST_HELP)}
+${option('--url <url>', URL_HELP)}
   --user <name>                the Foundry user the bridge joins as (default MCP-Claude)
   --password <pw>              its password (default: none)
   --admin-key <key>            FOUNDRY_ADMIN_KEY, the Setup screen's Administrator Password (not
                                the license key): the bridge then launches the world itself
-  --wake-url <url>             molten or generic: the URL that wakes a sleeping instance
-  --webdav-password <pw>       molten: the panel's File Manager password
-  --data-dir <dir>             local or generic: the install's Data folder (local's default: the
-                               platform's, when it exists)
+${option('--wake-url <url>', extraHelp('wakeUrl'))}
+${option('--webdav-password <pw>', extraHelp('webdavPassword'))}
+${option('--data-dir <dir>', DATA_DIR_HELP)}
   --world-id <id>              FOUNDRY_WORLD_ID, when /setup lists several worlds
-  --name <name>                the registration's name (default foundry; local: foundry-local5e)
+${option('--name <name>', NAME_HELP)}
   --toolsets <list>            FOUNDRY_TOOLSETS; readonly for a read-only first run
   --target <where>             project (this clone's .mcp.json; the default), user (~/.claude.json,
                                every project) or path:<file> (another project's .mcp.json)

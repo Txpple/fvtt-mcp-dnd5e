@@ -52,8 +52,11 @@ export function isPlaceholderUrl(url: string): boolean {
   return /^https?:\/\/your-(foundry|server)\./i.test(url.trim());
 }
 
-/** The startup refusal for a config that can never connect, or `undefined` when it can. */
-export function hostConfigProblem(cfg: HostConfig): string | undefined {
+/**
+ * The startup refusal for a config that can never connect, or `undefined` when it can. It reads
+ * the URL alone, so a caller with no host in hand (the bridge's own guard) names none.
+ */
+export function hostConfigProblem(cfg: Pick<HostConfig, 'serverUrl'>): string | undefined {
   if (isPlaceholderUrl(cfg.serverUrl)) {
     return (
       `FOUNDRY_URL is not set (it is still the placeholder "${cfg.serverUrl}"). Set it to your ` +

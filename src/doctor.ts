@@ -30,6 +30,7 @@ import {
 } from './client.js';
 import { chromiumProblem } from './foundry.js';
 import { namesOf } from './hosts/env.js';
+import { onboardingOf } from './hosts/onboarding.js';
 import { parseToolsetsEnv, resolveRegistration } from './toolsets.js';
 import { bridgeLine } from './utils/bridge-facts.js';
 import { majorVersion, REQUIRED_DND5E_MAJOR } from './utils/system-detection.js';
@@ -216,7 +217,8 @@ export async function runDoctor(io: DoctorIO, processEnv: Env = process.env): Pr
   if (noBrowser) fail(`browser: ${noBrowser}`);
   else io.say('ok', "browser: Playwright's Chromium is installed");
 
-  if (kind === 'local') {
+  // the Foundry app is looked for only where the preset runs Foundry on this machine
+  if (onboardingOf(kind).onThisMachine) {
     const app = io.foundryApp(env);
     if (app.found) io.say('ok', `Foundry app: ${app.main}`);
     else {
