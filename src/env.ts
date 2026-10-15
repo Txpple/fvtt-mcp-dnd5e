@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Env } from './hosts/env.js';
+import { type Env, namesOf } from './hosts/env.js';
 
 export type { Env } from './hosts/env.js';
 
@@ -79,7 +79,8 @@ export function envFileWarnings(text: string, parsed: Env, processEnv: Env = {})
       `${key} has a value but is commented out, so it is unset — delete the "# " to set it.`
     );
   }
-  for (const key of ['FOUNDRY_ADMIN_KEY', 'LOCAL_ADMIN_KEY', 'MOLTEN_ADMIN_KEY']) {
+  // the admin key under every name a host reads it by (its 2.x aliases included)
+  for (const key of namesOf('FOUNDRY_ADMIN_KEY')) {
     if (LICENSE_KEY.test(parsed[key]?.trim() ?? '')) {
       out.push(
         `${key} looks like a Foundry license key. It is the Administrator Password you type on ` +

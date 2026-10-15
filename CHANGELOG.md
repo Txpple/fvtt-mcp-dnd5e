@@ -69,6 +69,15 @@ What changed for a user of the tools and skills, release by release. The measure
   in its argument and its result), and nothing ran `scripts/measure/run-script-api.mjs --check`.
   `npm test` runs it now (`src/run-script-api.test.ts`); the reference is regenerated
   (`npm run api-doc`).
+- **The hosts rule holds again: legacy names live in the host selector.** `git grep MOLTEN_ src`
+  answered six files where CONTRIBUTING allows `src/hosts/env.ts` and its test. The 2.x names of
+  the suite and player identities (`BF_SUITE_*`, `MOLTEN_TEST_*`) are the selector's
+  `IDENTITY_NAMES`; the `.env` license-key check and the doctor's withheld admin key read every
+  name of `FOUNDRY_ADMIN_KEY` from `namesOf` (the selector's alias table) instead of listing them;
+  `src/hosts/env.test.ts` fails when another file under `src/` names a `MOLTEN_*` variable.
+  **`targetLabel` (`fvtt-mcp-dnd5e/client`) is the host preset's own label**: `local install`,
+  `Molten Hosting`, `generic` (was `local sandbox` / `prod (Molten)`), so a script's `target:` line
+  and the doctor's `config:` line read that way; library code no longer tells one host from another.
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 

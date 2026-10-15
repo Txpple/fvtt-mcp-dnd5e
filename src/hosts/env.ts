@@ -31,7 +31,9 @@ import type { HostKind } from './types.js';
  * under local — so a .env written for the 2.x layout keeps working unchanged. Precedence:
  * host-prefixed alias > FOUNDRY_* > default. `FOUNDRY_PROFILE=local` (pre-2.2) = FOUNDRY_HOST=local.
  * MOLTEN_FILEBROWSER_URL was never read by anything and is dropped. The table is LEGACY_NAMES;
- * `npm run init` asks it (`legacyNameOf`) which line of a .env supplies an answer it updates.
+ * `npm run init` asks it (`legacyNameOf`) which line of a .env supplies an answer it updates, and
+ * a reader that needs a key under every name asks `namesOf`. The 2.x names of the suite and player
+ * identities are IDENTITY_NAMES. `git grep MOLTEN_ src` answers this file and its test only.
  *
  * Secrets AND the world id are optional with NO default — an unset world id means "discover it on
  * /setup" (one world) rather than a doomed launch. Tools check presence and name the variable.
@@ -125,6 +127,36 @@ const LEGACY_NAMES: Record<HostKind, Readonly<Record<string, string>>> = {
 export function legacyNameOf(kind: HostKind, canonical: string): string | undefined {
   return LEGACY_NAMES[kind][canonical];
 }
+
+/**
+ * Every name `canonical` is read under on some host: the canonical name first, then each host's
+ * legacy alias of it (`FOUNDRY_ADMIN_KEY`, then the 2.x local and Molten names). For a check that
+ * looks at a key whichever host reads it (the .env slips, src/env.ts) and for a caller that
+ * withholds a key from every host at once (the doctor's login, src/doctor.ts).
+ */
+export function namesOf(canonical: string): string[] {
+  const names = [canonical];
+  for (const kind of HOST_KINDS) {
+    const alias = LEGACY_NAMES[kind][canonical];
+    if (alias && !names.includes(alias)) names.push(alias);
+  }
+  return names;
+}
+
+/**
+ * The env names of the second identities a script joins as (`resolveIdentity`, src/client.ts): a
+ * suite user and a player, the canonical name first, then the 2.x name still read in its place.
+ */
+export const IDENTITY_NAMES = {
+  suite: {
+    user: ['FOUNDRY_SUITE_USER', 'BF_SUITE_USER'],
+    password: ['FOUNDRY_SUITE_PASSWORD', 'BF_SUITE_PASSWORD'],
+  },
+  player: {
+    user: ['FOUNDRY_PLAYER_USER', 'MOLTEN_TEST_USER'],
+    password: ['FOUNDRY_PLAYER_PASSWORD', 'MOLTEN_TEST_PASSWORD'],
+  },
+} as const;
 
 /** An empty string in .env means "unset" for every optional field. */
 const opt = (v: string | undefined): string | undefined => (v?.trim() ? v.trim() : undefined);

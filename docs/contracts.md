@@ -32,9 +32,9 @@ imports:
 
 | Import | Gives |
 | --- | --- |
-| `fvtt-mcp-dnd5e/client` | `connectFoundry({ host, env, identity, tag, watchdogMs })` → `{ f, dispose }`; `Foundry` (`evaluate` / `call` / `screenshot` / `dispose`, alias `disconnect`); `BridgeError` (+ `BridgeErrorCode`, `PageErrorCode`); `foundryConfig`, `resolveIdentity`, `quietLogger`, `targetLabel`; `Logger`; `FilePlaneError`; and re-exports of the two below |
+| `fvtt-mcp-dnd5e/client` | `connectFoundry({ host, env, identity, tag, watchdogMs })` → `{ f, dispose }`; `Foundry` (`evaluate` / `call` / `screenshot` / `dispose`, alias `disconnect`); `BridgeError` (+ `BridgeErrorCode`, `PageErrorCode`); `foundryConfig`, `resolveIdentity`, `quietLogger`, `targetLabel` (the host preset's label: `local install`, `Molten Hosting`, `generic`); `Logger`; `FilePlaneError`; and re-exports of the two below |
 | `fvtt-mcp-dnd5e/env` | `loadEnv` (dotenv.parse of the family `.env`), `envPath` (`FVTT_MCP_ENV` or `<repo>/.env`), `repoRoot` |
-| `fvtt-mcp-dnd5e/hosts` | `resolveHostConfig` (the one env selector: `FOUNDRY_HOST` → preset), `createHost`, `filePlaneFor`, `bridgeConfigOf`, the `Host` / `FilePlane` / `HostKind` types |
+| `fvtt-mcp-dnd5e/hosts` | `resolveHostConfig` (the one env selector: `FOUNDRY_HOST` → preset), `createHost`, `filePlaneFor`, `bridgeConfigOf`, `hostLabel`, `namesOf` (a key under every name a host reads it by), `IDENTITY_NAMES`, the `Host` / `FilePlane` / `HostKind` types |
 
 `identity` is `bridge` (the MCP's own user — `FOUNDRY_USER`), `suite` (`FOUNDRY_SUITE_USER` /
 `_PASSWORD` — a distinct GM-capable account, so a bridge left connected shows as a second user

@@ -40,6 +40,11 @@ const LABELS: Record<HostKind, string> = {
   generic: 'generic',
 };
 
+/** A host preset's own label (`Host.label`), for a script's target line before any host exists. */
+export function hostLabel(kind: HostKind): string {
+  return LABELS[kind];
+}
+
 export class FoundryHost implements Host {
   readonly kind: HostKind;
   readonly label: string;

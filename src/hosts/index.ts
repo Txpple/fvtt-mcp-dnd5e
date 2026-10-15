@@ -16,11 +16,14 @@ import type { FilePlane, Host, PageCaller } from './types.js';
 export {
   hostConfigProblem,
   hostKindFromEnv,
+  IDENTITY_NAMES,
   isPlaceholderUrl,
+  namesOf,
   PLACEHOLDER_URL,
   resolveHostConfig,
 } from './env.js';
 export type { AliasWarn, Env } from './env.js';
+export { hostLabel } from './host.js';
 export type { HostConfig } from './host.js';
 export {
   buildPublicUrl,

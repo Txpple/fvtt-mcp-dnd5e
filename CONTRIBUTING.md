@@ -52,7 +52,9 @@ halves:
 Where Foundry runs is a *host* (`src/hosts/**`, design.md §2.6) and nothing outside that
 directory may know one from another: a tool that needs a file plane asks `filePlaneFor`, a script
 that needs a connection uses `connectFoundry` / `resolveHostConfig` and reads `FOUNDRY_HOST`.
-`git grep MOLTEN_ src` must keep answering `src/hosts/env.ts` (and its test) only.
+`git grep MOLTEN_ src` must keep answering `src/hosts/env.ts` (and its test) only, and
+`src/hosts/env.test.ts` fails when another file names one: a legacy name is read through the
+selector's tables (`namesOf`, `IDENTITY_NAMES`), and a host's label is its preset's (`hostLabel`).
 
 ## The gates
 

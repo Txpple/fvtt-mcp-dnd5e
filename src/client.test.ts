@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { connectFoundry, Foundry, resolveHostConfig, resolveIdentity } from './client.js';
+import {
+  connectFoundry,
+  Foundry,
+  resolveHostConfig,
+  resolveIdentity,
+  targetLabel,
+} from './client.js';
+import { IDENTITY_NAMES } from './hosts/index.js';
 
 const LOCAL = resolveHostConfig(
   {
@@ -33,13 +40,20 @@ describe('client — the sibling contract', () => {
     expect(
       resolveIdentity('suite', { BF_SUITE_USER: 'Tester Assistant', BF_SUITE_PASSWORD: 'x' }, LOCAL)
     ).toEqual({ user: 'Tester Assistant', password: 'x' });
+    // the 2.x player name is the host selector's to know (src/hosts/env.ts)
+    const [, legacyPlayer] = IDENTITY_NAMES.player.user;
+    expect(resolveIdentity('player', { [legacyPlayer]: 'Old Player' }, LOCAL)).toEqual({
+      user: 'Old Player',
+    });
     expect(
-      resolveIdentity(
-        'player',
-        { MOLTEN_TEST_USER: 'Old Player', FOUNDRY_PLAYER_USER: 'New' },
-        LOCAL
-      )
+      resolveIdentity('player', { [legacyPlayer]: 'Old Player', FOUNDRY_PLAYER_USER: 'New' }, LOCAL)
     ).toEqual({ user: 'New' });
+  });
+
+  it('targetLabel is the label of the host preset itself', () => {
+    expect(targetLabel('molten')).toBe('Molten Hosting');
+    expect(targetLabel('local')).toBe('local install');
+    expect(targetLabel('generic')).toBe('generic');
   });
 
   it('an unset suite / player user is a refusal naming the variable', () => {

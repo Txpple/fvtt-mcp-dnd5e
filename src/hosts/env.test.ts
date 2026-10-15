@@ -7,9 +7,19 @@
  * only under its own host, each reported once).
  */
 
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { hostConfigProblem, hostKindFromEnv, PLACEHOLDER_URL, resolveHostConfig } from './env.js';
-import { createHost, filePlaneFor } from './index.js';
+import {
+  hostConfigProblem,
+  hostKindFromEnv,
+  IDENTITY_NAMES,
+  namesOf,
+  PLACEHOLDER_URL,
+  resolveHostConfig,
+} from './env.js';
+import { createHost, filePlaneFor, hostLabel } from './index.js';
 
 /** A 2.x-layout .env: the MOLTEN_* prod set plus the LOCAL_* sandbox overrides, side by side. */
 const legacyEnv = {
@@ -382,5 +392,51 @@ describe('createHost', () => {
     expect(dav.files?.label).toBe('WebDAV');
     // A direct plane wins over the bridge plane.
     expect(filePlaneFor(dav, { call: async () => null }).label).toBe('WebDAV');
+  });
+});
+
+describe('the legacy names stay here (design.md §2.6, CONTRIBUTING: the hosts rule)', () => {
+  it('namesOf: the canonical name first, then every alias a host reads it by', () => {
+    expect(namesOf('FOUNDRY_ADMIN_KEY')).toEqual([
+      'FOUNDRY_ADMIN_KEY',
+      'MOLTEN_ADMIN_KEY',
+      'LOCAL_ADMIN_KEY',
+    ]);
+    expect(namesOf('FOUNDRY_WAKE_URL')).toEqual(['FOUNDRY_WAKE_URL', 'MOLTEN_MAGIC_URL']);
+    expect(namesOf('FOUNDRY_TOOLSETS')).toEqual(['FOUNDRY_TOOLSETS']);
+  });
+
+  it('IDENTITY_NAMES: the suite and player names, canonical first, then the 2.x name', () => {
+    expect(IDENTITY_NAMES.player.user).toEqual(['FOUNDRY_PLAYER_USER', 'MOLTEN_TEST_USER']);
+    expect(IDENTITY_NAMES.player.password).toEqual([
+      'FOUNDRY_PLAYER_PASSWORD',
+      'MOLTEN_TEST_PASSWORD',
+    ]);
+    expect(IDENTITY_NAMES.suite.user[0]).toBe('FOUNDRY_SUITE_USER');
+  });
+
+  it('a host preset carries its own label', () => {
+    expect(hostLabel('molten')).toBe('Molten Hosting');
+    expect(hostLabel('local')).toBe('local install');
+    expect(hostLabel('generic')).toBe('generic');
+  });
+
+  it('no file under src/ outside this one and its module names a MOLTEN_* variable', () => {
+    const src = join(dirname(fileURLToPath(import.meta.url)), '..');
+    const allowed = new Set(['hosts/env.ts', 'hosts/env.test.ts']);
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, e.name);
+        if (e.isDirectory()) walk(path);
+        else if (e.name.endsWith('.ts')) {
+          const rel = relative(src, path).split(sep).join('/');
+          if (!allowed.has(rel) && readFileSync(path, 'utf8').includes('MOLTEN_'))
+            offenders.push(rel);
+        }
+      }
+    };
+    walk(src);
+    expect(offenders).toEqual([]);
   });
 });

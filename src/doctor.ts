@@ -29,6 +29,7 @@ import {
   targetLabel,
 } from './client.js';
 import { chromiumProblem } from './foundry.js';
+import { namesOf } from './hosts/env.js';
 import { parseToolsetsEnv, resolveRegistration } from './toolsets.js';
 import { bridgeLine } from './utils/bridge-facts.js';
 import { majorVersion, REQUIRED_DND5E_MAJOR } from './utils/system-detection.js';
@@ -313,7 +314,8 @@ export async function runDoctor(io: DoctorIO, processEnv: Env = process.env): Pr
   try {
     const { f, dispose } = await connectFoundry({
       host: kind,
-      env: { ...env, FOUNDRY_ADMIN_KEY: '', LOCAL_ADMIN_KEY: '', MOLTEN_ADMIN_KEY: '' },
+      // the admin key withheld under every name a host reads it by, so the login never launches
+      env: { ...env, ...Object.fromEntries(namesOf('FOUNDRY_ADMIN_KEY').map(k => [k, ''])) },
       identity: 'bridge',
       tag: 'doctor',
       announce: false,

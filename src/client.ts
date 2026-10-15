@@ -28,6 +28,8 @@ import {
   createHost,
   hostConfigProblem,
   hostKindFromEnv,
+  hostLabel,
+  IDENTITY_NAMES,
   resolveHostConfig,
 } from './hosts/index.js';
 import type { Host, HostConfig, HostKind } from './hosts/index.js';
@@ -113,18 +115,6 @@ export interface Connected {
   dispose(): Promise<void>;
 }
 
-/** The suite / player identities, with the 2.x sibling names honoured as aliases. */
-const IDENTITY_KEYS = {
-  suite: {
-    user: ['FOUNDRY_SUITE_USER', 'BF_SUITE_USER'],
-    password: ['FOUNDRY_SUITE_PASSWORD', 'BF_SUITE_PASSWORD'],
-  },
-  player: {
-    user: ['FOUNDRY_PLAYER_USER', 'MOLTEN_TEST_USER'],
-    password: ['FOUNDRY_PLAYER_PASSWORD', 'MOLTEN_TEST_PASSWORD'],
-  },
-} as const;
-
 function firstSet(env: Env, keys: readonly string[]): string | undefined {
   for (const k of keys) {
     const v = env[k]?.trim();
@@ -153,7 +143,8 @@ export function resolveIdentity(
       ? { user: hostConfig.user, password: hostConfig.password }
       : { user: hostConfig.user };
   }
-  const keys = IDENTITY_KEYS[identity];
+  // the suite / player names, with the 2.x sibling names honoured as aliases (src/hosts/env.ts)
+  const keys = IDENTITY_NAMES[identity];
   const user = firstSet(env, keys.user);
   if (!user) {
     throw new Error(
@@ -207,9 +198,12 @@ export function foundryConfig(
   };
 }
 
-/** The one-line target announcement a script prints before it connects (stderr). */
+/**
+ * The one-line target announcement a script prints before it connects (stderr): the host
+ * preset's own label (src/hosts), so no library code tells one host from another.
+ */
 export function targetLabel(kind: HostKind): string {
-  return kind === 'local' ? 'local sandbox' : kind === 'molten' ? 'prod (Molten)' : kind;
+  return hostLabel(kind);
 }
 
 /**
