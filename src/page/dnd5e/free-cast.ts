@@ -208,7 +208,7 @@ export async function addFreeCast(params: {
   if (!actor) throw notFound(`Actor not found: ${actorIdentifier}`);
 
   // The granting feature must be a real item on the actor — the cast activity lives ON it.
-  const feature = resolveActorItem(actor, grantedBy);
+  const feature = resolveActorItem(actor, grantedBy, 'write');
   if (!feature || feature.type === 'spell') {
     const candidates = (actor.items as any[])
       .filter((i: any) => i.type === 'feat')
@@ -224,7 +224,7 @@ export async function addFreeCast(params: {
   // Resolve the spell: an embedded repertoire copy (its compendium source is the link — falling
   // back to a premium-pack name lookup, since raw toObject() imports carry no compendiumSource),
   // or a premium compendium uuid directly (the repertoire copy is then imported).
-  const embedded = resolveActorItem(actor, spellIdentifier, 'spell');
+  const embedded = resolveActorItem(actor, spellIdentifier, 'write', 'spell');
   let uuid: string | null = embedded
     ? ((toSource(embedded) as any)?._stats?.compendiumSource ?? null)
     : String(spellIdentifier).startsWith('Compendium.')

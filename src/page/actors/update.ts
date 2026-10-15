@@ -601,7 +601,7 @@ export async function updateActorItem(params: {
 
   const actor = resolveActorFuzzy(actorIdentifier, 'write');
   if (!actor) throw notFoundError(`Actor not found: ${actorIdentifier}`);
-  const item = resolveActorItem(actor, itemIdentifier, params.type);
+  const item = resolveActorItem(actor, itemIdentifier, 'write', params.type);
   if (!item) {
     throw notFoundError(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);
   }

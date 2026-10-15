@@ -25,7 +25,9 @@ import {
   deleteEmbeddedStrict,
   fuzzyTier,
   resolveActorFuzzy,
+  resolveActorItem,
   resolveActorTarget,
+  resolveWorldItem,
 } from './_shared.js';
 
 describe('normalizeAssetPath', () => {
@@ -670,5 +672,74 @@ describe('the fuzzy resolver: one tier answers; a write refuses a tie (design.md
     expect(found?.token).toBe(token);
     expect(found?.actor).toBe(token.actor);
     expect(resolveActorTarget('nothing-matches')).toBeUndefined();
+  });
+});
+
+describe('the item resolvers: the same tiers; a write refuses a tie (design.md §3)', () => {
+  const items = [
+    { id: 'i1', name: 'Longsword', type: 'weapon' },
+    { id: 'i2', name: 'Longsword +1', type: 'weapon' },
+    { id: 'i3', name: 'longsword', type: 'weapon' },
+    { id: 'i4', name: 'Shield', type: 'equipment' },
+    { id: 'i5', name: 'Shield', type: 'spell' },
+    { id: 'i6', name: 'Cure Wounds', type: 'spell' },
+  ];
+  /** An EmbeddedCollection's surface: get by id, getName, contents. */
+  const collection = (docs: typeof items) => ({
+    contents: docs,
+    get: (id: string) => docs.find(d => d.id === id),
+    getName: (name: string) => docs.find(d => d.name === name),
+  });
+  const actor = { name: 'Hero', items: collection(items) };
+  afterEach(() => {
+    delete (globalThis as any).game;
+  });
+
+  it('answers by the first tier that matches: id, exact name, the name without case, a substring', () => {
+    expect(resolveActorItem(actor, 'i2', 'write')?.id).toBe('i2');
+    expect(resolveActorItem(actor, 'Longsword', 'write')?.id).toBe('i1');
+    expect(resolveActorItem(actor, 'longsword +1', 'write')?.id).toBe('i2');
+    expect(resolveActorItem(actor, 'wounds', 'write')?.id).toBe('i6');
+    expect(resolveActorItem(actor, 'nothing', 'write')).toBeUndefined();
+    expect(resolveActorItem(actor, '', 'write')).toBeUndefined();
+  });
+
+  it('a read takes the best match; a write refuses a tie by name, listing the candidates', () => {
+    expect(resolveActorItem(actor, 'LONGSWORD')?.id).toBe('i1');
+    expect(resolveActorItem(actor, 'sword')?.id).toBe('i1');
+    const err = (() => {
+      try {
+        resolveActorItem(actor, 'sword', 'write');
+      } catch (e) {
+        return e as any;
+      }
+    })();
+    expect(err?.code).toBe('ambiguous');
+    expect(err?.message).toMatch(
+      /^Item "sword" matches 3: "Longsword" \(i1\), "Longsword \+1" \(i2\), "longsword" \(i3\)\. A write changes one item/
+    );
+    // two items with one exact name: only the id (or the type) tells them apart
+    expect(() => resolveActorItem(actor, 'Shield', 'write')).toThrow(
+      /matches 2: "Shield" \(i4\), "Shield" \(i5\)/
+    );
+  });
+
+  it('a type narrows every tier: the id, the names, the substring', () => {
+    expect(resolveActorItem(actor, 'Shield', 'write', 'spell')?.id).toBe('i5');
+    expect(resolveActorItem(actor, 'i4', 'write', 'spell')).toBeUndefined();
+    expect(resolveActorItem(actor, 'sword', 'write', 'spell')).toBeUndefined();
+    expect(resolveActorItem(actor, 'cure', 'write', 'spell')?.id).toBe('i6');
+  });
+
+  it('a world item: the same tiers over game.items, the same refusal on a write', () => {
+    (globalThis as any).game = { items: collection(items) };
+    expect(resolveWorldItem('i3', 'write')?.id).toBe('i3');
+    expect(resolveWorldItem('Longsword +1', 'write')?.id).toBe('i2');
+    expect(resolveWorldItem('sword')?.id).toBe('i1');
+    expect(() => resolveWorldItem('sword', 'write')).toThrow(/^Item "sword" matches 3/);
+    expect(() => resolveWorldItem('LONGSWORD', 'write')).toThrow(
+      /matches 2: "Longsword" \(i1\), "longsword" \(i3\)/
+    );
+    expect(resolveWorldItem('nothing', 'write')).toBeUndefined();
   });
 });

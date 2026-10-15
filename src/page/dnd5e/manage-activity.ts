@@ -209,16 +209,18 @@ export async function manageActivity(params: {
   let actorDoc: any = null;
   let actorRef: { id: string; name: string } | null = null;
   let applyUpdate: (data: Record<string, any>) => Promise<any>;
+  // a write changes one item, so a name that matches several is refused; a list reads the best
+  const mode = action === 'list' ? 'read' : 'write';
   if (params.actorIdentifier) {
-    const actor = resolveActorFuzzy(params.actorIdentifier, action === 'list' ? 'read' : 'write');
+    const actor = resolveActorFuzzy(params.actorIdentifier, mode);
     if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
-    item = resolveActorItem(actor, itemIdentifier);
+    item = resolveActorItem(actor, itemIdentifier, mode);
     if (!item) throw notFound(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);
     actorDoc = actor;
     actorRef = { id: actor.id, name: actor.name };
     applyUpdate = data => actor.updateEmbeddedDocuments('Item', [{ _id: item.id, ...data }]);
   } else {
-    item = resolveWorldItem(itemIdentifier);
+    item = resolveWorldItem(itemIdentifier, mode);
     if (!item) throw notFound(`World Item "${itemIdentifier}" not found`);
     applyUpdate = data => item.update(data);
   }

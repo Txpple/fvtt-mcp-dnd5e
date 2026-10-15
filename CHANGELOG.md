@@ -146,7 +146,13 @@ What changed for a user of the tools and skills, release by release. The measure
   is refused, listing them (it wrote to all of them), and no actor or no player is a `[not-found]`
   error instead of `0 ownership assignments completed`. The page resolver is one name everywhere
   (`resolveActorFuzzy`, `resolveActorTarget` for the token it came through); the call sites say
-  `'write'`. The run-script reference names `findActor`'s `forWrite`.
+  `'write'`. The run-script reference names `findActor`'s `forWrite`. **The item lookups share the
+  tiers** (`resolveActorItem`, `resolveWorldItem`; a call that names a type narrows every tier to
+  it): they took the first substring match on a write too, so `"sword"` could patch whichever
+  sword came first. `update-actor-item`, `add-free-cast` (its spell and its granting feature), and
+  `manage-activity` / `manage-effect` (but `list`) on an actor's item or a world item refuse an item
+  name that matches several (`[ambiguous]`: `Item "sword" matches 3: "Longsword" (i1), …`); a
+  read takes the best match (now the exact name over the case-insensitive one).
 - **`set-actor-ownership` with a placed token's id writes that token** (issue #19). The token was
   lost between the lookup and the write, so an unlinked token's write landed on its base actor and
   every other copy. The page call carries the scene and the token now: an unlinked token's own

@@ -497,20 +497,22 @@ function documentsOf(collection: any): any[] {
  * The documents an identifier names in `collection`, by the fuzzy rule's tiers: the first tier
  * that matches anything is the answer — exact id, exact name, the name without case, then a name
  * that contains it (without case). One entry is a match; several are a tie a write must not break.
+ * `where` narrows every tier to the documents it accepts (an item of one type).
  */
 export function fuzzyTier(
   collection: any,
   identifier: string,
-  { substring = true }: { substring?: boolean } = {}
+  { substring = true, where }: { substring?: boolean; where?: (d: any) => boolean } = {}
 ): any[] {
+  const ok = (d: any): boolean => !!d && (!where || where(d));
   const byId = collection?.get?.(identifier);
-  if (byId) return [byId];
-  const all = documentsOf(collection);
+  if (ok(byId)) return [byId];
+  const all = documentsOf(collection).filter(ok);
   const exact = all.filter((d: any) => d.name === identifier);
   if (exact.length) return exact;
   // a collection that cannot be listed still names one
   const named = collection?.getName?.(identifier);
-  if (named) return [named];
+  if (ok(named)) return [named];
   const lower = identifier.toLowerCase();
   const folded = all.filter((d: any) => d.name?.toLowerCase() === lower);
   if (folded.length || !substring) return folded;
@@ -563,32 +565,34 @@ export function resolveActorFuzzy(identifier: string, mode: 'read' | 'write' = '
 }
 
 /**
- * Resolve an embedded Item on an actor by exact id, then exact name (case-insensitive), then a
- * case-insensitive substring on name (optionally constrained to a `type`). Returns undefined when
- * nothing matches. Shared by the embedded-item editors (updateActorItem, manageActivity, manageEffect).
+ * Resolve an embedded Item on an actor by `fuzzyTier`'s tiers (exact id, exact name, the name
+ * without case, then a substring), optionally constrained to a `type`. A read takes the best
+ * match; a write (`mode: 'write'`) refuses a tier that names several items (`ambiguous`, naming
+ * them). Undefined when nothing matches. Shared by the embedded-item editors (updateActorItem,
+ * manageActivity, manageEffect, addFreeCast).
  */
-export function resolveActorItem(actor: any, identifier: string, type?: string): any {
+export function resolveActorItem(
+  actor: any,
+  identifier: string,
+  mode: 'read' | 'write' = 'read',
+  type?: string
+): any {
   if (!identifier) return undefined;
-  const byId = actor.items?.get?.(identifier);
-  if (byId && (!type || byId.type === type)) return byId;
-  const idLower = identifier.toLowerCase();
-  const typeOk = (i: any) => !type || i.type === type;
-  return (
-    actor.items?.find((i: any) => typeOk(i) && i.name?.toLowerCase() === idLower) ??
-    actor.items?.find((i: any) => typeOk(i) && i.name?.toLowerCase().includes(idLower))
-  );
+  const where = type ? (i: any) => i.type === type : undefined;
+  const tier = fuzzyTier(actor.items, identifier, where ? { where } : {});
+  if (tier.length > 1 && mode === 'write') throw ambiguousTarget('Item', identifier, tier);
+  return tier[0];
 }
 
-/** Resolve a world Item by exact id, then exact name, then a case-insensitive substring. */
-export function resolveWorldItem(identifier: string): any {
-  const byId = game.items?.get?.(identifier);
-  if (byId) return byId;
-  const idLower = identifier.toLowerCase();
-  return (
-    game.items?.getName?.(identifier) ||
-    game.items?.find?.((i: any) => i.name?.toLowerCase() === idLower) ||
-    game.items?.find?.((i: any) => i.name?.toLowerCase().includes(idLower))
-  );
+/**
+ * Resolve a world Item by `fuzzyTier`'s tiers over `game.items`: a read takes the best match; a
+ * write (`mode: 'write'`) refuses a tier that names several items (`ambiguous`, naming them).
+ */
+export function resolveWorldItem(identifier: string, mode: 'read' | 'write' = 'read'): any {
+  if (!identifier) return undefined;
+  const tier = fuzzyTier(game.items, identifier);
+  if (tier.length > 1 && mode === 'write') throw ambiguousTarget('Item', identifier, tier);
+  return tier[0];
 }
 
 /**

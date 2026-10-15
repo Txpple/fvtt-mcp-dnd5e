@@ -73,10 +73,12 @@ export async function manageEffect(params: {
   let parent: any;
   let parentRef: Record<string, any>;
   let kind: 'actor' | 'item';
+  // a write changes one document, so a name that matches several is refused; a list reads the best
+  const mode = action === 'list' ? 'read' : 'write';
   if (params.actorIdentifier && params.itemIdentifier) {
-    const actor = resolveActorFuzzy(params.actorIdentifier, action === 'list' ? 'read' : 'write');
+    const actor = resolveActorFuzzy(params.actorIdentifier, mode);
     if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
-    const item = resolveActorItem(actor, params.itemIdentifier);
+    const item = resolveActorItem(actor, params.itemIdentifier, mode);
     if (!item) throw notFound(`Item "${params.itemIdentifier}" not found on actor "${actor.name}"`);
     parent = item;
     kind = 'item';
@@ -85,13 +87,13 @@ export async function manageEffect(params: {
       item: { id: item.id, name: item.name, type: item.type },
     };
   } else if (params.actorIdentifier) {
-    const actor = resolveActorFuzzy(params.actorIdentifier, action === 'list' ? 'read' : 'write');
+    const actor = resolveActorFuzzy(params.actorIdentifier, mode);
     if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     parent = actor;
     kind = 'actor';
     parentRef = { actor: { id: actor.id, name: actor.name } };
   } else if (params.itemIdentifier) {
-    const item = resolveWorldItem(params.itemIdentifier);
+    const item = resolveWorldItem(params.itemIdentifier, mode);
     if (!item) throw notFound(`World Item "${params.itemIdentifier}" not found`);
     parent = item;
     kind = 'item';

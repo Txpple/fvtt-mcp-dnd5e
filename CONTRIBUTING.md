@@ -39,7 +39,8 @@ halves:
    (a file in `Data/`, a player's view) carries the `NO_RECEIPT` tag (`src/tool-kinds.ts`) and calls
    `noteUnrecorded()` once it did; `src/tools/registry.test.ts` lists every write tool in the tagged
    or the recorded set, so a new one is placed there by hand. A write resolves a fuzzy identifier
-   with `mode: 'write'` (`resolveActorFuzzy`, `resolveUser`): a tie is refused, never picked.
+   with `mode: 'write'` (`resolveActorFuzzy`, `resolveActorItem`, `resolveWorldItem`,
+   `resolveUser`): a tie is refused, never picked.
 5. **The prose budget and the context budgets** — a leaf `.describe()` ≤ 120 chars, a description
    ≤ 400, no tours of sibling tools, no Foundry-internals asides (the skills carry those). `npm test`
    prints three context budgets, each with the client that pays it, and fails when one climbs past

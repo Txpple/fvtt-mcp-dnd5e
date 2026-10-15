@@ -41,7 +41,9 @@ export const sceneTargetRequired = z.string().min(1).describe(`${SCENE_TARGET}.`
 
 /**
  * An item — embedded on an actor (`resolveActorItem`) or in the world sidebar (`resolveWorldItem`):
- * exact id, exact name (case-insensitive), then a name substring.
+ * the actor rule's tiers (exact id, exact name, the name without case, then a substring; the first
+ * that matches answers). A read takes the best match; a write refuses a tier that names several
+ * items (`ambiguous`, listing them), so "substring" means a unique one.
  */
 export const ITEM_TARGET = 'Item id, exact name, or name substring';
 export const itemTarget = z.string().min(1).describe(`${ITEM_TARGET}.`);
