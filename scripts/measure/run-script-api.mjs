@@ -2,8 +2,11 @@
 // with its argument shape one level deep and its return type, read from the TypeScript program
 // itself (src/page/index.ts's `api` block), so the reference can never drift from the seam.
 //
-//   node scripts/measure/run-script-api.mjs            # writes docs/run-script-api.md
+//   node scripts/measure/run-script-api.mjs            # writes docs/run-script-api.md (npm run api-doc)
 //   node scripts/measure/run-script-api.mjs --check    # exits 1 when the file is stale
+//
+// `npm test` runs the check (src/run-script-api.test.ts), so a page op changed without the
+// reference regenerated fails the gate.
 //
 // Grouped by the page module each function lives in. Offline; no Foundry.
 import { readFileSync, writeFileSync } from 'node:fs';

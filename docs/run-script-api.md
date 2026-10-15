@@ -1829,8 +1829,9 @@ args:
 - `sceneIdentifier: string`
 - `fit?: boolean`
 - `mark?: boolean`
+- `asToken?: string`
 
-Returns `{ found: boolean; notFound?: string | undefined; sceneId?: string | undefined; sceneName?: string | undefined; noteCount?: number | undefined; renderer?: string | undefined; dimensions?: { width: number; height: number; sceneX: number; sceneY: number; } | undefined; }`
+Returns `{ found: boolean; notFound?: string | undefined; asToken?: string | undefined; sceneId?: string | undefined; sceneName?: string | undefined; noteCount?: number | undefined; renderer?: string | undefined; dimensions?: { width: number; height: number; sceneX: number; sceneY: number; } | undefined; }`
 
 ### `fvtt.pullUsersToScene(args)`
 

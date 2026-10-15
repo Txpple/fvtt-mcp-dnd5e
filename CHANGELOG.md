@@ -64,6 +64,11 @@ What changed for a user of the tools and skills, release by release. The measure
   say the same.
 - **`npm test` ignores the gitignored `scratch/`.** A scratch `*.test.ts` left there on one machine
   was collected by the offline suite and changed the gate's count on that machine only.
+- **The `run-script` reference is held to the program.** `docs/run-script-api.md` is generated
+  from the page API and had gone stale with 4.6.0 (`screenshot-scene`'s page op gained `asToken`,
+  in its argument and its result), and nothing ran `scripts/measure/run-script-api.mjs --check`.
+  `npm test` runs it now (`src/run-script-api.test.ts`); the reference is regenerated
+  (`npm run api-doc`).
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 

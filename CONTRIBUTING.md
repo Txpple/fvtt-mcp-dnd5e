@@ -29,7 +29,10 @@ halves:
 3. **The page op** (`src/page/<domain>.ts`) — register it in `src/page/index.ts`. It runs *inside*
    the live Foundry page (the real `Document.create` / `update` / `delete`): browser + Foundry
    globals only, never Node or Playwright. Throw a coded `PageError` (`src/page/errors.ts`) — the
-   code rides to the tool as a `BridgeError` and the error mapper adds one hint per code.
+   code rides to the tool as a `BridgeError` and the error mapper adds one hint per code. Every
+   page op is also `fvtt.<name>` to a `run-script` program, so its public reference,
+   `docs/run-script-api.md`, is regenerated in the same commit (`npm run api-doc`); `npm test`
+   fails while the file is stale.
 4. **The result shape** — design.md §3: a list is one line per record with a header, a `get` is
    JSON, a mutation is a one-line confirmation, a miss is `isError`.
 5. **The prose budget and the context budgets** — a leaf `.describe()` ≤ 120 chars, a description
