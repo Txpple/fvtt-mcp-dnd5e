@@ -53,6 +53,15 @@ What changed for a user of the tools and skills, release by release. The measure
   `manage-journals` `delete-page` and `manage-placeables` `delete` now check that each document went
   and refuse naming the ones that did not (`[unsupported]`); a refused document is in no receipt,
   and the receipt of a batch keeps only the deletes that happened.
+- **design.md names the 4.x line** (the suite's review of 2026-10-15, decision 3). It and
+  CONTRIBUTING said the project had been in maintenance since 3.0.0 with no roadmap, while 4.x
+  shipped receipts and undo, `run-script`, the read-only mode, `init` and `doctor`, seat records,
+  the op cap, the lights whole and `asToken`, none of them written there. The feature line is open
+  behind a gate: a feature lands when it serves onboarding or the table and is written into
+  design.md before it is built; no live in-session assistant. design.md §4 gains a row per 4.x
+  capability and the three budgets, §8 the mechanisms (receipts, the script facade, the tool kinds,
+  the seat, the budgets), §1 and §9 the gate; CONTRIBUTING's opening, `CLAUDE.md` and `AGENTS.md`
+  say the same.
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 

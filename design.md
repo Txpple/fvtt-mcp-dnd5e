@@ -21,10 +21,16 @@ the world and writes the session diary through this MCP. It is a Foundry MCP
 It is user-facing: anyone can clone it and point it at their own world.
 
 **It does not run the game.** There is no live in-session assistant in this project — no event
-feed, no interjecting during play — by decision (owner, 2026-09-20). **3.0 was the last feature
-line** (shipped 2026-09-21; `docs/history/plan-3.0-consolidation.md`); the project is in
-maintenance: Foundry / dnd5e compatibility events, bug fixes, premium books brought into scope.
-There is no roadmap beyond it.
+feed, no interjecting during play, nothing that keeps a conversational assistant resident in the
+session — by the owner's decision, and no feature reopens it.
+
+**The feature line is open, behind a gate.** A feature lands when it serves **onboarding** (a DM
+getting from a clone to a working, safe registration on their own world) or **the table** (what a
+DM prepares a session with and keeps of it), and it is written into this document — a row in §4,
+a bullet in §8 for a mechanism — before it is built (§9). Compatibility events, bug fixes and
+premium books brought into scope (§2.3) pass without it. 3.0 consolidated the surface
+(`docs/history/plan-3.0-consolidation.md`); the 4.x line made it safe to share: receipts and undo,
+`run-script`, the read-only mode, `init` and `doctor`, the seat records and the op cap (§4, §8).
 
 **Where it stands today.** The content-creation building blocks are built — and, crucially, they
 *compose*. The same skills that make one scene or one NPC now assemble a **complete, table-ready
@@ -184,13 +190,25 @@ This is the architectural backbone that makes principle #1 real.
 | | **Rename** → `fvtt-mcp-dnd5e` (the host left the name; the system stayed) | ✅ done 2.2 |
 | | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/history/plan-3.0-consolidation.md` M1) |
 | | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `action`, every skill re-pointed in the same commit), owner content out, the user-facing docs | ✅ done 3.0.0, 2026-09-21 (`docs/history/plan-3.0-consolidation.md`; measured in `docs/history/architecture-review-2026-09.md`; `tools/list` 283,948 → 201,562, names ×2 11,147 → 6,153, 151 tools → 81) |
+| | **The three context budgets, each with its payer** — **per prompt** for a deferred client such as Claude Code (the tool names once per registration plus the skill descriptions), **per fetch** (the largest tool with its `anyOf` flattened the way that client shows it, and no key described in two shapes across a union's members), **the eager `tools/list`** with a row per toolset; `manage-placeables` carries each kind's entries on its own keys (`tiles` / `tilePatches` / `tileIds`, `lights` / `lightPatches` / `lightIds`, …, `tokenIds`), so the flattened view is right for every kind | ✅ done after 4.6.0 (`src/measure.test.ts`, §8; issue #18) |
+| **Onboarding & safety** (the 4.x line) | **Receipts and undo** — every write to the world's documents answers with a receipt holding the pre-images; `run-script { "undo": … }` reverses it, and an undo is a receipt of its own (a redo) | ✅ done 4.4.0 (§8) |
+| | **`run-script` and the `scripting` toolset** — a short program against `fvtt.*`, the page functions behind every tool: a loop or a bulk job in one round trip, its writes counted, capped and recorded, a dry run that stubs them; the reference (`docs/run-script-api.md`) generated from the program | ✅ done 4.4.0 (§8) |
+| | **The read-only mode** — `FOUNDRY_TOOLSETS=readonly` advertises every toolset's reads and refuses every other call by name before it runs; the join user's role is the boundary | ✅ done 4.4.0 (`src/tool-kinds.ts`) |
+| | **`npm run init` and `npm run doctor`** — from a built clone to a checked registration in one command; a setup checked line by line, safe against a live world (no launch, no wake) | ✅ done 4.2.0 (doctor), 4.4.0 (init) |
+| | **Seat records** — the bridge names its holder (pid, label, session, browser) on this machine and on its User; `disconnect-bridge { "all": true }` ends only a recorded browser; an idle bridge logs out | ✅ done 4.4.0 (`src/holders.ts`) |
+| | **The op cap** — a page op that hangs is asked whether the page still answers and closed when it does not; a write is never run twice after its page went away | ✅ done 4.4.0 (`src/op-cap.ts`) |
+| | **The bridge in `get-world-info`** — the server's version, the seat, the renderer, the family modules, the registration's toolsets, and a warning for whatever of it is amber | ✅ done 4.4.0 |
+| **The table** (the 4.x line) | **Lights read and written whole** — every field of the v14 AmbientLight reads back under the name its input takes, so a read row passes straight back as a patch | ✅ done 4.6.0 |
+| | **`screenshot-scene` `asToken`** — the player's view through a token (its vision, fog and lighting), so a light is judged the way the table sees it | ✅ done 4.6.0 |
 
-Legend: ✅ done · ➡️ moved to a sibling repo. There is no active line.
+Legend: ✅ done · ➡️ moved to a sibling repo. The line is open behind §1's gate: a row is written
+here before its feature is built.
 
 Every content building block is built, and they compose into **end-to-end adventures** (§1, §5) —
 from "here's a map, make me a module" to "here's my module, put it in the VTT." 3.0 made it cheap
-in context and the dnd5e MCP for anyone, and stopped: from here the §4 table only ever gains
-compatibility notes and premium books.
+in context and the dnd5e MCP for anyone; 4.x made it safe to hand to someone: a write answers with
+its receipt, a first registration can be read-only, and one command takes a clone to a checked
+registration. A row joins this table when it serves onboarding or the table (§1).
 
 ---
 
@@ -354,6 +372,33 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   parsed from the `page.evaluate` header; also on `fvtt-mcp-dnd5e/client`) →
   `src/utils/error-handler.ts` (one hint per code; no substring classifier). Proven live by
   `scripts/verify-error-contract.mjs`.
+- **Receipts.** The bridge reaches every page op through one choke point (`src/foundry.ts`); a
+  write runs under the page's write lock while Foundry's own document hooks record each document
+  it creates, updates or deletes, with the pre-image an undo needs (`src/page/_receipts.ts`). The
+  registry runs each tool call in a context of its own and keeps the call's writes as one receipt
+  on the bridge's machine (`src/receipts.ts`: under the OS temp dir, keyed by server URL and world
+  id, never applied to another world); the server appends the receipt's one line to the answer,
+  to an error's too when the call wrote before it failed. `run-script { "undo": … }` reverses a
+  receipt newest write first (`undoOps`). A sibling harness on `fvtt-mcp-dnd5e/client` runs no
+  call context and pays nothing. Proven live by `scripts/verify-receipts.mjs`.
+- **The script facade.** `src/page/run-script.ts` runs a program against `fvtt.*` with the page's
+  globals shadowed, its writes counted and capped by each op's tag (`src/page/_ops.ts`: read /
+  write / delete per op; an untagged op does not compile) and recorded into the call's receipt; a
+  dry run stubs the writes and lists them. It guards against accidents and is not a boundary: the
+  bridge user's role is. Its reference, `docs/run-script-api.md`, is generated from the program
+  (`scripts/measure/run-script-api.mjs`).
+- **Tool kinds.** `src/tool-kinds.ts` tags every tool read or write — per action, or per field,
+  where the call decides — and a tool missing from it fails the registry build. The read-only
+  registration's advertised list and its by-name refusals stand on it.
+- **The seat.** `src/holders.ts` keeps one record per bridge process (a file on this machine and a
+  flag on its User), so a second bridge on the seat names the first and `disconnect-bridge
+  { "all": true }` ends only a browser a record names; `src/op-cap.ts` caps a page op and asks a
+  slow page whether it still answers before it closes it.
+- **The budgets.** `src/measure.test.ts` prints and ratchets three context budgets, each with the
+  client that pays it: per prompt (the names once per registration plus the skill descriptions),
+  per fetch (the largest tool as a deferred client flattens it, and no lossy key), and the eager
+  `tools/list` with a ceiling per toolset. A change that adds advertised chars pays in its own
+  toolset's row or raises that row in the same commit, with the reason beside it.
 - **One registry.** `src/registry.ts` is the single source of truth wiring tool name → handler; the
   advertised tool list is derived from it so the two can't drift.
 - **Generated schemas.** Every tool's input schema is generated from one hoisted zod (`io: 'input'`)
@@ -377,11 +422,11 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 
 ## 9. How we use this document
 
-- **Before building**, locate the work on this page. If it isn't here, decide whether it's in scope —
-  and if so, add it here first. After 3.0 the answer is almost always "no": maintenance changes
-  what exists, it does not add. (The 2.1 line added three capability areas this way after the fact:
-  system automation settings + calendar (`configure-dnd5e-settings`, `manage-calendar`) and areas
-  with dnd5e behaviors (`add-region-behavior`, activity `behaviors`) — now rows in the §4 table.)
+- **Before building**, locate the work on this page. If it isn't here, it is built only if it passes
+  §1's gate — it serves onboarding or the table, and it keeps no assistant resident in the
+  session — and then it is written here first (a row in §4; a bullet in §8 for a mechanism), before
+  the code. A compatibility event, a bug fix or a premium book brought into scope needs no row. (The 2.1 and 4.x capabilities were written here after the
+  fact; the §4 rows that name them close that gap and are not the pattern.)
 - **When a skill and a tool seem to overlap**, re-read §2.1 and §3 and put each concern on the correct
   side.
 - **When tempted by a shortcut**, re-read §2.2.

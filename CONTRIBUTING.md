@@ -1,9 +1,11 @@
 # Contributing — the house rules
 
-Read [`design.md`](design.md) (binding) before changing tool behaviour. The project is in
-maintenance since 3.0.0 (2026-09-21): a change is a compatibility event, a bug fix, or a premium
-book brought into scope (design.md §1, §9) — there is no open tracker. The closed ones, with the
-numbers every gate below still ratchets against, are under [`docs/history/`](docs/history/README.md)
+Read [`design.md`](design.md) (binding) before changing tool behaviour. A change is a
+compatibility event, a bug fix, a premium book brought into scope, or a feature that passes
+design.md's gate (§1, §9): it serves onboarding or the table, it keeps no assistant resident in
+the session, and it is written into design.md before it is built. Open work is the repo's GitHub
+issues. The closed trackers, with the numbers every gate below still ratchets against, are under
+[`docs/history/`](docs/history/README.md)
 ([`plan-3.0-consolidation.md`](docs/history/plan-3.0-consolidation.md) and its measured basis,
 [`architecture-review-2026-09.md`](docs/history/architecture-review-2026-09.md)).
 [`docs/RELEASE.md`](docs/RELEASE.md) is the release gate. A gitignored `LOCAL.md` holds the real
