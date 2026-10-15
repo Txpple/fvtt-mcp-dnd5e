@@ -34,7 +34,12 @@ halves:
    `docs/run-script-api.md`, is regenerated in the same commit (`npm run api-doc`); `npm test`
    fails while the file is stale.
 4. **The result shape** — design.md §3: a list is one line per record with a header, a `get` is
-   JSON, a mutation is a one-line confirmation, a miss is `isError`.
+   JSON, a mutation is a one-line confirmation, a miss is `isError` (a tool's own refusal throws a
+   coded `ToolError`, never a "Refused: …" string). A write that can change what no receipt holds
+   (a file in `Data/`, a player's view) carries the `NO_RECEIPT` tag (`src/tool-kinds.ts`) and calls
+   `noteUnrecorded()` once it did; `src/tools/registry.test.ts` lists every write tool in the tagged
+   or the recorded set, so a new one is placed there by hand. A write resolves a fuzzy identifier
+   with `mode: 'write'` (`resolveActorFuzzy`, `resolveUser`): a tie is refused, never picked.
 5. **The prose budget and the context budgets** — a leaf `.describe()` ≤ 120 chars, a description
    ≤ 400, no tours of sibling tools, no Foundry-internals asides (the skills carry those). `npm test`
    prints three context budgets, each with the client that pays it, and fails when one climbs past
