@@ -36,7 +36,7 @@ import { join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
 import { Foundry } from '../dist/foundry.js';
 import { Logger } from '../dist/logger.js';
-import { UNRECORDED } from '../dist/page/_receipts.js';
+import { effectiveOps, UNRECORDED } from '../dist/page/_receipts.js';
 import { callContext, receiptsDir, receiptWorldKey, saveReceipt } from '../dist/receipts.js';
 import { buildToolRegistry } from '../dist/registry.js';
 import { bridgeConfig } from './lib/bridge-config.mjs';
@@ -351,16 +351,25 @@ try {
     acceptDefaults: true,
     defaultArt: false,
   });
+  // What the build created: the actor, and the PC folder when the world had none yet (a world
+  // that has it creates the actor alone). Never the advancement switch.
+  // the receipt's own view (effectiveOps): what the build made and removed again (its temp actor) is nothing
+  const pcOps = effectiveOps((pc.id && stored(pc.id)?.ops) || []);
+  const pcCreated = pcOps.filter(o => o.kind === 'create');
   check(
-    'create-pc answers a receipt with the actor only, not the dnd5e.disableAdvancements switch (4.4.1)',
-    !!pc.id && /1 created/.test(pc.line) && !/Setting/.test(pc.line),
-    pc.line
+    'create-pc answers a receipt with the actor (and a new PC folder) only, not the dnd5e.disableAdvancements switch (4.4.1)',
+    !!pc.id &&
+      pcCreated.filter(o => o.documentName === 'Actor').length === 1 &&
+      pcCreated.every(o => o.documentName === 'Actor' || o.documentName === 'Folder') &&
+      !pcOps.some(o => o.documentName === 'Setting') &&
+      !/Setting/.test(pc.line),
+    `${pc.line} | created ${pcCreated.map(o => o.documentName).join(', ')}`
   );
   if (pc.id) {
     const pcUndo = await undo(pc.id);
     check(
-      'undoing the PC build removes the actor and touches no setting',
-      /1 deleted/.test(pcUndo.line) &&
+      'undoing the PC build removes what it created and touches no setting',
+      new RegExp(`${pcCreated.length} deleted \\(Actor "${TAG} PC"`).test(pcUndo.line) &&
         !/Setting/.test(pcUndo.line) &&
         (await actorsNamed(`${TAG} PC`)).length === 0,
       pcUndo.line

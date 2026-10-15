@@ -382,7 +382,11 @@ try {
   // list: one line per record under the column header; the id we made is a row
   const gColumns = {
     tiles: 'id x y width height rotation elevation sort hidden locked src scaleX scaleY',
-    lights: 'id x y rotation hidden walls vision dim bright color angle animation',
+    // the light read whole: every field under its input's name (src/page/placeables/light.ts)
+    lights:
+      'id x y rotation hidden walls vision dim bright color angle alpha luminosity attenuation ' +
+      'animation animationSpeed animationIntensity darknessMin darknessMax coloration saturation ' +
+      'contrast shadows negative priority animationReverse elevation locked',
     walls: 'id c move sight light sound dir door ds',
     drawings: 'id x y shapeType width height rotation elevation sort text fillType strokeColor',
     sounds: 'id x y radius path volume repeat walls easing hidden',
@@ -426,7 +430,12 @@ try {
       head.startsWith(
         `${rows.length} ${kind.slice(0, -1)}(s) on "${TAG} Scene" (${sceneId}): ${columns}`
       ),
-      `G — list ${kind}: header names the scene and the column order (${head.slice(0, 70)}…)`
+      `G — list ${kind}: header names the scene and the column order (${head.slice(0, 70)}…)` +
+        (head.startsWith(
+          `${rows.length} ${kind.slice(0, -1)}(s) on "${TAG} Scene" (${sceneId}): ${columns}`
+        )
+          ? ''
+          : `\n        got:  ${head}\n        want: …: ${columns}`)
     );
     const row = rows.find(r => r.startsWith(`${gIds[kind]} `));
     assert(row, `G — list ${kind}: the created id is a row (${row})`);
