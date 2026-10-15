@@ -158,8 +158,8 @@ const CREATE_PC_DESCRIPTION =
   'Build a PC (type:character) from class + species + background by name through dnd5e ' +
   'advancement. Missing choices → a needsChoices[] dry run, nothing created (unless ' +
   'acceptDefaults). `level` 1–20, `multiclass` in one call, `spells` by name. A failed required ' +
-  'advancement persists nothing. Premium packs only. Returns {success, actor, applied, ' +
-  'needsChoices, unresolvedScale, errors, warnings}.';
+  'advancement is an error and persists nothing. Premium packs only. Returns {success, actor, ' +
+  'applied, needsChoices, unresolvedScale, warnings}.';
 
 const INSPECT_PC_ADVANCEMENT_DESCRIPTION =
   'Read-only: the choice points a class exposes up to a level — each advancement id, type ' +
@@ -175,7 +175,7 @@ const LEVEL_UP_PC_DESCRIPTION =
   'Add one level to a PC in place: a class it has levels up, one it lacks is a multiclass add ' +
   '(2024 proficiency subset). Missing choices → a needsChoices[] dry run, actor untouched. ASI ' +
   'bumps and feats are not applied (manage-actors update / add-feature). A failed required advancement is ' +
-  'rolled back. Returns {success, actor, applied, needsChoices, unresolvedScale, errors, warnings}.';
+  'rolled back and an error. Returns {success, actor, applied, needsChoices, unresolvedScale, warnings}.';
 
 // ---------------------------------------------------------------------------
 // Options interface
@@ -307,23 +307,8 @@ export class DnD5ePcTools {
   }
 
   private formatPcResponse(result: any, params: any): any {
-    // Corrupting advancement failure: the engine refused to persist a broken PC (nothing was created).
-    if (result?.success === false && Array.isArray(result?.errors) && result.errors.length > 0) {
-      const summary = `❌ "${params.name}" was NOT created — ${result.errors.length} advancement(s) failed`;
-      return {
-        summary,
-        success: false,
-        errors: result.errors,
-        applied: result.applied ?? [],
-        warnings: result.warnings ?? [],
-        message:
-          `${summary} (nothing was persisted — no junk actor).\n\n${result.errors
-            .map((e: string) => `- ${e}`)
-            .join('\n')}\n\n` +
-          'Fix the inputs (e.g. a bad subclass/choice uuid, or a class/feature the books reject) and ' +
-          're-call create-pc.',
-      };
-    }
+    // A corrupting advancement failure never reaches here: the page throws `rolled-back` (nothing
+    // was persisted), which the error mapper answers as an error with its hint.
 
     // Dry-run / under-specified: required choices missing, nothing persisted.
     if (result?.success === false && Array.isArray(result?.needsChoices)) {
@@ -439,22 +424,8 @@ export class DnD5ePcTools {
   }
 
   private formatLevelUpResponse(result: any, params: any): any {
-    // Corrupting advancement failure: the engine rolled the PC back to its prior level.
-    if (result?.success === false && Array.isArray(result?.errors) && result.errors.length > 0) {
-      const summary = `❌ "${params.actorIdentifier}" was NOT leveled — ${result.errors.length} advancement(s) failed`;
-      return {
-        summary,
-        success: false,
-        errors: result.errors,
-        applied: result.applied ?? [],
-        warnings: result.warnings ?? [],
-        message:
-          `${summary} (the PC was rolled back to its prior level).\n\n${result.errors
-            .map((e: string) => `- ${e}`)
-            .join('\n')}\n\n` +
-          'Fix the inputs (e.g. a bad subclass/choice uuid) and re-call level-up-pc.',
-      };
-    }
+    // A corrupting advancement failure never reaches here: the page rolls the PC back and throws
+    // `rolled-back` (or, when the rollback was incomplete, its own words), answered as an error.
 
     // Under-specified (e.g. a subclass pick missing at level 3): nothing was changed.
     if (result?.success === false && Array.isArray(result?.needsChoices)) {

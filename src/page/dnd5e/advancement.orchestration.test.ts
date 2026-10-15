@@ -7,6 +7,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { createPcActor, levelUpPc } from './advancement.js';
 import { installFoundryMock, type FakeDocSpec, type MockHandle } from './foundry-doc-mock.js';
+import { PageError } from '../errors.js';
 
 const PACK = 'dnd-players-handbook.classes';
 
@@ -59,7 +60,6 @@ describe('createPcActor orchestration', () => {
     });
 
     expect(res.success).toBe(true);
-    expect(res.errors ?? []).toEqual([]);
     expect(mock.persistedActorCount()).toBe(1); // the temp build actor was cleaned up
     expect(res.actor?.hp).toBe(10);
 
@@ -166,23 +166,24 @@ describe('createPcActor orchestration', () => {
     expect(res.actor.folder).toBe('fold-DM');
   });
 
-  it('does NOT persist and returns success:false + errors when a forced advancement throws', async () => {
+  it('does NOT persist and throws rolled-back when a forced advancement throws', async () => {
     const broken = fighter();
     broken.advancements = [
       { id: 'hp1', type: 'HitPoints', title: 'Hit Points', levels: [1], throws: true },
     ];
     mock = installFoundryMock([broken]);
 
-    const res: any = await createPcActor({
+    const err: any = await createPcActor({
       name: 'Doomed',
       className: 'Fighter',
       level: 1,
       folder: 'fixed-folder',
-    });
+    }).catch(e => e);
 
-    expect(res.success).toBe(false);
-    expect((res.errors ?? []).length).toBeGreaterThan(0);
-    expect(res.actor).toBeUndefined();
+    // a refused build is an error (design.md §3), coded rolled-back: nothing of it persists
+    expect(err).toBeInstanceOf(PageError);
+    expect(err.code).toBe('rolled-back');
+    expect(err.message).toMatch(/^"Doomed" was not created: 1 advancement\(s\) failed — /);
     // No junk actor: the temp build actor was deleted in finally and nothing was persisted.
     expect(mock.persistedActorCount()).toBe(0);
   });
@@ -200,7 +201,7 @@ describe('levelUpPc orchestration', () => {
     return res.actor.id;
   }
 
-  it('rolls back the class bump and returns success:false when the new level errors', async () => {
+  it('rolls back the class bump and throws rolled-back when the new level errors', async () => {
     // Fighter L2 advancement throws; L1 is clean so the initial build succeeds.
     mock = installFoundryMock([
       fighter({
@@ -220,10 +221,13 @@ describe('levelUpPc orchestration', () => {
     ]);
     const id = await buildL1();
 
-    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' });
+    const err: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' }).catch(e => e);
 
-    expect(res.success).toBe(false);
-    expect((res.errors ?? []).length).toBeGreaterThan(0);
+    expect(err).toBeInstanceOf(PageError);
+    expect(err.code).toBe('rolled-back');
+    expect(err.message).toMatch(
+      /was not leveled: 1 advancement\(s\) failed — .*put back to its prior level/
+    );
     // Rollback: the existing class level was reverted (updateEmbeddedDocuments back to level 1).
     const reverted = mock.calls().some(c => c.op === 'updateEmbeddedDocuments' && c.actor === id);
     expect(reverted).toBe(true);
@@ -247,9 +251,9 @@ describe('levelUpPc orchestration', () => {
     ]);
     const id = await buildL1();
 
-    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Wizard' });
+    const err: any = await levelUpPc({ actorIdentifier: id, className: 'Wizard' }).catch(e => e);
 
-    expect(res.success).toBe(false);
+    expect(err?.code).toBe('rolled-back');
     // Rollback of a multiclass add deletes the just-embedded class item.
     const deleted = mock.calls().some(c => c.op === 'deleteEmbeddedDocuments' && c.actor === id);
     expect(deleted).toBe(true);

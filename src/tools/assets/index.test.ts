@@ -47,6 +47,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AssetFileTools, joinRemote, matchesIncludeExt } from './index.js';
 import { buildPublicUrl } from '../../hosts/paths.js';
+import { FilePlaneError } from '../../hosts/types.js';
 
 const makeLogger = (): any => {
   const l: any = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -151,33 +152,43 @@ describe('asset-url (pure mapping, no network)', () => {
   });
 });
 
+/** A refusal is an error with a code (design.md §3), never a success-shaped "Refused: …" string. */
+const refused = (code: string, words: RegExp) => ({
+  code,
+  message: expect.stringMatching(words),
+});
+
 describe('world-DB write refusal (corruption guard)', () => {
   const DB_PATH = 'worlds/my-world/data/actors.db';
 
   it('upload-asset refuses a live world-DB path BEFORE any WebDAV call', async () => {
-    const out = await build().handleUploadAsset({ localPath: '/tmp/x', remotePath: DB_PATH });
-    expect(out).toMatch(/Refused/);
-    expect(out).toMatch(/LevelDB/);
+    await expect(
+      build().handleUploadAsset({ localPath: '/tmp/x', remotePath: DB_PATH })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
     expect(davInstance.putFile).not.toHaveBeenCalled();
   });
 
   it('create-asset-folder refuses a live world-DB path', async () => {
-    const out = await build().handleCreateAssetFolder({ remotePath: 'worlds/w/data/sub' });
-    expect(out).toMatch(/Refused/);
+    await expect(
+      build().handleCreateAssetFolder({ remotePath: 'worlds/w/data/sub' })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
     expect(davInstance.mkcol).not.toHaveBeenCalled();
   });
 
   it('delete-asset refuses a live world-DB path', async () => {
-    const out = await build().handleDeleteAsset({ remotePath: DB_PATH });
-    expect(out).toMatch(/Refused/);
+    await expect(build().handleDeleteAsset({ remotePath: DB_PATH })).rejects.toMatchObject(
+      refused('invalid', /LevelDB/)
+    );
     expect(davInstance.delete).not.toHaveBeenCalled();
   });
 
   it('move-asset refuses when either endpoint is a world-DB path', async () => {
-    const fromBad = await build().handleMoveAsset({ fromPath: DB_PATH, toPath: 'assets/x' });
-    expect(fromBad).toMatch(/Refused/);
-    const toBad = await build().handleMoveAsset({ fromPath: 'assets/x', toPath: DB_PATH });
-    expect(toBad).toMatch(/Refused/);
+    await expect(
+      build().handleMoveAsset({ fromPath: DB_PATH, toPath: 'assets/x' })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
+    await expect(
+      build().handleMoveAsset({ fromPath: 'assets/x', toPath: DB_PATH })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
     expect(davInstance.move).not.toHaveBeenCalled();
   });
 
@@ -225,7 +236,7 @@ describe('world-DB write refusal (corruption guard)', () => {
     const out = await build().handleCreateAssetFolder({
       remotePath: 'worlds/w/assets/audio',
     });
-    expect(out).not.toMatch(/Refused/);
+    expect(out).toBe('Created folder Data/worlds/w/assets/audio.');
     expect(davInstance.mkcol).toHaveBeenCalled();
   });
 
@@ -242,14 +253,16 @@ describe('world-DB write refusal (corruption guard)', () => {
   });
 
   it('refuses the bare world-data DIRECTORY itself (worlds/<w>/data)', async () => {
-    const out = await build().handleCreateAssetFolder({ remotePath: 'worlds/w/data' });
-    expect(out).toMatch(/Refused/);
+    await expect(
+      build().handleCreateAssetFolder({ remotePath: 'worlds/w/data' })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
     expect(davInstance.mkcol).not.toHaveBeenCalled();
   });
 
   it('refuses a `.`-segment path that canonicalizes into the world DB', async () => {
-    const out = await build().handleDeleteAsset({ remotePath: 'worlds/w/./data/actors.db' });
-    expect(out).toMatch(/Refused/);
+    await expect(
+      build().handleDeleteAsset({ remotePath: 'worlds/w/./data/actors.db' })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
     expect(davInstance.delete).not.toHaveBeenCalled();
   });
 });
@@ -284,14 +297,15 @@ describe("no direct plane → the bridge plane (Foundry's FilePicker through the
         throw new Error(`unexpected ${name}`);
       }),
     };
-    const out = await build({ configured: false, foundry }).handleDeleteAsset({
-      remotePath: 'assets/x.png',
-    });
-    expect(out).toMatch(
-      /delete-asset failed: cannot delete "Data\/assets\/x.png" through the bridge plane/
-    );
-    expect(out).toMatch(/FOUNDRY_DATA_DIR/);
-    expect(out).toMatch(/FOUNDRY_WEBDAV_URL/);
+    // the plane's own refusal (501, an operation it does not have) propagates to the mapper
+    const err: any = await build({ configured: false, foundry })
+      .handleDeleteAsset({ remotePath: 'assets/x.png' })
+      .catch(e => e);
+    expect(err).toBeInstanceOf(FilePlaneError);
+    expect(err.status).toBe(501);
+    expect(err.message).toMatch(/cannot delete "Data\/assets\/x.png" through the bridge plane/);
+    expect(err.message).toMatch(/FOUNDRY_DATA_DIR/);
+    expect(err.message).toMatch(/FOUNDRY_WEBDAV_URL/);
   });
 });
 
@@ -311,9 +325,9 @@ describe('reference-aware delete-asset', () => {
         },
       })),
     };
-    const out = await build({ foundry }).handleDeleteAsset({ remotePath: 'assets/x.png' });
-    expect(out).toMatch(/still referenced/);
-    expect(out).toMatch(/Scene "Cave"/);
+    await expect(
+      build({ foundry }).handleDeleteAsset({ remotePath: 'assets/x.png' })
+    ).rejects.toMatchObject(refused('invalid', /still referenced[\s\S]*Scene "Cave"/));
     expect(davInstance.delete).not.toHaveBeenCalled();
   });
 
@@ -324,9 +338,17 @@ describe('reference-aware delete-asset', () => {
       isDirectory: false,
     });
     // no foundry → findReferences returns checked:false
-    const out = await build().handleDeleteAsset({ remotePath: 'assets/x.png' });
-    expect(out).toMatch(/couldn't verify references/);
+    await expect(build().handleDeleteAsset({ remotePath: 'assets/x.png' })).rejects.toMatchObject(
+      refused('connection', /Couldn't verify references/)
+    );
     expect(davInstance.delete).not.toHaveBeenCalled();
+  });
+
+  it('a path that is not there is a not-found error, not a success line', async () => {
+    davInstance.stat.mockResolvedValue(null);
+    await expect(
+      build().handleDeleteAsset({ remotePath: 'assets/gone.png' })
+    ).rejects.toMatchObject(refused('not-found', /does not exist/));
   });
 
   it('deletes when no references exist', async () => {
@@ -360,10 +382,9 @@ describe('reference-aware delete-asset', () => {
 
   it('refuses a directory delete unless recursive:true', async () => {
     davInstance.stat.mockResolvedValue({ path: 'assets/dir', name: 'dir', isDirectory: true });
-    const out = await build({ foundry: { call: vi.fn() } }).handleDeleteAsset({
-      remotePath: 'assets/dir',
-    });
-    expect(out).toMatch(/recursive:true/);
+    await expect(
+      build({ foundry: { call: vi.fn() } }).handleDeleteAsset({ remotePath: 'assets/dir' })
+    ).rejects.toMatchObject(refused('invalid', /recursive:true/));
     expect(davInstance.delete).not.toHaveBeenCalled();
   });
 });
@@ -378,11 +399,19 @@ describe('upload-asset happy path', () => {
   it('refuses to overwrite an existing file unless overwrite:true', async () => {
     // readFile of a real-ish path: use this test file itself so readFile succeeds.
     davInstance.exists.mockResolvedValue(true);
-    const out = await build().handleUploadAsset({
-      localPath: __filename,
-      remotePath: 'assets/x.png',
-    });
-    expect(out).toMatch(/already exists/);
+    await expect(
+      build().handleUploadAsset({ localPath: __filename, remotePath: 'assets/x.png' })
+    ).rejects.toMatchObject(refused('invalid', /already exists.*overwrite:true/));
+    expect(davInstance.putFile).not.toHaveBeenCalled();
+  });
+
+  it('a local file that is not there is a not-found error', async () => {
+    await expect(
+      build().handleUploadAsset({
+        localPath: join(tmpdir(), 'no-such-file-for-upload.png'),
+        remotePath: 'assets/x.png',
+      })
+    ).rejects.toMatchObject(refused('not-found', /Cannot read local file/));
     expect(davInstance.putFile).not.toHaveBeenCalled();
   });
 });
@@ -445,28 +474,54 @@ describe('upload-asset-tree', () => {
   });
 
   it('refuses a live world-DB remoteRoot before any upload', async () => {
-    const out = await build().handleUploadAssetTree({
-      localRoot: root,
-      remoteRoot: 'worlds/w/data',
-    });
-    expect(out).toMatch(/Refused/);
+    await expect(
+      build().handleUploadAssetTree({ localRoot: root, remoteRoot: 'worlds/w/data' })
+    ).rejects.toMatchObject(refused('invalid', /LevelDB/));
     expect(davInstance.putFile).not.toHaveBeenCalled();
   });
 
   it('errors clearly when the local directory is missing', async () => {
-    const out = await build().handleUploadAssetTree({
-      localRoot: join(root, 'does-not-exist'),
-      remoteRoot: 'worlds/w/tiles',
-    });
-    expect(out).toMatch(/Cannot read local directory/);
+    await expect(
+      build().handleUploadAssetTree({
+        localRoot: join(root, 'does-not-exist'),
+        remoteRoot: 'worlds/w/tiles',
+      })
+    ).rejects.toMatchObject(refused('not-found', /Cannot read local directory/));
+  });
+
+  it('a filter that matches nothing is a not-found error', async () => {
+    await expect(
+      build().handleUploadAssetTree({
+        localRoot: root,
+        remoteRoot: 'worlds/w/tiles',
+        includeExt: ['ogg'],
+      })
+    ).rejects.toMatchObject(refused('not-found', /No files matching \{ogg\}/));
   });
 });
 
 describe('list-assets formatting', () => {
   it('reports not-found when the plane says the directory is absent', async () => {
     davInstance.list.mockResolvedValue(null);
-    const out = await build().handleListAssets({ remotePath: 'ghost' });
-    expect(out).toMatch(/does not exist/);
+    await expect(build().handleListAssets({ remotePath: 'ghost' })).rejects.toMatchObject(
+      refused('not-found', /does not exist/)
+    );
+  });
+
+  it('asset-info: a path that is not there is a not-found error', async () => {
+    davInstance.stat.mockResolvedValue(null);
+    await expect(build().handleAssetInfo({ remotePath: 'nope.png' })).rejects.toMatchObject(
+      refused('not-found', /"Data\/nope\.png" does not exist/)
+    );
+  });
+
+  it('copy-asset: an existing destination without overwrite is refused as invalid', async () => {
+    davInstance.stat.mockResolvedValue({ path: 'a.png', name: 'a.png', isDirectory: false });
+    davInstance.exists.mockResolvedValue(true);
+    await expect(
+      build().handleCopyAsset({ fromPath: 'a.png', toPath: 'b.png' })
+    ).rejects.toMatchObject(refused('invalid', /already exists/));
+    expect(davInstance.copy).not.toHaveBeenCalled();
   });
 
   it('lists children (folders first) with a count summary', async () => {

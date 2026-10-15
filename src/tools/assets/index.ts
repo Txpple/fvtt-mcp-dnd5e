@@ -12,7 +12,8 @@ import {
   toDataRelative,
   worldDbRefusal as refuseWorldDb,
 } from '../../hosts/paths.js';
-import { fileErrorMessage } from './access.js';
+import { localError, readLocal } from './access.js';
+import { ToolError } from '../../utils/error-handler.js';
 import { toInputSchema } from '../../utils/schema.js';
 
 /**
@@ -246,71 +247,57 @@ export class AssetFileTools {
   }
 
   // --- handlers -------------------------------------------------------------
+  //
+  // A miss or a refusal is an error (design.md §3): a handler throws a coded ToolError, and a file
+  // plane's own failure (FilePlaneError) propagates, coded by its status, to the central mapper.
+  // Only what the call did comes back as text.
 
   async handleListAssets(args: any): Promise<string> {
     const { remotePath } = ListAssetsSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-    const plane = this.plane;
-
-    try {
-      const children = await plane.list(clean);
-      if (children === null) {
-        return `Not found: "Data/${clean}" does not exist (or is not a directory).`;
-      }
-      if (children.length === 0) {
-        return `Data/${clean || '(root)'} is empty.`;
-      }
-      children.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-      const lines = children.map(e => this.formatEntryLine(e));
-      const dirs = children.filter(e => e.isDirectory).length;
-      const files = children.length - dirs;
-      return `Data/${clean || '(root)'} — ${dirs} folder(s), ${files} file(s):\n${lines.join('\n')}`;
-    } catch (err) {
-      return this.fileError('list-assets', err);
+    const children = await this.plane.list(clean);
+    if (children === null) {
+      throw new ToolError('not-found', `"Data/${clean}" does not exist (or is not a directory).`);
     }
+    if (children.length === 0) {
+      return `Data/${clean || '(root)'} is empty.`;
+    }
+    children.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    const lines = children.map(e => this.formatEntryLine(e));
+    const dirs = children.filter(e => e.isDirectory).length;
+    const files = children.length - dirs;
+    return `Data/${clean || '(root)'} — ${dirs} folder(s), ${files} file(s):\n${lines.join('\n')}`;
   }
 
   async handleAssetInfo(args: any): Promise<string> {
     const { remotePath } = AssetInfoSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-    const plane = this.plane;
-
-    try {
-      const entry = await plane.stat(clean);
-      if (!entry) return `Does not exist: "Data/${clean}".`;
-      if (entry.isDirectory) {
-        return `Data/${clean} — FOLDER${entry.lastModified ? ` (modified ${entry.lastModified})` : ''}.`;
-      }
-      const parts = [
-        `Data/${clean} — FILE`,
-        entry.size !== undefined ? `size ${humanSize(entry.size)} (${entry.size} B)` : null,
-        entry.contentType ? `type ${entry.contentType}` : null,
-        entry.lastModified ? `modified ${entry.lastModified}` : null,
-        `public URL: ${this.host.publicUrl(clean)}`,
-      ].filter(Boolean);
-      return parts.join('\n  ');
-    } catch (err) {
-      return this.fileError('asset-info', err);
+    const entry = await this.plane.stat(clean);
+    if (!entry) throw new ToolError('not-found', `"Data/${clean}" does not exist.`);
+    if (entry.isDirectory) {
+      return `Data/${clean} — FOLDER${entry.lastModified ? ` (modified ${entry.lastModified})` : ''}.`;
     }
+    const parts = [
+      `Data/${clean} — FILE`,
+      entry.size !== undefined ? `size ${humanSize(entry.size)} (${entry.size} B)` : null,
+      entry.contentType ? `type ${entry.contentType}` : null,
+      entry.lastModified ? `modified ${entry.lastModified}` : null,
+      `public URL: ${this.host.publicUrl(clean)}`,
+    ].filter(Boolean);
+    return parts.join('\n  ');
   }
 
   async handleDownloadAsset(args: any): Promise<string> {
     const { remotePath, localPath } = DownloadAssetSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-    const plane = this.plane;
-
-    try {
-      const bytes = await plane.read(clean);
-      await mkdir(dirname(localPath), { recursive: true });
-      await writeFile(localPath, bytes);
-      this.logger.info('download-asset', { remotePath: clean, localPath, bytes: bytes.length });
-      return `Downloaded Data/${clean} → "${localPath}" (${humanSize(bytes.length)}, ${bytes.length} B).`;
-    } catch (err) {
-      return this.fileError('download-asset', err);
-    }
+    const bytes = await this.plane.read(clean);
+    await mkdir(dirname(localPath), { recursive: true });
+    await writeFile(localPath, bytes);
+    this.logger.info('download-asset', { remotePath: clean, localPath, bytes: bytes.length });
+    return `Downloaded Data/${clean} → "${localPath}" (${humanSize(bytes.length)}, ${bytes.length} B).`;
   }
 
   async handleUploadAsset(args: any): Promise<string> {
@@ -318,39 +305,26 @@ export class AssetFileTools {
     const clean = toDataRelative(remotePath);
 
     // Guard against the cardinal Plane-B sin: writing into a live world's LevelDB store.
-    if (this.looksLikeWorldDbPath(clean)) {
-      return this.worldDbRefusal(remotePath);
-    }
-
+    this.refuseWorldDb(clean, remotePath);
     const plane = this.plane;
+    const bytes = await readLocal(localPath, 'local file');
 
-    let bytes: Uint8Array;
-    try {
-      bytes = await readFile(localPath);
-    } catch (err) {
-      return `Cannot read local file "${localPath}": ${(err as Error).message}`;
-    }
-
-    try {
-      if (!overwrite && (await plane.exists(clean))) {
-        return (
-          `Refused: "Data/${clean}" already exists. Pass overwrite:true to replace it ` +
-          '(or choose a different remotePath).'
-        );
-      }
-      await plane.ensureParents(clean);
-      await plane.write(clean, bytes, guessContentType(localPath));
-      const publicUrl = this.host.publicUrl(clean);
-      this.logger.info('upload-asset', { localPath, remotePath: clean, bytes: bytes.length });
-      return (
-        `Uploaded "${localPath}" (${humanSize(bytes.length)}) → Data/${clean}.\n` +
-        `  Data-relative path: ${clean}\n` +
-        `  Public URL: ${publicUrl}\n` +
-        '  NOTE: this URL is publicly accessible with no auth — do not upload anything sensitive.'
+    if (!overwrite && (await plane.exists(clean))) {
+      throw new ToolError(
+        'invalid',
+        `"Data/${clean}" already exists. Pass overwrite:true to replace it (or choose a different remotePath).`
       );
-    } catch (err) {
-      return this.fileError('upload-asset', err);
     }
+    await plane.ensureParents(clean);
+    await plane.write(clean, bytes, guessContentType(localPath));
+    const publicUrl = this.host.publicUrl(clean);
+    this.logger.info('upload-asset', { localPath, remotePath: clean, bytes: bytes.length });
+    return (
+      `Uploaded "${localPath}" (${humanSize(bytes.length)}) → Data/${clean}.\n` +
+      `  Data-relative path: ${clean}\n` +
+      `  Public URL: ${publicUrl}\n` +
+      '  NOTE: this URL is publicly accessible with no auth — do not upload anything sensitive.'
+    );
   }
 
   async handleUploadAssetTree(args: any): Promise<string> {
@@ -360,8 +334,7 @@ export class AssetFileTools {
     const root = toDataRelative(remoteRoot);
 
     // The root guard covers the whole subtree (every leaf is remoteRoot/<rel>, no `..`).
-    if (this.looksLikeWorldDbPath(root)) return this.worldDbRefusal(remoteRoot);
-
+    this.refuseWorldDb(root, remoteRoot);
     const plane = this.plane;
 
     // Enumerate local files (recursive). A missing/non-directory localRoot is a clear up-front error.
@@ -373,12 +346,12 @@ export class AssetFileTools {
         // Dirent.parentPath (Node 20.12+); fall back to the deprecated .path for safety.
         .map(e => join((e as any).parentPath ?? (e as any).path, e.name));
     } catch (err) {
-      return `Cannot read local directory "${localRoot}": ${(err as Error).message}`;
+      throw localError(`Cannot read local directory "${localRoot}"`, err);
     }
 
     if (files.length === 0) {
       const filt = includeExt?.length ? ` matching {${includeExt.join(', ')}}` : '';
-      return `No files${filt} found under "${localRoot}".`;
+      throw new ToolError('not-found', `No files${filt} found under "${localRoot}".`);
     }
 
     let uploaded = 0;
@@ -416,7 +389,7 @@ export class AssetFileTools {
       `  Public root: ${this.host.publicUrl(root)}`,
       '  NOTE: anything under Data/ is publicly accessible with no auth — do not upload anything sensitive.',
     ];
-    for (const e of errors.slice(0, 20)) lines.push(`  ⚠ ${e}`);
+    for (const e of errors.slice(0, 20)) lines.push(`  failed: ${e}`);
     if (errors.length > 20) lines.push(`  …and ${errors.length - 20} more error(s)`);
     return lines.join('\n');
   }
@@ -424,141 +397,140 @@ export class AssetFileTools {
   async handleCreateAssetFolder(args: any): Promise<string> {
     const { remotePath } = CreateAssetFolderSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-
-    if (this.looksLikeWorldDbPath(clean)) {
-      return this.worldDbRefusal(remotePath);
-    }
-
+    this.refuseWorldDb(clean, remotePath);
     const plane = this.plane;
 
-    try {
-      const existing = await plane.stat(clean);
-      if (existing) {
-        if (existing.isDirectory) return `Already exists: folder Data/${clean}.`;
-        return `Refused: "Data/${clean}" already exists as a FILE, not a folder.`;
-      }
-      await plane.ensureParents(clean); // create any missing parents above the target
-      await plane.mkdir(clean); // then the target folder itself
-      this.logger.info('create-asset-folder', { remotePath: clean });
-      return `Created folder Data/${clean}.`;
-    } catch (err) {
-      return this.fileError('create-asset-folder', err);
+    const existing = await plane.stat(clean);
+    if (existing) {
+      if (existing.isDirectory) return `Already exists: folder Data/${clean}.`;
+      throw new ToolError('invalid', `"Data/${clean}" already exists as a FILE, not a folder.`);
     }
+    await plane.ensureParents(clean); // create any missing parents above the target
+    await plane.mkdir(clean); // then the target folder itself
+    this.logger.info('create-asset-folder', { remotePath: clean });
+    return `Created folder Data/${clean}.`;
   }
 
   async handleDeleteAsset(args: any): Promise<string> {
     const { remotePath, recursive, force } = DeleteAssetSchema.parse(args ?? {});
     const clean = toDataRelative(remotePath);
-
-    if (this.looksLikeWorldDbPath(clean)) return this.worldDbRefusal(remotePath);
+    this.refuseWorldDb(clean, remotePath);
     const plane = this.plane;
 
-    try {
-      const entry = await plane.stat(clean);
-      if (!entry) return `Nothing to delete: "Data/${clean}" does not exist.`;
+    const entry = await plane.stat(clean);
+    if (!entry)
+      throw new ToolError('not-found', `Nothing to delete: "Data/${clean}" does not exist.`);
 
-      if (entry.isDirectory && !recursive) {
-        return (
-          `Refused: "Data/${clean}" is a directory. Pass recursive:true to delete it and everything ` +
-          'inside (deliberately not the default).'
+    if (entry.isDirectory && !recursive) {
+      throw new ToolError(
+        'invalid',
+        `"Data/${clean}" is a directory. Pass recursive:true to delete it and everything inside ` +
+          '(deliberately not the default).'
+      );
+    }
+
+    if (!force) {
+      if (entry.isDirectory) {
+        throw new ToolError(
+          'invalid',
+          "Directory deletes can't be reference-checked per-file. Re-run with force:true if you " +
+            'are sure nothing in it is still used by a scene/actor/journal/playlist.'
         );
       }
-
-      if (!force) {
-        if (entry.isDirectory) {
-          return (
-            `Refused: directory deletes can't be reference-checked per-file. Re-run with force:true ` +
-            'if you are sure nothing in it is still used by a scene/actor/journal/playlist.'
-          );
-        }
-        const { refs, checked } = await this.findReferences(clean);
-        if (!checked) {
-          return (
-            `Refused: couldn't verify references for "Data/${clean}" (the Foundry bridge isn't ` +
-            'connected). Open the world, or pass force:true to delete without checking.'
-          );
-        }
-        if (refs.length > 0) {
-          return `Refused: "Data/${clean}" is still referenced by ${refs.length} document(s):\n${this.formatRefs(
-            refs
-          )}\nRelink or remove those first, or pass force:true to delete anyway.`;
-        }
+      const { refs, checked } = await this.findReferences(clean);
+      if (!checked) {
+        throw new ToolError(
+          'connection',
+          `Couldn't verify references for "Data/${clean}" (the Foundry bridge isn't connected), so ` +
+            'nothing was deleted. Open the world, or pass force:true to delete without checking.'
+        );
       }
-
-      await plane.remove(clean, entry.isDirectory);
-      this.logger.info('delete-asset', { remotePath: clean, recursive, force });
-      return `Deleted Data/${clean}${entry.isDirectory ? ' (directory)' : ''}.`;
-    } catch (err) {
-      return this.fileError('delete-asset', err);
+      if (refs.length > 0) {
+        throw new ToolError(
+          'invalid',
+          `"Data/${clean}" is still referenced by ${refs.length} document(s):\n${this.formatRefs(refs)}\n` +
+            'Relink or remove those first, or pass force:true to delete anyway.'
+        );
+      }
     }
+
+    await plane.remove(clean, entry.isDirectory);
+    this.logger.info('delete-asset', { remotePath: clean, recursive, force });
+    return `Deleted Data/${clean}${entry.isDirectory ? ' (directory)' : ''}.`;
   }
 
   async handleMoveAsset(args: any): Promise<string> {
     const { fromPath, toPath, overwrite, relink, force } = MoveAssetSchema.parse(args ?? {});
     const cleanFrom = toDataRelative(fromPath);
     const cleanTo = toDataRelative(toPath);
-
-    if (this.looksLikeWorldDbPath(cleanFrom)) return this.worldDbRefusal(fromPath);
-    if (this.looksLikeWorldDbPath(cleanTo)) return this.worldDbRefusal(toPath);
+    this.refuseWorldDb(cleanFrom, fromPath);
+    this.refuseWorldDb(cleanTo, toPath);
     const plane = this.plane;
 
-    try {
-      const entry = await plane.stat(cleanFrom);
-      if (!entry) return `Nothing to move: "Data/${cleanFrom}" does not exist.`;
-      if (!overwrite && (await plane.exists(cleanTo))) {
-        return `Refused: "Data/${cleanTo}" already exists. Pass overwrite:true to replace it.`;
-      }
+    const entry = await plane.stat(cleanFrom);
+    if (!entry) {
+      throw new ToolError('not-found', `Nothing to move: "Data/${cleanFrom}" does not exist.`);
+    }
+    if (!overwrite && (await plane.exists(cleanTo))) {
+      throw new ToolError(
+        'invalid',
+        `"Data/${cleanTo}" already exists. Pass overwrite:true to replace it.`
+      );
+    }
 
-      let refs: any[] = [];
-      if (entry.isDirectory) {
-        if (!force) {
-          return (
-            `Refused: directory moves can't be reference-checked per-file. Re-run with force:true ` +
+    let refs: any[] = [];
+    if (entry.isDirectory) {
+      if (!force) {
+        throw new ToolError(
+          'invalid',
+          "Directory moves can't be reference-checked per-file. Re-run with force:true " +
             '(then relink any affected references manually).'
+        );
+      }
+    } else {
+      const check = await this.findReferences(cleanFrom);
+      refs = check.refs;
+      if (!force && !relink) {
+        if (!check.checked) {
+          throw new ToolError(
+            'connection',
+            `Couldn't verify references for "Data/${cleanFrom}" (the Foundry bridge isn't ` +
+              'connected), so nothing was moved. Pass relink:true (to move + rewrite once the ' +
+              'world is open) or force:true (move only).'
           );
         }
-      } else {
-        const check = await this.findReferences(cleanFrom);
-        refs = check.refs;
-        if (!force && !relink) {
-          if (!check.checked) {
-            return (
-              `Refused: couldn't verify references for "Data/${cleanFrom}" (bridge not connected). ` +
-              'Pass relink:true (to move + rewrite once the world is open) or force:true (move only).'
-            );
-          }
-          if (refs.length > 0) {
-            return (
-              `Refused: "Data/${cleanFrom}" is referenced by ${refs.length} document(s) — moving ` +
-              `would break them:\n${this.formatRefs(refs)}\n` +
+        if (refs.length > 0) {
+          throw new ToolError(
+            'invalid',
+            `"Data/${cleanFrom}" is referenced by ${refs.length} document(s) — moving would break ` +
+              `them:\n${this.formatRefs(refs)}\n` +
               'Re-run with relink:true to move AND fix the references, or force:true to move anyway.'
-            );
-          }
+          );
         }
       }
-
-      // A plane's move does not create missing directories (Apache answers 500, not 409), so build the
-      // destination's parents first — same contract as upload-asset.
-      await plane.ensureParents(cleanTo);
-      await plane.move(cleanFrom, cleanTo, overwrite, entry.isDirectory);
-      this.logger.info('move-asset', { fromPath: cleanFrom, toPath: cleanTo, relink, force });
-
-      let relinkNote = '';
-      if (relink && !entry.isDirectory) {
-        try {
-          const r = await this.foundry.call('relinkAsset', {
-            oldPath: cleanFrom,
-            newPath: cleanTo,
-          });
-          relinkNote = `\nRelinked ${r?.changedCount ?? 0} reference(s).`;
-        } catch (err) {
-          relinkNote = `\nWARNING: move succeeded but relink failed (${(err as Error).message}). References may be broken — run relink-asset manually.`;
-        }
-      }
-      return `Moved Data/${cleanFrom} → Data/${cleanTo}.${relinkNote}`;
-    } catch (err) {
-      return this.fileError('move-asset', err);
     }
+
+    // A plane's move does not create missing directories (Apache answers 500, not 409), so build the
+    // destination's parents first — same contract as upload-asset.
+    await plane.ensureParents(cleanTo);
+    await plane.move(cleanFrom, cleanTo, overwrite, entry.isDirectory);
+    this.logger.info('move-asset', { fromPath: cleanFrom, toPath: cleanTo, relink, force });
+
+    // The move happened: a relink that fails after it is a warning on the answer, not its error
+    // (a retry of the move would find no source).
+    let relinkNote = '';
+    if (relink && !entry.isDirectory) {
+      try {
+        const r = await this.foundry.call('relinkAsset', {
+          oldPath: cleanFrom,
+          newPath: cleanTo,
+        });
+        relinkNote = `\nRelinked ${r?.changedCount ?? 0} reference(s).`;
+      } catch (err) {
+        relinkNote = `\nWARNING: move succeeded but relink failed (${(err as Error).message}). References may be broken — run relink-asset manually.`;
+      }
+    }
+    return `Moved Data/${cleanFrom} → Data/${cleanTo}.${relinkNote}`;
   }
 
   async handleCopyAsset(args: any): Promise<string> {
@@ -567,24 +539,25 @@ export class AssetFileTools {
     const cleanTo = toDataRelative(toPath);
 
     // Guard BOTH ends: a live world's LevelDB must not be read or written over the file channel.
-    if (this.looksLikeWorldDbPath(cleanFrom)) return this.worldDbRefusal(fromPath);
-    if (this.looksLikeWorldDbPath(cleanTo)) return this.worldDbRefusal(toPath);
+    this.refuseWorldDb(cleanFrom, fromPath);
+    this.refuseWorldDb(cleanTo, toPath);
     const plane = this.plane;
 
-    try {
-      const entry = await plane.stat(cleanFrom);
-      if (!entry) return `Nothing to copy: "Data/${cleanFrom}" does not exist.`;
-      if (!overwrite && (await plane.exists(cleanTo))) {
-        return `Refused: "Data/${cleanTo}" already exists. Pass overwrite:true to replace it.`;
-      }
-      // copy has the same missing-directory failure mode as move — create parents first.
-      await plane.ensureParents(cleanTo);
-      await plane.copy(cleanFrom, cleanTo, overwrite, entry.isDirectory);
-      this.logger.info('copy-asset', { fromPath: cleanFrom, toPath: cleanTo });
-      return `Copied Data/${cleanFrom} → Data/${cleanTo}.`;
-    } catch (err) {
-      return this.fileError('copy-asset', err);
+    const entry = await plane.stat(cleanFrom);
+    if (!entry) {
+      throw new ToolError('not-found', `Nothing to copy: "Data/${cleanFrom}" does not exist.`);
     }
+    if (!overwrite && (await plane.exists(cleanTo))) {
+      throw new ToolError(
+        'invalid',
+        `"Data/${cleanTo}" already exists. Pass overwrite:true to replace it.`
+      );
+    }
+    // copy has the same missing-directory failure mode as move — create parents first.
+    await plane.ensureParents(cleanTo);
+    await plane.copy(cleanFrom, cleanTo, overwrite, entry.isDirectory);
+    this.logger.info('copy-asset', { fromPath: cleanFrom, toPath: cleanTo });
+    return `Copied Data/${cleanFrom} → Data/${cleanTo}.`;
   }
 
   /** Fully implemented — pure mapping, no network. */
@@ -595,12 +568,9 @@ export class AssetFileTools {
 
   // --- helpers --------------------------------------------------------------
 
-  private worldDbRefusal(remotePath: string): string {
-    return refuseWorldDb(remotePath);
-  }
-
-  private fileError(tool: string, err: unknown): string {
-    return fileErrorMessage(tool, err, this.logger);
+  /** Refuse a path inside a live world's LevelDB store (`invalid`), before any plane op. */
+  private refuseWorldDb(dataRelativePath: string, asGiven: string): void {
+    if (isWorldDbPath(dataRelativePath)) throw new ToolError('invalid', refuseWorldDb(asGiven));
   }
 
   /** Ask the bridge what references an asset path. `checked:false` = bridge unavailable. */
@@ -626,10 +596,5 @@ export class AssetFileTools {
     if (e.isDirectory) return `  [DIR ] ${e.name}/`;
     const meta = [humanSize(e.size), e.contentType].filter(Boolean).join(', ');
     return `  [FILE] ${e.name}${meta ? `  (${meta})` : ''}  → ${this.host.publicUrl(e.path)}`;
-  }
-
-  /** Heuristic: is this path inside a world's live LevelDB store (`worlds/<w>/data/...`)? */
-  private looksLikeWorldDbPath(dataRelativePath: string): boolean {
-    return isWorldDbPath(dataRelativePath);
   }
 }

@@ -78,6 +78,30 @@ What changed for a user of the tools and skills, release by release. The measure
   **`targetLabel` (`fvtt-mcp-dnd5e/client`) is the host preset's own label**: `local install`,
   `Molten Hosting`, `generic` (was `local sandbox` / `prod (Molten)`), so a script's `target:` line
   and the doctor's `config:` line read that way; library code no longer tells one host from another.
+- **A miss or a refusal is an error, everywhere** (design.md §3). The asset file tools and the chat
+  tools answered misses and refusals as successful text ("Refused: …", "Not found: …", "Does not
+  exist", "`<tool>` failed: …"), so a client saw a success. They are errors now, with a code and its
+  hint: a Data path that is not there (`list-assets`, `asset-info`, `delete-asset`, `move-asset`,
+  `copy-asset`), a local file or directory that is not there, an `upload-asset-tree` filter that
+  matches nothing: `[not-found]`; an existing file without `overwrite`, a world-DB path, a directory
+  without `recursive`, a referenced file without `force` / `relink`, a `create-asset-folder` onto a
+  file, `delete-chat-messages` `clearAll` / `beforeTimestamp` without `confirm`, an `export-chat-log`
+  destination it refuses, a `send-chat-message` `dataUri` image that is a URL: `[invalid]`; a
+  reference check with the bridge down: `[connection]`. A file plane's own failure is coded by its
+  status (404 `not-found`, 400 / 409 / 412 `invalid`, 401 / 403 `permission`, 415 / 501
+  `unsupported`; anything else its words). An `export-chat-log` whose Data copy is refused after
+  the local copy was written says so in the error. `create-asset-folder` onto an existing folder and
+  a `move-asset` whose relink failed after the move stay answers (the call did its work). The `invalid`
+  hint no longer says "the page" (a tool can refuse before it): "The arguments were refused — fix or
+  add the field it names and retry."
+- **A PC build or level-up whose advancement failed is an error, `[rolled-back]`.** `create-pc` and
+  `level-up-pc` answered `{success:false, errors[]}` as a normal result; the page now throws
+  `rolled-back` naming each failed advancement (nothing persisted, or the PC put back at its prior
+  level), the code whose hint says just that and which nothing threw before. A level-up whose
+  rollback itself failed is its own words (it is not "nothing written"), and the call's receipt names
+  what stayed. `needsChoices` (a dry run) is still an answer. The page result loses `errors`; the
+  tool descriptions say "is an error". `docs/RELEASE.md`'s smoke step expects the error.
+  `scripts/verify-asset-plane.mjs` checks the refusals as errors.
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 

@@ -8,7 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import { BridgeError, asCallError } from '../bridge-error.js';
 import { PAGE_ERROR_NAME_PREFIX, type PageErrorCode } from '../page/errors.js';
-import { ErrorHandler, HINTS } from './error-handler.js';
+import { FilePlaneError } from '../hosts/types.js';
+import { ErrorHandler, filePlaneCode, HINTS, ToolError } from './error-handler.js';
 
 // Minimal logger stub — ErrorHandler only needs child()/warn/error.
 const noopLogger: any = {
@@ -179,5 +180,45 @@ describe('ErrorHandler.toUserMessage — an uncoded error is its raw words, noth
       'kaboom widget malfunction'
     );
     expect(eh.toUserMessage('a string was thrown', 'x')).toBe('a string was thrown');
+  });
+});
+
+describe('ErrorHandler.toUserMessage — a tool refusal is an error with its code (design.md §3)', () => {
+  it("a ToolError keeps its words and gets its code's hint, the same as a page's", () => {
+    const msg = eh.toUserMessage(
+      new ToolError('not-found', '"Data/assets/x.png" does not exist.'),
+      'asset-info'
+    );
+    expect(msg).toBe(`"Data/assets/x.png" does not exist. [not-found] ${HINTS['not-found']}`);
+    const refused = eh.toUserMessage(
+      new ToolError('invalid', '"Data/a.png" already exists. Pass overwrite:true to replace it.'),
+      'upload-asset'
+    );
+    expect(refused).toContain(`[invalid] ${HINTS.invalid}`);
+  });
+
+  it('a FilePlaneError is coded by its status; a status with no code is its raw words', () => {
+    const cases: Array<[number, string | undefined]> = [
+      [404, 'not-found'],
+      [400, 'invalid'],
+      [409, 'invalid'],
+      [412, 'invalid'],
+      [403, 'permission'],
+      [415, 'unsupported'],
+      [501, 'unsupported'],
+      [500, undefined],
+      [0, undefined],
+    ];
+    for (const [status, code] of cases) {
+      expect(filePlaneCode(status)).toBe(code);
+      const msg = eh.toUserMessage(new FilePlaneError('plane said no', status), 'move-asset');
+      expect(msg).toBe(
+        code ? `plane said no [${code}] ${HINTS[code as 'invalid']}` : 'plane said no'
+      );
+    }
+  });
+
+  it('no hint speaks for the page alone: a Node-side refusal reads true under every code', () => {
+    for (const hint of Object.values(HINTS)) expect(hint).not.toMatch(/^The page /);
   });
 });

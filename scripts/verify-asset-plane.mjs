@@ -49,6 +49,18 @@ const quiet = {
 const stamp = () => new Date().toISOString().slice(11, 19);
 let pass = 0;
 let fail = 0;
+/**
+ * A call that must be refused. A refusal is an error (design.md §3): a ToolError with a `code`, or
+ * the plane's own FilePlaneError with a `status`. A call that answered instead is not refused.
+ */
+async function refusal(promise) {
+  try {
+    const out = await promise;
+    return { threw: false, code: undefined, status: undefined, message: String(out) };
+  } catch (e) {
+    return { threw: true, code: e?.code, status: e?.status, message: e?.message ?? String(e) };
+  }
+}
 function check(cond, label, detail = '') {
   if (cond) {
     pass++;
@@ -105,11 +117,13 @@ try {
     'upload-asset uploads + reports the public URL',
     out
   );
-  out = await tools.handleUploadAsset({ localPath: localFile, remotePath: `${ROOT}/a/probe.txt` });
+  let r = await refusal(
+    tools.handleUploadAsset({ localPath: localFile, remotePath: `${ROOT}/a/probe.txt` })
+  );
   check(
-    /already exists/.test(out),
-    'upload-asset refuses to overwrite without overwrite:true',
-    out
+    r.threw && r.code === 'invalid' && /already exists/.test(r.message),
+    'upload-asset refuses to overwrite without overwrite:true (an invalid error)',
+    r.message
   );
   out = await tools.handleUploadAsset({
     localPath: localFile,
@@ -126,8 +140,12 @@ try {
   );
   out = await tools.handleAssetInfo({ remotePath: `${ROOT}/a` });
   check(/FOLDER/.test(out), 'asset-info reports a folder', out);
-  out = await tools.handleAssetInfo({ remotePath: `${ROOT}/nope` });
-  check(/Does not exist/.test(out), 'asset-info reports absence', out);
+  r = await refusal(tools.handleAssetInfo({ remotePath: `${ROOT}/nope` }));
+  check(
+    r.threw && r.code === 'not-found' && /does not exist/.test(r.message),
+    'asset-info reports absence as a not-found error',
+    r.message
+  );
 
   out = await tools.handleListAssets({ remotePath: ROOT });
   check(
@@ -138,8 +156,12 @@ try {
   out = await tools.handleListAssets({ remotePath: `${ROOT}/a` });
   check(/\[FILE\] probe\.txt/.test(out), 'list-assets lists the uploaded file', out);
   check(/\d+ B[,)]/.test(out), 'list-assets reports the file size', out);
-  out = await tools.handleListAssets({ remotePath: `${ROOT}/ghost` });
-  check(/does not exist/.test(out), 'list-assets reports an absent directory', out);
+  r = await refusal(tools.handleListAssets({ remotePath: `${ROOT}/ghost` }));
+  check(
+    r.threw && r.code === 'not-found' && /does not exist/.test(r.message),
+    'list-assets reports an absent directory as a not-found error',
+    r.message
+  );
 
   out = await tools.handleAssetUrl({ remotePath: `Data/${ROOT}/a/probe.txt` });
   check(out === host.publicUrl(`${ROOT}/a/probe.txt`), 'asset-url maps through the host', out);
@@ -149,34 +171,44 @@ try {
     toPath: `${ROOT}/b/copy.txt`,
   });
   check(/Copied/.test(out), 'copy-asset creates parents + copies a file', out);
-  out = await tools.handleCopyAsset({
-    fromPath: `${ROOT}/a/probe.txt`,
-    toPath: `${ROOT}/b/copy.txt`,
-  });
-  check(/already exists/.test(out), 'copy-asset refuses an existing destination', out);
+  r = await refusal(
+    tools.handleCopyAsset({ fromPath: `${ROOT}/a/probe.txt`, toPath: `${ROOT}/b/copy.txt` })
+  );
+  check(
+    r.threw && r.code === 'invalid' && /already exists/.test(r.message),
+    'copy-asset refuses an existing destination (an invalid error)',
+    r.message
+  );
 
   if (!bridged) {
     // (On the bridge plane a down bridge is the plane itself — nothing to reference-check with.)
-    out = await toolsNoBridge.handleMoveAsset({
-      fromPath: `${ROOT}/b/copy.txt`,
-      toPath: `${ROOT}/c/moved.txt`,
-    });
+    r = await refusal(
+      toolsNoBridge.handleMoveAsset({
+        fromPath: `${ROOT}/b/copy.txt`,
+        toPath: `${ROOT}/c/moved.txt`,
+      })
+    );
     check(
-      /Refused: couldn't verify references/.test(out),
-      'move-asset refuses while the bridge is down (no reference check)',
-      out
+      r.threw && r.code === 'connection' && /Couldn't verify references/.test(r.message),
+      'move-asset refuses while the bridge is down (no reference check; a connection error)',
+      r.message
     );
   }
-  out = await tools.handleMoveAsset({
-    fromPath: `${ROOT}/b/copy.txt`,
-    toPath: `${ROOT}/c/moved.txt`,
-    force: true,
-  });
   if (bridged) {
+    r = await refusal(
+      tools.handleMoveAsset({
+        fromPath: `${ROOT}/b/copy.txt`,
+        toPath: `${ROOT}/c/moved.txt`,
+        force: true,
+      })
+    );
     check(
-      /cannot move .* through the bridge plane/.test(out) && /FOUNDRY_DATA_DIR/.test(out),
-      'move-asset refuses by name on the bridge plane (FilePicker cannot move)',
-      out
+      r.threw &&
+        r.status === 501 &&
+        /cannot move .* through the bridge plane/.test(r.message) &&
+        /FOUNDRY_DATA_DIR/.test(r.message),
+      'move-asset refuses by name on the bridge plane (FilePicker cannot move; status 501)',
+      r.message
     );
     out = await tools.handleCopyAsset({
       fromPath: `${ROOT}/b/copy.txt`,
@@ -184,9 +216,14 @@ try {
     });
     check(/Copied/.test(out), 'copy-asset (bridge: download + upload) into a new folder', out);
   } else {
+    out = await tools.handleMoveAsset({
+      fromPath: `${ROOT}/b/copy.txt`,
+      toPath: `${ROOT}/c/moved.txt`,
+      force: true,
+    });
     check(/Moved/.test(out), 'move-asset (force) creates parents + moves', out);
-    out = await tools.handleAssetInfo({ remotePath: `${ROOT}/b/copy.txt` });
-    check(/Does not exist/.test(out), 'move-asset removed the source', out);
+    r = await refusal(tools.handleAssetInfo({ remotePath: `${ROOT}/b/copy.txt` }));
+    check(r.threw && r.code === 'not-found', 'move-asset removed the source', r.message);
   }
 
   const dl = join(tmp, 'downloaded.txt');
@@ -200,13 +237,23 @@ try {
   );
 
   // Refusals that must hold on every plane.
-  out = await tools.handleUploadAsset({
-    localPath: localFile,
-    remotePath: `worlds/${worldId}/data/actors/x.db`,
-  });
-  check(/live LevelDB/.test(out), 'upload-asset refuses a live world-DB path', out);
-  out = await tools.handleCreateAssetFolder({ remotePath: `worlds/${worldId}/data` });
-  check(/live LevelDB/.test(out), 'create-asset-folder refuses the world-DB dir', out);
+  r = await refusal(
+    tools.handleUploadAsset({
+      localPath: localFile,
+      remotePath: `worlds/${worldId}/data/actors/x.db`,
+    })
+  );
+  check(
+    r.threw && r.code === 'invalid' && /live LevelDB/.test(r.message),
+    'upload-asset refuses a live world-DB path (an invalid error)',
+    r.message
+  );
+  r = await refusal(tools.handleCreateAssetFolder({ remotePath: `worlds/${worldId}/data` }));
+  check(
+    r.threw && r.code === 'invalid' && /live LevelDB/.test(r.message),
+    'create-asset-folder refuses the world-DB dir (an invalid error)',
+    r.message
+  );
   let threw = null;
   try {
     await tools.handleAssetInfo({ remotePath: `${ROOT}/../../etc/passwd` });
@@ -221,34 +268,47 @@ try {
   if (bridged) {
     const html = join(tmp, 'page.html');
     writeFileSync(html, '<p>x</p>');
-    out = await tools.handleUploadAsset({ localPath: html, remotePath: `${ROOT}/a/page.html` });
+    r = await refusal(
+      tools.handleUploadAsset({ localPath: html, remotePath: `${ROOT}/a/page.html` })
+    );
     check(
-      /cannot be uploaded through the bridge plane/.test(out) && /\.html/.test(out),
-      'upload-asset (bridge) refuses a non-uploadable extension by name',
-      out
+      r.threw &&
+        r.status === 415 &&
+        /cannot be uploaded through the bridge plane/.test(r.message) &&
+        /\.html/.test(r.message),
+      'upload-asset (bridge) refuses a non-uploadable extension by name (status 415)',
+      r.message
     );
   }
 
   if (!bridged) {
-    out = await toolsNoBridge.handleDeleteAsset({ remotePath: `${ROOT}/c/moved.txt` });
+    r = await refusal(toolsNoBridge.handleDeleteAsset({ remotePath: `${ROOT}/c/moved.txt` }));
     check(
-      /Refused: couldn't verify references/.test(out),
-      'delete-asset refuses while the bridge is down (no reference check)',
-      out
+      r.threw && r.code === 'connection' && /Couldn't verify references/.test(r.message),
+      'delete-asset refuses while the bridge is down (no reference check; a connection error)',
+      r.message
     );
   }
-  out = await tools.handleDeleteAsset({ remotePath: `${ROOT}/c/moved.txt`, force: true });
   if (bridged) {
+    r = await refusal(tools.handleDeleteAsset({ remotePath: `${ROOT}/c/moved.txt`, force: true }));
     check(
-      /cannot delete .* through the bridge plane/.test(out) && /FOUNDRY_WEBDAV_URL/.test(out),
-      'delete-asset refuses by name on the bridge plane (FilePicker cannot delete)',
-      out
+      r.threw &&
+        r.status === 501 &&
+        /cannot delete .* through the bridge plane/.test(r.message) &&
+        /FOUNDRY_WEBDAV_URL/.test(r.message),
+      'delete-asset refuses by name on the bridge plane (FilePicker cannot delete; status 501)',
+      r.message
     );
   } else {
+    out = await tools.handleDeleteAsset({ remotePath: `${ROOT}/c/moved.txt`, force: true });
     check(/Deleted/.test(out), 'delete-asset (force) deletes a file', out);
   }
-  out = await tools.handleDeleteAsset({ remotePath: `${ROOT}/a` });
-  check(/is a directory/.test(out), 'delete-asset refuses a directory without recursive:true', out);
+  r = await refusal(tools.handleDeleteAsset({ remotePath: `${ROOT}/a` }));
+  check(
+    r.threw && r.code === 'invalid' && /is a directory/.test(r.message),
+    'delete-asset refuses a directory without recursive:true (an invalid error)',
+    r.message
+  );
 
   // --- get-world-info reports the plane in use --------------------------------------------
   const scene = new SceneTools({ foundry, logger: quiet, host });

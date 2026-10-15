@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { actorTarget } from './_targets.js';
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, isAbsolute, basename } from 'node:path';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import type { FilePlane, Host } from '../hosts/types.js';
+import { type FilePlane, FilePlaneError, type Host } from '../hosts/types.js';
 import { filePlaneFor } from '../hosts/index.js';
 import {
   guessContentType,
@@ -16,7 +16,8 @@ import {
 import { toInputSchema } from '../utils/schema.js';
 import { formatDeletionResult } from '../utils/format.js';
 import { validateExportDestinations } from '../utils/transcript.js';
-import { fileErrorMessage } from './assets/access.js';
+import { localError, readLocal } from './assets/access.js';
+import { ToolError } from '../utils/error-handler.js';
 
 /**
  * Chat-log tools — post / list / delete / export chat messages, plus rich dnd5e cards.
@@ -272,13 +273,12 @@ export class ChatTools {
 
     let content = parsed.content;
     if (parsed.images && parsed.images.length > 0) {
-      const assembled = await this.assembleImages(
+      const figures = await this.assembleImages(
         parsed.images,
         parsed.imageFolder ?? `worlds/${await this.foundry.worldId()}/assets/chat`,
         parsed.overwriteImages
       );
-      if ('refusal' in assembled) return assembled.refusal;
-      content = `${content}\n${assembled.figures.join('\n')}`;
+      content = `${content}\n${figures.join('\n')}`;
     }
 
     const result = await this.foundry.call('postChatMessage', {
@@ -298,8 +298,8 @@ export class ChatTools {
 
   /**
    * Resolve each image to a public URL (uploading absolute local files through the file plane) and
-   * build the <figure> HTML. Returns a plain refusal string on a plane / world-DB guard rather than
-   * throwing.
+   * build the <figure> HTML. A plane or world-DB refusal throws (design.md §3: a refusal is an
+   * error), before the message is posted.
    */
   private async assembleImages(
     images: Array<{
@@ -310,7 +310,7 @@ export class ChatTools {
     }>,
     folder: string,
     overwrite: boolean
-  ): Promise<{ figures: string[] } | { refusal: string }> {
+  ): Promise<string[]> {
     const figures: string[] = [];
     for (const img of images) {
       const p = img.path;
@@ -319,18 +319,12 @@ export class ChatTools {
       // dataUri: inline a LOCAL file as base64 directly in the HTML (no upload).
       if (img.embed === 'dataUri') {
         if (/^https?:\/\//i.test(p) || p.startsWith('data:')) {
-          return {
-            refusal: `Image "${p}": embed:"dataUri" needs a LOCAL file path, not a URL. Use embed:"upload" or pass a local file.`,
-          };
+          throw new ToolError(
+            'invalid',
+            `Image "${p}": embed:"dataUri" needs a LOCAL file path, not a URL. Use embed:"upload" or pass a local file.`
+          );
         }
-        let bytes: Buffer;
-        try {
-          bytes = await readFile(p);
-        } catch (err) {
-          return {
-            refusal: `Cannot read local image "${p}" for dataUri embed: ${(err as Error).message}`,
-          };
-        }
+        const bytes = Buffer.from(await readLocal(p, 'local image (dataUri embed)'));
         const mime = guessContentType(p) || 'application/octet-stream';
         url = `data:${mime};base64,${bytes.toString('base64')}`;
         figures.push(figureHtml(url, img.caption, img.alt));
@@ -343,24 +337,13 @@ export class ChatTools {
         // Local file → upload through the file plane, then link the public URL.
         const files = this.files;
         const remote = toDataRelative(`${folder}/${basename(p)}`);
-        if (looksLikeWorldDbPath(remote)) return { refusal: worldDbRefusal(remote) };
-        let bytes: Uint8Array;
-        try {
-          bytes = await readFile(p);
-        } catch (err) {
-          return { refusal: `Cannot read local image "${p}": ${(err as Error).message}` };
+        if (looksLikeWorldDbPath(remote)) throw new ToolError('invalid', worldDbRefusal(remote));
+        const bytes = await readLocal(p, 'local image');
+        if (overwrite || !(await files.exists(remote))) {
+          await files.ensureParents(remote);
+          await files.write(remote, bytes, guessContentType(p));
         }
-        try {
-          if (overwrite || !(await files.exists(remote))) {
-            await files.ensureParents(remote);
-            await files.write(remote, bytes, guessContentType(p));
-          }
-          url = this.host.publicUrl(remote);
-        } catch (err) {
-          return {
-            refusal: fileErrorMessage('send-chat-message (image upload)', err, this.logger),
-          };
-        }
+        url = this.host.publicUrl(remote);
       } else {
         // Treat as an existing Data-relative asset path.
         url = this.host.publicUrl(toDataRelative(p));
@@ -368,7 +351,7 @@ export class ChatTools {
 
       figures.push(figureHtml(url, img.caption, img.alt));
     }
-    return { figures };
+    return figures;
   }
 
   // --- list -----------------------------------------------------------------
@@ -393,12 +376,15 @@ export class ChatTools {
     const parsed = DeleteChatMessagesSchema.parse(args ?? {});
     // Guard the bulk deletes BEFORE touching the bridge (clearAll + beforeTimestamp).
     if (parsed.clearAll && !parsed.confirm) {
-      return 'Refused: clearAll deletes EVERY chat message. Pass confirm:true to proceed.';
+      throw new ToolError(
+        'invalid',
+        'clearAll deletes EVERY chat message. Pass confirm:true to proceed.'
+      );
     }
     if (parsed.beforeTimestamp !== undefined && !parsed.confirm) {
-      return (
-        'Refused: beforeTimestamp deletes every message older than the cutoff. ' +
-        'Pass confirm:true to proceed.'
+      throw new ToolError(
+        'invalid',
+        'beforeTimestamp deletes every message older than the cutoff. Pass confirm:true to proceed.'
       );
     }
     const result = await this.foundry.call('deleteChatMessages', parsed);
@@ -417,7 +403,7 @@ export class ChatTools {
     if (parsed.localPath) dest.localPath = parsed.localPath;
     if (parsed.remotePath) dest.remotePath = parsed.remotePath;
     const check = validateExportDestinations(dest);
-    if (!check.ok) return `Refused: ${check.error}`;
+    if (!check.ok) throw new ToolError('invalid', check.error);
 
     const res = await this.foundry.call('exportChatLog', {
       format: parsed.format,
@@ -431,32 +417,45 @@ export class ChatTools {
     // Local destination.
     if (parsed.localPath) {
       if (!parsed.overwrite && (await fileExists(parsed.localPath))) {
-        return `Refused: local file "${parsed.localPath}" already exists. Pass overwrite:true to replace it.`;
+        throw new ToolError(
+          'invalid',
+          `Local file "${parsed.localPath}" already exists. Pass overwrite:true to replace it.`
+        );
       }
       try {
         await mkdir(dirname(parsed.localPath), { recursive: true });
         await writeFile(parsed.localPath, bytes);
-        outLines.push(`  local: ${parsed.localPath} (${humanSize(bytes.length)})`);
       } catch (err) {
-        return `export-chat-log failed writing "${parsed.localPath}": ${(err as Error).message}`;
+        throw localError(`Cannot write the local export "${parsed.localPath}"`, err);
       }
+      outLines.push(`  local: ${parsed.localPath} (${humanSize(bytes.length)})`);
     }
 
-    // Remote destination — the file plane.
+    // Remote destination — the file plane. A refusal here says what the call already wrote.
     if (parsed.remotePath) {
+      const wrote = parsed.localPath ? ` (the local copy was written: ${parsed.localPath})` : '';
       const clean = toDataRelative(parsed.remotePath);
-      if (looksLikeWorldDbPath(clean)) return worldDbRefusal(parsed.remotePath);
+      if (looksLikeWorldDbPath(clean)) {
+        throw new ToolError('invalid', `${worldDbRefusal(parsed.remotePath)}${wrote}`);
+      }
       const files = this.files;
+      if (!parsed.overwrite && (await files.exists(clean))) {
+        throw new ToolError(
+          'invalid',
+          `"Data/${clean}" already exists. Pass overwrite:true to replace it.${wrote}`
+        );
+      }
       try {
-        if (!parsed.overwrite && (await files.exists(clean))) {
-          return `Refused: "Data/${clean}" already exists. Pass overwrite:true to replace it.`;
-        }
         await files.ensureParents(clean);
         await files.write(clean, bytes, guessContentType(parsed.remotePath));
-        outLines.push(`  Data/${clean}\n  public URL: ${this.host.publicUrl(clean)}`);
       } catch (err) {
-        return fileErrorMessage('export-chat-log', err, this.logger);
+        // the plane's status (its code) is kept; the words gain what was already written
+        if (wrote && err instanceof FilePlaneError) {
+          throw new FilePlaneError(`${err.message}${wrote}`, err.status);
+        }
+        throw err;
       }
+      outLines.push(`  Data/${clean}\n  public URL: ${this.host.publicUrl(clean)}`);
     }
 
     return `Exported ${res?.messageCount ?? 0} message(s) as ${parsed.format} →\n${outLines.join('\n')}`;

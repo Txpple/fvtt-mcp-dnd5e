@@ -31,7 +31,7 @@ import {
 } from '../_shared.js';
 import { addSpellsToActor } from './spells.js';
 import { readDarkvision, TOKEN_DISPOSITION, tokenDefaults } from './token-defaults.js';
-import { ambiguous, invalid, notFound, unsupported } from '../errors.js';
+import { ambiguous, invalid, notFound, rolledBack, unsupported } from '../errors.js';
 import { UNRECORDED } from '../_receipts.js';
 
 /**
@@ -301,13 +301,12 @@ export interface PcBuildResult {
   /** prefab path only: the source pregen's name, and the update-actor keys layered onto the copy. */
   from?: string | undefined;
   modificationsApplied?: string[] | undefined;
-  warnings: string[];
   /**
-   * CORRUPTING advancement failures (a forced grant, supplied pick, subclass embed, or HP apply that
-   * threw). Distinct from `warnings` (best-effort): a non-empty `errors` means the PC would be silently
-   * incomplete, so the build does NOT persist (create) / rolls back (level-up) and returns success:false.
+   * Best-effort notes. A CORRUPTING advancement failure (a forced grant, supplied pick, subclass
+   * embed, or HP apply that threw) is not a warning: the PC would be silently incomplete, so the
+   * build does not persist (create) / rolls back (level-up) and the call throws `rolled-back`.
    */
-  errors?: string[] | undefined;
+  warnings: string[];
 }
 
 // =============================================================================
@@ -993,9 +992,14 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
     // A corrupting advancement failed (a forced grant / supplied pick / subclass embed / HP apply that
     // threw). The PC would be silently incomplete, so DON'T persist a broken character — fail loudly so
     // the skill/DM fixes the input and re-calls. No litter: the temp build actor is cleaned in `finally`
-    // (mirrors the needsChoices no-persist discipline above). design.md §2.1 — tools fail loudly.
+    // (mirrors the needsChoices no-persist discipline above). design.md §2.1 — tools fail loudly; §3 —
+    // a refused build is an error, `rolled-back`: nothing of it persists.
     if (errors.length > 0) {
-      return { success: false, errors, applied, warnings };
+      throw rolledBack(
+        `"${plan.name}" was not created: ${errors.length} advancement(s) failed — ` +
+          `${errors.join('; ')}. Nothing was persisted; fix the input (a subclass, a choice uuid, ` +
+          'a class or feature the books reject) and re-call create-pc.'
+      );
     }
 
     // 4. PERSIST — snapshot the built _source and create the real actor (one DB write, embedded items
@@ -1252,7 +1256,11 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     // A corrupting advancement failed. Roll back the ONE persisted mutation (the class embed/bump) and
     // skip the final persist, so the in-memory apply() updateSource changes evaporate on the next read —
     // never leave a half-leveled PC. Symmetric with createPcActor's no-persist-on-error (design.md §2.1).
+    // A refused level-up is an error (design.md §3): `rolled-back` once the PC is back where it
+    // was; an incomplete rollback is not "nothing written", so it is its own words, uncoded, and the
+    // call's receipt names what stayed.
     if (errors.length > 0) {
+      const failed = `${errors.length} advancement(s) failed — ${errors.join('; ')}`;
       try {
         if (isNewClass) {
           await actor.deleteEmbeddedDocuments('Item', [classItemId]);
@@ -1263,12 +1271,15 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
         }
         game.actors.get(actor.id)?.reset?.();
       } catch (e) {
-        warnings.push(
-          `Level-up failed and the rollback was incomplete — inspect "${actor.name}": ` +
-            `${e instanceof Error ? e.message : String(e)}`
+        throw new Error(
+          `"${actor.name}" was not leveled (${failed}), and the rollback was incomplete — inspect ` +
+            `"${actor.name}": ${e instanceof Error ? e.message : String(e)}`
         );
       }
-      return { success: false, errors, applied, warnings };
+      throw rolledBack(
+        `"${actor.name}" was not leveled: ${failed}. It was put back to its prior level; fix the ` +
+          'input (e.g. a bad subclass or choice uuid) and re-call level-up-pc.'
+      );
     }
 
     // 6. Persist the in-memory apply() mutations (apply uses updateSource — in-memory only).

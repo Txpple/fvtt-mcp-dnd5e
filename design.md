@@ -161,7 +161,12 @@ This is the architectural backbone that makes principle #1 real.
   survives `page.evaluate` — and comes back as a `BridgeError` (`src/bridge-error.ts`; a lost
   session is `connection`). The mapper appends one hint per code after the words and never
   classifies by a word in the message; an uncoded throw (Foundry's own) is its raw text, nothing
-  added. A tool's own curated message (`FormattedToolError`) passes through verbatim.
+  added. A tool that refuses or misses before or without the page (a Data path that is not there,
+  an existing file without `overwrite`, a world-DB path, a local file it cannot read) throws a
+  coded `ToolError`, the same contract on the Node side; a file plane's own failure is coded by its
+  status (`filePlaneCode`). A refused multi-step write that was undone as a whole (a PC build or
+  level-up whose advancement failed) is `rolled-back`. A tool's own curated message
+  (`FormattedToolError`) passes through verbatim.
 - **The boundary is the test.** Before adding code, decide which side it's on. Mixed-concern code is
   the thing this contract exists to prevent.
 

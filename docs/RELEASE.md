@@ -54,8 +54,8 @@
 
 4. **Smoke the headline tools over MCP** after a Claude Code restart (a changed tool schema needs
    one): `get-world-info` on the sandbox registration; build a multiclass level-3 PC (expect
-   `success` + zero unresolved `@scale`); confirm a deliberately bad subclass uuid returns
-   `success:false` + `errors[]` with no actor created.
+   `success` + zero unresolved `@scale`); confirm a deliberately bad subclass uuid is an error
+   (`isError`, `[rolled-back]`, naming the advancement that failed) with no actor created.
 
 5. **The numbers.** `npm run measure` and the `npm test` budget lines (tools/list chars, name
    chars per registration, skill-description chars, the always-on set) go in the release notes

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { FilePlaneError } from '../hosts/types.js';
 import { ChatTools } from './chat.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
 
@@ -192,11 +193,16 @@ describe('send-chat-message', () => {
 
   it('refuses embed:"dataUri" for an http URL', async () => {
     const { tools } = build();
-    const out = await tools.handleSendChatMessage({
-      content: '<p>x</p>',
-      images: [{ path: 'https://example.com/x.png', embed: 'dataUri' }],
+    // a refusal is an error with a code (design.md §3), and nothing is posted
+    await expect(
+      tools.handleSendChatMessage({
+        content: '<p>x</p>',
+        images: [{ path: 'https://example.com/x.png', embed: 'dataUri' }],
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/needs a LOCAL file/i),
     });
-    expect(out).toMatch(/needs a LOCAL file/i);
   });
 });
 
@@ -223,15 +229,18 @@ describe('list-chat-messages', () => {
 describe('delete-chat-messages', () => {
   it('refuses clearAll without confirm and does NOT call the bridge', async () => {
     const { tools, calls } = build({});
-    const out = await tools.handleDeleteChatMessages({ clearAll: true });
-    expect(out).toMatch(/Refused/);
+    await expect(tools.handleDeleteChatMessages({ clearAll: true })).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/confirm:true/),
+    });
     expect(calls.length).toBe(0);
   });
 
   it('refuses beforeTimestamp without confirm and does NOT call the bridge', async () => {
     const { tools, calls } = build({});
-    const out = await tools.handleDeleteChatMessages({ beforeTimestamp: 1_700_000_000_000 });
-    expect(out).toMatch(/Refused/);
+    await expect(
+      tools.handleDeleteChatMessages({ beforeTimestamp: 1_700_000_000_000 })
+    ).rejects.toMatchObject({ code: 'invalid', message: expect.stringMatching(/confirm:true/) });
     expect(calls.length).toBe(0);
   });
 
@@ -285,9 +294,27 @@ describe('export-chat-log', () => {
     const { tools } = build({ format: 'markdown', messageCount: 1, content: 'new' });
     const p = tmpFile('exists.md');
     await writeFile(p, 'old');
-    const out = await tools.handleExportChatLog({ localPath: p });
-    expect(out).toMatch(/already exists/);
+    await expect(tools.handleExportChatLog({ localPath: p })).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(/already exists/),
+    });
     expect(await readFile(p, 'utf8')).toBe('old'); // untouched
+  });
+
+  it('a refused remote copy is an error that says the local copy was already written', async () => {
+    const dav = fakeDav({ exists: vi.fn(async () => true) });
+    const { tools } = build({ format: 'markdown', messageCount: 1, content: 'x' }, dav);
+    const local = tmpFile('both.md');
+    await expect(
+      tools.handleExportChatLog({ localPath: local, remotePath: 'worlds/w/exports/log.md' })
+    ).rejects.toMatchObject({
+      code: 'invalid',
+      message: expect.stringMatching(
+        /already exists\. Pass overwrite:true .*\(the local copy was written: .*both\.md\)/
+      ),
+    });
+    expect(await readFile(local, 'utf8')).toBe('x');
+    expect(dav.putFile).not.toHaveBeenCalled();
   });
 
   it('a remote-only export goes through the bridge plane when the host has no direct plane', async () => {
@@ -311,13 +338,14 @@ describe('export-chat-log', () => {
         return { ok: false, reason: 'extension', detail: 'accepts only md, txt — not ".html"' };
       return { format: 'html', messageCount: 1, content: '<html></html>' };
     }, null);
-    const out = await tools.handleExportChatLog({
-      remotePath: 'worlds/w/exports/log.html',
-      format: 'html',
-    });
-    expect(out).toMatch(/export-chat-log failed/);
-    expect(out).toMatch(/bridge plane/);
-    expect(out).toMatch(/FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_\*/);
+    // the plane's refusal propagates (415: a format it cannot take), coded by the mapper
+    const err: any = await tools
+      .handleExportChatLog({ remotePath: 'worlds/w/exports/log.html', format: 'html' })
+      .catch(e => e);
+    expect(err).toBeInstanceOf(FilePlaneError);
+    expect(err.status).toBe(415);
+    expect(err.message).toMatch(/bridge plane/);
+    expect(err.message).toMatch(/FOUNDRY_DATA_DIR or FOUNDRY_WEBDAV_\*/);
   });
 });
 
