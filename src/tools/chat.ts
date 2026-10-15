@@ -254,7 +254,7 @@ export class ChatTools {
         name: 'post-item-card',
         description:
           "Post an actor item's dnd5e usage card with its working buttons, or roll its attack / " +
-          'damage to chat; an item with no activity says so. GM-only.',
+          "damage to chat; no activity or a module's veto is an error. GM-only.",
         inputSchema: toInputSchema(PostItemCardSchema),
       },
       {
@@ -468,8 +468,8 @@ export class ChatTools {
 
   async handlePostItemCard(args: any): Promise<string> {
     const parsed = PostItemCardSchema.parse(args ?? {});
+    // the page refuses a card it could not post (no activity, a module's veto) as an error
     const r = await this.foundry.call('postItemCard', parsed);
-    if (!r.posted) return `Could not post a rich card: ${r.reason}`;
     return `Posted ${r.action} card for "${r.itemName}" (${r.activityType}) as ${r.actorName}.`;
   }
 

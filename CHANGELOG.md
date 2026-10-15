@@ -90,7 +90,14 @@ What changed for a user of the tools and skills, release by release. The measure
   reference check with the bridge down: `[connection]`. A scene that does not resolve in
   `activate-scene`, `pull-users-to-scene`, `set-landing-scene`, `get-scene-dimensions` or
   `screenshot-scene` (each answered "Scene not found: … Nothing changed." as its result) is a
-  `[not-found]` error too; nothing is changed, pulled or captured. A file plane's own failure is
+  `[not-found]` error too; nothing is changed, pulled or captured. `post-item-card` answered a card
+  it could not post as text ("Could not post a rich card: …"); the page now refuses it with a code:
+  an item with no activities, and a use or a roll a module's hook vetoed (By the Books'
+  require-target rule; nothing reaches chat), are `[unsupported]`, as a vetoed delete is; a named
+  `activity` the item does not have is `[not-found]`, listing the ones it has (it was misreported as
+  "item has no activities"); `attack` on an item with no attack activity, or `damage` on an activity
+  that rolls none, is `[invalid]` (it was misreported as a veto). The page result (`fvtt.postItemCard`)
+  is `posted: true` only; the reference is regenerated. A file plane's own failure is
   coded by its status (404 `not-found`, 400 / 409 / 412 `invalid`, 401 / 403 `permission`, 415 /
   501 `unsupported`; anything else its words). An `export-chat-log` whose Data copy is refused after
   the local copy was written says so in the error. `create-asset-folder` onto an existing folder and

@@ -331,7 +331,7 @@ args:
 - `consume?: boolean`
 - `critical?: boolean`
 
-Returns `{ success: boolean; posted: false; actorName: any; itemName: any; reason: string; } | { reason?: string; messageId?: any; posted: boolean; activityType: any; success: boolean; actorName: any; itemName: any; action: "use" | "attack" | "damage"; }`
+Returns `{ messageId?: any; posted: true; activityType: any; success: boolean; actorName: any; itemName: any; action: "use" | "attack" | "damage"; }`
 
 ### `fvtt.requestRoll(args)`
 

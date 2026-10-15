@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { BridgeError } from '../bridge-error.js';
 import { FilePlaneError } from '../hosts/types.js';
 import { ChatTools } from './chat.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
@@ -364,10 +365,16 @@ describe('post-item-card', () => {
     expect(out).toContain('Posted use card for "Tail"');
   });
 
-  it('surfaces the reason when no activity exists', async () => {
-    const { tools } = build({ success: true, posted: false, reason: 'item has no activities' });
-    const out = await tools.handlePostItemCard({ actor: 'X', item: 'Plain Feature' });
-    expect(out).toMatch(/Could not post a rich card/);
+  it("a card the page could not post is the page's coded error, never a success", async () => {
+    const vetoed = new BridgeError({
+      code: 'unsupported',
+      fn: 'postItemCard',
+      detail: 'Nothing was posted: a module hook vetoed the use of "Tail"',
+    });
+    const { tools } = build(() => {
+      throw vetoed;
+    });
+    await expect(tools.handlePostItemCard({ actor: 'X', item: 'Tail' })).rejects.toBe(vetoed);
   });
 });
 

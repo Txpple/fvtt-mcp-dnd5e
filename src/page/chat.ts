@@ -30,7 +30,7 @@ import {
   type Visibility,
   type StyleName,
 } from './chat-helpers.js';
-import { invalid, notFound } from './errors.js';
+import { invalid, notFound, unsupported } from './errors.js';
 
 const CONST_: any = (globalThis as any).CONST;
 
@@ -327,50 +327,54 @@ export async function postItemCard(args: {
     activity = list[0];
   }
 
+  if (!activity && args.activity) {
+    const names = list.map((a: any) => `"${a?.name ?? a?.type}" (${a?.id})`).join(', ');
+    throw notFound(
+      `activity "${args.activity}" not found on "${item.name}"` +
+        (names ? ` (its activities: ${names})` : ' (it has no activities)')
+    );
+  }
   if (!activity) {
-    return {
-      success: true,
-      posted: false as const,
-      actorName: actor.name,
-      itemName: item.name,
-      reason:
-        'item has no activities; rich buttons require an Activity (dnd5e 5.x). ' +
-        'Use send-chat-message for a plain description card.',
-    };
+    throw unsupported(
+      `"${item.name}" on "${actor.name}" has no activities, and a rich card's buttons need one ` +
+        '(dnd5e 5.x). Use send-chat-message for a plain description card.'
+    );
   }
 
-  // Honest `posted`: dnd5e returns undefined from use() and null from rollAttack/rollDamage when a
-  // `dnd5e.preUseActivity` / pre-roll hook vetoes the action (e.g. By the Books' require-target rule
-  // on an attack with nothing targeted) or a dialog is cancelled — nothing reaches chat then.
-  const VETOED =
-    'nothing was posted — a module hook vetoed the use (e.g. a require-target rule: target a token ' +
-    'first, or post the attack/damage roll directly with action "attack" / "damage")';
+  // Nothing posted is a refusal: dnd5e returns undefined from use() and null from
+  // rollAttack/rollDamage when a `dnd5e.preUseActivity` / pre-roll hook vetoes the action (e.g. By
+  // the Books' require-target rule on an attack with nothing targeted) — nothing reaches chat then.
+  // A module's veto is `unsupported`, as a vetoed delete is (deleteEmbeddedStrict).
+  const vetoed = (what: string, tip = '') =>
+    unsupported(
+      `Nothing was posted: a module hook vetoed the ${what} of "${item.name}" (e.g. a ` +
+        `require-target rule; the bridge targets no token).${tip}`
+    );
   const action = args.action ?? 'use';
   const base = { success: true, actorName: actor.name, itemName: item.name, action };
   if (action === 'attack') {
     const atk = activities?.getByType?.('attack')?.[0] ?? activity;
-    const rolls = await atk.rollAttack?.({}, { configure: false }, { create: true });
-    const posted = Array.isArray(rolls) && rolls.length > 0;
-    return {
-      ...base,
-      posted,
-      activityType: atk.type,
-      ...(posted ? {} : { reason: VETOED }),
-    };
+    if (typeof atk?.rollAttack !== 'function') {
+      throw invalid(`"${item.name}" has no attack activity: post it with action "use"`);
+    }
+    const rolls = await atk.rollAttack({}, { configure: false }, { create: true });
+    if (!Array.isArray(rolls) || rolls.length === 0) throw vetoed('attack roll');
+    return { ...base, posted: true as const, activityType: atk.type };
   }
   if (action === 'damage') {
-    const rolls = await activity.rollDamage?.(
+    if (typeof activity.rollDamage !== 'function') {
+      throw invalid(
+        `the ${activity.type} activity of "${item.name}" rolls no damage: name one that does ` +
+          '(activity) or post it with action "use"'
+      );
+    }
+    const rolls = await activity.rollDamage(
       { critical: { allow: !!args.critical } },
       { configure: false },
       { create: true }
     );
-    const posted = Array.isArray(rolls) && rolls.length > 0;
-    return {
-      ...base,
-      posted,
-      activityType: activity.type,
-      ...(posted ? {} : { reason: VETOED }),
-    };
+    if (!Array.isArray(rolls) || rolls.length === 0) throw vetoed('damage roll');
+    return { ...base, posted: true as const, activityType: activity.type };
   }
   // action === 'use' — the supported primary path; buttons rebind via the dnd5e listeners.
   const results = await activity.use?.(
@@ -378,13 +382,17 @@ export async function postItemCard(args: {
     { configure: false },
     { create: true }
   );
-  const posted = !!results;
+  if (!results) {
+    throw vetoed(
+      'use',
+      ' Post the attack or damage roll directly with action "attack" / "damage".'
+    );
+  }
   return {
     ...base,
-    posted,
+    posted: true as const,
     activityType: activity.type,
     ...(results?.message?.id ? { messageId: results.message.id } : {}),
-    ...(posted ? {} : { reason: VETOED }),
   };
 }
 

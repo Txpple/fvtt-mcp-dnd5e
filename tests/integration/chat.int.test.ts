@@ -104,15 +104,19 @@ describe.skipIf(!LIVE)('chat-log tools (live)', () => {
     if (msg) expect(msg.content).not.toContain('[[/save');
   });
 
-  it('post-item-card behaves correctly (posts a card or returns a clear reason)', async ctx => {
+  it('post-item-card behaves correctly (posts a card or refuses with a code)', async ctx => {
     if (!seed.actorName || !seed.itemName) return ctx.skip();
-    const r = await foundry.call<{ posted?: boolean; reason?: string }>('postItemCard', {
-      actor: seed.actorName,
-      item: seed.itemName,
-      action: 'use',
-    });
-    // Either a card posted, or a clean "no activities" reason — both are correct behavior.
-    expect(typeof r?.posted === 'boolean').toBe(true);
+    const r = await foundry
+      .call<{ posted?: boolean }>('postItemCard', {
+        actor: seed.actorName,
+        item: seed.itemName,
+        action: 'use',
+      })
+      .catch((e: any) => e);
+    // Either a card posted, or a coded refusal (an item with no activities, a module's veto):
+    // both are correct behavior; a card it could not post is never a success.
+    if (r instanceof Error) expect((r as any).code).toBe('unsupported');
+    else expect(r?.posted).toBe(true);
   });
 
   it('exports the transcript to a local file (ChatTools handler)', async () => {

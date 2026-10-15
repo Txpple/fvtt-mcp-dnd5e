@@ -60,7 +60,9 @@ Content is HTML. Keep these shapes consistent:
 
 - **Show an NPC's attack/feature WITH working buttons** → `post-item-card { actor, item, action: "use" }`.
   This drives the dnd5e Activity system, so the Attack/Damage/Apply-Effects buttons actually work. If
-  the item has no activity the tool says so — fall back to a plain `send-chat-message` description card.
+  the item has no activity the tool refuses it (`[unsupported]`) — fall back to a plain
+  `send-chat-message` description card. A module's veto (a require-target rule) is the same error:
+  nothing was posted.
 - **Ask the table for a roll** → `request-roll { kind: "save"|"check"|"skill", ability/skill, dc }`.
   Posts a clickable prompt players use to roll their own check.
 - **Honesty:** only dnd5e activity cards and inline rolls/`@UUID` links are interactive without an
