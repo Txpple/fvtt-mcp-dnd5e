@@ -260,8 +260,14 @@ describe('setActorOwnership — guards', () => {
 });
 
 describe('setActorOwnership — a placed token (issue #19)', () => {
-  /** Foundry's ForcedDeletion, as the page reaches it (`foundry.data.operators`). */
+  /** Foundry's ForcedDeletion and ForcedReplacement, as the page reaches them (`foundry.data.operators`). */
   class ForcedDeletion {}
+  class ForcedReplacement {
+    constructor(readonly value: unknown) {}
+    static create(value: unknown) {
+      return new ForcedReplacement(value);
+    }
+  }
 
   /**
    * A base actor and one placed token of it on scene s1. The token's own ownership lives on its
@@ -271,8 +277,8 @@ describe('setActorOwnership — a placed token (issue #19)', () => {
   function stubTokenWorld(opts: {
     linked: boolean;
     delta?: Record<string, number> | null;
-    /** Foundry 14.369's ownership field: a deletion of one entry inside it is ignored. */
-    ignoresInnerDeletion?: boolean;
+    /** Foundry 14.369's server: a deletion in an ownership map, or of the map, is ignored. */
+    honoursDeletion?: boolean;
   }) {
     const writes: Array<{ doc: string; data: any; options?: any }> = [];
     const base: any = {
@@ -290,14 +296,18 @@ describe('setActorOwnership — a placed token (issue #19)', () => {
         writes.push({ doc: 'delta', data, options });
         for (const [path, value] of Object.entries(data)) {
           if (path === 'ownership') {
-            // the whole map: a ForcedDeletion (or null) leaves the token nothing of its own
-            delta.ownership = value instanceof ForcedDeletion || value === null ? null : value;
+            // the whole map: a replacement is taken; a deletion only where the stub honours it
+            if (value instanceof ForcedReplacement)
+              delta.ownership = { ...(value.value as object) };
+            else if (value instanceof ForcedDeletion) {
+              if (opts.honoursDeletion) delta.ownership = null;
+            } else delta.ownership = value;
             continue;
           }
           const key = path.replace(/^ownership\./, '');
           delta.ownership = { ...(delta.ownership ?? {}) };
           if (value instanceof ForcedDeletion) {
-            if (opts.ignoresInnerDeletion === false) delete delta.ownership[key];
+            if (opts.honoursDeletion) delete delta.ownership[key];
           } else delta.ownership[key] = value;
         }
       },
@@ -314,7 +324,7 @@ describe('setActorOwnership — a placed token (issue #19)', () => {
         return { ownership: { ...base.ownership, ...(delta.ownership ?? {}) } };
       },
     };
-    (globalThis as any).foundry = { data: { operators: { ForcedDeletion } } };
+    (globalThis as any).foundry = { data: { operators: { ForcedDeletion, ForcedReplacement } } };
     (globalThis as any).game = {
       actors: { get: (id: string) => (id === 'base1' ? base : undefined) },
       users: { get: (id: string) => (id === 'u1' ? { id: 'u1', name: 'John' } : undefined) },
@@ -366,7 +376,7 @@ describe('setActorOwnership — a placed token (issue #19)', () => {
     expect(delta.ownership).toEqual({ u2: 0, default: 3, u1: 2 });
   });
 
-  it("INHERIT removes the token's map whole and merges its other entries back; the user inherits the base actor's", async () => {
+  it("INHERIT writes the token's map whole, without the user's entry: the token's other entries and default stay", async () => {
     const { base, delta, writes, token } = stubTokenWorld({
       linked: false,
       delta: { u1: 3, u2: 0, default: 3 },
@@ -381,36 +391,35 @@ describe('setActorOwnership — a placed token (issue #19)', () => {
     expect(out.message).toMatch(
       /Removed John's own entry on token "Goblin Sentry".*inherits the default \(OWNER\)/
     );
-    // a deletion inside the map is ignored by Foundry, so the map goes whole, then the rest returns
-    expect(writes).toHaveLength(2);
-    expect(writes[0]!.data.ownership).toBeInstanceOf(ForcedDeletion);
-    expect(writes[1]!.data).toEqual({ 'ownership.u2': 0, 'ownership.default': 3 });
-    expect(delta.ownership).toEqual({ u2: 0, default: 3 });
+    // one replacement of the whole map (the server ignores a deletion in it, or of it)
+    expect(writes).toHaveLength(1);
+    expect(writes[0]!.data.ownership).toBeInstanceOf(ForcedReplacement);
+    expect(delta.ownership).toEqual({ default: 3, u2: 0 });
     expect(Object.hasOwn(token.actor.ownership, 'u1')).toBe(false);
     expect(base.ownership).toEqual({ default: 3, u2: 2 });
   });
 
-  it("INHERIT of the token's only entry leaves it nothing of its own (one write)", async () => {
-    const { delta, writes, token } = stubTokenWorld({
-      linked: false,
-      delta: { u1: 1, default: 3 },
-    });
-    await setActorOwnership({
+  it("INHERIT of a user the base actor names gives them the base actor's entry, copied onto the token", async () => {
+    const { delta, token } = stubTokenWorld({ linked: false, delta: { u2: 1, default: 3 } });
+    (globalThis as any).game.users.get = (id: string) =>
+      id === 'u2' ? { id: 'u2', name: 'Ann' } : undefined;
+    const out = await setActorOwnership({
       actorId: 'base1',
-      userId: 'u1',
+      userId: 'u2',
       permission: null,
       sceneId: 's1',
       tokenId: 't1',
     });
-    expect(writes).toHaveLength(1);
-    expect(delta.ownership).toBeNull();
-    // the base actor's own default and entries apply again
-    expect(token.actor.ownership).toEqual({ default: 3, u2: 2 });
+    expect(out.message).toMatch(
+      /inherits the base actor's entry \(OBSERVER\).*copied onto the token/
+    );
+    expect(delta.ownership).toEqual({ default: 3, u2: 2 });
+    expect(token.actor.ownership.u2).toBe(2);
   });
 
   it('a removal Foundry did not make is an error, never a success', async () => {
     const { delta } = stubTokenWorld({ linked: false, delta: { u1: 1, default: 3 } });
-    // a delta that keeps its map whatever it is told (the measured failure, one level up)
+    // a delta that keeps its map whatever it is told (what the server did to a deletion)
     delta.update = async () => {};
     await expect(
       setActorOwnership({

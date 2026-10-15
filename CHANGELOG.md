@@ -145,8 +145,10 @@ What changed for a user of the tools and skills, release by release. The measure
   default, since Foundry fills a missing default with NONE, which would lock every other player out
   of the token; never a non-recursive write, which would rebuild the token's actor from the base
   actor and drop the token's own hit points and changes on every client), INHERIT removes it (the
-  map whole, since Foundry ignores a deletion inside it, then the token's other entries merged back;
-  read back, and an error if Foundry kept the entry), and the base actor is untouched; a linked token
+  server ignores a deletion in an ownership map or of the map, so the token's map is written whole,
+  as Foundry's own ownership dialog writes it: the base actor's entries, the token's others over
+  them, the user's base entry or none; read back, and an error if Foundry kept the entry), and the
+  base actor is untouched; a linked token
   has no ownership of its own, so the write
   goes to its base actor and the answer says so (`token "…" is linked … the write went to its base
   actor`). `list-actor-ownership` with a token id reads that token and names it (`token: {id,

@@ -16,7 +16,9 @@
 //   7. A placed token's id writes that token (issue #19): on an UNLINKED token of the actor, the
 //      tool sets the bystander's level on the token's own ActorDelta (the token answers LIMITED)
 //      while the base actor keeps its OBSERVER; list-actor-ownership with the token id reads the
-//      token; INHERIT on the token removes its entry (the base actor's applies again); a LINKED
+//      token; INHERIT on the token removes its entry (the base actor's level applies again, copied
+//      onto the token, which Foundry writes whole); the other player keeps OWNER and the token its
+//      own hit points through every write; a LINKED
 //      token's write goes to the base actor and the answer says so. A throwaway ZZ scene holds
 //      the two tokens and is deleted in finally.
 //
@@ -264,7 +266,10 @@ try {
   });
   const t2Token = await tokenState(unlinkedId, otherUserId);
   assert(
-    !Object.hasOwn(t2Token.own ?? {}, otherUserId) && t2Token.effective === before.effective,
+    // the token's map is written whole: the bystander's entry is the base actor's own level again
+    (t2Token.own?.[otherUserId] ?? before.stored) === before.stored &&
+      t2Token.effective === before.effective &&
+      t2Token.own?.default === 3,
     `INHERIT on the token removes its entry: the base actor's applies again (own ${JSON.stringify(t2Token.own)}, effective ${t2Token.effective}; ${t2.results?.[0]?.message})`
   );
   assert(t2Token.hp === 7, `and survives the INHERIT (hp ${t2Token.hp})`);

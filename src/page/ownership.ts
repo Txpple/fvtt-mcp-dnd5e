@@ -238,10 +238,13 @@ async function setOwnershipOn(
  * from the base actor plus the ownership alone, dropping the token's other changes, its hit points
  * among them, on every client); the first entry also carries the token's current default, since
  * Foundry's ownership field fills a missing `default` with NONE, which would lock every other user
- * out of the token. INHERIT removes the token's map whole (Foundry's ForcedDeletion; a deletion of
- * one entry inside it is ignored), which makes Foundry re-derive the token's actor from the base
- * actor, merges the token's other entries back, and reads the result back: a removal Foundry did
- * not make is an error, never a success.
+ * out of the token. INHERIT cannot delete one entry: the server ignores a deletion inside an
+ * ownership map and of the whole map alike (measured on Foundry 14.369), and takes a map written
+ * whole, the way Foundry's own ownership dialog writes a token's (a ForcedReplacement). So the
+ * token's map is written whole: the base actor's entries, the token's others over them, and this
+ * user's base entry or none (the default). Every client's token actor then equals what Foundry
+ * re-derives; the base actor's entries are copied onto the token, as the dialog copies them. The
+ * result is read back: a removal Foundry did not make is an error, never a success.
  */
 async function setTokenOwnership(
   token: any,
@@ -260,33 +263,23 @@ async function setTokenOwnership(
   if (permission === null) {
     const hadEntry = Object.hasOwn(own, user.id);
     if (hadEntry) {
-      // Foundry's ownership field ignores a deletion inside it (a ForcedDeletion of one entry
-      // left it, measured on Foundry 14.369), so the token's map goes whole — which makes Foundry
-      // re-derive the token's actor from its base actor on every client — and the token's other
-      // entries, with its default, are merged back.
-      const rest: Record<string, number> = { ...own };
-      delete rest[user.id];
-      if (typeof rest.default !== 'number') {
-        const current = token.actor?.ownership?.default;
-        rest.default = typeof current === 'number' ? current : baseDefault;
-      }
+      const next: Record<string, number> = { ...baseMap, ...own };
+      delete next[user.id];
+      if (Object.hasOwn(baseMap, user.id)) next[user.id] = baseMap[user.id]!;
+      if (typeof next.default !== 'number') next.default = baseDefault;
       const ops = (globalThis as any).foundry?.data?.operators;
-      await delta.update(
-        typeof ops?.ForcedDeletion === 'function'
-          ? { ownership: new ops.ForcedDeletion() }
-          : { ownership: null }
-      );
-      const others = Object.keys(rest).some(k => k !== 'default');
-      if (others || rest.default !== baseDefault) {
-        await delta.update(
-          Object.fromEntries(Object.entries(rest).map(([k, v]) => [`ownership.${k}`, v]))
-        );
+      if (typeof ops?.ForcedReplacement?.create === 'function') {
+        await delta.update({ ownership: ops.ForcedReplacement.create(next) });
+      } else {
+        await delta.update({ ownership: next }, { diff: false, recursive: false });
       }
       // never report a removal Foundry did not make
-      if (Object.hasOwn(token.delta?.ownership ?? {}, user.id)) {
+      const after: Record<string, number> = token.delta?.ownership ?? {};
+      const want = Object.hasOwn(baseMap, user.id) ? baseMap[user.id] : undefined;
+      if (Object.hasOwn(after, user.id) && after[user.id] !== want) {
         throw unsupported(
           `Foundry kept ${user.name}'s own entry on ${where} (` +
-            `${levelName(token.delta.ownership[user.id])}); nothing else changed. Set the level ` +
+            `${levelName(after[user.id]!)}); nothing else changed. Set the level ` +
             "the user should have on the token instead, or reset the token's ownership in Foundry."
         );
       }
@@ -298,7 +291,8 @@ async function setTokenOwnership(
       success: true,
       target: 'token',
       message: hadEntry
-        ? `Removed ${user.name}'s own entry on ${where} — it now inherits ${fallback}`
+        ? `Removed ${user.name}'s own entry on ${where} — it now inherits ${fallback} (Foundry ` +
+          "takes a token's ownership whole, so the base actor's entries are copied onto the token)"
         : `${user.name} had no entry of its own on ${where} — already inheriting ${fallback}`,
     };
   }
