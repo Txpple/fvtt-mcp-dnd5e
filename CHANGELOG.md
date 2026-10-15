@@ -5,6 +5,13 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **The Area Sounds mirror is tested against the module.** `configure-area-sounds` repairs a set
+  the way Area Sounds' own `normalizeSet` does, in TypeScript; `src/page/areasounds.contract.test.ts`
+  now runs both over a corpus of edge values from the module's clone beside this repo, checks the
+  day/night gate, the flag's scope and the library path against the module's `store.js`, reads
+  back what `setsUpdate` stores through the engine unchanged, and holds the mirror to the module's
+  `contracts/sets.json` at the version `contracts/consumes.json` names. Without the clone (CI) the
+  module half is skipped, saying so.
 - **Three context budgets, each with the client that pays it** (the suite's review of 2026-10-15,
   issue #18). The one `tools/list` ceiling measured an eager client, and at 4.6.0 it had 13 chars of
   headroom, so a lights change had to trim the token fields to fit. `npm test` now prints and

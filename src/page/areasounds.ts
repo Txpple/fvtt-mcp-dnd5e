@@ -7,10 +7,13 @@
 // when the module is missing or disabled (reported as a warning, never as a working set — the
 // set-landing-scene precedent).
 //
-// ⚠️ SOURCE OF TRUTH for the set schema is the module's `scripts/engine.js#normalizeSet`. The
-// normalizer below MIRRORS it field-for-field (same defaults, same clamps) and additionally REPORTS
-// what it clamped, which is the half a tool owes a caller that a UI does not. If that module's
-// schema ever gains a field, this is the file that has to follow.
+// ⚠️ SOURCE OF TRUTH for the set schema is the module's `scripts/engine.js#normalizeSet`, and its
+// `contracts/sets.json` writes it down (every field, default and clamp, versioned). The normalizer
+// below MIRRORS it field-for-field (same defaults, same clamps) and additionally REPORTS what it
+// clamped, which is the half a tool owes a caller that a UI does not. `areasounds.contract.test.ts`
+// runs both against a corpus from the module's clone beside this repo, so a field the module gains
+// fails that test here; this is the file that has to follow, and `contracts/consumes.json` the
+// version.
 //
 // Set shape (fvtt-mod-areasounds design.md, "Data shape — flags-only"):
 //   { id, name, active, files[], playStyle: "interval"|"loop", interval, intervalVariation,

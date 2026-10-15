@@ -1,0 +1,13 @@
+{
+  "repo": "fvtt-mcp-dnd5e",
+  "description": "The contracts this server reads, each at the version its test last passed against. src/page/areasounds.contract.test.ts reads the emitter's file and its engine from the clone beside this repo and fails when the mirror disagrees with the engine or the version here is not the emitter's; the suite's tools/contracts.mjs --check prints every consumer's version against every emitter's.",
+  "consumes": [
+    {
+      "emitter": "fvtt-mod-areasounds",
+      "contract": "sets",
+      "file": "contracts/sets.json",
+      "version": 1,
+      "test": "src/page/areasounds.contract.test.ts"
+    }
+  ]
+}
