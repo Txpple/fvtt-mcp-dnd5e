@@ -8,7 +8,13 @@
 // createWorldItems @3733-3900 / deleteWorldItems @3900-4018) exactly so the
 // consuming Node tools (src/tools/items.ts) and their tests stay green.
 
-import { toSource, unmaskedName, sanitizeDocData as sanitizeData } from './_shared.js';
+import {
+  ambiguousTarget,
+  fuzzyTier,
+  toSource,
+  unmaskedName,
+  sanitizeDocData as sanitizeData,
+} from './_shared.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { GENERIC_ICON } from './dnd5e/icons.js';
 import { invalid, notFound } from './errors.js';
@@ -332,9 +338,9 @@ interface DeleteWorldItemsArgs {
 /**
  * Permanently delete one or more world-level Item documents by exact id or
  * exact name. SAFETY: resolution is STRICT — exact id (game.items.get) or exact
- * name (game.items.getName) only, no substring/fuzzy matching, so a destructive
- * call can never hit the wrong item. Returns { success, deletedCount, deleted,
- * notFound? }.
+ * name only, no substring/fuzzy matching, and a name two items share is refused
+ * (ambiguous) before anything is deleted, so a destructive call can never hit
+ * the wrong item. Returns { success, deletedCount, deleted, notFound? }.
  */
 export async function deleteWorldItems(args: DeleteWorldItemsArgs) {
   const identifiers = args?.identifiers;
@@ -347,21 +353,24 @@ export async function deleteWorldItems(args: DeleteWorldItemsArgs) {
     [];
   const notFound: string[] = [];
 
+  // STRICT resolution only — exact id, then exact name — and every identifier before the first
+  // delete: a name two items share is refused (ambiguous, naming them), so nothing is deleted.
+  const targets: any[] = [];
   for (const identifier of identifiers) {
-    // STRICT resolution only — exact id, then exact name.
-    const item = game.items?.get(identifier) || game.items?.getName(identifier);
-    if (item) {
-      const info = {
-        id: item.id ?? identifier,
-        name: item.name ?? '',
-        ...trueNameField(item),
-        type: item.type,
-      };
-      await item.delete();
-      deleted.push(info);
-    } else {
-      notFound.push(identifier);
-    }
+    const named = fuzzyTier(game.items, identifier, { substring: false, caseless: false });
+    if (named.length > 1) throw ambiguousTarget('Item', identifier, named);
+    if (named[0]) targets.push(named[0]);
+    else notFound.push(identifier);
+  }
+  for (const item of targets) {
+    const info = {
+      id: item.id,
+      name: item.name ?? '',
+      ...trueNameField(item),
+      type: item.type,
+    };
+    await item.delete();
+    deleted.push(info);
   }
 
   return {

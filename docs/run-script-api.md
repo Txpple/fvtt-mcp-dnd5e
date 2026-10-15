@@ -189,7 +189,7 @@ Returns `{ notFound: string[] | undefined; warnings: string[] | undefined; error
 
 ### `fvtt.removeActorItems(params)`
 
-Remove embedded Items from an existing actor, identified by id (exact) and/or name (case-insensitive, optionally constrained to a `type`). Identifiers that match nothing are reported in `notFound` rather than silently ignored. Returns { actorId, actorName, removed, notFound }.
+Remove embedded Items from an existing actor, identified by id (exact) and/or name (exact, then case-insensitive, optionally constrained to a `type`; a name several items share is refused, naming them, before anything is deleted). Identifiers that match nothing are reported in `notFound` rather than silently ignored. Returns { actorId, actorName, removed, notFound }.
 
 params:
 - `actorIdentifier: string`
@@ -1113,7 +1113,7 @@ Returns `{ warnings?: string[]; folderId: any; folderName: any; created: any; }`
 
 ### `fvtt.deleteWorldItems(args)`
 
-Permanently delete one or more world-level Item documents by exact id or exact name. SAFETY: resolution is STRICT — exact id (game.items.get) or exact name (game.items.getName) only, no substring/fuzzy matching, so a destructive call can never hit the wrong item. Returns { success, deletedCount, deleted, notFound? }.
+Permanently delete one or more world-level Item documents by exact id or exact name. SAFETY: resolution is STRICT — exact id (game.items.get) or exact name only, no substring/fuzzy matching, and a name two items share is refused (ambiguous) before anything is deleted, so a destructive call can never hit the wrong item. Returns { success, deletedCount, deleted, notFound? }.
 
 args:
 - `identifiers: string[]`

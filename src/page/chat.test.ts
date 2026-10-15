@@ -47,6 +47,17 @@ describe('postItemCard: a card it could not post is an error with a code', () =>
     expect(r).toMatchObject({ posted: true, activityType: 'attack', messageId: 'm1' });
   });
 
+  it('an item name two items share is refused, naming them (a card is a write)', async () => {
+    stubWorld([tail, { ...tail, id: 'i9' }]);
+    const err = await postItemCard({ actor: 'a1', item: 'Tail' }).catch(e => e);
+    expect(err.name).toBe('PageError:ambiguous');
+    expect(err.message).toMatch(/^Item "Tail" matches 2: "Tail" \(i1\), "Tail" \(i9\)/);
+    // the id still names one
+    await expect(postItemCard({ actor: 'a1', item: 'i9' })).resolves.toMatchObject({
+      posted: true,
+    });
+  });
+
   it('an item with no activities is unsupported', async () => {
     stubWorld([{ id: 'i2', name: 'Plain Feature', type: 'feat', system: {} }]);
     const err = await postItemCard({ actor: 'Ankylosaurus', item: 'Plain Feature' }).catch(e => e);

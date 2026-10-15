@@ -497,12 +497,18 @@ function documentsOf(collection: any): any[] {
  * The documents an identifier names in `collection`, by the fuzzy rule's tiers: the first tier
  * that matches anything is the answer — exact id, exact name, the name without case, then a name
  * that contains it (without case). One entry is a match; several are a tie a write must not break.
- * `where` narrows every tier to the documents it accepts (an item of one type).
+ * `where` narrows every tier to the documents it accepts (an item of one type); `substring: false`
+ * drops the last tier, and `caseless: false` the two after the exact name (a strict lookup: the
+ * exact id, then every document with that exact name).
  */
 export function fuzzyTier(
   collection: any,
   identifier: string,
-  { substring = true, where }: { substring?: boolean; where?: (d: any) => boolean } = {}
+  {
+    substring = true,
+    caseless = true,
+    where,
+  }: { substring?: boolean; caseless?: boolean; where?: (d: any) => boolean } = {}
 ): any[] {
   const ok = (d: any): boolean => !!d && (!where || where(d));
   const byId = collection?.get?.(identifier);
@@ -513,6 +519,7 @@ export function fuzzyTier(
   // a collection that cannot be listed still names one
   const named = collection?.getName?.(identifier);
   if (ok(named)) return [named];
+  if (!caseless) return [];
   const lower = identifier.toLowerCase();
   const folded = all.filter((d: any) => d.name?.toLowerCase() === lower);
   if (folded.length || !substring) return folded;

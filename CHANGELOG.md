@@ -152,7 +152,12 @@ What changed for a user of the tools and skills, release by release. The measure
   sword came first. `update-actor-item`, `add-free-cast` (its spell and its granting feature), and
   `manage-activity` / `manage-effect` (but `list`) on an actor's item or a world item refuse an item
   name that matches several (`[ambiguous]`: `Item "sword" matches 3: "Longsword" (i1), …`); a
-  read takes the best match (now the exact name over the case-insensitive one).
+  read takes the best match (now the exact name over the case-insensitive one). The strict item
+  lookups on a write refuse a name two items share the same way: `post-item-card`'s `item` (an id
+  or the exact name), `remove-from-actor`'s `itemNames` (the exact name, then without case) and
+  `manage-items` `delete` (an id or the exact name) each took the first of them, so a delete by a
+  shared name removed whichever came first; every name is resolved before the first delete, so a
+  refused call deletes nothing (the ids still remove several).
 - **`set-actor-ownership` with a placed token's id writes that token** (issue #19). The token was
   lost between the lookup and the write, so an unlinked token's write landed on its base actor and
   every other copy. The page call carries the scene and the token now: an unlinked token's own

@@ -646,6 +646,10 @@ describe('the fuzzy resolver: one tier answers; a write refuses a tie (design.md
     expect(fuzzyTier(c, 'boss').map(a => a.id)).toEqual(['a2']);
     expect(fuzzyTier(c, 'gob').map(a => a.id)).toEqual(['a1', 'a2', 'a3', 'a4']);
     expect(fuzzyTier(c, 'gob', { substring: false })).toEqual([]);
+    // strict: the exact id, then every document with the exact name; nothing without case
+    const strict = { substring: false, caseless: false };
+    expect(fuzzyTier(c, 'Twin', strict).map(a => a.id)).toEqual(['a5', 'a6']);
+    expect(fuzzyTier(c, 'GOBLIN', strict)).toEqual([]);
   });
 
   it('a read takes the best match; a write refuses a tie by name, listing the candidates', () => {

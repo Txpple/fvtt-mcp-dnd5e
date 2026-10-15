@@ -16,7 +16,7 @@
 //  - rich dnd5e cards come from the Activity system (use/rollAttack/rollDamage), the only path whose
 //    buttons rebind through the system's own listeners.
 
-import { resolveActorFuzzy, MCP_FLAG_SCOPE } from './_shared.js';
+import { ambiguousTarget, fuzzyTier, resolveActorFuzzy, MCP_FLAG_SCOPE } from './_shared.js';
 import {
   buildMessageVisibility,
   toMessageRecord,
@@ -309,10 +309,10 @@ export async function postItemCard(args: {
 }) {
   const actor = resolveActorFuzzy(args.actor, 'write');
   if (!actor) throw notFound(`actor "${args.actor}" not found`);
-  const item =
-    actor.items?.get(args.item) ||
-    actor.items?.getName?.(args.item) ||
-    actor.items?.find?.((i: any) => i.name === args.item);
+  // the exact id, then the exact name: a card is a write, so a name two items share is refused
+  const named = fuzzyTier(actor.items, args.item, { substring: false, caseless: false });
+  if (named.length > 1) throw ambiguousTarget('Item', args.item, named);
+  const item = named[0];
   if (!item) throw notFound(`item "${args.item}" not found on actor "${actor.name}"`);
 
   const activities = item.system?.activities;

@@ -763,9 +763,10 @@ export async function addActorItems(params: {
 
 /**
  * Remove embedded Items from an existing actor, identified by id (exact) and/or
- * name (case-insensitive, optionally constrained to a `type`). Identifiers that
- * match nothing are reported in `notFound` rather than silently ignored.
- * Returns { actorId, actorName, removed, notFound }.
+ * name (exact, then case-insensitive, optionally constrained to a `type`; a name
+ * several items share is refused, naming them, before anything is deleted).
+ * Identifiers that match nothing are reported in `notFound` rather than silently
+ * ignored. Returns { actorId, actorName, removed, notFound }.
  */
 export async function removeActorItems(params: {
   actorIdentifier: string;
@@ -801,11 +802,13 @@ export async function removeActorItems(params: {
     }
   }
   if (hasNames) {
+    // the exact name, then the name without case: a name several items share is refused before
+    // anything is deleted (a delete removes one item per name; pass the ids to remove several)
+    const where = typeLower ? (i: any) => i.type === typeLower : undefined;
     for (const name of itemNames) {
-      const nameLower = name.toLowerCase();
-      const item = actor.items.find(
-        (i: any) => i.name?.toLowerCase() === nameLower && (!typeLower || i.type === typeLower)
-      );
+      const named = fuzzyTier(actor.items, name, { substring: false, ...(where ? { where } : {}) });
+      if (named.length > 1) throw ambiguousTarget('Item', name, named);
+      const item = named[0];
       if (item) toDelete.set(item.id, item);
       else notFound.push(name);
     }
