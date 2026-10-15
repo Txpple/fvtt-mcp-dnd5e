@@ -62,6 +62,8 @@ What changed for a user of the tools and skills, release by release. The measure
   capability and the three budgets, §8 the mechanisms (receipts, the script facade, the tool kinds,
   the seat, the budgets), §1 and §9 the gate; CONTRIBUTING's opening, `CLAUDE.md` and `AGENTS.md`
   say the same.
+- **`npm test` ignores the gitignored `scratch/`.** A scratch `*.test.ts` left there on one machine
+  was collected by the offline suite and changed the gate's count on that machine only.
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 
