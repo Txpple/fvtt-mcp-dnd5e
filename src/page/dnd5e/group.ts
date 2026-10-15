@@ -133,10 +133,13 @@ function currentMemberIds(group: any): string[] {
   return members.map((m: any) => m?.actor).filter(Boolean);
 }
 
-/** Resolve each identifier against the world (fuzzy: id, exact name, substring). */
+/**
+ * Resolve each identifier against the world (fuzzy: id, exact name, substring). Membership is a
+ * write, so an identifier that names several actors is refused, naming them.
+ */
 function resolveMembers(identifiers: string[]): MemberResolution[] {
   return identifiers.map(identifier => {
-    const actor = resolveActorFuzzy(identifier);
+    const actor = resolveActorFuzzy(identifier, 'write');
     return {
       identifier,
       actor: actor ? { id: actor.id, name: actor.name, type: actor.type } : null,
@@ -144,9 +147,12 @@ function resolveMembers(identifiers: string[]): MemberResolution[] {
   });
 }
 
-/** Resolve an identifier that must be a GROUP actor, with a type-naming error otherwise. */
-function resolveGroupStrict(identifier: string): any {
-  const actor = resolveActorFuzzy(identifier);
+/**
+ * Resolve an identifier that must be a GROUP actor, with a type-naming error otherwise; a write
+ * (`mode`) refuses an identifier that names several actors.
+ */
+function resolveGroupStrict(identifier: string, mode: 'read' | 'write'): any {
+  const actor = resolveActorFuzzy(identifier, mode);
   if (!actor) {
     throw notFound(`No actor matches "${identifier}"`);
   }
@@ -281,7 +287,7 @@ export interface ManageGroupMembersArgs {
  * the batch never dies mid-loop on a guard the system API would have thrown.
  */
 export async function manageGroupMembers(args: ManageGroupMembersArgs) {
-  const group = resolveGroupStrict(args.groupIdentifier);
+  const group = resolveGroupStrict(args.groupIdentifier, 'write');
 
   const removals = planMemberRemovals(currentMemberIds(group), resolveMembers(args.remove ?? []));
   for (const { id } of removals.remove) {
@@ -313,7 +319,7 @@ export async function manageGroupMembers(args: ManageGroupMembersArgs) {
  * get-actor's character-shaped read returns an empty husk for groups — this is the contract.
  */
 export function getGroupInfo(args: { groupIdentifier: string }) {
-  const group = resolveGroupStrict(args.groupIdentifier);
+  const group = resolveGroupStrict(args.groupIdentifier, 'read');
   const source = group.system.toObject();
 
   const users = (game.users?.contents ?? []).filter((u: any) => !u.isGM);
@@ -381,7 +387,7 @@ export async function configurePrimaryParty(args: ConfigurePrimaryPartyArgs = {}
   }
 
   if (args.groupIdentifier) {
-    const group = resolveGroupStrict(args.groupIdentifier);
+    const group = resolveGroupStrict(args.groupIdentifier, 'write');
     if (previous?.id === group.id) {
       return { success: true, changed: false as const, current: previous };
     }

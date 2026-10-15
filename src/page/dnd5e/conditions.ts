@@ -178,7 +178,7 @@ export async function applyCondition(args: {
   active?: boolean | undefined;
   exhaustionLevel?: number | undefined;
 }) {
-  const actor = resolveActorFuzzy(args?.actorIdentifier);
+  const actor = resolveActorFuzzy(args?.actorIdentifier, 'write');
   if (!actor) throw notFound(`Actor not found: ${args?.actorIdentifier}`);
   if (typeof actor.toggleStatusEffect !== 'function') {
     throw unsupported('This Foundry version does not support Actor#toggleStatusEffect.');

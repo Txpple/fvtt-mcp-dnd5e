@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { getActorOwnership, setActorOwnership } from './ownership.js';
+import { findPlayers, getActorOwnership, setActorOwnership } from './ownership.js';
 
 type UpdateCall = { data: any; options?: any };
 
@@ -247,14 +247,193 @@ describe('getActorOwnership — verbose: explicit vs inherited', () => {
 });
 
 describe('setActorOwnership — guards', () => {
-  it('returns an error (not a throw) for an unknown actor or user, writing nothing', async () => {
+  it('a miss (an unknown actor or user) is a not-found error, writing nothing (design.md §3)', async () => {
     const { updates } = stubWorld({ default: 3 });
     await expect(
       setActorOwnership({ actorId: 'nope', userId: 'u1', permission: null })
-    ).resolves.toMatchObject({ success: false, error: 'Actor not found: nope' });
+    ).rejects.toMatchObject({ code: 'not-found', message: 'Actor not found: nope' });
     await expect(
       setActorOwnership({ actorId: 'actor1', userId: 'ghost', permission: null })
-    ).resolves.toMatchObject({ success: false, error: 'User not found: ghost' });
+    ).rejects.toMatchObject({ code: 'not-found', message: 'User not found: ghost' });
     expect(updates).toHaveLength(0);
+  });
+});
+
+describe('setActorOwnership — a placed token (issue #19)', () => {
+  /**
+   * A base actor and one placed token of it on scene s1. The token's own ownership lives on its
+   * ActorDelta (null: nothing of its own); its synthetic actor's map is the base's with the
+   * delta's entries over it, per user — what Foundry's ActorDelta.applyDelta builds.
+   */
+  function stubTokenWorld(opts: { linked: boolean; delta?: Record<string, number> | null }) {
+    const writes: Array<{ doc: string; data: any; options?: any }> = [];
+    const base: any = {
+      id: 'base1',
+      name: 'Goblin',
+      ownership: { default: 0, u2: 2 },
+      update: async (data: any, options?: any) => {
+        writes.push({ doc: 'base', data, options });
+        base.ownership = { ...data.ownership };
+      },
+    };
+    const delta: any = {
+      ownership: opts.delta ?? null,
+      update: async (data: any, options?: any) => {
+        writes.push({ doc: 'delta', data, options });
+        delta.ownership = data.ownership;
+      },
+    };
+    const token: any = {
+      id: 't1',
+      name: 'Goblin Sentry',
+      actorLink: opts.linked,
+      actorId: 'base1',
+      parent: { id: 's1' },
+      delta,
+    };
+    (globalThis as any).game = {
+      actors: { get: (id: string) => (id === 'base1' ? base : undefined) },
+      users: { get: (id: string) => (id === 'u1' ? { id: 'u1', name: 'John' } : undefined) },
+      scenes: {
+        get: (id: string) =>
+          id === 's1'
+            ? { id: 's1', tokens: { get: (t: string) => (t === 't1' ? token : undefined) } }
+            : undefined,
+      },
+    };
+    return { base, delta, writes };
+  }
+
+  it("an unlinked token: the write lands on the token's own entries; the base actor is untouched", async () => {
+    const { base, delta, writes } = stubTokenWorld({ linked: false });
+    const out = await setActorOwnership({
+      actorId: 'base1',
+      userId: 'u1',
+      permission: 1,
+      sceneId: 's1',
+      tokenId: 't1',
+    });
+    expect(out).toMatchObject({ success: true, target: 'token' });
+    expect(out.message).toMatch(/Set token "Goblin Sentry" \(t1, scene s1\) ownership to LIMITED/);
+    // only the token's own map, written whole: the base actor's entries are not copied in
+    expect(writes).toEqual([
+      { doc: 'delta', data: { ownership: { u1: 1 } }, options: { diff: false, recursive: false } },
+    ]);
+    expect(delta.ownership).toEqual({ u1: 1 });
+    expect(base.ownership).toEqual({ default: 0, u2: 2 });
+  });
+
+  it("INHERIT on an unlinked token removes the token's entry; an empty map is nothing of its own", async () => {
+    const { base, delta, writes } = stubTokenWorld({ linked: false, delta: { u1: 3 } });
+    const out = await setActorOwnership({
+      actorId: 'base1',
+      userId: 'u1',
+      permission: null,
+      sceneId: 's1',
+      tokenId: 't1',
+    });
+    expect(out.message).toMatch(
+      /Removed John's own entry on token "Goblin Sentry".*inherits the default \(NONE\)/
+    );
+    expect(writes).toEqual([
+      { doc: 'delta', data: { ownership: null }, options: { diff: false, recursive: false } },
+    ]);
+    expect(delta.ownership).toBeNull();
+    expect(base.ownership).toEqual({ default: 0, u2: 2 });
+  });
+
+  it('a linked token has no ownership of its own: the base actor is written, and the answer says so', async () => {
+    const { base, writes } = stubTokenWorld({ linked: true });
+    const out = await setActorOwnership({
+      actorId: 'base1',
+      userId: 'u1',
+      permission: 2,
+      sceneId: 's1',
+      tokenId: 't1',
+    });
+    expect(out.target).toBe('actor');
+    expect(out.message).toMatch(/token "Goblin Sentry" is linked.*base actor "Goblin"/);
+    expect(writes.map(w => w.doc)).toEqual(['base']);
+    expect(base.ownership).toEqual({ default: 0, u2: 2, u1: 2 });
+  });
+
+  it('a token that is not on the scene is a not-found error, writing nothing', async () => {
+    const { writes } = stubTokenWorld({ linked: false });
+    await expect(
+      setActorOwnership({
+        actorId: 'base1',
+        userId: 'u1',
+        permission: 1,
+        sceneId: 's1',
+        tokenId: 'tX',
+      })
+    ).rejects.toMatchObject({ code: 'not-found' });
+    expect(writes).toEqual([]);
+  });
+});
+
+describe('getActorOwnership — a placed token id (issue #19)', () => {
+  it("reads the token's own actor and names the token, not the base actor", () => {
+    const synthetic: any = {
+      id: 'base1',
+      name: 'Goblin',
+      type: 'npc',
+      ownership: { default: 0, u1: 1 },
+      testUserPermission: () => false,
+    };
+    const token = {
+      id: 't1',
+      name: 'Goblin Sentry',
+      actorLink: false,
+      parent: { id: 's1' },
+      actor: synthetic,
+    };
+    (globalThis as any).game = {
+      actors: { contents: [], get: () => undefined },
+      scenes: [{ tokens: { get: (id: string) => (id === 't1' ? token : undefined) } }],
+      users: {
+        contents: [{ id: 'u1', name: 'John', isGM: false }],
+        get: (id: string) => (id === 'u1' ? { id: 'u1', name: 'John', isGM: false } : undefined),
+        getName: () => undefined,
+      },
+    };
+    const out = getActorOwnership({ actorIdentifier: 't1' }) as any;
+    expect(out.ownership).toEqual([
+      {
+        id: 'base1',
+        name: 'Goblin Sentry',
+        token: { id: 't1', scene: 's1', linked: false },
+        default: 'NONE',
+        explicit: { John: 'LIMITED' },
+      },
+    ]);
+  });
+});
+
+describe('findPlayers — one tier answers', () => {
+  const users = [
+    { id: 'u1', name: 'John', isGM: false },
+    { id: 'u2', name: 'Johnny', isGM: false },
+    { id: 'gm', name: 'Johann the GM', isGM: true },
+  ];
+  afterEach(() => {
+    delete (globalThis as any).game;
+  });
+  const world = () => {
+    (globalThis as any).game = {
+      users: { contents: users, get: (id: string) => users.find(u => u.id === id) },
+      actors: { contents: [] },
+    };
+  };
+
+  it('an exact name answers alone; a substring names every player it matches; GMs never', () => {
+    world();
+    expect(findPlayers({ identifier: 'John' })).toEqual([{ id: 'u1', name: 'John' }]);
+    expect(findPlayers({ identifier: 'joh' })).toEqual([
+      { id: 'u1', name: 'John' },
+      { id: 'u2', name: 'Johnny' },
+    ]);
+    expect(findPlayers({ identifier: 'u2' })).toEqual([{ id: 'u2', name: 'Johnny' }]);
+    expect(findPlayers({ identifier: 'joh', allowPartialMatch: false })).toEqual([]);
   });
 });

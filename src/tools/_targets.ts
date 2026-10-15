@@ -8,9 +8,11 @@
 import { z } from 'zod';
 
 /**
- * The fuzzy rule — `resolveActorFuzzy` (src/page/_shared.ts): exact id, exact name, then a
- * case-insensitive name substring; then a placed token id on any scene, which targets that token's
- * own actor (its delta), not the base actor. Every read and every sheet edit.
+ * The fuzzy rule — `resolveActorFuzzy` (src/page/_shared.ts): exact id, exact name, the name
+ * without case, then a case-insensitive name substring (the first tier that matches answers);
+ * then a placed token id on any scene, which targets that token's own actor (its delta), not the
+ * base actor. Every read and every sheet edit. A read takes the best match; a write refuses a tier
+ * that names several actors (`ambiguous`, listing them), so "substring ok" means a unique one.
  */
 export const ACTOR_TARGET =
   'Actor id or name (substring ok); a placed token id targets that token, not its base actor.';

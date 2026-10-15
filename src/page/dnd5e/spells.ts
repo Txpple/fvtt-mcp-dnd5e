@@ -8,7 +8,7 @@
 // dnd5e system-data shape + return shape the Node tools + tests expect. No module
 // scaffolding (validateFoundryState / auditLog / permissions / sockets).
 
-import { resolveActorFuzzy as findActorByIdentifier } from '../_shared.js';
+import { resolveActorFuzzy } from '../_shared.js';
 import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { DEFAULT_SPELL_PACKS } from '../../utils/compendium-sources.js';
@@ -224,7 +224,7 @@ export async function setActorSpellcasting(
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(data.actorIdentifier);
+  const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
   if (!actor) {
     throw notFoundError(`Actor not found: "${data.actorIdentifier}"`);
   }
@@ -277,7 +277,7 @@ export async function addSpellsToActor(data: AddSpellsArgs) {
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(data.actorIdentifier);
+  const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
   if (!actor) {
     throw notFoundError(`Actor not found: "${data.actorIdentifier}"`);
   }
@@ -456,7 +456,7 @@ export async function addHomebrewSpellToActor(args: {
       `addHomebrewSpellToActor requires D&D 5e. Current system: "${game.system.id}".`
     );
   }
-  const actor = findActorByIdentifier(args.actorIdentifier);
+  const actor = resolveActorFuzzy(args.actorIdentifier, 'write');
   if (!actor) throw notFoundError(`Actor not found: "${args.actorIdentifier}"`);
 
   const existing = actor.items.find(

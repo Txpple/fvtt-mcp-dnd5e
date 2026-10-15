@@ -409,9 +409,11 @@ export class JournalTools {
     const request = LinkQuestToNPCSchema.parse(args);
 
     // Resolve the NPC to a REAL Actor — a quest link must point at a live document, never a dead
-    // name (ask-don't-invent). findActor returns { id, name } or null.
+    // name (ask-don't-invent). findActor returns { id, name } or null; the link is a write, so a
+    // name that matches several actors is refused, naming them, never linked to the first.
     const actor = (await this.foundry.call('findActor', {
       identifier: request.npcName,
+      forWrite: true,
     })) as { id?: string; name?: string } | null;
     if (!actor?.id) {
       throw new FormattedToolError(

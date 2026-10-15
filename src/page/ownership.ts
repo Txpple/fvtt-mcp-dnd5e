@@ -4,7 +4,8 @@
 // actor's ownership map. No permission/transaction/settings scaffolding — the
 // headless page IS the GM, so it reads and mutates ownership directly.
 
-import { resolveActorFuzzy as findActorByIdentifier } from './_shared.js';
+import { fuzzyTier, resolveActorTarget } from './_shared.js';
+import { notFound } from './errors.js';
 
 // Foundry token disposition constant for FRIENDLY (CONST.TOKEN_DISPOSITIONS.FRIENDLY).
 const FRIENDLY_DISPOSITION = 1;
@@ -50,9 +51,12 @@ export function getActorOwnership(args?: {
   const playerIdentifier = args?.playerIdentifier;
   const single = !!actorIdentifier && actorIdentifier !== 'all';
 
-  const actors: any[] = single
-    ? [findActorByIdentifier(actorIdentifier)].filter(Boolean)
-    : (game.actors?.contents ?? []);
+  // One actor asked for: through a placed token's id it is that token's own actor (an unlinked
+  // token's synthetic actor carries the token's ownership over its base actor's), and the row
+  // names the token (issue #19).
+  const target = single ? resolveActorTarget(actorIdentifier) : undefined;
+  const actors: any[] = single ? (target ? [target.actor] : []) : (game.actors?.contents ?? []);
+  const tokenOf = (actor: any) => (target?.token && target.actor === actor ? target.token : null);
 
   const users: any[] = (
     playerIdentifier
@@ -67,11 +71,14 @@ export function getActorOwnership(args?: {
   for (const actor of actors) {
     const map: Record<string, number> = actor.ownership ?? {};
     const defaultLevel = typeof map.default === 'number' ? map.default : 0;
+    const token = tokenOf(actor);
+    const tokenField = token ? { token: tokenRef(token) } : {};
 
     if (args?.verbose) {
       rows.push({
         id: actor.id,
-        name: actor.name,
+        name: token?.name ?? actor.name,
+        ...tokenField,
         type: actor.type,
         defaultPermission: levelName(defaultLevel),
         numericDefaultPermission: defaultLevel,
@@ -106,13 +113,19 @@ export function getActorOwnership(args?: {
     }
     rows.push({
       id: actor.id,
-      name: actor.name,
+      name: token?.name ?? actor.name,
+      ...tokenField,
       default: levelName(defaultLevel),
       ...(hasExplicit ? { explicit } : {}),
     });
   }
 
   return { ownership: rows, total: actors.length, listed: rows.length, trivialOmitted: trivial };
+}
+
+/** A placed token as an ownership row names it: its id, its scene, whether it is linked. */
+function tokenRef(token: any): { id: string; scene: string; linked: boolean } {
+  return { id: token.id, scene: token.parent?.id ?? '', linked: !!token.actorLink };
 }
 
 /**
@@ -130,68 +143,141 @@ export function getActorOwnership(args?: {
  * across three actors; see fvtt-mod-partystash/tools/clean-stale-ownership.mjs), and a recursive update
  * would merge the removed key straight back in.
  *
- * Best-effort: returns a { success, message, error? } result rather than throwing.
+ * A placed token (`sceneId` + `tokenId`, issue #19): an UNLINKED token's ownership is its own —
+ * the token's ActorDelta carries only the entries set on the token, merged over the base actor's
+ * per user, so a write there leaves the base actor and every other copy alone, and INHERIT
+ * removes the token's entry (the user then inherits the base actor's). A LINKED token has no
+ * ownership of its own: the write goes to the base actor, and the answer says so.
+ *
+ * A miss (no such actor, token or user) is an error, coded `not-found` (design.md §3).
  */
 export async function setActorOwnership(args: {
   actorId: string;
   userId: string;
   permission: number | null;
-}): Promise<{ success: boolean; message: string; error?: string | undefined }> {
-  try {
-    const actor = game.actors?.get(args.actorId);
-    if (!actor) {
-      return { success: false, error: `Actor not found: ${args.actorId}`, message: '' };
+  /** With `tokenId`: the scene of a placed token whose own ownership is written. */
+  sceneId?: string | undefined;
+  /** A placed token: unlinked, its own ownership (its ActorDelta's); linked, its base actor's. */
+  tokenId?: string | undefined;
+}): Promise<{ success: boolean; message: string; target: 'actor' | 'token' }> {
+  const user = game.users?.get(args.userId);
+  if (!user) throw notFound(`User not found: ${args.userId}`);
+
+  if (args.tokenId) {
+    const scene = game.scenes?.get(args.sceneId ?? '');
+    const token = scene?.tokens?.get(args.tokenId);
+    if (!token) {
+      throw notFound(`Token not found: ${args.tokenId} on scene ${args.sceneId ?? '(none named)'}`);
     }
-
-    const user = game.users?.get(args.userId);
-    if (!user) {
-      return { success: false, error: `User not found: ${args.userId}`, message: '' };
-    }
-
-    const currentOwnership: Record<string, number> = actor.ownership || {};
-
-    // INHERIT: rebuild the map WITHOUT this user's key.
-    if (args.permission === null) {
-      const hadEntry = Object.hasOwn(currentOwnership, args.userId);
-      const next: Record<string, number> = {};
-      for (const [id, level] of Object.entries(currentOwnership)) {
-        if (id !== args.userId) next[id] = level;
-      }
-
-      await actor.update({ ownership: next }, { diff: false, recursive: false });
-
-      const defaultLevel = next.default ?? 0;
-      const inherited = PERMISSION_NAMES[defaultLevel] ?? String(defaultLevel);
-      return {
-        success: true,
-        message: hadEntry
-          ? `Removed ${user.name}'s explicit ownership entry on ${actor.name} — now inherits the actor default (${inherited})`
-          : `${user.name} had no explicit ownership entry on ${actor.name} — already inheriting the actor default (${inherited})`,
-      };
-    }
-
-    // Merge the new permission into the actor's existing ownership map.
-    const newOwnership = { ...currentOwnership, [args.userId]: args.permission };
-
-    await actor.update({ ownership: newOwnership }, { diff: false, recursive: false });
-
-    const permissionName = PERMISSION_NAMES[args.permission] ?? args.permission.toString();
-
+    if (!token.actorLink) return setTokenOwnership(token, user, args.permission);
+    const base = game.actors?.get(token.actorId ?? args.actorId);
+    if (!base) throw notFound(`Actor not found: the base actor of token "${token.name}"`);
+    const out = await setOwnershipOn(base, user, args.permission);
     return {
-      success: true,
+      ...out,
       message:
-        `Set ${actor.name} ownership to ${permissionName} for ${user.name}` +
-        (args.permission === 0
-          ? ` (explicit deny — overrides the actor default; use INHERIT to fall back to it)`
-          : ''),
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      message: '',
+        `${out.message} — token "${token.name}" is linked, so it has no ownership of its own: ` +
+        `the write went to its base actor "${base.name}" and every token linked to it`,
     };
   }
+
+  const actor = game.actors?.get(args.actorId);
+  if (!actor) throw notFound(`Actor not found: ${args.actorId}`);
+  return setOwnershipOn(actor, user, args.permission);
+}
+
+/** A world actor's ownership map, written whole (the module comment above says why). */
+async function setOwnershipOn(
+  actor: any,
+  user: any,
+  permission: number | null
+): Promise<{ success: boolean; message: string; target: 'actor' }> {
+  const currentOwnership: Record<string, number> = actor.ownership || {};
+
+  // INHERIT: rebuild the map WITHOUT this user's key.
+  if (permission === null) {
+    const hadEntry = Object.hasOwn(currentOwnership, user.id);
+    const next: Record<string, number> = {};
+    for (const [id, level] of Object.entries(currentOwnership)) {
+      if (id !== user.id) next[id] = level;
+    }
+
+    await actor.update({ ownership: next }, { diff: false, recursive: false });
+
+    const defaultLevel = next.default ?? 0;
+    const inherited = PERMISSION_NAMES[defaultLevel] ?? String(defaultLevel);
+    return {
+      success: true,
+      target: 'actor',
+      message: hadEntry
+        ? `Removed ${user.name}'s explicit ownership entry on ${actor.name} — now inherits the actor default (${inherited})`
+        : `${user.name} had no explicit ownership entry on ${actor.name} — already inheriting the actor default (${inherited})`,
+    };
+  }
+
+  // Merge the new permission into the actor's existing ownership map.
+  const newOwnership = { ...currentOwnership, [user.id]: permission };
+  await actor.update({ ownership: newOwnership }, { diff: false, recursive: false });
+
+  const permissionName = PERMISSION_NAMES[permission] ?? permission.toString();
+  return {
+    success: true,
+    target: 'actor',
+    message:
+      `Set ${actor.name} ownership to ${permissionName} for ${user.name}` +
+      (permission === 0
+        ? ` (explicit deny — overrides the actor default; use INHERIT to fall back to it)`
+        : ''),
+  };
+}
+
+/**
+ * An unlinked token's own ownership: the entries on its ActorDelta, merged per user over its base
+ * actor's (Foundry's `ActorDelta.applyDelta`). Only the token's own map is written, whole, so the
+ * base actor and the other copies keep theirs, and an empty map is null again (nothing of its own).
+ */
+async function setTokenOwnership(
+  token: any,
+  user: any,
+  permission: number | null
+): Promise<{ success: boolean; message: string; target: 'token' }> {
+  const delta = token.delta;
+  if (!delta) throw notFound(`Token "${token.name}" has no actor data of its own`);
+  const own: Record<string, number> = { ...(delta.ownership ?? {}) };
+  const base = game.actors?.get(token.actorId);
+  const baseMap: Record<string, number> = base?.ownership ?? {};
+  const levelName = (level: number) => PERMISSION_NAMES[level] ?? String(level);
+  const where = `token "${token.name}" (${token.id}, scene ${token.parent?.id ?? '?'})`;
+
+  if (permission === null) {
+    const hadEntry = Object.hasOwn(own, user.id);
+    delete own[user.id];
+    await delta.update(
+      { ownership: Object.keys(own).length ? own : null },
+      { diff: false, recursive: false }
+    );
+    const fallback = Object.hasOwn(baseMap, user.id)
+      ? `the base actor's entry (${levelName(baseMap[user.id]!)})`
+      : `the default (${levelName(own.default ?? baseMap.default ?? 0)})`;
+    return {
+      success: true,
+      target: 'token',
+      message: hadEntry
+        ? `Removed ${user.name}'s own entry on ${where} — it now inherits ${fallback}`
+        : `${user.name} had no entry of its own on ${where} — already inheriting ${fallback}`,
+    };
+  }
+
+  own[user.id] = permission;
+  await delta.update({ ownership: own }, { diff: false, recursive: false });
+  return {
+    success: true,
+    target: 'token',
+    message:
+      `Set ${where} ownership to ${levelName(permission)} for ${user.name}; its base actor ` +
+      `${base ? `"${base.name}" ` : ''}and the other tokens keep theirs` +
+      (permission === 0 ? ' (an explicit deny on this token; INHERIT falls back)' : ''),
+  };
 }
 
 /**
@@ -238,47 +324,42 @@ export function getConnectedPlayers(): Array<{ id: string; name: string }> {
 }
 
 /**
- * Find player users matching an identifier. Matches non-GM user names directly
- * (exact, or partial when allowPartialMatch). If none match and
- * includeCharacterOwners is set, falls back to matching character actor names
- * and returning their owning player. Returns { id, name }[].
+ * The players an identifier names, for a write (set-actor-ownership): the non-GM users by
+ * `fuzzyTier` (id, exact name, the name without case, then a name containing it when
+ * allowPartialMatch); none, and includeCharacterOwners, the owners of the character actors it
+ * names by the same tiers. One tier answers, so an exact name never brings its substring matches
+ * along: more than one entry is a tie the caller refuses. Returns { id, name }[].
  */
 export function findPlayers(args: {
   identifier: string;
   allowPartialMatch?: boolean | undefined;
   includeCharacterOwners?: boolean | undefined;
-}) {
+}): Array<{ id: string; name: string }> {
   const { identifier, allowPartialMatch = true, includeCharacterOwners = true } = args;
-  const searchTerm = identifier.toLowerCase();
-  const players: Array<{ id: string; name: string }> = [];
+  const pick = (docs: any[]): any[] => {
+    const byId = (id: string) => docs.find((d: any) => d.id === id);
+    const tier = fuzzyTier({ contents: docs, get: byId }, identifier);
+    // without partial matching, a substring tier is no match
+    if (allowPartialMatch) return tier;
+    const lower = identifier.toLowerCase();
+    return tier.filter((d: any) => d.id === identifier || d.name?.toLowerCase() === lower);
+  };
 
-  // Direct user-name matching (excluding GMs).
-  for (const user of game.users?.contents ?? []) {
-    if (user.isGM) continue;
+  const players: Array<{ id: string; name: string }> = pick(
+    (game.users?.contents ?? []).filter((u: any) => !u.isGM)
+  ).map((u: any) => ({ id: String(u.id || ''), name: String(u.name || 'Unknown') }));
+  if (players.length || !includeCharacterOwners) return players.filter(p => p.id);
 
-    const userName = user.name?.toLowerCase() || '';
-    if (userName === searchTerm || (allowPartialMatch && userName.includes(searchTerm))) {
-      players.push({ id: user.id || '', name: user.name || 'Unknown' });
+  // Character-name fallback: resolve to each named character's owning player.
+  const owners: Array<{ id: string; name: string }> = [];
+  const characters = (game.actors?.contents ?? []).filter((a: any) => a.type === 'character');
+  for (const actor of pick(characters)) {
+    const owner = game.users?.contents.find(
+      (user: any) => actor.testUserPermission(user, 'OWNER') && !user.isGM
+    );
+    if (owner && !owners.some(p => p.id === owner.id)) {
+      owners.push({ id: owner.id || '', name: owner.name || 'Unknown' });
     }
   }
-
-  // Character-name fallback: resolve to the character's owning player.
-  if (includeCharacterOwners && players.length === 0) {
-    for (const actor of game.actors?.contents ?? []) {
-      if (actor.type !== 'character') continue;
-
-      const actorName = actor.name?.toLowerCase() || '';
-      if (actorName === searchTerm || (allowPartialMatch && actorName.includes(searchTerm))) {
-        const owner = game.users?.contents.find(
-          (user: any) => actor.testUserPermission(user, 'OWNER') && !user.isGM
-        );
-
-        if (owner && !players.some(p => p.id === owner.id)) {
-          players.push({ id: owner.id || '', name: owner.name || 'Unknown' });
-        }
-      }
-    }
-  }
-
-  return players.filter(p => p.id);
+  return owners.filter(p => p.id);
 }

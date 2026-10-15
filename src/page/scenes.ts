@@ -24,6 +24,7 @@
 import { normalizeAssetPath, getOrCreateFolder } from './_shared.js';
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { ambiguous, invalid, notFound } from './errors.js';
+import { resolveUser } from './users.js';
 
 // Foundry document class (Scene) and CONST live in the page global scope but are
 // not declared in foundry-globals.d.ts; reach them off globalThis (loosely typed).
@@ -852,9 +853,8 @@ export async function pullUsersToScene(args: {
   const selfId = game.user?.id;
 
   for (const identifier of args.userIdentifiers ?? []) {
-    const user =
-      game.users?.get(identifier) ||
-      game.users?.contents.find((u: any) => u.name?.toLowerCase() === identifier.toLowerCase());
+    // a pull is a write: a name two users share without case is refused, naming them
+    const user = resolveUser(identifier, 'write');
     if (!user) {
       notFound.push(identifier);
       continue;
@@ -957,10 +957,10 @@ export async function setLandingScene(args: {
   const unchanged: Array<{ id: string; name: string }> = [];
   const notFound: string[] = [];
 
-  for (const id of args.userIdentifiers ?? []) {
-    const user =
-      game.users?.get(id) ||
-      game.users?.contents.find((u: any) => u.name?.toLowerCase() === id.toLowerCase());
+  // every identifier is resolved before the first write: one that two users share is refused,
+  // naming them, with nothing written
+  const targets = (args.userIdentifiers ?? []).map(id => ({ id, user: resolveUser(id, 'write') }));
+  for (const { id, user } of targets) {
     if (!user) {
       notFound.push(id);
       continue;

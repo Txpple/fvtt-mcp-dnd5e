@@ -23,6 +23,9 @@ import {
   assertPlainSerializable,
   guardSerialization,
   deleteEmbeddedStrict,
+  fuzzyTier,
+  resolveActorFuzzy,
+  resolveActorTarget,
 } from './_shared.js';
 
 describe('normalizeAssetPath', () => {
@@ -610,5 +613,62 @@ describe('deleteEmbeddedStrict', () => {
     await expect(deleteEmbeddedStrict(answered, 'Tile', ['t1'], 'Tile')).rejects.toThrow(/vetoed/);
     const silent = { name: 'P', deleteEmbeddedDocuments: async () => undefined };
     await expect(deleteEmbeddedStrict(silent, 'Tile', ['t1'], 'Tile')).resolves.toEqual(['t1']);
+  });
+});
+
+describe('the fuzzy resolver: one tier answers; a write refuses a tie (design.md §3)', () => {
+  const actors = [
+    { id: 'a1', name: 'Goblin' },
+    { id: 'a2', name: 'Goblin Boss' },
+    { id: 'a3', name: 'goblin' },
+    { id: 'a4', name: 'Hobgoblin Captain' },
+    { id: 'a5', name: 'Twin' },
+    { id: 'a6', name: 'Twin' },
+  ];
+  const token = { id: 'tok1', name: 'Sentry', actor: { id: 'a1', name: 'Goblin' } };
+  afterEach(() => {
+    delete (globalThis as any).game;
+  });
+  const world = () => {
+    (globalThis as any).game = {
+      actors: { contents: actors, get: (id: string) => actors.find(a => a.id === id) },
+      scenes: [{ tokens: { get: (id: string) => (id === token.id ? token : undefined) } }],
+    };
+  };
+
+  it('fuzzyTier: id, exact name, the name without case, then a substring: the first that matches', () => {
+    const c = { contents: actors, get: (id: string) => actors.find(a => a.id === id) };
+    expect(fuzzyTier(c, 'a4').map(a => a.id)).toEqual(['a4']);
+    expect(fuzzyTier(c, 'Goblin').map(a => a.id)).toEqual(['a1']);
+    expect(fuzzyTier(c, 'GOBLIN').map(a => a.id)).toEqual(['a1', 'a3']);
+    expect(fuzzyTier(c, 'boss').map(a => a.id)).toEqual(['a2']);
+    expect(fuzzyTier(c, 'gob').map(a => a.id)).toEqual(['a1', 'a2', 'a3', 'a4']);
+    expect(fuzzyTier(c, 'gob', { substring: false })).toEqual([]);
+  });
+
+  it('a read takes the best match; a write refuses a tie by name, listing the candidates', () => {
+    world();
+    expect(resolveActorFuzzy('gob')?.id).toBe('a1');
+    expect(resolveActorFuzzy('boss', 'write')?.id).toBe('a2');
+    expect(() => resolveActorFuzzy('gob', 'write')).toThrow(
+      /^Actor "gob" matches 4: "Goblin" \(a1\), "Goblin Boss" \(a2\), "goblin" \(a3\), "Hobgoblin Captain" \(a4\)\. A write changes one actor/
+    );
+    // two actors with one exact name: only the id tells them apart
+    expect(() => resolveActorFuzzy('Twin', 'write')).toThrow(
+      /matches 2: "Twin" \(a5\), "Twin" \(a6\)/
+    );
+    try {
+      resolveActorFuzzy('Twin', 'write');
+    } catch (e: any) {
+      expect(e.code).toBe('ambiguous');
+    }
+  });
+
+  it('a placed token id, with no world actor matching, is that token and its own actor', () => {
+    world();
+    const found = resolveActorTarget('tok1', 'write');
+    expect(found?.token).toBe(token);
+    expect(found?.actor).toBe(token.actor);
+    expect(resolveActorTarget('nothing-matches')).toBeUndefined();
   });
 });

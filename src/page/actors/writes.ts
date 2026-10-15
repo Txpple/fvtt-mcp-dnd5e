@@ -4,7 +4,9 @@
 // page. (F45: the writes third of the old src/page/actors.ts.)
 
 import {
-  resolveActorFuzzy as resolveActor,
+  ambiguousTarget,
+  fuzzyTier,
+  resolveActorFuzzy,
   getOrCreateFolder as getOrCreateFolderShared,
   importFromCompendium,
   findUnresolvedScaleTokens,
@@ -21,7 +23,7 @@ import {
   tokenDefaults,
   type DispositionKey,
 } from '../dnd5e/token-defaults.js';
-import { ambiguous, invalid, notFound as notFoundError } from '../errors.js';
+import { invalid, notFound as notFoundError } from '../errors.js';
 
 import { updateActor } from './update.js';
 
@@ -555,21 +557,11 @@ export async function deleteActor(data: {
  * player is worse than assigning none, so ambiguity never silently picks.
  */
 function resolveOwnerUser(identifier: string): any {
-  const byId = game.users?.get(identifier);
-  if (byId) return byId;
-
-  const users: any[] = game.users?.contents ?? [];
-  const term = identifier.toLowerCase();
-  const exact = users.find((u: any) => u.name?.toLowerCase() === term);
-  if (exact) return exact;
-
-  const partial = users.filter((u: any) => u.name?.toLowerCase().includes(term));
-  if (partial.length === 1) return partial[0];
-  if (partial.length > 1) {
-    throw ambiguous(
-      `Ambiguous owner "${identifier}" — matches ${partial.map((u: any) => u.name).join(', ')}`
-    );
-  }
+  // the shared tiers (id, exact name, the name without case, a name containing it); a tie is
+  // refused, naming the users
+  const tier = fuzzyTier(game.users, identifier);
+  if (tier.length > 1) throw ambiguousTarget('User', identifier, tier);
+  if (tier.length) return tier[0];
   throw notFoundError(`User not found: ${identifier}`);
 }
 
@@ -725,7 +717,7 @@ export async function addActorItems(params: {
     throw invalid('items array is required and must contain at least one entry');
   }
 
-  const actor = resolveActor(actorIdentifier);
+  const actor = resolveActorFuzzy(actorIdentifier, 'write');
   if (!actor) {
     throw notFoundError(`Actor not found: ${actorIdentifier}`);
   }
@@ -792,7 +784,7 @@ export async function removeActorItems(params: {
     throw invalid('Provide itemIds and/or itemNames identifying the items to remove');
   }
 
-  const actor = resolveActor(actorIdentifier);
+  const actor = resolveActorFuzzy(actorIdentifier, 'write');
   if (!actor) {
     throw notFoundError(`Actor not found: ${actorIdentifier}`);
   }

@@ -11,7 +11,7 @@
 // coupling, no import cycle.
 
 import {
-  resolveActorFuzzy as resolveActor,
+  resolveActorFuzzy,
   resolveActorItem,
   resolveWorldItem,
   toDeletionKey,
@@ -210,7 +210,7 @@ export async function manageActivity(params: {
   let actorRef: { id: string; name: string } | null = null;
   let applyUpdate: (data: Record<string, any>) => Promise<any>;
   if (params.actorIdentifier) {
-    const actor = resolveActor(params.actorIdentifier);
+    const actor = resolveActorFuzzy(params.actorIdentifier, action === 'list' ? 'read' : 'write');
     if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     item = resolveActorItem(actor, itemIdentifier);
     if (!item) throw notFound(`Item "${itemIdentifier}" not found on actor "${actor.name}"`);

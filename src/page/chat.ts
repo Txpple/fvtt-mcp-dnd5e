@@ -139,7 +139,7 @@ export async function postChatMessage(args: {
   let speaker: any;
   const aliasArg = (args.speakerAlias ?? '').trim();
   if (args.speakerActor) {
-    actorDoc = resolveActorFuzzy(args.speakerActor);
+    actorDoc = resolveActorFuzzy(args.speakerActor, 'write');
     if (!actorDoc) throw notFound(`speakerActor "${args.speakerActor}" not found`);
     speaker = Cls.getSpeaker({ actor: actorDoc, ...(aliasArg ? { alias: aliasArg } : {}) });
   } else {
@@ -307,7 +307,7 @@ export async function postItemCard(args: {
   consume?: boolean | undefined;
   critical?: boolean | undefined;
 }) {
-  const actor = resolveActorFuzzy(args.actor);
+  const actor = resolveActorFuzzy(args.actor, 'write');
   if (!actor) throw notFound(`actor "${args.actor}" not found`);
   const item =
     actor.items?.get(args.item) ||

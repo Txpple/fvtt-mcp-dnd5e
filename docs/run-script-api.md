@@ -17,12 +17,13 @@ Returns `{ id: any; name: any; type: any; itemCount: any; effectCount: any; data
 
 ### `fvtt.findActor(args)`
 
-Resolve an actor by free-text identifier, returning { id, name } or null. Payload: { identifier }.
+Resolve an actor by free-text identifier, returning { id, name } or null; through a placed token's id, also the token (`sceneId`, `tokenId`, `linked`), so a write can reach the token's own actor instead of its base actor (issue #19). `forWrite` refuses an identifier that names several actors (`ambiguous`, naming them) instead of picking the first. Payload: { identifier }.
 
 args:
 - `identifier: string`
+- `forWrite?: boolean`
 
-Returns `{ id: any; name: any; } | null`
+Returns `{ id: string; name: string; token?: { sceneId: string; tokenId: string; name: string; linked: boolean; } | undefined; } | null`
 
 ### `fvtt.getCharacterEntity(args)`
 
@@ -1352,7 +1353,7 @@ Returns `{ success: boolean; updated: false; notFound: string; folder?: never; }
 
 ### `fvtt.findPlayers(args)`
 
-Find player users matching an identifier. Matches non-GM user names directly (exact, or partial when allowPartialMatch). If none match and includeCharacterOwners is set, falls back to matching character actor names and returning their owning player. Returns { id, name }[].
+The players an identifier names, for a write (set-actor-ownership): the non-GM users by `fuzzyTier` (id, exact name, the name without case, then a name containing it when allowPartialMatch); none, and includeCharacterOwners, the owners of the character actors it names by the same tiers. One tier answers, so an exact name never brings its substring matches along: more than one entry is a tie the caller refuses. Returns { id, name }[].
 
 args:
 - `identifier: string`
@@ -1398,8 +1399,10 @@ args:
 - `actorId: string`
 - `userId: string`
 - `permission: number | null`
+- `sceneId?: string` — With `tokenId`: the scene of a placed token whose own ownership is written.
+- `tokenId?: string` — A placed token: unlinked, its own ownership (its ActorDelta's); linked, its base actor's.
 
-Returns `{ success: boolean; message: string; error?: string | undefined; }`
+Returns `{ success: boolean; message: string; target: "actor" | "token"; }`
 
 ## placeables/drawing
 

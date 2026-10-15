@@ -3,7 +3,8 @@
 // the fuzzy find. (F45: the reads third of the old src/page/actors.ts.)
 
 import {
-  resolveActorFuzzy as resolveActor,
+  resolveActorFuzzy,
+  resolveActorTarget,
   toSource,
   unmaskedName,
   sanitizeDocData as sanitize,
@@ -373,7 +374,7 @@ export function getCharacterInfo(args: {
     throw invalid('characterName or characterId is required');
   }
 
-  const actor: any = resolveActor(identifier);
+  const actor: any = resolveActorFuzzy(identifier);
   if (!actor) {
     throw notFoundError(`Character not found: ${identifier}`);
   }
@@ -480,7 +481,7 @@ export function exportActorData(args: { identifier?: string | undefined }) {
     throw invalid('identifier is required');
   }
 
-  const actor: any = resolveActor(identifier);
+  const actor: any = resolveActorFuzzy(identifier);
   if (!actor) {
     throw notFoundError(`Character not found: ${identifier}`);
   }
@@ -619,7 +620,7 @@ export function searchCharacterItems(args: {
 }) {
   const { characterIdentifier, query, type, category, limit = 20 } = args;
 
-  const actor = resolveActor(characterIdentifier);
+  const actor = resolveActorFuzzy(characterIdentifier);
   if (!actor) {
     throw notFoundError(`Character not found: ${characterIdentifier}`);
   }
@@ -759,15 +760,31 @@ export function searchCharacterItems(args: {
 }
 
 /**
- * Resolve an actor by free-text identifier, returning { id, name } or null.
- * Payload: { identifier }.
+ * Resolve an actor by free-text identifier, returning { id, name } or null; through a placed
+ * token's id, also the token (`sceneId`, `tokenId`, `linked`), so a write can reach the token's
+ * own actor instead of its base actor (issue #19). `forWrite` refuses an identifier that names
+ * several actors (`ambiguous`, naming them) instead of picking the first. Payload: { identifier }.
  */
-export function findActor(args: { identifier: string }) {
-  try {
-    const actor = resolveActor(args.identifier);
-    return actor ? { id: actor.id, name: actor.name } : null;
-  } catch (error) {
-    console.error('Error finding actor:', error);
-    return null;
-  }
+export function findActor(args: { identifier: string; forWrite?: boolean | undefined }): {
+  id: string;
+  name: string;
+  token?: { sceneId: string; tokenId: string; name: string; linked: boolean } | undefined;
+} | null {
+  const found = resolveActorTarget(args.identifier, args.forWrite ? 'write' : 'read');
+  if (!found) return null;
+  const { actor, token } = found;
+  return {
+    id: actor.id,
+    name: token?.name ?? actor.name,
+    ...(token
+      ? {
+          token: {
+            sceneId: token.parent?.id ?? '',
+            tokenId: token.id,
+            name: token.name ?? actor.name,
+            linked: !!token.actorLink,
+          },
+        }
+      : {}),
+  };
 }

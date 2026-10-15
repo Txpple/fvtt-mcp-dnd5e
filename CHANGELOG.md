@@ -118,6 +118,37 @@ What changed for a user of the tools and skills, release by release. The measure
   tagged ten or the recorded 48 by name, so a new write cannot join unnoticed. The README's "every
   write tool answers with a receipt" now says what is true; design.md §3 and §8 and the `run-script`
   skill say the same. Library: `dispatchWithReceipt` answers `notUndoable` beside `receiptLine`.
+- **A write never breaks a tie: a fuzzy name that matches several documents is refused, naming
+  them.** The actor resolver (one function, imported under three names at 32 sites) took the first
+  substring match, also for a write, so `"gob"` could add a feature to whichever goblin came first.
+  It answers by tiers now — exact id, exact name, the name without case, then a substring; the first
+  tier that matches answers — and every write site refuses a tier with several actors
+  (`[ambiguous]`: `Actor "gob" matches 4: "Goblin" (a1), "Goblin Boss" (a2), … A write changes one
+  actor, so it is not picked for you: name it by its id.`): the sheet edits, `add-feature`,
+  `add-item`, `manage-effect` / `manage-activity` (but `list`), `apply-condition`, `level-up-pc`,
+  `add-free-cast`, the group members, `set-primary-party`, `update-user`'s character,
+  `send-chat-message`'s `speakerActor`, `post-item-card`, `link-quest-to-npc`, and
+  `set-actor-ownership`. Reads still take the best match (now the case-insensitive exact name over
+  an earlier substring). The user lookups share the tiers: `update-user`, `set-user-avatar`, the
+  macro owner and hotbar, `pull-users-to-scene` and `set-landing-scene` (every name resolved before
+  the first write) refuse a name two users share without case; `duplicate-actor`'s owner the same;
+  `set-actor-ownership`'s player is one player or `"party"` — a name that matches several players
+  is refused, listing them (it wrote to all of them), and no actor or no player is a `[not-found]`
+  error instead of `0 ownership assignments completed`. The page resolver is one name everywhere
+  (`resolveActorFuzzy`, `resolveActorTarget` for the token it came through); the call sites say
+  `'write'`. The run-script reference names `findActor`'s `forWrite`.
+- **`set-actor-ownership` with a placed token's id writes that token** (issue #19). The token was
+  lost between the lookup and the write, so an unlinked token's write landed on its base actor and
+  every other copy. The page call carries the scene and the token now: an unlinked token's own
+  entry is set on its ActorDelta (only the token's entries, merged per user over the base actor's
+  the way Foundry builds the token's actor), INHERIT removes it (the user inherits the base actor's
+  again), and the base actor is untouched; a linked token has no ownership of its own, so the write
+  goes to its base actor and the answer says so (`token "…" is linked … the write went to its base
+  actor`). `list-actor-ownership` with a token id reads that token and names it (`token: {id,
+  scene, linked}`). A miss in the page's `setActorOwnership` is a `not-found` error; the tool
+  answers the first refusal as its error when no assignment landed. `src/tools/ownership.test.ts`
+  holds the token case (the identifier resolving to a token's synthetic actor), the linked case and
+  the ties; `scripts/verify-ownership-inherit.mjs` §7 proves it live (owed on the sandbox).
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 

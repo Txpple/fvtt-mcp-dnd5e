@@ -74,7 +74,7 @@ export async function manageEffect(params: {
   let parentRef: Record<string, any>;
   let kind: 'actor' | 'item';
   if (params.actorIdentifier && params.itemIdentifier) {
-    const actor = resolveActorFuzzy(params.actorIdentifier);
+    const actor = resolveActorFuzzy(params.actorIdentifier, action === 'list' ? 'read' : 'write');
     if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     const item = resolveActorItem(actor, params.itemIdentifier);
     if (!item) throw notFound(`Item "${params.itemIdentifier}" not found on actor "${actor.name}"`);
@@ -85,7 +85,7 @@ export async function manageEffect(params: {
       item: { id: item.id, name: item.name, type: item.type },
     };
   } else if (params.actorIdentifier) {
-    const actor = resolveActorFuzzy(params.actorIdentifier);
+    const actor = resolveActorFuzzy(params.actorIdentifier, action === 'list' ? 'read' : 'write');
     if (!actor) throw notFound(`Actor not found: ${params.actorIdentifier}`);
     parent = actor;
     kind = 'actor';

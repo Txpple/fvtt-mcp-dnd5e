@@ -554,7 +554,7 @@ export async function addItem(data: AddItemArgs): Promise<AddItemResult> {
 
   // --- Target: actor (embedded) vs world (sidebar) ---
   if (data.actorIdentifier) {
-    const actor = resolveActorFuzzy(data.actorIdentifier);
+    const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
     if (!actor) throw notFound(`Actor not found: "${data.actorIdentifier}"`);
 
     let containerId: string | null = null;
@@ -663,7 +663,7 @@ export async function importItemFromCompendium(data: ImportItemArgs): Promise<Im
 
   // --- Target: actor (embedded) vs world (sidebar) ---
   if (data.actorIdentifier) {
-    const actor = resolveActorFuzzy(data.actorIdentifier);
+    const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
     if (!actor) throw notFound(`Actor not found: "${data.actorIdentifier}"`);
 
     if (data.container) {

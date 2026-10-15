@@ -22,8 +22,8 @@ const OWNER = 3;
 /** Hotbar slots are 1–50 (5 pages × 10). */
 const HOTBAR_SLOTS = 50;
 
-function resolveUserOrThrow(identifier: string): any {
-  const user = resolveUser(identifier);
+function resolveUserOrThrow(identifier: string, mode: 'read' | 'write'): any {
+  const user = resolveUser(identifier, mode);
   if (!user) {
     const names = (game.users?.contents ?? []).map((u: any) => u.name).join(', ');
     throw notFound(`user "${identifier}" not found. Users in this world: ${names}`);
@@ -88,10 +88,10 @@ export async function createMacro(args: {
 
   // Resolve every named user BEFORE creating anything — a bad identifier must not orphan a macro.
   const grantees: any[] = [];
-  const hotbarUser = args.hotbarUser ? resolveUserOrThrow(args.hotbarUser) : null;
+  const hotbarUser = args.hotbarUser ? resolveUserOrThrow(args.hotbarUser, 'write') : null;
   if (hotbarUser) grantees.push(hotbarUser);
   if (args.owner) {
-    const owner = resolveUserOrThrow(args.owner);
+    const owner = resolveUserOrThrow(args.owner, 'write');
     if (!grantees.some(u => u.id === owner.id)) grantees.push(owner);
   }
 
@@ -157,7 +157,7 @@ export async function createMacro(args: {
 export function listMacros(args?: { nameFilter?: string | undefined; user?: string | undefined }) {
   const assignments = hotbarAssignments();
   const nameLower = args?.nameFilter ? args.nameFilter.toLowerCase() : null;
-  const userId = args?.user ? resolveUserOrThrow(args.user).id : null;
+  const userId = args?.user ? resolveUserOrThrow(args.user, 'read').id : null;
   const macros = (game.macros?.contents ?? [])
     .map((m: any) => ({ ...describeMacro(m), hotbar: assignments.get(m.id) ?? [] }))
     .filter(

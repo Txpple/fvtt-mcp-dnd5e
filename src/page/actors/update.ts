@@ -2,12 +2,7 @@
 // (updateActorItem). Runs INSIDE the headless Foundry page. (F45: the update third of the old
 // src/page/actors.ts.)
 
-import {
-  resolveActorFuzzy as resolveActor,
-  resolveActorItem,
-  toDeletionKey,
-  unmaskedName,
-} from '../_shared.js';
+import { resolveActorFuzzy, resolveActorItem, toDeletionKey, unmaskedName } from '../_shared.js';
 import {
   ABILITIES,
   buildAcUpdate,
@@ -66,7 +61,7 @@ const TOKEN_DISPLAY_MODES: Record<string, number> = {
 export async function updateActor(params: UpdateActorArgs) {
   const identifier = params?.actorIdentifier;
   if (!identifier) throw invalid('actorIdentifier is required');
-  const actor = resolveActor(identifier);
+  const actor = resolveActorFuzzy(identifier, 'write');
   if (!actor) throw notFoundError(`Actor not found: ${identifier}`);
 
   const isNpc = actor.type === 'npc';
@@ -604,7 +599,7 @@ export async function updateActorItem(params: {
   if (!actorIdentifier) throw invalid('actorIdentifier is required');
   if (!itemIdentifier) throw invalid('itemIdentifier is required');
 
-  const actor = resolveActor(actorIdentifier);
+  const actor = resolveActorFuzzy(actorIdentifier, 'write');
   if (!actor) throw notFoundError(`Actor not found: ${actorIdentifier}`);
   const item = resolveActorItem(actor, itemIdentifier, params.type);
   if (!item) {

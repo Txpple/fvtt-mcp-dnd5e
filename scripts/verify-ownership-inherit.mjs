@@ -13,6 +13,12 @@
 //   4. A granted level (OBSERVER) still merges without disturbing `default` or other users.
 //   5. End-to-end through OwnershipTools: permissionLevel 'INHERIT' → permission null on the wire.
 //   6. INHERIT never touches the `default` key or other users' entries.
+//   7. A placed token's id writes that token (issue #19): on an UNLINKED token of the actor, the
+//      tool sets the bystander's level on the token's own ActorDelta (the token answers LIMITED)
+//      while the base actor keeps its OBSERVER; list-actor-ownership with the token id reads the
+//      token; INHERIT on the token removes its entry (the base actor's applies again); a LINKED
+//      token's write goes to the base actor and the answer says so. A throwaway ZZ scene holds
+//      the two tokens and is deleted in finally.
 //
 // Drives a real headless Foundry session (fresh dist/, no CC restart). Throwaway fixture user +
 // actor, cleaned in finally. Build first: npm run build. Run: node scripts/verify-ownership-inherit.mjs
@@ -78,6 +84,9 @@ const readState = (actorId, userId) =>
 let userId;
 let otherUserId;
 let actorId;
+let sceneId;
+let unlinkedId;
+let linkedId;
 
 try {
   console.log('[verify-ownership] connecting…');
@@ -166,6 +175,86 @@ try {
     `other player still OBSERVER (got ${s5.ownership[otherUserId]})`
   );
 
+  console.log('# 7) a placed token id writes that token, not its base actor (issue #19)');
+  ({ sceneId, unlinkedId, linkedId } = await f.evaluate(
+    async ids => {
+      const s = await Scene.create({ name: `${ids.tag} Scene`, width: 1000, height: 1000 });
+      const [unlinked, linked] = await s.createEmbeddedDocuments('Token', [
+        { name: `${ids.tag} Unlinked`, actorId: ids.actorId, actorLink: false, x: 100, y: 100 },
+        { name: `${ids.tag} Linked`, actorId: ids.actorId, actorLink: true, x: 300, y: 100 },
+      ]);
+      return { sceneId: s.id, unlinkedId: unlinked.id, linkedId: linked.id };
+    },
+    { tag: TAG, actorId }
+  ));
+  const tokenState = (tokenId, uid) =>
+    f.evaluate(
+      ids => {
+        const token = game.scenes.get(ids.sceneId).tokens.get(ids.tokenId);
+        const user = game.users.get(ids.uid);
+        const a = token.actor;
+        return {
+          own: token.delta?.ownership ? { ...token.delta.ownership } : null,
+          effective: a.testUserPermission(user, 'OWNER')
+            ? 3
+            : a.testUserPermission(user, 'OBSERVER')
+              ? 2
+              : a.testUserPermission(user, 'LIMITED')
+                ? 1
+                : 0,
+        };
+      },
+      { sceneId, tokenId, uid }
+    );
+  const before = await readState(actorId, otherUserId);
+  const t1 = await tools.handleToolCall('set-actor-ownership', {
+    actorIdentifier: unlinkedId,
+    playerIdentifier: TAG2,
+    permissionLevel: 'LIMITED',
+  });
+  const t1Token = await tokenState(unlinkedId, otherUserId);
+  const t1Base = await readState(actorId, otherUserId);
+  assert(
+    t1.results?.[0]?.target === 'token' && t1.results?.[0]?.token?.id === unlinkedId,
+    `the tool wrote the token (${t1.results?.[0]?.message})`
+  );
+  assert(
+    t1Token.own?.[otherUserId] === 1 && t1Token.effective === 1,
+    `the unlinked token now gives the bystander LIMITED (own ${JSON.stringify(t1Token.own)}, effective ${t1Token.effective})`
+  );
+  assert(
+    t1Base.stored === before.stored && t1Base.effective === before.effective,
+    `the base actor is untouched (bystander still ${t1Base.effective}, was ${before.effective})`
+  );
+  const listed = await tools.handleToolCall('list-actor-ownership', {
+    actorIdentifier: unlinkedId,
+  });
+  const row = listed.ownership?.[0];
+  assert(
+    row?.token?.id === unlinkedId && row?.explicit?.[TAG2] === 'LIMITED',
+    `list-actor-ownership with the token id reads the token (${JSON.stringify(row)})`
+  );
+  const t2 = await tools.handleToolCall('set-actor-ownership', {
+    actorIdentifier: unlinkedId,
+    playerIdentifier: TAG2,
+    permissionLevel: 'INHERIT',
+  });
+  const t2Token = await tokenState(unlinkedId, otherUserId);
+  assert(
+    t2Token.own === null && t2Token.effective === before.effective,
+    `INHERIT on the token removes its entry: the base actor's applies again (${t2.results?.[0]?.message})`
+  );
+  const t3 = await tools.handleToolCall('set-actor-ownership', {
+    actorIdentifier: linkedId,
+    playerIdentifier: TAG,
+    permissionLevel: 'LIMITED',
+  });
+  const t3Base = await readState(actorId, userId);
+  assert(
+    /is linked/.test(t3.results?.[0]?.message ?? '') && t3Base.stored === 1,
+    `a linked token says the write went to the base actor, and it did (${t3.results?.[0]?.message})`
+  );
+
   console.log(`\n${fails === 0 ? 'ALL GREEN' : 'FAILURES'} — ${passes} passed, ${fails} failed`);
   process.exitCode = fails === 0 ? 0 : 1;
 } catch (e) {
@@ -177,9 +266,11 @@ try {
   try {
     const left = await f.evaluate(
       async ids => {
+        if (ids.sceneId) await game.scenes.get(ids.sceneId)?.delete();
         for (const id of [ids.userId, ids.otherUserId]) await game.users.get(id)?.delete();
         await game.actors.get(ids.actorId)?.delete();
         return {
+          scene: ids.sceneId && game.scenes.get(ids.sceneId) ? 1 : 0,
           users: [ids.userId, ids.otherUserId].filter(id => game.users.get(id)).length,
           actor: game.actors.get(ids.actorId) ? 1 : 0,
           stale: game.actors.contents.filter(a =>
@@ -187,10 +278,10 @@ try {
           ).length,
         };
       },
-      { userId, otherUserId, actorId }
+      { userId, otherUserId, actorId, sceneId }
     );
     console.log(
-      `# cleanup: ${left.users} fixture users left, ${left.actor} fixture actors left, ` +
+      `# cleanup: ${left.scene} fixture scene left, ${left.users} fixture users left, ${left.actor} fixture actors left, ` +
         `${left.stale} actor(s) world-wide carrying a stale ownership entry`
     );
   } catch (e) {

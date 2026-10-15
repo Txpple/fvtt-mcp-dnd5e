@@ -12,25 +12,24 @@
 
 import { imgResolves, badAssetWarning } from './img-resolve.js';
 import { resolveCreatureIcon } from './dnd5e/icons.js';
-import { resolveActorFuzzy } from './_shared.js';
+import { ambiguousTarget, fuzzyTier, resolveActorFuzzy } from './_shared.js';
 import { invalid, notFound } from './errors.js';
 
 /** Role number ↔ human label, indexed by CONST.USER_ROLES value (0–4). */
 const ROLE_LABELS = ['none', 'player', 'trusted', 'assistant', 'gamemaster'] as const;
 
 /**
- * Resolve a user by exact id, exact name, then case-insensitive exact name; falls back to the
- * current bridge user when no identifier is given. Shared with macros.ts (hotbar targets).
+ * Resolve a user by exact id, exact name, then case-insensitive exact name (`fuzzyTier` with no
+ * substring tier); falls back to the current bridge user when no identifier is given. A write
+ * (`mode: 'write'`) refuses a name two users share without case (`ambiguous`, naming them); a
+ * read takes the first. Shared with macros.ts (hotbar targets) and scenes.ts (the pulls and the
+ * landing scenes).
  */
-export function resolveUser(identifier?: string): any {
+export function resolveUser(identifier?: string, mode: 'read' | 'write' = 'read'): any {
   if (!identifier) return game.user;
-  return (
-    game.users?.get(identifier) ||
-    game.users?.getName?.(identifier) ||
-    game.users?.find?.((u: any) => u.name === identifier) ||
-    game.users?.find?.((u: any) => u.name?.toLowerCase() === identifier.toLowerCase()) ||
-    null
-  );
+  const tier = fuzzyTier(game.users, identifier, { substring: false });
+  if (tier.length > 1 && mode === 'write') throw ambiguousTarget('User', identifier, tier);
+  return tier[0] ?? null;
 }
 
 /** One user as the tools see it — listUsers and updateUser's echo. */
@@ -92,7 +91,7 @@ export async function updateUser(args: {
   character?: string | undefined;
 }) {
   if (!args?.user) throw invalid('user is required (a user id or exact name)');
-  const user = resolveUser(args.user);
+  const user = resolveUser(args.user, 'write');
   if (!user) {
     const names = (game.users?.contents ?? []).map((u: any) => u.name).join(', ');
     throw notFound(`user "${args.user}" not found. Users in this world: ${names}`);
@@ -159,7 +158,7 @@ export async function updateUser(args: {
       update.character = null;
       applied.push('character');
     } else {
-      const actor = resolveActorFuzzy(args.character);
+      const actor = resolveActorFuzzy(args.character, 'write');
       if (!actor) throw notFound(`character actor "${args.character}" not found`);
       if (actor.type !== 'character') {
         warnings.push(
@@ -190,7 +189,7 @@ export async function setUserAvatar(args: { user?: string | undefined; avatar: s
       'avatar is required and must be a non-empty string (a path or URL Foundry can load)'
     );
   }
-  const user = resolveUser(args.user);
+  const user = resolveUser(args.user, 'write');
   if (!user) throw notFound(`user "${args.user}" not found`);
 
   const warnings: string[] = [];

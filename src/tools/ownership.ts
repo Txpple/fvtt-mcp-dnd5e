@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ACTOR_TARGET, actorTarget } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
-import { FormattedToolError } from '../utils/error-handler.js';
+import { FormattedToolError, ToolError } from '../utils/error-handler.js';
 import { toInputSchema } from '../utils/schema.js';
 
 export interface OwnershipToolsOptions {
@@ -98,7 +98,10 @@ export class OwnershipTools {
   }
 
   /**
-   * Assign actor ownership permissions
+   * Assign actor ownership permissions. A placed token's id writes that token's own ownership (an
+   * unlinked token's ActorDelta), never its base actor's, and a linked token's answer says the
+   * write went to its base actor (issue #19). An identifier that names several actors or players
+   * is refused by name (a write is never given the first match), and one that names none is a miss.
    */
   private async assignActorOwnership(args: any) {
     const { actorIdentifier, playerIdentifier, permissionLevel, confirmBulkOperation } =
@@ -113,7 +116,7 @@ export class OwnershipTools {
     const validatedLevel = permissionLevel;
     const numericLevel = validatedLevel === 'INHERIT' ? null : OwnershipLevels[validatedLevel];
 
-    // Resolve actors and players
+    // Resolve actors and players: a miss or a tie throws, before any write
     const actors = await this.resolveActors(actorIdentifier);
     const players = await this.resolvePlayers(playerIdentifier);
 
@@ -128,6 +131,7 @@ export class OwnershipTools {
 
     // Apply ownership changes
     const results = [];
+    let firstError: unknown;
     for (const actor of actors) {
       for (const player of players) {
         try {
@@ -135,17 +139,28 @@ export class OwnershipTools {
             actorId: actor.id,
             userId: player.id,
             permission: numericLevel,
+            ...(actor.token ? { sceneId: actor.token.sceneId, tokenId: actor.token.tokenId } : {}),
           });
 
           results.push({
             actor: actor.name,
+            ...(actor.token
+              ? {
+                  token: {
+                    id: actor.token.tokenId,
+                    scene: actor.token.sceneId,
+                    linked: actor.token.linked,
+                  },
+                }
+              : {}),
             player: player.name,
             permission: validatedLevel,
+            target: result.target,
             success: result.success,
             message: result.message,
-            error: result.error,
           });
         } catch (error) {
+          firstError ??= error;
           results.push({
             actor: actor.name,
             player: player.name,
@@ -159,9 +174,11 @@ export class OwnershipTools {
 
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.length - successCount;
+    // nothing landed: the call failed, with the first refusal's own code (design.md §3)
+    if (successCount === 0 && firstError) throw firstError;
 
     return {
-      success: successCount > 0,
+      success: true,
       message: `${successCount} ownership assignments completed${failureCount > 0 ? `, ${failureCount} failed` : ''}`,
       results,
     };
@@ -197,63 +214,75 @@ export class OwnershipTools {
   }
 
   /**
-   * Resolve actors from identifier (supports bulk operations)
+   * Resolve actors from identifier: the bulk phrases, else one actor by the write rule (a tie is
+   * refused by the page, naming the actors), with the placed token it came through.
    */
-  private async resolveActors(identifier: string): Promise<Array<{ id: string; name: string }>> {
+  private async resolveActors(identifier: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      token?: { sceneId: string; tokenId: string; linked: boolean } | undefined;
+    }>
+  > {
     this.logger.debug(`Resolving actors for identifier: ${identifier}`);
-
-    try {
-      if (identifier.toLowerCase().includes('all friendly npcs')) {
-        // Get all tokens in current scene with friendly disposition
-        const actors = await this.foundry.call('getFriendlyNPCs');
-        this.logger.debug(`Found ${actors.length} friendly NPCs`);
-        return actors;
-      } else if (identifier.toLowerCase().includes('party characters')) {
-        // Get all player-owned characters
-        const actors = await this.foundry.call('getPartyCharacters');
-        this.logger.debug(`Found ${actors.length} party characters`);
-        return actors;
-      } else {
-        // Single actor lookup
-        this.logger.debug(`Looking for single actor: ${identifier}`);
-        const actor = await this.foundry.call('findActor', {
-          identifier,
-        });
-        this.logger.debug(`Single actor lookup result:`, actor);
-        return actor ? [actor] : [];
+    const phrase = identifier.toLowerCase();
+    if (phrase.includes('all friendly npcs')) {
+      // Get all tokens in current scene with friendly disposition
+      const actors = await this.foundry.call('getFriendlyNPCs');
+      if (!actors.length) {
+        throw new ToolError('not-found', 'No friendly NPC token is on the active scene.');
       }
-    } catch (error) {
-      this.logger.error(`Failed to resolve actors for "${identifier}":`, error);
-      return [];
+      return actors;
     }
+    if (phrase.includes('party characters')) {
+      // Get all player-owned characters
+      const actors = await this.foundry.call('getPartyCharacters');
+      if (!actors.length)
+        throw new ToolError('not-found', 'No character actor has a player owner.');
+      return actors;
+    }
+    const actor = await this.foundry.call('findActor', { identifier, forWrite: true });
+    if (!actor)
+      throw new ToolError('not-found', `No actor or placed token matches "${identifier}".`);
+    return [actor];
   }
 
   /**
-   * Resolve players from identifier (supports partial matching)
+   * Resolve players from identifier: "party" is every connected player; anything else is one
+   * player (or a character's owner) by name, and a name that matches several is refused, naming
+   * them, never written to all of them.
    */
   private async resolvePlayers(identifier: string): Promise<Array<{ id: string; name: string }>> {
     this.logger.debug(`Resolving players for identifier: ${identifier}`);
-
-    try {
-      if (identifier.toLowerCase() === 'party') {
-        // Get all connected players (excluding GM)
-        const players = await this.foundry.call('getConnectedPlayers');
-        this.logger.debug(`Found ${players.length} connected players`);
-        return players;
-      } else {
-        // Single player lookup with partial matching
-        this.logger.debug(`Looking for single player: ${identifier}`);
-        const players = await this.foundry.call('findPlayers', {
-          identifier,
-          allowPartialMatch: true,
-          includeCharacterOwners: true, // Also match by character names they own
-        });
-        this.logger.debug(`Player lookup result:`, players);
-        return players;
+    if (identifier.toLowerCase() === 'party') {
+      const players = await this.foundry.call('getConnectedPlayers');
+      if (!players.length) {
+        throw new ToolError(
+          'not-found',
+          'No player is connected: "party" means the connected players. Name an offline player instead.'
+        );
       }
-    } catch (error) {
-      this.logger.error(`Failed to resolve players for "${identifier}":`, error);
-      return [];
+      return players;
     }
+    const players = await this.foundry.call('findPlayers', {
+      identifier,
+      allowPartialMatch: true,
+      includeCharacterOwners: true, // Also match by character names they own
+    });
+    if (!players.length) {
+      throw new ToolError(
+        'not-found',
+        `No player (or character owned by one) matches "${identifier}".`
+      );
+    }
+    if (players.length > 1) {
+      const shown = players.map(p => `"${p.name}" (${p.id})`).join(', ');
+      throw new ToolError(
+        'ambiguous',
+        `Player "${identifier}" matches ${players.length}: ${shown}. A write changes one player's ` +
+          'entry, so it is not picked for you: name the player by user id or full name, or use "party".'
+      );
+    }
+    return players;
   }
 }

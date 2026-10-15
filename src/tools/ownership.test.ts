@@ -138,21 +138,45 @@ describe('set-actor-ownership (assignActorOwnership)', () => {
     expect(out.results[0]).toMatchObject({ permission: 'INHERIT', success: true });
   });
 
-  it('reports a per-pair failure when the bridge returns success:false', async () => {
+  it('a write the page refuses, with nothing landed, is the call error (design.md §3)', async () => {
+    const refusal = Object.assign(new Error('User not found: u'), { code: 'not-found' });
     const { tools } = build((method: string) => {
       if (method === 'findActor') return { id: 'a', name: 'Aragorn' };
       if (method === 'findPlayers') return [{ id: 'u', name: 'John' }];
-      if (method === 'setActorOwnership') return { success: false, error: 'denied' };
+      if (method === 'setActorOwnership') throw refusal;
+      return {};
+    });
+    await expect(
+      tools.handleToolCall('set-actor-ownership', {
+        actorIdentifier: 'Aragorn',
+        playerIdentifier: 'John',
+        permissionLevel: 'OBSERVER',
+      })
+    ).rejects.toBe(refusal);
+  });
+
+  it('a bulk write keeps a row per pair and counts the ones the page refused', async () => {
+    const { tools } = build((method: string, args: any) => {
+      if (method === 'getFriendlyNPCs')
+        return [
+          { id: 'n1', name: 'Guard' },
+          { id: 'n2', name: 'Merchant' },
+        ];
+      if (method === 'findPlayers') return [{ id: 'u', name: 'John' }];
+      if (method === 'setActorOwnership') {
+        if (args.actorId === 'n2') throw new Error('Actor not found: n2');
+        return { success: true, message: 'ok', target: 'actor' };
+      }
       return {};
     });
     const out = await tools.handleToolCall('set-actor-ownership', {
-      actorIdentifier: 'Aragorn',
+      actorIdentifier: 'all friendly npcs',
       playerIdentifier: 'John',
       permissionLevel: 'OBSERVER',
+      confirmBulkOperation: true,
     });
-    // No successes -> overall success false, failure count reflected in message.
-    expect(out.success).toBe(false);
-    expect(out.message).toBe('0 ownership assignments completed, 1 failed');
+    expect(out.message).toBe('1 ownership assignments completed, 1 failed');
+    expect(out.results[1]).toMatchObject({ actor: 'Merchant', success: false });
   });
 
   it('blocks a bulk operation (multiple actors) unless confirmBulkOperation is set', async () => {
@@ -209,6 +233,144 @@ describe('set-actor-ownership (assignActorOwnership)', () => {
         permissionLevel: 'GODMODE',
       })
     ).rejects.toThrow();
+  });
+});
+
+describe('set-actor-ownership with a placed token id (issue #19)', () => {
+  /** findActor resolving to a token's synthetic actor: the base actor's id, and the token. */
+  const viaToken = (linked: boolean) => (method: string) => {
+    if (method === 'findActor')
+      return {
+        id: 'base1',
+        name: 'Goblin Sentry',
+        token: { sceneId: 's1', tokenId: 't1', name: 'Goblin Sentry', linked },
+      };
+    if (method === 'findPlayers') return [{ id: 'u1', name: 'John' }];
+    if (method === 'setActorOwnership')
+      return linked
+        ? {
+            success: true,
+            target: 'actor',
+            message: 'Set Goblin ownership to LIMITED for John — token "Goblin Sentry" is linked',
+          }
+        : { success: true, target: 'token', message: 'Set token "Goblin Sentry" ownership' };
+    return {};
+  };
+
+  it("an unlinked token: the write carries the scene and the token, so it lands on the token's own actor", async () => {
+    const { tools, calls } = build(viaToken(false));
+    const out = await tools.handleToolCall('set-actor-ownership', {
+      actorIdentifier: 't1',
+      playerIdentifier: 'John',
+      permissionLevel: 'LIMITED',
+    });
+    // the lookup is a write's: a tie would be refused, not picked
+    expect(calls.find(c => c[0] === 'findActor')![1]).toEqual({ identifier: 't1', forWrite: true });
+    // the page call names the token, never the bare base actor id alone
+    expect(calls.find(c => c[0] === 'setActorOwnership')![1]).toEqual({
+      actorId: 'base1',
+      userId: 'u1',
+      permission: 1,
+      sceneId: 's1',
+      tokenId: 't1',
+    });
+    expect(out.results[0]).toMatchObject({
+      actor: 'Goblin Sentry',
+      token: { id: 't1', scene: 's1', linked: false },
+      target: 'token',
+      success: true,
+    });
+  });
+
+  it('a linked token: the page is still handed the token, and the answer says the write went to the base actor', async () => {
+    const { tools, calls } = build(viaToken(true));
+    const out = await tools.handleToolCall('set-actor-ownership', {
+      actorIdentifier: 't1',
+      playerIdentifier: 'John',
+      permissionLevel: 'LIMITED',
+    });
+    expect(calls.find(c => c[0] === 'setActorOwnership')![1]).toMatchObject({
+      sceneId: 's1',
+      tokenId: 't1',
+    });
+    expect(out.results[0]).toMatchObject({ target: 'actor', token: { linked: true } });
+    expect(out.results[0].message).toMatch(/is linked/);
+  });
+
+  it('INHERIT on a token travels as permission:null with the token', async () => {
+    const { tools, calls } = build(viaToken(false));
+    await tools.handleToolCall('set-actor-ownership', {
+      actorIdentifier: 't1',
+      playerIdentifier: 'John',
+      permissionLevel: 'INHERIT',
+    });
+    expect(calls.find(c => c[0] === 'setActorOwnership')![1]).toMatchObject({
+      permission: null,
+      tokenId: 't1',
+    });
+  });
+});
+
+describe('set-actor-ownership refuses a fuzzy name that names several (a write is never given the first)', () => {
+  it('an actor name the page finds ambiguous is the call error, and nothing is written', async () => {
+    const tie = Object.assign(new Error('Actor "Gob" matches 2: …'), { code: 'ambiguous' });
+    const { tools, calls } = build((method: string) => {
+      if (method === 'findActor') throw tie;
+      return {};
+    });
+    await expect(
+      tools.handleToolCall('set-actor-ownership', {
+        actorIdentifier: 'Gob',
+        playerIdentifier: 'John',
+        permissionLevel: 'OWNER',
+      })
+    ).rejects.toBe(tie);
+    expect(calls.some(c => c[0] === 'setActorOwnership')).toBe(false);
+  });
+
+  it('a player name that matches two players is refused, naming both, and nothing is written', async () => {
+    const { tools, calls } = build((method: string) => {
+      if (method === 'findActor') return { id: 'a1', name: 'Aragorn' };
+      if (method === 'findPlayers')
+        return [
+          { id: 'u1', name: 'John' },
+          { id: 'u2', name: 'Johnny' },
+        ];
+      return {};
+    });
+    await expect(
+      tools.handleToolCall('set-actor-ownership', {
+        actorIdentifier: 'Aragorn',
+        playerIdentifier: 'joh',
+        permissionLevel: 'OWNER',
+        confirmBulkOperation: true,
+      })
+    ).rejects.toMatchObject({
+      code: 'ambiguous',
+      message: expect.stringMatching(/Player "joh" matches 2: "John" \(u1\), "Johnny" \(u2\)/),
+    });
+    expect(calls.some(c => c[0] === 'setActorOwnership')).toBe(false);
+  });
+
+  it('no actor and no player are misses (not-found), not an empty success', async () => {
+    const none = build((method: string) => (method === 'findActor' ? null : []));
+    await expect(
+      none.tools.handleToolCall('set-actor-ownership', {
+        actorIdentifier: 'Nobody',
+        playerIdentifier: 'John',
+        permissionLevel: 'OWNER',
+      })
+    ).rejects.toMatchObject({ code: 'not-found' });
+    const noPlayer = build((method: string) =>
+      method === 'findActor' ? { id: 'a1', name: 'Aragorn' } : []
+    );
+    await expect(
+      noPlayer.tools.handleToolCall('set-actor-ownership', {
+        actorIdentifier: 'Aragorn',
+        playerIdentifier: 'Ghost',
+        permissionLevel: 'OWNER',
+      })
+    ).rejects.toMatchObject({ code: 'not-found', message: expect.stringMatching(/"Ghost"/) });
   });
 });
 

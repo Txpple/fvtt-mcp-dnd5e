@@ -7,7 +7,7 @@
 // so it must remain browser-only: no Node, no Playwright — only browser + Foundry
 // globals (see foundry-globals.d.ts).
 
-import { invalid, notFound, unsupported } from './errors.js';
+import { ambiguous, invalid, notFound, unsupported } from './errors.js';
 
 // Foundry's Folder document class isn't declared in foundry-globals.d.ts; reach
 // it off globalThis (the established sibling-page-file pattern).
@@ -485,27 +485,81 @@ export function slugify(name: string, fallback = 'feature'): string {
   );
 }
 
-/**
- * Resolve a world Actor from a free-text identifier (read path — fuzzy).
- * Order: exact id, exact name, then case-insensitive substring on name.
- * Falls back to a scene-token's (possibly synthetic/delta-backed) actor so an
- * unlinked token can still be resolved by its token id.
- * (Oracle: findActorByIdentifier ~4395-4420 / data-access resolveActor.)
- */
-export function resolveActorFuzzy(identifier: string): any {
-  const worldActor =
-    game.actors?.get(identifier) ||
-    game.actors?.getName?.(identifier) ||
-    Array.from(game.actors ?? []).find((a: any) =>
-      a.name?.toLowerCase().includes(identifier.toLowerCase())
-    );
-  if (worldActor) return worldActor;
+/** A collection's documents: `contents` (a Foundry collection), else its iteration, else none. */
+function documentsOf(collection: any): any[] {
+  if (Array.isArray(collection?.contents)) return collection.contents;
+  if (collection && typeof collection[Symbol.iterator] === 'function')
+    return Array.from(collection);
+  return [];
+}
 
+/**
+ * The documents an identifier names in `collection`, by the fuzzy rule's tiers: the first tier
+ * that matches anything is the answer — exact id, exact name, the name without case, then a name
+ * that contains it (without case). One entry is a match; several are a tie a write must not break.
+ */
+export function fuzzyTier(
+  collection: any,
+  identifier: string,
+  { substring = true }: { substring?: boolean } = {}
+): any[] {
+  const byId = collection?.get?.(identifier);
+  if (byId) return [byId];
+  const all = documentsOf(collection);
+  const exact = all.filter((d: any) => d.name === identifier);
+  if (exact.length) return exact;
+  // a collection that cannot be listed still names one
+  const named = collection?.getName?.(identifier);
+  if (named) return [named];
+  const lower = identifier.toLowerCase();
+  const folded = all.filter((d: any) => d.name?.toLowerCase() === lower);
+  if (folded.length || !substring) return folded;
+  return all.filter((d: any) => typeof d.name === 'string' && d.name.toLowerCase().includes(lower));
+}
+
+/**
+ * The refusal of a write whose identifier names several documents: each candidate by name and
+ * id (the first ten), and how to name one. Reads pick the first instead (design.md §3).
+ */
+export function ambiguousTarget(noun: string, identifier: string, candidates: any[]): Error {
+  const shown = candidates
+    .slice(0, 10)
+    .map((d: any) => `"${d.name}" (${d.id})`)
+    .join(', ');
+  const more = candidates.length > 10 ? `, and ${candidates.length - 10} more` : '';
+  return ambiguous(
+    `${noun} "${identifier}" matches ${candidates.length}: ${shown}${more}. A write changes one ` +
+      `${noun.toLowerCase()}, so it is not picked for you: name it by its id.`
+  );
+}
+
+/**
+ * Resolve an Actor from a free-text identifier, and the placed token it came through when it
+ * did. The tiers are `fuzzyTier`'s over the world actors; with no world actor matching, a placed
+ * token's id on any scene targets that token's own actor (an unlinked token's is synthetic, its
+ * writes land on the token's ActorDelta; a linked token's is the base actor). `mode: 'write'`
+ * refuses a tier that matches several actors (`ambiguous`, naming them); a read takes the first.
+ */
+export function resolveActorTarget(
+  identifier: string,
+  mode: 'read' | 'write' = 'read'
+): { actor: any; token?: any } | undefined {
+  const tier = fuzzyTier(game.actors, identifier);
+  if (tier.length > 1 && mode === 'write') throw ambiguousTarget('Actor', identifier, tier);
+  if (tier.length) return { actor: tier[0] };
   for (const scene of game.scenes ?? []) {
     const token = scene.tokens?.get(identifier);
-    if (token?.actor) return token.actor;
+    if (token?.actor) return { actor: token.actor, token };
   }
   return undefined;
+}
+
+/**
+ * Resolve an Actor from a free-text identifier (`resolveActorTarget`, the actor alone): a read
+ * takes the best match; a write (`mode: 'write'`) refuses an identifier that names several.
+ */
+export function resolveActorFuzzy(identifier: string, mode: 'read' | 'write' = 'read'): any {
+  return resolveActorTarget(identifier, mode)?.actor;
 }
 
 /**

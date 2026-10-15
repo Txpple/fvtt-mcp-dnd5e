@@ -9,7 +9,7 @@
 // addPassiveFeatureToActor @5947-6041) so the consuming tool
 // (src/tools/dnd5e/add-feature.ts) and its test stay green.
 
-import { slugify, resolveActorFuzzy as findActorByIdentifier } from '../_shared.js';
+import { slugify, resolveActorFuzzy } from '../_shared.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { invalid, notFound, unsupported } from '../errors.js';
 import type { PassiveFeatureArgs } from '../../tools/dnd5e/add-feature.js';
@@ -36,7 +36,7 @@ export async function addSaveFeatureToActor(args: {
   img?: string | undefined;
 }) {
   // 1. Lookup actor
-  const actor = findActorByIdentifier(args.actorIdentifier);
+  const actor = resolveActorFuzzy(args.actorIdentifier, 'write');
   if (!actor) {
     throw notFound(`Actor not found: "${args.actorIdentifier}"`);
   }
@@ -166,7 +166,7 @@ export async function addPassiveFeatureToActor(args: PassiveFeatureArgs) {
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(args.actorIdentifier);
+  const actor = resolveActorFuzzy(args.actorIdentifier, 'write');
   if (!actor) {
     throw notFound(`Actor not found: "${args.actorIdentifier}"`);
   }

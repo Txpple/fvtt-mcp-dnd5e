@@ -13,7 +13,7 @@
 // object the Node tools send via foundry.call(name, args) and returns the exact
 // shape the tools + tests expect: { success, actor:{id,name}, item:{id,name,type}, warnings }.
 
-import { slugify, resolveActorFuzzy as findActorByIdentifier, DAMAGE_TYPES } from '../_shared.js';
+import { slugify, resolveActorFuzzy, DAMAGE_TYPES } from '../_shared.js';
 import { WEAPON_PROPERTIES } from '../../utils/dnd5e-canonical.js';
 import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
@@ -91,7 +91,7 @@ export async function addAttackToActor(data: AttackFeatureArgs & { effectiveAbil
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(data.actorIdentifier);
+  const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
   if (!actor) {
     throw notFound(`Actor not found: "${data.actorIdentifier}"`);
   }
@@ -247,7 +247,7 @@ export async function addAuraToActor(data: AuraFeatureArgs) {
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(data.actorIdentifier);
+  const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
   if (!actor) {
     throw notFound(`Actor not found: "${data.actorIdentifier}"`);
   }
@@ -408,7 +408,7 @@ export async function addAttackWithSaveToActor(
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(data.actorIdentifier);
+  const actor = resolveActorFuzzy(data.actorIdentifier, 'write');
   if (!actor) {
     throw notFound(`Actor not found: "${data.actorIdentifier}"`);
   }

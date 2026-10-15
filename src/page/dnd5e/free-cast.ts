@@ -204,7 +204,7 @@ export async function addFreeCast(params: {
     throw invalid('grantedBy is required — the feature ITEM on the actor that grants the cast');
   }
 
-  const actor = resolveActorFuzzy(actorIdentifier);
+  const actor = resolveActorFuzzy(actorIdentifier, 'write');
   if (!actor) throw notFound(`Actor not found: ${actorIdentifier}`);
 
   // The granting feature must be a real item on the actor — the cast activity lives ON it.

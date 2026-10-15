@@ -154,7 +154,12 @@ This is the architectural backbone that makes principle #1 real.
   change no receipt can hold (a file in `Data/`, a player's view) ends the answer with a
   `not undoable: …` line instead, so it never reads like a read (§8, *Receipts*). **A miss is an
   error** (`isError`), never a prose "not found" inside
-  a success-shaped result. An unknown argument is refused by name, never stripped. A result over
+  a success-shaped result. An unknown argument is refused by name, never stripped. A fuzzy lookup
+  (an actor or a user by id, name or name substring) answers by its first tier that matches: a
+  read takes the best match, but **a write never breaks a tie** — an identifier that names several
+  documents is refused (`ambiguous`), listing each candidate with its id. A placed token's id
+  targets that token's own actor, for a read and a write alike (an unlinked token's ownership is
+  its own; a linked token's is its base actor's, and the answer says so). A result over
   the response cap is cut at record boundaries with a `truncation` stamp, never mid-record.
   (Decision #10 of the 3.0 plan, `docs/history/plan-3.0-consolidation.md`; the line format
   landed family by family in its M8.)

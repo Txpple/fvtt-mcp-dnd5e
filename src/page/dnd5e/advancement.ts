@@ -1144,7 +1144,7 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   const hpMode = plan.hpMode ?? 'avg';
 
   // 1. Resolve the actor — must be an existing character.
-  const actor = resolveActorFuzzy(plan.actorIdentifier);
+  const actor = resolveActorFuzzy(plan.actorIdentifier, 'write');
   if (!actor) throw notFound(`PC not found: "${plan.actorIdentifier}". Use the exact name or id.`);
   if (actor.type !== 'character') {
     throw invalid(

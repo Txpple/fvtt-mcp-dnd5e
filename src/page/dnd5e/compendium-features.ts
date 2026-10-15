@@ -3,11 +3,7 @@
 // source documents, and createEmbeddedDocuments('Item', ...) onto the resolved actor.
 // Faithful port of data-access.ts addFeaturesFromCompendium (oracle 6603-6793, v0.9.3).
 
-import {
-  resolveActorFuzzy as findActorByIdentifier,
-  toSource,
-  findUnresolvedScaleTokens,
-} from '../_shared.js';
+import { resolveActorFuzzy, toSource, findUnresolvedScaleTokens } from '../_shared.js';
 import { DEFAULT_FEATURE_PACKS } from '../../utils/compendium-sources.js';
 import { invalid, notFound as notFoundError, unsupported } from '../errors.js';
 
@@ -24,7 +20,7 @@ export async function addFeaturesFromCompendium(args: {
   }
 
   // 1. Resolve actor
-  const actor = findActorByIdentifier(args.actorIdentifier);
+  const actor = resolveActorFuzzy(args.actorIdentifier, 'write');
   if (!actor) {
     throw notFoundError(`Actor not found: "${args.actorIdentifier}"`);
   }

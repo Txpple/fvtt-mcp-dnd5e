@@ -483,7 +483,10 @@ describe('handleLinkQuestToNPC (real @UUID link, never a dead name)', () => {
       relationship: 'questGiver',
     });
 
-    expect(calls.find(c => c[0] === 'findActor')![1]).toEqual({ identifier: 'Old Druid' });
+    expect(calls.find(c => c[0] === 'findActor')![1]).toEqual({
+      identifier: 'Old Druid',
+      forWrite: true,
+    });
     const updateCall = calls.find(c => c[0] === 'updateJournalContent')!;
     expect(updateCall[1].journalId).toBe('j1');
     expect(updateCall[1].content).toContain('@UUID[Actor.abc123]{Old Druid}');
