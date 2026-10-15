@@ -87,9 +87,12 @@ What changed for a user of the tools and skills, release by release. The measure
   without `recursive`, a referenced file without `force` / `relink`, a `create-asset-folder` onto a
   file, `delete-chat-messages` `clearAll` / `beforeTimestamp` without `confirm`, an `export-chat-log`
   destination it refuses, a `send-chat-message` `dataUri` image that is a URL: `[invalid]`; a
-  reference check with the bridge down: `[connection]`. A file plane's own failure is coded by its
-  status (404 `not-found`, 400 / 409 / 412 `invalid`, 401 / 403 `permission`, 415 / 501
-  `unsupported`; anything else its words). An `export-chat-log` whose Data copy is refused after
+  reference check with the bridge down: `[connection]`. A scene that does not resolve in
+  `activate-scene`, `pull-users-to-scene`, `set-landing-scene`, `get-scene-dimensions` or
+  `screenshot-scene` (each answered "Scene not found: … Nothing changed." as its result) is a
+  `[not-found]` error too; nothing is changed, pulled or captured. A file plane's own failure is
+  coded by its status (404 `not-found`, 400 / 409 / 412 `invalid`, 401 / 403 `permission`, 415 /
+  501 `unsupported`; anything else its words). An `export-chat-log` whose Data copy is refused after
   the local copy was written says so in the error. `create-asset-folder` onto an existing folder and
   a `move-asset` whose relink failed after the move stay answers (the call did its work). The `invalid`
   hint no longer says "the page" (a tool can refuse before it): "The arguments were refused — fix or

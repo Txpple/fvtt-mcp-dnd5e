@@ -124,10 +124,14 @@ describe('handleActivateScene', () => {
     expect(out).not.toContain('⚡ Activated');
   });
 
-  it('reports a missing scene without claiming a change', async () => {
+  it('a missing scene is a not-found error (design.md §3), never a success', async () => {
     const { tools } = build({ success: false, notFound: 'Ghost Camp' });
-    const out = await tools.handleActivateScene({ sceneIdentifier: 'Ghost Camp' });
-    expect(out).toBe('Scene not found: "Ghost Camp". Nothing changed.');
+    await expect(
+      tools.handleActivateScene({ sceneIdentifier: 'Ghost Camp' })
+    ).rejects.toMatchObject({
+      code: 'not-found',
+      message: 'Scene not found: "Ghost Camp". Nothing changed.',
+    });
   });
 
   it('rejects an empty sceneIdentifier', async () => {
@@ -224,13 +228,14 @@ describe('handlePullUsersToScene', () => {
     expect(out).toContain('never echoed back to the sending client');
   });
 
-  it('reports a missing scene without claiming a change', async () => {
+  it('a missing scene is a not-found error (design.md §3), never a success', async () => {
     const { tools } = build({ sceneNotFound: 'Ghost Camp', pulled: [], offline: [], notFound: [] });
-    const out = await tools.handlePullUsersToScene({
-      sceneIdentifier: 'Ghost Camp',
-      userIdentifiers: ['Tom'],
+    await expect(
+      tools.handlePullUsersToScene({ sceneIdentifier: 'Ghost Camp', userIdentifiers: ['Tom'] })
+    ).rejects.toMatchObject({
+      code: 'not-found',
+      message: 'Scene not found: "Ghost Camp". Nothing changed.',
     });
-    expect(out).toBe('Scene not found: "Ghost Camp". Nothing changed.');
   });
 
   it('rejects an empty userIdentifiers array', async () => {
@@ -356,7 +361,7 @@ describe('handleSetLandingScene', () => {
     expect(out).toContain('⚠️ No such user: Nobody');
   });
 
-  it('hints at "none" when the scene name does not resolve', async () => {
+  it('a scene that does not resolve is a not-found error, hinting at "none"', async () => {
     const { tools } = build({
       success: false,
       sceneNotFound: 'Ghost Camp',
@@ -365,12 +370,12 @@ describe('handleSetLandingScene', () => {
       unchanged: [],
       notFound: [],
     });
-    const out = await tools.handleSetLandingScene({
-      sceneIdentifier: 'Ghost Camp',
-      userIdentifiers: ['Tom'],
-    });
-    expect(out).toContain('Scene not found: "Ghost Camp"');
-    expect(out).toContain('"none"');
+    const err = await tools
+      .handleSetLandingScene({ sceneIdentifier: 'Ghost Camp', userIdentifiers: ['Tom'] })
+      .catch(e => e);
+    expect(err).toMatchObject({ code: 'not-found' });
+    expect(err.message).toContain('Scene not found: "Ghost Camp". Nothing changed.');
+    expect(err.message).toContain('"none"');
   });
 
   it('rejects an empty userIdentifiers array', async () => {
@@ -1054,10 +1059,11 @@ describe('handleGetSceneDimensions', () => {
     expect(out).toMatchObject({ sceneX: 280, sceneY: 280, size: 140 });
   });
 
-  it('reports a not-found scene', async () => {
+  it('a scene that does not resolve is a not-found error', async () => {
     const { tools } = build({ found: false, notFound: 'Ghost' });
-    const out = await tools.handleGetSceneDimensions({ sceneIdentifier: 'Ghost' });
-    expect(out).toBe('Scene not found: "Ghost".');
+    await expect(
+      tools.handleGetSceneDimensions({ sceneIdentifier: 'Ghost' })
+    ).rejects.toMatchObject({ code: 'not-found', message: 'Scene not found: "Ghost".' });
   });
 
   it('rejects an empty sceneIdentifier', async () => {
@@ -1097,10 +1103,12 @@ describe('handleScreenshotScene', () => {
     expect((foundry.screenshot as any).mock.calls[0][0]).toMatch(/fvtt-scene-abc123\.png$/);
   });
 
-  it('reports not-found and does NOT capture when the scene does not resolve', async () => {
+  it('a scene that does not resolve is a not-found error, and nothing is captured', async () => {
     const { tools, foundry } = build({ found: false, notFound: 'Ghost' });
-    const out = await tools.handleScreenshotScene({ sceneIdentifier: 'Ghost' });
-    expect(out).toBe('Scene not found: "Ghost". Nothing captured.');
+    await expect(tools.handleScreenshotScene({ sceneIdentifier: 'Ghost' })).rejects.toMatchObject({
+      code: 'not-found',
+      message: 'Scene not found: "Ghost". Nothing captured.',
+    });
     expect(foundry.screenshot).not.toHaveBeenCalled();
   });
 

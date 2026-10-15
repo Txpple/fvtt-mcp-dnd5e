@@ -1417,6 +1417,23 @@ describe('the writes no receipt records (NO_RECEIPT): a "not undoable" line ends
       userIdentifiers: ['Bo'],
     });
     expect(none.notUndoable).toBeUndefined();
+    // a scene that does not resolve moved nobody: a not-found error, no line
+    const nowhere = registry(() => ({
+      success: false,
+      sceneNotFound: 'Nowhere',
+      pulled: [],
+      offline: [],
+      selfSkipped: [],
+      notFound: [],
+    }));
+    const err = await nowhere
+      .dispatchWithReceipt('pull-users-to-scene', {
+        sceneIdentifier: 'Nowhere',
+        userIdentifiers: ['Ann'],
+      })
+      .catch(e => e);
+    expect(err).toMatchObject({ code: 'not-found' });
+    expect(receiptLineOf(err)).toBeUndefined();
   });
 
   it('a run that called a file-plane op names it; its document writes keep their receipt', async () => {

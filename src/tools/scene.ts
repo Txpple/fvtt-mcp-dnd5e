@@ -14,7 +14,7 @@ import {
   rendererLabel,
 } from '../utils/bridge-facts.js';
 import { noteUnrecorded } from '../receipts.js';
-import { FormattedToolError } from '../utils/error-handler.js';
+import { FormattedToolError, ToolError } from '../utils/error-handler.js';
 import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
 import { TESTED_DND5E, TESTED_FOUNDRY, versionBelow } from '../utils/system-detection.js';
@@ -604,7 +604,10 @@ export class SceneTools {
     const parsed = GetSceneDimensionsSchema.parse(args ?? {});
     const result = await this.foundry.call('getSceneDimensions', parsed);
     if (result?.found === false) {
-      return `Scene not found: "${result?.notFound ?? parsed.sceneIdentifier}".`;
+      throw new ToolError(
+        'not-found',
+        `Scene not found: "${result?.notFound ?? parsed.sceneIdentifier}".`
+      );
     }
     return result;
   }
@@ -619,7 +622,10 @@ export class SceneTools {
       asToken: parsed.asToken,
     });
     if (!meta?.found) {
-      return `Scene not found: "${meta?.notFound ?? parsed.sceneIdentifier}". Nothing captured.`;
+      throw new ToolError(
+        'not-found',
+        `Scene not found: "${meta?.notFound ?? parsed.sceneIdentifier}". Nothing captured.`
+      );
     }
     // Bridge-side (Playwright): capture the rendered page to a file. Default to a temp path.
     const safeId = String(meta.sceneId ?? 'scene').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -646,7 +652,10 @@ export class SceneTools {
     const result = await this.foundry.call('activateScene', parsed);
 
     if (result?.success === false) {
-      return `Scene not found: "${result?.notFound ?? parsed.sceneIdentifier}". Nothing changed.`;
+      throw new ToolError(
+        'not-found',
+        `Scene not found: "${result?.notFound ?? parsed.sceneIdentifier}". Nothing changed.`
+      );
     }
 
     const name = `"${result?.scene?.name}" (${result?.scene?.id})`;
@@ -667,7 +676,10 @@ export class SceneTools {
     const result = await this.foundry.call('pullUsersToScene', parsed);
 
     if (result?.sceneNotFound) {
-      return `Scene not found: "${result.sceneNotFound}". Nothing changed.`;
+      throw new ToolError(
+        'not-found',
+        `Scene not found: "${result.sceneNotFound}". Nothing changed.`
+      );
     }
 
     const scene = `"${result?.scene?.name}" (${result?.scene?.id})`;
@@ -705,9 +717,10 @@ export class SceneTools {
     const result = await this.foundry.call('setLandingScene', parsed);
 
     if (result?.sceneNotFound) {
-      return (
+      throw new ToolError(
+        'not-found',
         `Scene not found: "${result.sceneNotFound}". Nothing changed. ` +
-        '(Pass "none" if you meant to CLEAR the assignment.)'
+          '(Pass "none" if you meant to CLEAR the assignment.)'
       );
     }
 
