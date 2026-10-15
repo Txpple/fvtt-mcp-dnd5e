@@ -5,6 +5,19 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **Three context budgets, each with the client that pays it** (the suite's review of 2026-10-15,
+  issue #18). The one `tools/list` ceiling measured an eager client, and at 4.6.0 it had 13 chars of
+  headroom, so a lights change had to trim the token fields to fit. `npm test` now prints and
+  ratchets three: **per prompt** for a deferred client such as Claude Code (the tool names once per
+  registration plus the skill descriptions: 13,916 chars, ceiling 14,000); **per fetch** (the
+  largest single tool with its `anyOf` flattened the way Claude Code shows it — `manage-placeables`,
+  13,164 chars, ceiling 13,200 — and a flatten-safety rule: that merge shows a key in the first
+  member's shape only, so no key may be described in two shapes across a union's members; 17 keys
+  were, listed in the test until the commits that fix them); and **the eager `tools/list`**
+  (204,987 chars) with a row per toolset at today's number and the total raised from 205,000 to
+  220,000, so a family that grows pays in its own row or raises it in the same commit, never in a
+  neighbour's prose. `node scripts/measure/schema-decompose.mjs` prints the flattened view and the
+  lossy keys of every union tool.
 - **A vetoed delete is an error, not a success.** A module may refuse a delete from its
   `preDelete<Doc>` hook (By the Books keeps a standing companion's effect); Foundry then skips the
   document and resolves as if nothing were wrong, and `manage-effect` `delete` answered "Deleted"

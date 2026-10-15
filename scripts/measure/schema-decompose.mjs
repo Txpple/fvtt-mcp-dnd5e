@@ -2,7 +2,9 @@
 // bytes go: per tool, the description vs the inputSchema; inside the schema, the leaf
 // "description" strings (zod .describe() prose), the enum lists, defaults/consts, and the
 // structural remainder. This is the number M7 (the prose diet) is defined on: tools/list
-// ≤ 230,000 chars, every leaf ≤ 120, every description ≤ 400.
+// ≤ 230,000 chars, every leaf ≤ 120, every description ≤ 400. Then the DEFERRED client's view:
+// each union tool as Claude Code shows it once fetched (its anyOf folded into one object, the
+// first owner of a key winning) and the keys that merge loses — budget (b) of src/measure.test.ts.
 //
 //   node scripts/measure/schema-decompose.mjs [--top 15] [--json out.json]
 //
@@ -14,6 +16,7 @@ import {
   argValue,
   buildRegistry,
   decomposeToolsList,
+  flattenToolsList,
   fmt,
   pct,
   proseOffenders,
@@ -87,7 +90,21 @@ for (const o of offenders) {
   console.log(`  ${o.name}: ${bits.join(' · ')}`);
 }
 
+// The deferred client's view (src/measure.ts flattenTool): what one fetch of each union tool costs
+// in Claude Code, and the keys its merge shows in the first member's shape only.
+const flat = flattenToolsList(tools);
+console.log(
+  `\nflattened (Claude Code, one fetch per tool): ${fmt(flat.chars)} chars over every tool once ` +
+    `(${pct(flat.chars, all)} of the advertised list); largest ${flat.largest.name} ${fmt(flat.largest.chars)} ≈ ${fmt(approxTokens(flat.largest.chars))} tokens; ` +
+    `lossy keys: ${flat.lossy.length}`
+);
+console.log('tool | anyOf members | advertised | flattened | keys the merge loses (shapes)');
+for (const r of flat.tools.filter(r => r.members > 0)) {
+  const lossy = r.lossyKeys.map(k => `${k.key} (${k.shapes})`).join(', ') || '—';
+  console.log(`${r.name} | ${r.members} | ${r.advertisedChars} | ${r.chars} | ${lossy}`);
+}
+
 if (jsonOut) {
-  writeFileSync(jsonOut, JSON.stringify(list, null, 1));
+  writeFileSync(jsonOut, JSON.stringify({ ...list, flattened: flat }, null, 1));
   console.log(`written ${jsonOut}`);
 }

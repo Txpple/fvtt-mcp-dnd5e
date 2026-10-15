@@ -1,12 +1,15 @@
 /**
  * The context budgets, measured (docs/history/plan-3.0-consolidation.md — every 3.0 milestone is defined
- * by these numbers). What an MCP client pays for this server, in chars of JSON as the transport
- * sends it:
+ * by these numbers; the suite's docs/reviews/2026-10-15-mcp-tool-surface.md names who pays each).
+ * What an MCP client pays for this server, in chars of JSON as the transport sends it:
  *
  *   - the advertised `tools/list` — what an EAGER client loads at connect (283,945 at 2.2.0);
  *   - the tool NAMES — what every Claude Code prompt carries when schemas are deferred, in the
  *     `mcp__<registration>__<name>` form, once per registration (11,147 for two at 2.2.0);
- *   - the skill front-matter descriptions — also in every Claude Code prompt (15,381 at 2.2.0).
+ *   - the skill front-matter descriptions — also in every Claude Code prompt (15,381 at 2.2.0);
+ *   - one tool FLATTENED — what a deferred client pays when it fetches a tool's schema: Claude Code
+ *     folds a union's `anyOf` into one object, so a fetch costs the flattened chars, and a key two
+ *     members describe differently is shown with the first member's shape only.
  *
  * `src/measure.test.ts` prints these and ratchets them; `scripts/measure/*` report them in detail
  * (per tool, per toolset, per skill). One implementation so the test and the scripts cannot
@@ -199,6 +202,115 @@ export function decomposeToolsList(tools: AdvertisedTool[]): ToolsListBytes {
     }
   }
   return { chars: jsonChars(tools), count: tools.length, tools: rows, totals };
+}
+
+/** JSON chars and tool count of each group of the list — a toolset's share, by its own tools. */
+export function charsByGroup(
+  tools: AdvertisedTool[],
+  groupOf: (name: string) => string | undefined
+): Record<string, { count: number; chars: number }> {
+  const groups = new Map<string, AdvertisedTool[]>();
+  for (const tool of tools) {
+    const group = groupOf(tool.name) ?? '(none)';
+    groups.set(group, [...(groups.get(group) ?? []), tool]);
+  }
+  const out: Record<string, { count: number; chars: number }> = {};
+  for (const [group, members] of groups) {
+    out[group] = { count: members.length, chars: jsonChars(members) };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// One tool flattened — what a deferred client pays per fetch, and what the merge loses
+// ---------------------------------------------------------------------------
+
+/**
+ * How Claude Code renders a union tool when its schema is fetched (observed in its ToolSearch
+ * result on 2026-10-15; the suite's docs/reviews/2026-10-15-mcp-tool-surface.md §2): the `anyOf`
+ * is not shown. The root's properties come first, then each member's properties in member order,
+ * the FIRST owner of a key winning — so the root's described leaf beats a member's bare one, and
+ * the first member's shape beats every later member's; `additionalProperties` becomes true and
+ * the members' `required` tuples fold into one "input constraint" line. A key two members describe
+ * differently is shown with the first member's shape only: the merge is LOSSY there, and the model
+ * reads the wrong fields. `lossyKeys` names those keys; the budget test keeps the list empty.
+ */
+export interface FlattenedTool {
+  name: string;
+  /** Root `anyOf` members (0 for a plain tool, whose flattened view is the advertised one). */
+  members: number;
+  /** JSON chars of the flattened tool — what one fetch costs a deferred client. */
+  chars: number;
+  /** JSON chars as advertised (the eager cost of the same tool). */
+  advertisedChars: number;
+  /** Keys described in two or more shapes across the root and the members. */
+  lossyKeys: Array<{ key: string; shapes: number }>;
+}
+
+/** A leaf that carries prose anywhere in it; a bare `{type}` member leaf defers to the root's. */
+const describes = (leaf: unknown): boolean => JSON.stringify(leaf).includes('"description"');
+
+/** One tool as a deferred client shows it (the merge above), with the keys the merge loses. */
+export function flattenTool(tool: AdvertisedTool): FlattenedTool {
+  const advertisedChars = jsonChars(tool);
+  const { root, members } = splitUnion(tool.inputSchema);
+  if (members.length === 0) {
+    return { name: tool.name, members: 0, chars: advertisedChars, advertisedChars, lossyKeys: [] };
+  }
+  const rootObject = root as Record<string, unknown>;
+  const rootProperties = (rootObject.properties ?? {}) as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...rootProperties };
+  const shapes = new Map<string, Set<string>>();
+  const note = (key: string, leaf: unknown): void => {
+    if (!describes(leaf)) return;
+    const seen = shapes.get(key) ?? new Set<string>();
+    seen.add(JSON.stringify(leaf));
+    shapes.set(key, seen);
+  };
+  for (const [key, leaf] of Object.entries(rootProperties)) note(key, leaf);
+  for (const member of members) {
+    const properties = (member.properties ?? {}) as Record<string, unknown>;
+    for (const [key, leaf] of Object.entries(properties)) {
+      if (!(key in merged)) merged[key] = leaf;
+      note(key, leaf);
+    }
+  }
+  const flattened = {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: { ...rootObject, properties: merged, additionalProperties: true },
+  };
+  const lossyKeys = [...shapes]
+    .filter(([, seen]) => seen.size > 1)
+    .map(([key, seen]) => ({ key, shapes: seen.size }));
+  return {
+    name: tool.name,
+    members: members.length,
+    chars: jsonChars(flattened),
+    advertisedChars,
+    lossyKeys,
+  };
+}
+
+export interface FlattenedToolsList {
+  /** One row per tool, largest flattened first. */
+  tools: FlattenedTool[];
+  /** The largest single fetch. */
+  largest: FlattenedTool;
+  /** The flattened views summed — every tool fetched once. */
+  chars: number;
+  /** Every lossy key of every tool, as `<tool>.<key> ×<shapes>`, in list order. */
+  lossy: string[];
+}
+
+export function flattenToolsList(tools: AdvertisedTool[]): FlattenedToolsList {
+  const rows = tools.map(flattenTool).sort((a, b) => b.chars - a.chars);
+  return {
+    tools: rows,
+    largest: rows[0]!,
+    chars: rows.reduce((sum, row) => sum + row.chars, 0),
+    lossy: rows.flatMap(row => row.lossyKeys.map(k => `${row.name}.${k.key} ×${k.shapes}`)),
+  };
 }
 
 // ---------------------------------------------------------------------------

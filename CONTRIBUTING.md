@@ -30,10 +30,16 @@ halves:
    code rides to the tool as a `BridgeError` and the error mapper adds one hint per code.
 4. **The result shape** — design.md §3: a list is one line per record with a header, a `get` is
    JSON, a mutation is a one-line confirmation, a miss is `isError`.
-5. **The prose budget** — a leaf `.describe()` ≤ 120 chars, a description ≤ 400, no tours of
-   sibling tools, no Foundry-internals asides (the skills carry those). `npm test` prints the
-   context budgets and fails when one climbs past its ratchet (`src/measure.test.ts`); a new leaf
-   is paid for in its family's prose in the same commit.
+5. **The prose budget and the context budgets** — a leaf `.describe()` ≤ 120 chars, a description
+   ≤ 400, no tours of sibling tools, no Foundry-internals asides (the skills carry those). `npm test`
+   prints three context budgets, each with the client that pays it, and fails when one climbs past
+   its ratchet (`src/measure.test.ts`): **per prompt** for a deferred client such as Claude Code
+   (the tool names once per registration plus the skill descriptions), **per fetch** (the largest
+   tool with its `anyOf` flattened the way that client shows it, and no key described in two
+   shapes across a union's members — the merge shows the first member's shape only), and **the
+   eager `tools/list`** with a row per toolset. A change that adds advertised chars pays in its own
+   toolset's row or raises that row in the same commit, with the reason beside it; a union member
+   that takes a key another member takes reuses that leaf, never re-describes it.
 6. **The skills** (`.claude/skills/**`, tracked) — a skill decides, a tool does (design.md §2.1).
    A renamed or re-shaped tool is re-pointed in every skill that names it **in the same commit**;
    `node scripts/measure/skills-matrix.mjs` must report 0 unresolved names.
@@ -68,7 +74,8 @@ so a green offline gate proves arg shaping and pure logic, not the write paths:
 
 One feature or fix = one commit, and the commit message carries the numbers: the verify counts,
 the integration result, and — for anything that changes the advertised surface — the budgets
-`npm test` printed (tools/list chars, name chars, skill-description chars) before and after.
+`npm test` printed (per prompt, per fetch, tools/list and the toolset row that moved) before and
+after.
 
 ## Foundry / dnd5e upgrades are compatibility events
 

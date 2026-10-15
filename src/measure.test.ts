@@ -1,10 +1,22 @@
 /**
  * The context budgets — printed on every `npm test`, and ratcheted.
  *
- * Every 3.0 milestone (docs/history/plan-3.0-consolidation.md) is defined by these numbers: what an eager
- * client loads (`tools/list`), what every Claude Code prompt carries (the tool names, the skill
- * descriptions). The ceilings below are today's measurements rounded up; a milestone that lands
- * its diet lowers its ceiling in the same commit, so the number can never quietly climb back.
+ * Three budgets, each with the client that pays it (the suite's
+ * docs/reviews/2026-10-15-mcp-tool-surface.md §4; the 3.0 milestones that set the numbers are in
+ * docs/history/plan-3.0-consolidation.md):
+ *
+ *   (a) PER PROMPT, a deferred client (Claude Code): the tool names once per registration plus the
+ *       skill front-matter descriptions — paid on every turn, whatever is fetched.
+ *   (b) PER FETCH, the same client: one tool's schema, its `anyOf` flattened (src/measure.ts
+ *       `flattenTool`) — paid once per session per tool used; and the flatten-safety rule, since a
+ *       key two members describe differently is shown with the first member's shape only.
+ *   (c) THE EAGER LIST, a client that loads every schema at connect: `tools/list` whole, with a
+ *       row per toolset. A change that adds advertised chars pays in its own toolset's row, or
+ *       raises that row in the same commit with the reason beside it; the total has working
+ *       headroom so a growth in one family never trims another's prose.
+ *
+ * Every ceiling is today's measurement rounded up; a diet lowers its ceiling in the same commit,
+ * so a number can never quietly climb back.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -13,7 +25,9 @@ import {
   DEFAULT_REGISTRATIONS,
   PROSE_BUDGET,
   approxTokens,
+  charsByGroup,
   decomposeToolsList,
+  flattenToolsList,
   jsonChars,
   measureNames,
   proseOffenders,
@@ -23,23 +37,78 @@ import {
 import { buildToolRegistry } from './registry.js';
 import { ACTOR_TARGET, ACTOR_TARGET_STRICT, ITEM_TARGET, SCENE_TARGET } from './tools/_targets.js';
 import { makeFoundry, makeLogger } from './tools/test-helpers.js';
-import { ALWAYS_ON, READONLY } from './toolsets.js';
+import { ALWAYS_ON, READONLY, TOOLSET_NAMES, type ToolsetName, toolsetOf } from './toolsets.js';
 
-/** The ratchets (chars). The comment names the milestone that lowers each one and its target. */
+/** The ratchets (chars). The comment names who pays each and the commit that set it. */
 const BUDGET = {
-  // 283,945 at 2.2.0; +4,379 for the closed top level (`additionalProperties:false` × 151, M2 —
-  // the cost the plan accepted for refusing unknown arguments); 205,248 after M7 (the prose diet:
-  // every leaf ≤ 120, every description ≤ 400 — the test below; the M7 target was ≤ 230,000);
-  // 201,562 after M8 (the CRUD consolidation kept every family ≤ its own before) — the ceiling
-  // lowered to 205,000 so the M8 gain cannot leak back.
-  toolsListChars: 205_000,
+  // (a) per prompt, Claude Code: 13,916 on 2026-10-15 (6,143 names for two registrations +
+  // 7,773 skill descriptions); a new tool costs it about 90 chars.
+  perPrompt: 14_000,
   // 11,147 at 2.2.0; 6,153 after M8 (151 names → 81; the target was ≤ 7,000, now the ceiling)
   nameChars: 7_000,
   skillDescriptionChars: 8_000, // 15,381 at 2.2.0; 7,998 after M3 (all 17 rewritten, 120/120 trigger phrases kept)
+  // (b) per fetch, Claude Code: the largest single tool flattened — manage-placeables, 13,164 on
+  // 2026-10-15 with one kind's shapes under `items` / `patches` / `ids` (the lossy view).
+  perFetch: 13_200,
+  // (c) the eager list: 283,945 at 2.2.0; +4,379 for the closed top level
+  // (`additionalProperties:false` × 151, M2 — the cost the plan accepted for refusing unknown
+  // arguments); 205,248 after M7 (the prose diet: every leaf ≤ 120, every description ≤ 400 — the
+  // test below; the M7 target was ≤ 230,000); 201,562 after M8 (the CRUD consolidation); the ceiling
+  // sat at 205,000 until 4.6.0 reached 204,987 and had to trim its neighbours' prose to fit.
+  // 220,000 since 2026-10-15: 7% of working headroom, the per-toolset rows below the ratchet.
+  toolsListChars: 220_000,
   // the always-on toolset — every registration carries it, however narrow (10,814 as `world`;
   // M7 split it into `session` + the opt-in `settings` and set the ceiling at 2,100)
   alwaysOnChars: 2_100,
 };
+
+/**
+ * (c) per toolset: each row is that family's own tools on the eager list, today's number rounded
+ * up to the next 100. A commit that grows a family raises its row here, with the reason, and
+ * nothing else; a new toolset adds a row (the test refuses one without).
+ */
+const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
+  // every row: the 2026-10-15 measurement (4.6.0 plus the vetoed-delete fix), rounded up
+  session: 1_800, // 1,778
+  settings: 6_900, // 6,809
+  actors: 75_000, // 74,911
+  items: 4_700, // 4,615
+  compendium: 6_600, // 6,541
+  scenes: 62_200, // 62,106
+  journals: 14_400, // 14,380
+  tables: 6_000, // 5,935
+  cards: 2_100, // 2,009
+  audio: 5_200, // 5,119
+  chat: 6_300, // 6,254
+  combat: 1_200, // 1,141
+  assets: 6_400, // 6,372
+  organization: 5_800, // 5,775
+  scripting: 1_300, // 1,256
+};
+
+/**
+ * (b) the keys the flatten loses today, each fixed by a commit that follows (manage-placeables'
+ * per-kind keys first, then the rest); the list only shrinks, and the rule is that it is empty.
+ */
+const LOSSY_TODAY = [
+  'manage-placeables.items ×8',
+  'manage-placeables.patches ×7',
+  'manage-placeables.ids ×9',
+  'manage-placeables.name ×2',
+  'manage-scenes.name ×2',
+  'search-compendium.limit ×3',
+  'manage-rolltables.name ×2',
+  'manage-rolltables.formula ×2',
+  'manage-rolltables.replacement ×2',
+  'manage-rolltables.displayRoll ×2',
+  'manage-rolltables.results ×2',
+  'manage-journals.name ×2',
+  'manage-journals.pageId ×3',
+  'manage-cards.name ×2',
+  'manage-playlists.name ×2',
+  'manage-folders.name ×2',
+  'manage-folders.parentFolder ×2',
+];
 
 function surface(toolsets: readonly string[] = []) {
   const host = createHost(resolveHostConfig({}, 'generic'), makeLogger());
@@ -49,9 +118,9 @@ function surface(toolsets: readonly string[] = []) {
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const line = (label: string, chars: number, detail: string) =>
-  `  ${label.padEnd(20)} ${fmt(chars).padStart(8)} chars ≈ ${fmt(approxTokens(chars)).padStart(6)} tokens  ${detail}`;
+  `    ${label.padEnd(20)} ${fmt(chars).padStart(8)} chars ≈ ${fmt(approxTokens(chars)).padStart(6)} tokens  ${detail}`;
 
-describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
+describe('context budgets (three, each with the client that pays it)', () => {
   const tools = surface();
   const list = decomposeToolsList(tools);
   const alwaysOn = jsonChars(surface([ALWAYS_ON]));
@@ -62,42 +131,57 @@ describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
   const names = measureNames(tools, DEFAULT_REGISTRATIONS);
   const skills = readSkillDescriptions();
   const skillChars = totalSkillDescriptionChars(skills);
+  const perPrompt = names.prefixedChars + skillChars;
+  const flat = flattenToolsList(tools);
+  const toolToSet = toolsetOf();
+  const byToolset = charsByGroup(tools, name => toolToSet.get(name));
 
   // biome-ignore lint/suspicious/noConsole: printing the budgets is the point of this test
   console.log(
     [
       'context budgets:',
-      line(
-        'tools/list',
-        list.chars,
-        `(${list.count} tools; ≤ ${fmt(BUDGET.toolsListChars)}; M7 done; M8 keeps each family ≤ today)`
-      ),
+      '  (a) per prompt — Claude Code, schemas deferred: paid on every turn',
       line(
         `names ×${DEFAULT_REGISTRATIONS.length}`,
         names.prefixedChars,
-        `(${names.count} names; ≤ ${fmt(BUDGET.nameChars)}; M8 → ≤ 7,000)`
+        `(${names.count} names; ≤ ${fmt(BUDGET.nameChars)})`
       ),
       line(
         'skill descriptions',
         skillChars,
-        `(${skills.length} skills; ≤ ${fmt(BUDGET.skillDescriptionChars)}; M3 done)`
+        `(${skills.length} skills; ≤ ${fmt(BUDGET.skillDescriptionChars)})`
       ),
-      `  leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description + list.totals.memberDescriptions)} · ` +
-        `structural ${fmt(list.totals.structural)} · longest leaf ${fmt(list.totals.longestLeafDescription)}`,
+      line('per prompt', perPrompt, `(≤ ${fmt(BUDGET.perPrompt)})`),
+      '  (b) per fetch — Claude Code, one tool with its anyOf flattened: paid once per tool used',
+      line(
+        'largest tool',
+        flat.largest.chars,
+        `(${flat.largest.name}, ${flat.largest.members} members, ${fmt(flat.largest.advertisedChars)} advertised; ≤ ${fmt(BUDGET.perFetch)})`
+      ),
+      `    every tool once     ${fmt(flat.chars).padStart(8)} chars (advertised ${fmt(list.chars)}); lossy keys: ${flat.lossy.length} (${LOSSY_TODAY.length} known; the rule is none)`,
+      ...flat.lossy.map(k => `      ${k}`),
+      '  (c) the eager list — a client that loads every schema at connect',
+      line('tools/list', list.chars, `(${list.count} tools; ≤ ${fmt(BUDGET.toolsListChars)})`),
+      ...TOOLSET_NAMES.map(name =>
+        line(
+          `  ${name}`,
+          byToolset[name]?.chars ?? 0,
+          `(${byToolset[name]?.count ?? 0} tools; ≤ ${fmt(TOOLSET_CEILINGS[name])})`
+        )
+      ),
       line(`always-on (${ALWAYS_ON})`, alwaysOn, `(≤ ${fmt(BUDGET.alwaysOnChars)})`),
       line(
         READONLY,
         readOnly,
         `(${readOnlyTools.length} tools; ${((100 * readOnly) / list.chars).toFixed(1)}% of the full list; reported, no ceiling)`
       ),
-      `  prose budget: ${offenders.length} tools over (leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}; M7 done)`,
+      `    leaf .describe() ${fmt(list.totals.leafDescriptions)} · descriptions ${fmt(list.totals.description + list.totals.memberDescriptions)} · ` +
+        `structural ${fmt(list.totals.structural)} · longest leaf ${fmt(list.totals.longestLeafDescription)}`,
+      `    prose budget: ${offenders.length} tools over (leaf ≤ ${PROSE_BUDGET.leaf}, description ≤ ${PROSE_BUDGET.description}; M7 done)`,
     ].join('\n')
   );
 
-  it('tools/list stays within its ceiling', () => {
-    expect(list.chars).toBeLessThanOrEqual(BUDGET.toolsListChars);
-  });
-
+  // (a) per prompt
   it('the tool names, once per registration, stay within their ceiling', () => {
     expect(names.prefixedChars).toBeLessThanOrEqual(BUDGET.nameChars);
   });
@@ -106,6 +190,39 @@ describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
     expect(skills.length).toBeGreaterThan(0);
     for (const s of skills) expect(s.chars, `${s.skill} has no description`).toBeGreaterThan(0);
     expect(skillChars).toBeLessThanOrEqual(BUDGET.skillDescriptionChars);
+  });
+
+  it('(a) per prompt: the names and the skill descriptions together stay within their ceiling', () => {
+    expect(perPrompt).toBeLessThanOrEqual(BUDGET.perPrompt);
+  });
+
+  // (b) per fetch
+  it('(b) per fetch: the largest tool, flattened, stays within its ceiling', () => {
+    expect(flat.largest.chars, flat.largest.name).toBeLessThanOrEqual(BUDGET.perFetch);
+  });
+
+  it('(b) flatten-safety: no key is described in two shapes across a union (the merge would show one)', () => {
+    expect(flat.lossy, flat.lossy.join('\n')).toEqual(LOSSY_TODAY);
+  });
+
+  // (c) the eager list
+  it('(c) tools/list stays within its ceiling', () => {
+    expect(list.chars).toBeLessThanOrEqual(BUDGET.toolsListChars);
+  });
+
+  it('(c) every toolset stays within its row, and every toolset has a row', () => {
+    const over: string[] = [];
+    for (const name of TOOLSET_NAMES) {
+      const row = byToolset[name];
+      expect(row, `${name} has no tools`).toBeDefined();
+      expect(TOOLSET_CEILINGS[name], `${name} has no ceiling row`).toBeTypeOf('number');
+      if (row && row.chars > TOOLSET_CEILINGS[name]) {
+        over.push(`${name}: ${fmt(row.chars)} > ${fmt(TOOLSET_CEILINGS[name])}`);
+      }
+    }
+    expect(over, over.join('\n')).toEqual([]);
+    // every advertised tool belongs to a toolset (a stray one would hide outside every row)
+    expect(Object.keys(byToolset).sort()).toEqual([...TOOLSET_NAMES].sort());
   });
 
   it('the always-on toolset stays within its ceiling', () => {
@@ -189,6 +306,11 @@ describe('context budgets (docs/history/plan-3.0-consolidation.md)', () => {
       expect(envelope, row.name).toBeGreaterThan(0);
       expect(envelope, row.name).toBeLessThan(80);
       expect(row.structural, row.name).toBeGreaterThan(0);
+    }
+    // a plain tool's flattened view is its advertised one; a union's is smaller or equal
+    for (const row of flat.tools) {
+      if (row.members === 0) expect(row.chars, row.name).toBe(row.advertisedChars);
+      else expect(row.chars, row.name).toBeLessThanOrEqual(row.advertisedChars);
     }
   });
 });
