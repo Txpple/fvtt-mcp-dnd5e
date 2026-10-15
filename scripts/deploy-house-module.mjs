@@ -5,6 +5,9 @@
 //   node scripts/deploy-house-module.mjs fvtt-mod-bythebooks --local     (the LOCAL sandbox)
 //   FOUNDRY_HOST=molten node scripts/deploy-house-module.mjs fvtt-mod-lootshelf
 //   FOUNDRY_HOST=molten node scripts/deploy-house-module.mjs fvtt-mod-partystash --check   (compare only)
+//   node scripts/deploy-house-module.mjs fvtt-mod-bythebooks --local --from ../fvtt-mod-bythebooks.4c
+//       (the tree to upload is a feature worktree beside the clone; the destination is still
+//        modules/<module-id>, so a branch can be proved on the sandbox without touching the clone)
 //
 // TARGETS: the host FOUNDRY_HOST selects (src/hosts/env.ts), through its DIRECT file plane — the
 // WebDAV plane on a managed box, the Data/ directory of an install on this machine; a host with
@@ -30,7 +33,7 @@
 // box is right whenever that happens, and the lag is REPORTED rather than pretended away.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, posix } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { loadEnv } from '../dist/env.js';
 import { createHost, hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
@@ -41,15 +44,27 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const checkOnly = args.includes('--check');
 const toLocal = args.includes('--local');
-const moduleId = args.find(a => !a.startsWith('--'));
+const usage =
+  'usage: node scripts/deploy-house-module.mjs <module-id> [--check] [--local] [--from <dir>]';
+const fromAt = args.indexOf('--from');
+const fromDir = fromAt >= 0 ? args[fromAt + 1] : null;
+if (fromAt >= 0 && (!fromDir || fromDir.startsWith('--'))) {
+  console.error(`--from needs a directory.\n${usage}`);
+  process.exit(2);
+}
+const moduleId = args.find((a, i) => !a.startsWith('--') && i !== fromAt + 1);
 if (!moduleId) {
-  console.error('usage: node scripts/deploy-house-module.mjs <module-id> [--check] [--local]');
+  console.error(usage);
   process.exit(2);
 }
 
-const REPO = join(__dirname, '..', '..', moduleId);
+// The tree that is uploaded: the sibling clone by default, or any directory named by --from (a
+// feature worktree beside the clone). The destination is always modules/<module-id>.
+const REPO = fromDir ? resolve(fromDir) : join(__dirname, '..', '..', moduleId);
 if (!existsSync(join(REPO, 'module.json'))) {
-  console.error(`No module.json at ${REPO} — is the repo cloned beside this one?`);
+  console.error(
+    `No module.json at ${REPO} — ${fromDir ? 'is --from a module tree?' : 'is the repo cloned beside this one?'}`
+  );
   process.exit(2);
 }
 
@@ -120,7 +135,7 @@ const files = servedFiles();
 const manifest = JSON.parse(readFileSync(join(REPO, 'module.json'), 'utf8'));
 console.log(
   `${checkOnly ? 'Checking' : 'Deploying'} ${moduleId} v${manifest.version} ` +
-    `(${files.length} files) -> ${target.label}\n`
+    `(${files.length} files${fromDir ? `, from ${REPO}` : ''}) -> ${target.label}\n`
 );
 
 let fails = 0;
