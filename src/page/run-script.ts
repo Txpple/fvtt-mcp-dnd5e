@@ -25,7 +25,7 @@
 // The page keeps no receipts: the run's writes ride back as `ops`, the bridge files them as the
 // tool call's receipt (src/receipts.ts), and `undoOps` reverses one.
 
-import { opKind } from './_ops.js';
+import { opKind, UNRECORDED_OPS } from './_ops.js';
 import { documentNames, type ReceiptOp, record, withWriteLock } from './_receipts.js';
 import { invalid } from './errors.js';
 
@@ -98,6 +98,11 @@ export interface RunScriptResult {
     deleted: number;
     calls: number;
     writes: number;
+    /**
+     * The write ops the run called whose change no receipt records (./_ops.ts UNRECORDED_OPS: a
+     * file in Data/, the players' views), each once; absent when none ran.
+     */
+    unrecorded?: string[];
   };
   dryRun?: Array<{ fn: string; args: unknown }>;
   /** The run's writes, in order; the bridge lifts them out into the call's receipt. */
@@ -108,6 +113,8 @@ interface Counts {
   calls: number;
   writes: number;
   deletes: number;
+  /** The UNRECORDED_OPS a call of the run completed. */
+  unrecorded: Set<string>;
 }
 
 /**
@@ -179,7 +186,12 @@ function facade(
       const settled = () => {
         run.pending.delete(call);
       };
-      void call.then(settled, settled);
+      // a completed file-plane or view op changed what the receipt cannot hold
+      const done = () => {
+        if (UNRECORDED_OPS.has(name)) counts.unrecorded.add(name);
+        settled();
+      };
+      void call.then(done, settled);
       return call;
     };
   }
@@ -245,7 +257,7 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
   }
 
   const run = async (): Promise<RunScriptResult> => {
-    const counts: Counts = { calls: 0, writes: 0, deletes: 0 };
+    const counts: Counts = { calls: 0, writes: 0, deletes: 0, unrecorded: new Set() };
     const log: string[] = [];
     const dry: Array<{ fn: string; args: unknown }> = [];
     const logFn = (...parts: unknown[]) => {
@@ -324,6 +336,7 @@ export async function runScript(args: RunScriptArgs): Promise<RunScriptResult> {
         deleted: count('delete'),
         calls: counts.calls,
         writes: counts.writes,
+        ...(counts.unrecorded.size ? { unrecorded: [...counts.unrecorded] } : {}),
       },
     };
     if (ok) out.result = result;

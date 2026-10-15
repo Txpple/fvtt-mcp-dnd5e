@@ -18,6 +18,7 @@ import { formatDeletionResult } from '../utils/format.js';
 import { validateExportDestinations } from '../utils/transcript.js';
 import { localError, readLocal } from './assets/access.js';
 import { ToolError } from '../utils/error-handler.js';
+import { noteUnrecorded } from '../receipts.js';
 
 /**
  * Chat-log tools — post / list / delete / export chat messages, plus rich dnd5e cards.
@@ -342,6 +343,7 @@ export class ChatTools {
         if (overwrite || !(await files.exists(remote))) {
           await files.ensureParents(remote);
           await files.write(remote, bytes, guessContentType(p));
+          noteUnrecorded();
         }
         url = this.host.publicUrl(remote);
       } else {
@@ -448,6 +450,7 @@ export class ChatTools {
       try {
         await files.ensureParents(clean);
         await files.write(clean, bytes, guessContentType(parsed.remotePath));
+        noteUnrecorded();
       } catch (err) {
         // the plane's status (its code) is kept; the words gain what was already written
         if (wrote && err instanceof FilePlaneError) {

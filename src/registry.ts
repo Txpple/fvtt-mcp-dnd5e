@@ -9,6 +9,8 @@
 import type { FoundryBridge } from './foundry.js';
 import type { Host } from './hosts/types.js';
 import {
+  NO_RECEIPT,
+  noReceiptOf,
   TOOL_KINDS,
   readActionsOf,
   readOnlyRefusal,
@@ -32,6 +34,7 @@ import {
   callContext,
   markUndone,
   NOTHING_PUT_BACK,
+  notUndoableLine,
   pruneReceipts,
   receiptLine,
   receiptPath,
@@ -100,9 +103,14 @@ export interface ToolRegistry {
   /**
    * `dispatch`, and the receipt line of the writes the call made (src/receipts.ts): kept in the
    * store, one line the server appends to the answer; none when the call wrote nothing. A call that
-   * fails after it wrote throws an error carrying the line (`receiptLineOf`).
+   * changed something no receipt records (a NO_RECEIPT tool's Data/ file, a player's view) also
+   * answers `notUndoable`, the line that ends the answer. A call that fails after it wrote throws an
+   * error carrying both lines (`receiptLineOf`).
    */
-  dispatchWithReceipt(name: string, args: any): Promise<{ result: any; receiptLine?: string }>;
+  dispatchWithReceipt(
+    name: string,
+    args: any
+  ): Promise<{ result: any; receiptLine?: string; notUndoable?: string }>;
   /** The toolsets this registry advertises. */
   enabledToolsets: ReadonlySet<ToolsetName>;
   /** FOUNDRY_TOOLSETS=readonly: the reads are advertised, and every other call is refused. */
@@ -465,6 +473,12 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   for (const name of Object.keys(TOOL_KINDS)) {
     if (!handlers[name]) throw new Error(`src/tool-kinds.ts tags "${name}", which has no handler`);
   }
+  // A NO_RECEIPT tag says a write can change what no receipt records: it means nothing on a read.
+  for (const name of Object.keys(NO_RECEIPT)) {
+    if ((TOOL_KINDS as Record<string, ToolKind>)[name] === 'read') {
+      throw new Error(`src/tool-kinds.ts tags "${name}" NO_RECEIPT, but it only reads`);
+    }
+  }
   const isEnabled = (name: string): boolean => enabledToolsets.has(toolsetByTool.get(name)!);
 
   // The advertised top level is closed (toInputSchema sets additionalProperties:false): an unknown
@@ -567,20 +581,35 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     }
   };
 
+  // A call that changed what no receipt records (src/receipts.ts noteUnrecorded) ends its answer
+  // with the "not undoable" line, in its NO_RECEIPT words or the detail it gave.
+  const unrecordedLine = (tool: string, ctx: CallContext): string | undefined => {
+    if (!ctx.unrecorded) return undefined;
+    const what = ctx.unrecorded.detail ?? noReceiptOf(tool);
+    if (!what)
+      logger.warn('a call noted an unrecorded change but carries no NO_RECEIPT tag', { tool });
+    return notUndoableLine(what ?? "a change outside the world's documents");
+  };
+
   const dispatchWithReceipt = async (
     name: string,
     args: any
-  ): Promise<{ result: any; receiptLine?: string }> => {
+  ): Promise<{ result: any; receiptLine?: string; notUndoable?: string }> => {
     const ctx: CallContext = { ops: [] };
     let result: any;
     try {
       result = await callContext.run(ctx, () => route(name, args));
     } catch (err) {
-      const line = keepReceipt(name, ctx);
-      throw line ? withReceiptLine(err, line) : err;
+      const lines = [keepReceipt(name, ctx), unrecordedLine(name, ctx)].filter(Boolean);
+      throw lines.length ? withReceiptLine(err, lines.join('\n')) : err;
     }
     const line = keepReceipt(name, ctx);
-    return line ? { result, receiptLine: line } : { result };
+    const notUndoable = unrecordedLine(name, ctx);
+    return {
+      result,
+      ...(line ? { receiptLine: line } : {}),
+      ...(notUndoable ? { notUndoable } : {}),
+    };
   };
 
   const dispatch = async (name: string, args: any): Promise<any> =>

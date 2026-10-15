@@ -220,6 +220,17 @@ export const OPS = {
 } as const satisfies Record<keyof PageApi, OpKind>;
 
 /**
+ * The write ops whose change is not a document — a file in Data/ (the bridge file plane), the
+ * players' views (a socket pull) — so the receipt recorder never sees it. A run that calls one is
+ * told its change is not undoable (src/tools/script.ts; NO_RECEIPT in src/tool-kinds.ts).
+ */
+export const UNRECORDED_OPS: ReadonlySet<string> = new Set<keyof typeof OPS>([
+  'uploadFile',
+  'createDirectory',
+  'pullUsersToScene',
+]);
+
+/**
  * What one call does: `read`, `write` or `delete`, from the op's tag and, for a tag that depends on
  * the call, its arguments. A name that is not a page op is a write: nothing vouches for it.
  */

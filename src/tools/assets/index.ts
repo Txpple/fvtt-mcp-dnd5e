@@ -14,6 +14,7 @@ import {
 } from '../../hosts/paths.js';
 import { localError, readLocal } from './access.js';
 import { ToolError } from '../../utils/error-handler.js';
+import { noteUnrecorded } from '../../receipts.js';
 import { toInputSchema } from '../../utils/schema.js';
 
 /**
@@ -317,6 +318,7 @@ export class AssetFileTools {
     }
     await plane.ensureParents(clean);
     await plane.write(clean, bytes, guessContentType(localPath));
+    noteUnrecorded();
     const publicUrl = this.host.publicUrl(clean);
     this.logger.info('upload-asset', { localPath, remotePath: clean, bytes: bytes.length });
     return (
@@ -372,6 +374,7 @@ export class AssetFileTools {
         await plane.ensureParents(remote);
         await plane.write(remote, bytes, guessContentType(localPath));
         uploaded++;
+        noteUnrecorded();
       } catch (err) {
         errors.push(`${rel}: ${(err as Error).message}`);
       }
@@ -407,6 +410,7 @@ export class AssetFileTools {
     }
     await plane.ensureParents(clean); // create any missing parents above the target
     await plane.mkdir(clean); // then the target folder itself
+    noteUnrecorded();
     this.logger.info('create-asset-folder', { remotePath: clean });
     return `Created folder Data/${clean}.`;
   }
@@ -455,6 +459,7 @@ export class AssetFileTools {
     }
 
     await plane.remove(clean, entry.isDirectory);
+    noteUnrecorded();
     this.logger.info('delete-asset', { remotePath: clean, recursive, force });
     return `Deleted Data/${clean}${entry.isDirectory ? ' (directory)' : ''}.`;
   }
@@ -514,6 +519,7 @@ export class AssetFileTools {
     // destination's parents first — same contract as upload-asset.
     await plane.ensureParents(cleanTo);
     await plane.move(cleanFrom, cleanTo, overwrite, entry.isDirectory);
+    noteUnrecorded();
     this.logger.info('move-asset', { fromPath: cleanFrom, toPath: cleanTo, relink, force });
 
     // The move happened: a relink that fails after it is a warning on the answer, not its error
@@ -556,6 +562,7 @@ export class AssetFileTools {
     // copy has the same missing-directory failure mode as move — create parents first.
     await plane.ensureParents(cleanTo);
     await plane.copy(cleanFrom, cleanTo, overwrite, entry.isDirectory);
+    noteUnrecorded();
     this.logger.info('copy-asset', { fromPath: cleanFrom, toPath: cleanTo });
     return `Copied Data/${cleanFrom} → Data/${cleanTo}.`;
   }

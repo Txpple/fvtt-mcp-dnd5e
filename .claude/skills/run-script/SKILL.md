@@ -68,8 +68,8 @@ return { placed };
   unknown. Read the world before running it again.
 - **Batch**: one `createActorFromCompendium` with `quantity: 6` beats six calls; one
   `addActorItems` with the whole list beats one per item. The write count is calls, not documents.
-- **The receipt**: every write tool answers with one receipt line, and a run with one for the whole
-  run: `receipt rcpt_…: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value)
+- **The receipt**: every write to the world's documents answers with one receipt line, and a run
+  with one for the whole run: `receipt rcpt_…: 1 created, 1 updated, 0 deleted (Actor "Goblin 3": system.attributes.hp.value)
   · undo: run-script { "undo": "rcpt_…" }`. The undo is the same `{ "undo": "rcpt_…" }` for a tool's
   receipt and a run's: it deletes what the call created, puts back the paths it changed (removing
   the ones it added), and re-creates what it deleted with its id, newest write first. Receipts are
@@ -88,6 +88,9 @@ return { placed };
 - **What cannot be undone**: a write whose pre-image was over the cap (2 MB per document, 8 MB per
   call; the line counts them as not undoable), the file plane (uploads, copies, moves and deletes of
   files), chat players have already seen (the message can be deleted, not unseen), and a pulled view.
+  A call that changed a file or a view ends its answer with a `not undoable: …` line naming it (a
+  run: `what fvtt.uploadFile, fvtt.pullUsersToScene changed`), after the receipt of any documents
+  it also wrote.
 - **A failed run keeps its receipt** (the writes done before the throw are in it), and so does a
   tool that fails after it wrote; undo it if the half-done state is worse than none.
 

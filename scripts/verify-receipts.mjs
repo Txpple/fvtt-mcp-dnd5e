@@ -24,6 +24,9 @@
 //     the run's undo removes them;
 //   - two run-script calls issued together: the second runs after the first, and its op cap never
 //     counts the wait (no "still running" warning from the bridge, no page closed; about 35 s);
+//   - a change no receipt can hold: create-asset-folder on a ZZ folder in Data/ answers no receipt
+//     and ends with the "not undoable" line, again on the same folder says nothing more, and
+//     delete-asset (a direct plane) ends with its line (the folder removed in finally otherwise);
 //   - the cost of the choke point, timed in the page (printed, not a check).
 // Everything is named ZZ-receipts… (the lights are tracked by id) and deleted in finally, through
 // the bridge without a receipt; the receipt files this run made are removed from the store.
@@ -66,6 +69,7 @@ const { dispatchWithReceipt } = buildToolRegistry({
 const made = new Set(); // receipt ids this run made: removed from the store at the end
 const lights = new Set(); // light ids this run placed on the active scene
 let worldKey = '';
+let dataFolder = null; // the ZZ folder this run made in Data/, until it is deleted
 
 /** Call a tool as the server does: its result, its receipt line and the receipt id in it. */
 async function tool(name, args) {
@@ -557,6 +561,37 @@ try {
   );
 
   // ── 11. The cost of the choke point, timed in the page ─────────────────────────────────────────
+  // ── a change no receipt can hold (NO_RECEIPT): a folder in Data/ ─────────────────────────────
+  console.log('\n# a change no receipt can hold (a ZZ folder in Data/)');
+  dataFolder = `${TAG}-${Date.now()}`;
+  const mk = await dispatchWithReceipt('create-asset-folder', { remotePath: dataFolder });
+  check(
+    'create-asset-folder answers no receipt and ends with the "not undoable" line',
+    !mk.receiptLine && /^not undoable: the folder it made in Data\/ \(/.test(mk.notUndoable ?? ''),
+    `${mk.result} | ${mk.notUndoable}`
+  );
+  const again = await dispatchWithReceipt('create-asset-folder', { remotePath: dataFolder });
+  check(
+    'the same folder again makes nothing and says nothing past its answer',
+    /^Already exists: folder/.test(again.result) && !again.notUndoable && !again.receiptLine,
+    `${again.result} | ${again.notUndoable}`
+  );
+  if (cfg.host.files) {
+    const del = await dispatchWithReceipt('delete-asset', {
+      remotePath: dataFolder,
+      recursive: true,
+      force: true,
+    });
+    check(
+      'delete-asset (a direct plane) ends with the "not undoable" line, no receipt',
+      !del.receiptLine && /^not undoable: the delete in Data\/ \(/.test(del.notUndoable ?? ''),
+      `${del.result} | ${del.notUndoable}`
+    );
+    dataFolder = null;
+  } else {
+    console.log('  (no direct plane: the empty folder stays; the bridge plane cannot delete it)');
+  }
+
   console.log('\n# the cost (in the page, 20 calls each)');
   const [subject] = await actorsNamed(`${TAG} Goblin`);
   const cost = await look(
@@ -642,6 +677,11 @@ try {
     )
     .catch(e => ({ error: e.message }));
   console.log(`\n[verify-receipts] cleanup: ${JSON.stringify(left)}`);
+  if (dataFolder && cfg.host.files) {
+    await cfg.host.files.remove(dataFolder, true).catch(e => {
+      console.log(`  Data/${dataFolder} not removed: ${e.message}`);
+    });
+  }
   const remains = await f
     .evaluate(
       ({ tag, lightIds }) => [

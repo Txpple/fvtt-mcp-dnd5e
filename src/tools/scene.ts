@@ -13,6 +13,7 @@ import {
   moduleWarnings,
   rendererLabel,
 } from '../utils/bridge-facts.js';
+import { noteUnrecorded } from '../receipts.js';
 import { FormattedToolError } from '../utils/error-handler.js';
 import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
@@ -674,6 +675,8 @@ export class SceneTools {
     const offline: Array<{ name: string }> = result?.offline ?? [];
     const selfSkipped: Array<{ name: string }> = result?.selfSkipped ?? [];
     const notFound: string[] = result?.notFound ?? [];
+    // a pull moves views over a socket: no document changes, so no receipt can put them back
+    if (pulled.length) noteUnrecorded();
 
     const head = pulled.length
       ? `👁️ Pulled ${pulled.length} user(s) to ${scene}: ${pulled.map(u => u.name).join(', ')}` +

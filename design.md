@@ -150,7 +150,10 @@ This is the architectural backbone that makes principle #1 real.
   one line per record in a fixed, documented field order under a header `<N> <noun>(s)` (`of M`
   when cut); a search body always says `totalFound`, the full match count. **Single reads**
   (`get-*`) are JSON with a `compact` / `fields` selector. **Mutations** are a one-line
-  confirmation plus warnings. **A miss is an error** (`isError`), never a prose "not found" inside
+  confirmation plus warnings, then the server's receipt line for the documents the call wrote; a
+  change no receipt can hold (a file in `Data/`, a player's view) ends the answer with a
+  `not undoable: …` line instead, so it never reads like a read (§8, *Receipts*). **A miss is an
+  error** (`isError`), never a prose "not found" inside
   a success-shaped result. An unknown argument is refused by name, never stripped. A result over
   the response cap is cut at record boundaries with a `truncation` stamp, never mid-record.
   (Decision #10 of the 3.0 plan, `docs/history/plan-3.0-consolidation.md`; the line format
@@ -196,7 +199,7 @@ This is the architectural backbone that makes principle #1 real.
 | | **Official dnd5e 6.x** — the 6.0.3 compatibility pin | ✅ done 2026-09-20 (`docs/history/plan-3.0-consolidation.md` M1) |
 | | **3.0 — the token fix and the dnd5e-not-Molten refactor**: results diet, schema prose diet, the `FOUNDRY_*` config contract with `generic` as the default host, the bridge file plane on every host, the package / sibling contract, the CRUD consolidation (17 `list/create/update/delete-X` families → family tools with `action`, every skill re-pointed in the same commit), owner content out, the user-facing docs | ✅ done 3.0.0, 2026-09-21 (`docs/history/plan-3.0-consolidation.md`; measured in `docs/history/architecture-review-2026-09.md`; `tools/list` 283,948 → 201,562, names ×2 11,147 → 6,153, 151 tools → 81) |
 | | **The three context budgets, each with its payer** — **per prompt** for a deferred client such as Claude Code (the tool names once per registration plus the skill descriptions), **per fetch** (the largest tool with its `anyOf` flattened the way that client shows it, and no key described in two shapes across a union's members), **the eager `tools/list`** with a row per toolset; `manage-placeables` carries each kind's entries on its own keys (`tiles` / `tilePatches` / `tileIds`, `lights` / `lightPatches` / `lightIds`, …, `tokenIds`), so the flattened view is right for every kind | ✅ done after 4.6.0 (`src/measure.test.ts`, §8; issue #18) |
-| **Onboarding & safety** (the 4.x line) | **Receipts and undo** — every write to the world's documents answers with a receipt holding the pre-images; `run-script { "undo": … }` reverses it, and an undo is a receipt of its own (a redo) | ✅ done 4.4.0 (§8) |
+| **Onboarding & safety** (the 4.x line) | **Receipts and undo** — every write to the world's documents answers with a receipt holding the pre-images; `run-script { "undo": … }` reverses it, and an undo is a receipt of its own (a redo); a change no receipt can hold (a file in `Data/`, a player's view) ends its answer with a "not undoable" line | ✅ done 4.4.0; the "not undoable" line after 4.6.0 (§8) |
 | | **`run-script` and the `scripting` toolset** — a short program against `fvtt.*`, the page functions behind every tool: a loop or a bulk job in one round trip, its writes counted, capped and recorded, a dry run that stubs them; the reference (`docs/run-script-api.md`) generated from the program | ✅ done 4.4.0 (§8) |
 | | **The read-only mode** — `FOUNDRY_TOOLSETS=readonly` advertises every toolset's reads and refuses every other call by name before it runs; the join user's role is the boundary | ✅ done 4.4.0 (`src/tool-kinds.ts`) |
 | | **`npm run init` and `npm run doctor`** — from a built clone to a checked registration in one command; a setup checked line by line, safe against a live world (no launch, no wake) | ✅ done 4.2.0 (doctor), 4.4.0 (init) |
@@ -385,7 +388,12 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   id, never applied to another world); the server appends the receipt's one line to the answer,
   to an error's too when the call wrote before it failed. `run-script { "undo": … }` reverses a
   receipt newest write first (`undoOps`). A sibling harness on `fvtt-mcp-dnd5e/client` runs no
-  call context and pays nothing. Proven live by `scripts/verify-receipts.mjs`.
+  call context and pays nothing. What no receipt can record — a file in `Data/`, the players'
+  views — is tagged per tool in `src/tool-kinds.ts` (`NO_RECEIPT`) and per page op in
+  `src/page/_ops.ts` (`UNRECORDED_OPS`, for a run); a call that made such a change ends its answer
+  with a `not undoable: …` line in its tag's words, after the receipt of any documents it also
+  wrote, and `src/tools/registry.test.ts` sorts every write tool into the tagged or the recorded
+  ones by name. Proven live by `scripts/verify-receipts.mjs`.
 - **The script facade.** `src/page/run-script.ts` runs a program against `fvtt.*` with the page's
   globals shadowed, its writes counted and capped by each op's tag (`src/page/_ops.ts`: read /
   write / delete per op; an untagged op does not compile) and recorded into the call's receipt; a

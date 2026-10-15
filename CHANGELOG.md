@@ -102,6 +102,22 @@ What changed for a user of the tools and skills, release by release. The measure
   what stayed. `needsChoices` (a dry run) is still an answer. The page result loses `errors`; the
   tool descriptions say "is an error". `docs/RELEASE.md`'s smoke step expects the error.
   `scripts/verify-asset-plane.mjs` checks the refusals as errors.
+- **A change no receipt can hold says it is not undoable.** A receipt records the world's
+  documents, so a call that changed a file in `Data/` or a player's view answered like a read: no
+  receipt line and no warning. Such a call now ends its answer with one line, e.g.
+  `not undoable: the delete in Data/ (a receipt holds the world's documents only)`, after the receipt
+  of any documents it also wrote (a `move-asset` relink, a `send-chat-message` with an uploaded
+  image). The tools carry a `NO_RECEIPT` tag (`src/tool-kinds.ts`): `upload-asset`,
+  `upload-asset-tree`, `create-asset-folder`, `delete-asset`, `move-asset`, `copy-asset`,
+  `export-chat-log` (its `Data/` copy), `send-chat-message` (an uploaded image),
+  `pull-users-to-scene` (a view it moved) and `run-script`, whose answer names the page functions a
+  run completed that write past the recorder (`fvtt.uploadFile`, `fvtt.createDirectory`,
+  `fvtt.pullUsersToScene`; the page result's `receipt.unrecorded`). The line appears only once the
+  change was made (not on a refusal, an existing folder, a pull that moved nobody), and a failed
+  call carries it like its receipt line. `src/tools/registry.test.ts` sorts every write tool into the
+  tagged ten or the recorded 48 by name, so a new write cannot join unnoticed. The README's "every
+  write tool answers with a receipt" now says what is true; design.md §3 and §8 and the `run-script`
+  skill say the same. Library: `dispatchWithReceipt` answers `notUndoable` beside `receiptLine`.
 
 ## 4.6.0 — 2026-10-12 — lights read and write whole; a screenshot through a token
 

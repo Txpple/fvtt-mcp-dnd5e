@@ -135,6 +135,33 @@ describe('runScript against a stubbed page', () => {
     expect(hooks.size).toBe(0); // a dry run records nothing
   });
 
+  it('a run names the file-plane and view ops it completed, which no receipt records', async () => {
+    const g = globalThis as any;
+    g.window.__fvtt.uploadFile = async (a: unknown) => {
+      calls.push(['uploadFile', a]);
+      return { ok: true };
+    };
+    g.window.__fvtt.pullUsersToScene = async () => {
+      throw new Error('no such scene');
+    };
+    const r = await runScript({
+      src: `await fvtt.uploadFile({ path: 'a.txt', base64: '' });
+        await fvtt.uploadFile({ path: 'b.txt', base64: '' });
+        await fvtt.updateActor({ id: 'a1', hp: 1 });
+        try { await fvtt.pullUsersToScene({}); } catch {}
+        return 1;`,
+    });
+    expect(r.ok).toBe(true);
+    // each once; the pull failed, so it changed nothing; the update is in the receipt's ops
+    expect(r.receipt.unrecorded).toEqual(['uploadFile']);
+    expect(r.ops).toHaveLength(1);
+    const dry = await runScript({
+      src: `await fvtt.uploadFile({ path: 'a.txt', base64: '' }); return 1;`,
+      dryRun: true,
+    });
+    expect(dry.receipt.unrecorded).toBeUndefined();
+  });
+
   it('a dry run stubs by the op table: a remap is a write, a list action reads', async () => {
     const g = globalThis as any;
     g.window.__fvtt.remapSceneTeleporters = async (a: unknown) => {

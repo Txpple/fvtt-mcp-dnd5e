@@ -19,7 +19,7 @@ import { buildToolRegistry } from '../registry.js';
 import { clearSystemCache } from '../utils/system-detection.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
 import { TOOLSETS, TOOLSET_NAMES, parseToolsetsEnv } from '../toolsets.js';
-import { TOOL_KINDS, type ToolKind, toolKind } from '../tool-kinds.js';
+import { NO_RECEIPT, TOOL_KINDS, type ToolKind, toolKind } from '../tool-kinds.js';
 import { opKind } from '../page/_ops.js';
 import { createHost, resolveHostConfig } from '../hosts/index.js';
 
@@ -1248,5 +1248,223 @@ describe('receipts on every write (issue #6): one line per call, appended centra
     expect(b.receiptLine).toContain('(Setting "call 2": value)');
     expect(a.receiptLine).not.toBe(b.receiptLine);
     expect(stored().map(r => r.ops.length)).toEqual([1, 1]);
+  });
+});
+
+describe('the writes no receipt records (NO_RECEIPT): a "not undoable" line ends the answer', () => {
+  // Every tool that can write sits in exactly one of these two lists, by name. A write whose change
+  // can be outside the world's documents (a file in Data/, a player's view) is NO_RECEIPT; every
+  // other write is recorded (its receipt holds all it changed). A new write tool fails here until
+  // it is placed: read its handler, then add it to one list.
+  const NO_RECEIPT_WRITES = [
+    'copy-asset',
+    'create-asset-folder',
+    'delete-asset',
+    'export-chat-log',
+    'move-asset',
+    'pull-users-to-scene',
+    'run-script',
+    'send-chat-message',
+    'upload-asset',
+    'upload-asset-tree',
+  ];
+  const RECORDED_WRITES = [
+    'activate-scene',
+    'add-feature',
+    'add-free-cast',
+    'add-item',
+    'add-journal-image',
+    'apply-condition',
+    'author-npc',
+    'bulk-delete',
+    'configure-area-sounds',
+    'configure-combat-tracker',
+    'configure-dnd5e-settings',
+    'create-actor-from-compendium',
+    'create-group',
+    'create-pc',
+    'create-pc-from-prefab',
+    'create-quest-journal',
+    'delete-chat-messages',
+    'duplicate-actor',
+    'level-up-pc',
+    'link-quest-to-npc',
+    'manage-activity',
+    'manage-actors',
+    'manage-calendar',
+    'manage-cards',
+    'manage-effect',
+    'manage-folders',
+    'manage-group-members',
+    'manage-items',
+    'manage-journals',
+    'manage-macros',
+    'manage-placeables',
+    'manage-playlists',
+    'manage-rolltables',
+    'manage-scenes',
+    'move-documents',
+    'post-item-card',
+    'relink-asset',
+    'remove-from-actor',
+    'request-roll',
+    'set-actor-art',
+    'set-actor-ownership',
+    'set-journal-page-visibility',
+    'set-landing-scene',
+    'set-primary-party',
+    'set-user-avatar',
+    'update-actor-item',
+    'update-quest-journal',
+    'update-user',
+  ];
+
+  it('sorts every write tool into the tagged or the recorded list, by name', () => {
+    const writes = Object.entries(TOOL_KINDS as Record<string, ToolKind>)
+      .filter(([, kind]) => kind !== 'read')
+      .map(([name]) => name)
+      .sort();
+    expect(Object.keys(NO_RECEIPT).sort()).toEqual(NO_RECEIPT_WRITES);
+    expect([...NO_RECEIPT_WRITES, ...RECORDED_WRITES].sort()).toEqual(writes);
+    expect(NO_RECEIPT_WRITES.filter(n => RECORDED_WRITES.includes(n))).toEqual([]);
+  });
+
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'fvtt-registry-noreceipt-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+  /** A registry over the bridge file plane (the generic host has no direct plane). */
+  function registry(onCall: (name: string, args: any) => unknown) {
+    const { foundry } = makeFoundry(async (name: string, args: any) => onCall(name, args));
+    return buildToolRegistry({
+      foundry,
+      logger: makeLogger(),
+      host,
+      serverUrl: 'http://localhost:30000',
+      receiptsDir: dir,
+    });
+  }
+  const line = (what: string) =>
+    `not undoable: ${what} (a receipt holds the world's documents only)`;
+
+  it('a Data/ change answers the line in its tag words, and no receipt', async () => {
+    const { dispatchWithReceipt } = registry(name => {
+      if (name === 'statFile') return null;
+      if (name === 'createDirectory') return { ok: true };
+      return {};
+    });
+    const out = await dispatchWithReceipt('create-asset-folder', { remotePath: 'assets/new' });
+    expect(out.result).toBe('Created folder Data/assets/new.');
+    expect(out.receiptLine).toBeUndefined();
+    expect(out.notUndoable).toBe(line('the folder it made in Data/'));
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('a call that changed nothing past the documents answers no line', async () => {
+    // an existing folder: nothing made
+    const { dispatchWithReceipt } = registry(name =>
+      name === 'statFile' ? { isDirectory: true } : {}
+    );
+    const out = await dispatchWithReceipt('create-asset-folder', { remotePath: 'assets/old' });
+    expect(out.result).toBe('Already exists: folder Data/assets/old.');
+    expect(out.notUndoable).toBeUndefined();
+    // a chat message with no image uploads nothing: its receipt holds the message
+    const chat = registry(name =>
+      name === 'postChatMessage'
+        ? { id: 'c1', alias: 'GM', visibility: 'public', whisperCount: 0 }
+        : {}
+    );
+    const said = await chat.dispatchWithReceipt('send-chat-message', { content: '<p>hi</p>' });
+    expect(said.notUndoable).toBeUndefined();
+  });
+
+  it('a refused call is an error carrying no line', async () => {
+    const { dispatchWithReceipt } = registry(name =>
+      name === 'statFile' ? { isDirectory: false, size: 3 } : {}
+    );
+    const err = await dispatchWithReceipt('create-asset-folder', { remotePath: 'a.txt' }).catch(
+      e => e
+    );
+    expect(err).toMatchObject({ code: 'invalid' });
+    expect(receiptLineOf(err)).toBeUndefined();
+  });
+
+  it('a pull answers the line only when it moved a view', async () => {
+    const pulled = registry(() => ({
+      scene: { id: 's1', name: 'Crypt' },
+      pulled: [{ id: 'u1', name: 'Ann' }],
+      offline: [],
+      selfSkipped: [],
+      notFound: [],
+    }));
+    const out = await pulled.dispatchWithReceipt('pull-users-to-scene', {
+      sceneIdentifier: 'Crypt',
+      userIdentifiers: ['Ann'],
+    });
+    expect(out.notUndoable).toBe(line("the players' views it moved"));
+    const nobody = registry(() => ({
+      scene: { id: 's1', name: 'Crypt' },
+      pulled: [],
+      offline: [{ id: 'u2', name: 'Bo' }],
+      selfSkipped: [],
+      notFound: [],
+    }));
+    const none = await nobody.dispatchWithReceipt('pull-users-to-scene', {
+      sceneIdentifier: 'Crypt',
+      userIdentifiers: ['Bo'],
+    });
+    expect(none.notUndoable).toBeUndefined();
+  });
+
+  it('a run that called a file-plane op names it; its document writes keep their receipt', async () => {
+    const SCENE: ReceiptOp = {
+      kind: 'update',
+      documentName: 'Scene',
+      uuid: 'Scene.s1',
+      label: 'Crypt',
+      pre: { name: 'Old' },
+    };
+    const { dispatchWithReceipt } = registry(name => {
+      if (name !== 'runScript') return {};
+      noteOps([SCENE]);
+      return {
+        ok: true,
+        result: null,
+        log: [],
+        timedOut: false,
+        receipt: {
+          created: 0,
+          updated: 1,
+          deleted: 0,
+          calls: 2,
+          writes: 2,
+          unrecorded: ['uploadFile'],
+        },
+      };
+    });
+    const out = await dispatchWithReceipt('run-script', { script: 'return 1;' });
+    expect(out.receiptLine).toMatch(/^receipt rcpt_\w+: 0 created, 1 updated, 0 deleted/);
+    expect(out.notUndoable).toBe(line('what fvtt.uploadFile changed'));
+  });
+
+  it('a failed call that changed a Data/ file first carries the line on its error', async () => {
+    // a remote export whose copy landed, then a page write failed after it is not this tool's
+    // shape; the chat image upload is: the image goes up, then the post is refused
+    const { dispatchWithReceipt } = registry(name => {
+      if (name === 'statFile') return null;
+      if (name === 'createDirectory') return { ok: true };
+      if (name === 'uploadFile') return { ok: true };
+      if (name === 'postChatMessage') throw new Error('the post was refused');
+      return {};
+    });
+    const err = await dispatchWithReceipt('send-chat-message', {
+      content: '<p>look</p>',
+      images: [{ path: __filename }],
+    }).catch(e => e);
+    expect(err?.message).toMatch(/the post was refused/);
+    expect(receiptLineOf(err)).toBe(line('the image it uploaded to Data/'));
   });
 });

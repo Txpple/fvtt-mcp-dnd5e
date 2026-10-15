@@ -7,7 +7,9 @@
 // world, the compendia or a pack on disk, and at most writes a file on this machine (a download, an
 // export, a screenshot); a write changes the world (a document, a setting, a flag, a chat message,
 // a file in Foundry's Data/, a player's view) or runs a program. A missing or an extra tool is a
-// compile error (`satisfies` below) and fails the registry build. Pure: no I/O.
+// compile error (`satisfies` below) and fails the registry build. The writes whose change can be
+// outside the world's documents (a Data/ file, a player's view), which no receipt records, carry a
+// second tag, NO_RECEIPT. Pure: no I/O.
 
 import type { TOOLSETS, ToolsetName } from './toolsets.js';
 import { DND5E_SETTINGS } from './utils/dnd5e-settings.js';
@@ -129,6 +131,33 @@ export const TOOL_KINDS = {
   'move-documents': 'write',
   'bulk-delete': 'write',
 } as const satisfies Record<ToolName, ToolKind>;
+
+/**
+ * The write tools that can change something outside the world's documents, where no receipt
+ * reaches: a file in Data/ (the file plane), a player's view (a socket pull). Such a call, once it
+ * made that change (`noteUnrecorded`, src/receipts.ts), ends its answer with a "not undoable" line
+ * naming it in these words (src/registry.ts); what it also wrote to documents is in its receipt as
+ * usual (a move's relink, a chat message with an uploaded image). The registry refuses a tag on a
+ * tool that only reads, and src/tools/registry.test.ts sorts every write tool into this table or
+ * the recorded ones by name, so a new write tool is placed by hand.
+ */
+export const NO_RECEIPT = {
+  'upload-asset': 'the file it wrote to Data/',
+  'upload-asset-tree': 'the files it wrote to Data/',
+  'create-asset-folder': 'the folder it made in Data/',
+  'delete-asset': 'the delete in Data/',
+  'move-asset': 'the move in Data/',
+  'copy-asset': 'the copy it wrote to Data/',
+  'export-chat-log': 'the copy it wrote to Data/',
+  'send-chat-message': 'the image it uploaded to Data/',
+  'pull-users-to-scene': "the players' views it moved",
+  'run-script': 'what its file-plane or view calls changed',
+} as const satisfies Partial<Record<ToolName, string>>;
+
+/** The NO_RECEIPT words of a tool, if it carries the tag. */
+export function noReceiptOf(name: string): string | undefined {
+  return Object.hasOwn(NO_RECEIPT, name) ? (NO_RECEIPT as Record<string, string>)[name] : undefined;
+}
 
 const tagOf = (name: string): ToolKind | undefined =>
   Object.hasOwn(TOOL_KINDS, name) ? (TOOL_KINDS as Record<string, ToolKind>)[name] : undefined;

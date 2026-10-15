@@ -50,6 +50,12 @@ export interface CallContext {
    * reverses is then not marked undone, and stays undoable.
    */
   reversesPartial?: boolean;
+  /**
+   * Set when the call changed something outside the world's documents, which no receipt records
+   * (a file in Data/, a player's view): its answer ends with a "not undoable" line
+   * (src/registry.ts). `detail` names the change in place of the tool's NO_RECEIPT words.
+   */
+  unrecorded?: { detail?: string };
 }
 
 /** The tool call in flight on this async path (src/registry.ts runs every call inside one). */
@@ -60,6 +66,23 @@ export function noteOps(ops: readonly ReceiptOp[]): void {
   const ctx = callContext.getStore();
   if (!ctx) return;
   for (const op of ops) ctx.ops.push(op);
+}
+
+/**
+ * Say the call in flight changed something no receipt can record (a file in Data/, a player's
+ * view), once it has: its answer then ends with the "not undoable" line. A tool that calls it is
+ * tagged in NO_RECEIPT (src/tool-kinds.ts), whose words the line uses unless `detail` names the
+ * change. With no call in flight (a sibling harness, a verify script) it does nothing.
+ */
+export function noteUnrecorded(detail?: string): void {
+  const ctx = callContext.getStore();
+  if (!ctx) return;
+  ctx.unrecorded = detail ? { detail } : (ctx.unrecorded ?? {});
+}
+
+/** The line that ends the answer of a call that changed what no receipt records. */
+export function notUndoableLine(what: string): string {
+  return `not undoable: ${what} (a receipt holds the world's documents only)`;
 }
 
 export interface StoredReceipt {
@@ -335,7 +358,10 @@ export function receiptLine(
 
 const LINE = Symbol('receiptLine');
 
-/** The error a failed call throws, carrying the receipt line of the writes it made before failing. */
+/**
+ * The error a failed call throws, carrying the receipt line of the writes it made before failing
+ * (and, on the line after it, the "not undoable" line of what it changed outside the documents).
+ */
 export function withReceiptLine(err: unknown, line: string): Error {
   const error = err instanceof Error ? err : new Error(String(err));
   (error as Error & { [LINE]?: string })[LINE] = line;

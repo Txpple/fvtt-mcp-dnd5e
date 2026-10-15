@@ -92,18 +92,21 @@ async function main(): Promise<void> {
   mcp.setRequestHandler(CallToolRequestSchema, async request => {
     const { name, arguments: args } = request.params as any;
     try {
-      const { result, receiptLine } = await dispatchWithReceipt(name, args ?? {});
+      const { result, receiptLine, notUndoable } = await dispatchWithReceipt(name, args ?? {});
       // A fat result (a broad search, a loaded actor) is cut at RECORD boundaries with a count of
       // what was omitted — config.toolResponseMaxChars is the guardrail (src/utils/cap.ts). The
-      // receipt line of a call that wrote follows the cut result, so it is never what is cut.
+      // receipt line of a call that wrote follows the cut result, so it is never what is cut, and
+      // the "not undoable" line of a change no receipt records ends the answer.
       const text = capResult(result, config.toolResponseMaxChars);
       return {
-        content: [{ type: 'text', text: receiptLine ? `${text}\n${receiptLine}` : text }],
+        content: [
+          { type: 'text', text: [text, receiptLine, notUndoable].filter(Boolean).join('\n') },
+        ],
       };
     } catch (e) {
       // Tools that curate their own errors throw FormattedToolError — pass those through verbatim.
       // Everything else is mapped centrally by its code (src/utils/error-handler.ts). A call that
-      // wrote before it failed still answers its receipt line.
+      // wrote before it failed still answers its receipt line (and its "not undoable" line).
       const message =
         e instanceof FormattedToolError ? e.message : errorHandler.toUserMessage(e, name);
       logger.error('Tool call failed', { name, error: message });

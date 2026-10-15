@@ -5,6 +5,7 @@ import {
   callContext,
   loadReceipt,
   NOTHING_PUT_BACK,
+  noteUnrecorded,
   receiptsDir,
   receiptWorldKey,
   type StoredReceipt,
@@ -248,6 +249,11 @@ export class ScriptTools {
       ...(a.maxDeletes !== undefined ? { maxDeletes: a.maxDeletes } : {}),
       ...(a.timeoutSeconds !== undefined ? { timeoutMs: a.timeoutSeconds * 1000 } : {}),
     });
+    // A run's receipt holds its document writes; a file-plane or view op it ran is past it.
+    const unrecorded = r.receipt.unrecorded ?? [];
+    if (unrecorded.length) {
+      noteUnrecorded(`what ${unrecorded.map(fn => `fvtt.${fn}`).join(', ')} changed`);
+    }
 
     const lines: string[] = [];
     if (r.dryRun) {
