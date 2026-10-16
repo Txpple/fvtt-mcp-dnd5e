@@ -52,7 +52,7 @@ if (fromAt >= 0 && (!fromDir || fromDir.startsWith('--'))) {
   console.error(`--from needs a directory.\n${usage}`);
   process.exit(2);
 }
-const moduleId = args.find((a, i) => !a.startsWith('--') && i !== fromAt + 1);
+const moduleId = args.find((a, i) => !a.startsWith('--') && (fromAt < 0 || i !== fromAt + 1));
 if (!moduleId) {
   console.error(usage);
   process.exit(2);
