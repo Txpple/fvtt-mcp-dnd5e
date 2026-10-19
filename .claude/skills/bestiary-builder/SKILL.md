@@ -1,8 +1,9 @@
 ---
 name: bestiary-builder
 description: >-
-  Add a monster the party FOUGHT to the world's player-facing Bestiary journal — the Monster Manual
-  art and narrative write-up (never the stat block), filed alphabetically. Use when the user says
+  Add a monster the party FOUGHT to the world's player-facing Bestiary journal — a brief page: the
+  campaign's own illustration, a short Monster Manual narrative (never the stat block) and a
+  callout of the party's own encounter, filed alphabetically. session-scribe runs it at every wrap. Use when the user says
   "add it to the bestiary", "the party killed a <monster> — log it", "bestiary entry for <monster>",
   "add the monsters we fought", "what did we fight? put them in the bestiary", or wraps a session
   and wants the kills recorded.
@@ -56,19 +57,37 @@ Manual** names it:
   the page by hand with `manage-journals` `create`/`update` in the same house shape, or run with
   `--no-art` and edit the text in after.
 
-## Step 2 — Art
+## Step 2 — Art: the campaign's own illustration
 
-Default is the **Monster Manual's own journal art** (`modules/dnd-monster-manual/assets/journal-art/…`)
-— already installed with the module, so nothing to upload, and it carries the book's caption when it
-has one ("Left to Right: Vine Blight, Tree Blight, and Needle Blight").
+**Use the campaign's own art, not the Monster Manual's** (DM, Echoes of Halruaa, 2026-10-19). The
+creature the party fought already has a portrait in the world: the actor's `img` (`exportActorData`
+on the placed token's actor, e.g. `worlds/<world>/assets/portraits/grimlock-cudgel.png`). Pass it:
 
-Override when the DM has their own scan or a higher-res plate:
+```
+--art "worlds/<world>/assets/portraits/<slug>.png::<a short caption tied to where they met it>"
+```
 
-1. `upload-asset` it to `worlds/<world>/assets/journal/bestiary/<slug>.png` first (one subfolder per journal — the campaign repo's `conventions/assets.md`);
-2. pass `--art "worlds/<world>/assets/journal/bestiary/<slug>.png::Optional caption"` (repeatable — a
-   multi-creature page like Blights takes two, in the order you want them).
+One image per page, even when the party fought several variants (they share one illustration;
+pick the one they saw most). No portrait in the world → ask the DM (the `illustration-builder`
+skill makes one) rather than falling back to the MM plate. The script's no-`--art` default (the
+MM's own journal art) is for a campaign without its own illustrations. `--no-art` for text only.
 
-`--no-art` for a text-only page.
+## Step 2½ — Keep it brief, and weave in the campaign's story
+
+**Players read little.** A page is the art, the MM epithet and pull quote, **at most two** MM
+narrative paragraphs (the script's default `--paras 2`; `--paras 1` when they are long), then
+**one short callout of the party's own encounter**: two or three sentences, only what the players
+saw or learned in play (from `<sessions.dir>/<date>/recap.md`; never a GM secret, never the next
+twist). Write it in dnd5e's block kit (the `journal-builder` skill's `notable`) as an HTML file and
+pass `--story <file>`:
+
+```html
+<aside class="notable"><h4>At the Hearth</h4><p>Five grimlocks came up through the Breach…
+<strong>Something below knows where the Hearth is.</strong></p></aside>
+```
+
+The `<h4>` names where they met it. When they meet the creature again, rewrite the callout (still
+short) and re-run.
 
 ## Step 3 — Run it
 
@@ -76,14 +95,17 @@ Override when the DM has their own scan or a higher-res plate:
 node .claude/skills/bestiary-builder/bestiary-entry.mjs --monster "<MM name>" [options]
 ```
 
-It targets the same world the MCP registration does: `FOUNDRY_HOST` picks the host exactly as it
-does for the server (`FOUNDRY_HOST=local` = the sandbox); the repo's `.env` supplies the rest.
+Run it from this repo's root. `FOUNDRY_HOST` picks the host exactly as it does for the server, and
+`FVTT_MCP_ENV` the env file: prod is `FOUNDRY_HOST=molten FVTT_MCP_ENV=.env.halruaa`, the sandbox
+`FOUNDRY_HOST=local` (the repo's `.env`). Prod writes only on the DM's word.
 
 | option | effect |
 | --- | --- |
 | `--monster <name>` | required; MM creature name (any variant of a shared-lore family) |
 | `--page <name>` | page title override (default: the MM lore page name) |
-| `--art <src[::caption]>` | Data-relative image instead of the MM art; repeatable |
+| `--art <src[::caption]>` | Data-relative image instead of the MM art (the campaign's portrait); repeatable |
+| `--paras <n>` | keep the first n MM narrative paragraphs (default 2) |
+| `--story <file>` | HTML fragment (a dnd5e `notable` callout) appended after the MM text |
 | `--no-art` | text only |
 | `--gm-only` | page stays GM-only (unrevealed monster) |
 | `--journal` / `--folder` | `campaign.json` → `journals.bestiary.name` / `.folder`; defaults `Bestiary` / `Adventure Log` |

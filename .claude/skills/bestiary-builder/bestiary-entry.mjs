@@ -24,6 +24,8 @@
 //                      "Hobgoblin Captain" -> the "Hobgoblins" page, "Vine Blight" -> "Blights".
 //   --page <name>      Override the page title (default: the MM lore page name).
 //   --art <src[::cap]> Use this Data-relative image instead of the MM art. Repeatable (order kept).
+//   --paras <n>        Keep the first n MM narrative paragraphs (default 2; players read little).
+//   --story <file>     HTML fragment appended after the MM narrative: the campaign's own encounter.
 //   --no-art           Text only.
 //   --gm-only          Page stays GM-only (monster not yet revealed to the players).
 //   --journal <name>   Bestiary journal name (default "Bestiary").
@@ -45,12 +47,14 @@ const { bridgeConfig } = await import(
 
 // ---- args -------------------------------------------------------------------------------------
 const argv = process.argv.slice(2);
-const opts = { arts: [], journalName: 'Bestiary', folderName: 'Adventure Log' };
+const opts = { arts: [], journalName: 'Bestiary', folderName: 'Adventure Log', paras: 2 };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--monster') opts.monsterName = argv[++i];
   else if (a === '--page') opts.pageName = argv[++i];
   else if (a === '--art') opts.arts.push(argv[++i]);
+  else if (a === '--paras') opts.paras = Number(argv[++i]);
+  else if (a === '--story') opts.story = readFileSync(argv[++i], 'utf8').trim();
   else if (a === '--no-art') opts.noArt = true;
   else if (a === '--gm-only') opts.gmOnly = true;
   else if (a === '--journal') opts.journalName = argv[++i];
@@ -71,14 +75,10 @@ opts.arts = opts.arts.map(s => {
 });
 
 // ---- env --------------------------------------------------------------------------------------
-const env = {};
-for (const line of readFileSync(join(REPO_ROOT, '.env'), 'utf8').split(/\r?\n/)) {
-  if (line.trimStart().startsWith('#')) continue;
-  const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-  if (m) env[m[1]] = m[2];
-}
-
-const f = new Foundry(bridgeConfig(env, { quiet: true }));
+// The family's loader: FVTT_MCP_ENV picks the file (prod is `FOUNDRY_HOST=molten
+// FVTT_MCP_ENV=.env.halruaa`), else <repo>/.env.
+const { loadEnv } = await import(pathToFileURL(join(REPO_ROOT, 'dist', 'env.js')).href);
+const f = new Foundry(bridgeConfig(loadEnv(), { quiet: true }));
 
 // ---- the live-page half -----------------------------------------------------------------------
 const work = async o => {
@@ -125,6 +125,7 @@ const work = async o => {
     root = root.firstElementChild; // some entries wrap everything in a bare <div>
 
   const mmArt = [];
+  const epithets = new Set();
   for (const el of [...root.children]) {
     const text = (el.textContent ?? '').trim();
 
@@ -162,6 +163,7 @@ const work = async o => {
     // the italic epithet under the art -> a plain paragraph (its <em> carries the look)
     if (el.classList.contains('creature-flavor') && el.querySelector('em')) {
       el.removeAttribute('class');
+      epithets.add(el);
       continue;
     }
     // pull-quotes -> dnd5e's own pull quote (aside.quote-lg, p.quote-author; the System-HTML page of
@@ -177,9 +179,18 @@ const work = async o => {
     el.removeAttribute('class'); // MM book classes don't exist in the world stylesheet
   }
 
+  // players read little: keep the first `paras` narrative paragraphs, drop everything after them
+  let kept = 0;
+  for (const el of [...root.children]) {
+    if (kept >= o.paras) el.remove();
+    else if (el.tagName === 'P' && !epithets.has(el)) kept++;
+  }
+
   const arts = o.noArt ? [] : o.arts.length ? o.arts : mmArt;
   const body = root.innerHTML.trim();
-  const html = arts.map(a => figure(a.src, a.caption)).join('') + body;
+  // the campaign's own encounter with it, after the book's narrative (an HTML fragment in dnd5e's
+  // block kit, players' view: `<aside class="notable"><h4>…</h4><p>…</p></aside>`)
+  const html = arts.map(a => figure(a.src, a.caption)).join('') + body + (o.story ?? '');
 
   const pageName = o.pageName || lore.name;
   if (o.dryRun)
