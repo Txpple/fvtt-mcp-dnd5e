@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.6.1 — 2026-10-19 — flatten-safe schemas and three context budgets; a vetoed delete, a miss and a refusal are errors; the Area Sounds mirror under contract
 
 - **The Area Sounds mirror is tested against the module.** `configure-area-sounds` repairs a set
   the way Area Sounds' own `normalizeSet` does, in TypeScript; `src/page/areasounds.contract.test.ts`
