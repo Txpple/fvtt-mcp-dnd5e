@@ -1,9 +1,9 @@
 ---
 name: bestiary-builder
 description: >-
-  Add a monster the party FOUGHT to the world's player-facing Bestiary journal — a brief page: the
-  campaign's own illustration, a short Monster Manual narrative (never the stat block) and a
-  callout of the party's own encounter, filed alphabetically. session-scribe runs it at every wrap. Use when the user says
+  Add a monster the party FOUGHT to the players' Bestiary journal — a brief page: the
+  campaign's own art, a short Monster Manual narrative (never the stat block) and the party's own
+  encounter, filed alphabetically. session-scribe runs it at each wrap. Use when the user says
   "add it to the bestiary", "the party killed a <monster> — log it", "bestiary entry for <monster>",
   "add the monsters we fought", "what did we fight? put them in the bestiary", or wraps a session
   and wants the kills recorded.

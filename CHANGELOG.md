@@ -3,6 +3,24 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.6.2 — 2026-10-19 — the bestiary in the campaign's own art, brief
+
+- **`bestiary-builder` uses the campaign's own art and keeps a page brief.** A page is the
+  creature's portrait from the world (the actor's `img`, passed as `--art`; the Monster Manual's
+  journal art stays the default only for a campaign without its own illustrations), the MM epithet
+  and pull quote, at most two MM narrative paragraphs (`--paras <n>`, default 2), and one short
+  callout of the party's own encounter in dnd5e's `notable` block (`--story <file>`, an HTML
+  fragment, written from the session recap and never a GM secret). session-scribe runs it at every
+  wrap.
+- **`bestiary-entry.mjs` reads the env through the family's loader**, so `FVTT_MCP_ENV` picks the
+  file the same way it does for the server (prod: `FOUNDRY_HOST=molten FVTT_MCP_ENV=.env.halruaa`);
+  it read only the repo's `.env` before.
+- No server code changed since 4.6.1: the tools and schemas are 4.6.1's, and so are its live
+  verifies. The longer description cost the per-prompt budget, which the rewrite first broke
+  (14,031 of 14,000); it is worded to fit. Budgets: skill descriptions 7,852 (17 skills; ≤ 8,000),
+  per prompt 13,995 (≤ 14,000), per fetch 36,758 (`manage-placeables`; ≤ 36,800), tools/list
+  205,896 (81 tools; ≤ 220,000).
+
 ## 4.6.1 — 2026-10-19 — flatten-safe schemas and three context budgets; a vetoed delete, a miss and a refusal are errors; the Area Sounds mirror under contract
 
 - **The Area Sounds mirror is tested against the module.** `configure-area-sounds` repairs a set
