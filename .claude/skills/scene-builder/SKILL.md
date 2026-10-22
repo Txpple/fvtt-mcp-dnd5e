@@ -24,12 +24,23 @@ link onto the scene; those skills author the content.
 **Regions & teleporters (on an existing scene).** To connect two maps — stairs, a cave mouth, a
 portal — use **`manage-placeables`** `{ kind: "regions", action: "create-teleporter" }`: give a center point (canvas px, via `get-scene-dimensions` for
 the padding math) on each scene and it drops a grid-snapped trigger at each end and cross-links them
-two-way (or `twoWay:false` for one-directional). **Transitions ask before moving (DM-approved house
-pattern):** the default `confirm:true` sets core v14's `choice` flag so the player gets a
-"Teleport / Do Not Teleport" popup instead of being yanked between maps — pass `confirm:false` ONLY
-for traps/plot teleports that should fire silently. The same default applies when wiring a
-`teleportToken` via **`action: "add-behavior"`** (`system.choice` defaults to true; set it false
-explicitly to opt out). Name the pads (`fromName`/`toName`) — never ship default "Region" labels.
+two-way (or `twoWay:false` for one-directional). Name the pads (`fromName`/`toName`) — never ship
+default "Region" labels.
+
+> **⚠ Teleporters move without asking — keep `confirm` off (the default).** `confirm:true` (core
+> v14's `choice`, "Teleport / Do Not Teleport") parks each token in the pad until its owner answers.
+> At a live table a party walks in together and anyone who misses the popup (another window in
+> front) or clicks No is stranded on the pad; the GM then drops a copy of their token to keep play
+> moving, and that copy breaks the next passage: when the GM moves a player's token through a
+> teleporter, Foundry does not pull a player who still owns another sighted token on the scene
+> being left (a leftover copy, or a familiar such as an owl). Reproduced live, every time. So:
+> - leave `confirm` off; turn it on only where refusing is the point (a one-way drop), and say so
+>   to the DM. `add-behavior`'s `system.choice` likewise defaults to false;
+> - one token per PC per scene: never paste or sidebar-drag a second copy to move someone — use
+>   the pad, or Pull to Scene (scene navigation / Players list) after a GM move;
+> - a familiar or summon on the scene being left keeps its owner behind on a GM move: move it
+>   through with its owner, or pull that player.
+> - a player who walks their own token through is always pulled.
 NOTE: the regions list cannot read `choice` back and no tool edits a behavior after creation — a
 wrong teleporter is fixed by `action: "delete"` + rebuild. For arbitrary regions/behaviors use
 `action: "create"` (raw v14 shapes + behaviors), and `"list"` / `"update"` (rename, recolor, or

@@ -1135,8 +1135,8 @@ describe('teleporter special ops', () => {
     expect(call?.[1].twoWay).toBe(true);
     expect(call?.[1].widthCells).toBe(1);
     expect(call?.[1].snapToGrid).toBe(true);
-    // The confirm-before-moving house default: choice:true unless explicitly disabled.
-    expect(call?.[1].confirm).toBe(true);
+    // No confirmation dialog unless asked for: an unanswered one strands the token.
+    expect(call?.[1].confirm).toBe(false);
     expect(out).toContain('two-way teleporter');
     expect(out).toContain('rA');
     expect(out).toContain('Scene.s2.Region.rB');

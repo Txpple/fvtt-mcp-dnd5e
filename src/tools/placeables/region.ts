@@ -127,10 +127,8 @@ const CreateTeleporterSchema = z.object({
   snapToGrid: z.boolean().default(true).describe('Snap each trigger to the grid under its center.'),
   confirm: z
     .boolean()
-    .default(true)
-    .describe(
-      'The moving player gets the Teleport / Do Not Teleport dialog; false fires silently.'
-    ),
+    .default(false)
+    .describe('Ask the mover first (a dialog); off by default: a missed dialog strands the token.'),
   fromName: z.string().optional().describe('Name for the from-side region.'),
   toName: z.string().optional().describe('Name for the to-side region.'),
   color: z.string().optional().describe('Region tint hex (default "#3fb0ff").'),
@@ -218,7 +216,7 @@ const AddRegionBehaviorSchema = z.object({
     .optional()
     .describe(
       'teleportToken: the destination, resolved and appended to system.destinations; system.choice ' +
-        'defaults to true.'
+        'defaults to false.'
     ),
 });
 
@@ -290,7 +288,7 @@ export const regionKindModule: PlaceableKindFactory = foundry => ({
       description:
         'Create a teleporter between two points (from / to, the same scene allowed): a grid-sized ' +
         'trigger region at each with a teleportToken behavior pointing at the other; one-way with ' +
-        'twoWay:false, silent with confirm:false. Regions are layer-visible (no player overlay).',
+        'twoWay:false, asks first with confirm:true. Regions are layer-visible (no player overlay).',
       schema: CreateTeleporterSchema,
       handler: async parsed => {
         const result = await foundry.call('createSceneTeleporter', parsed);

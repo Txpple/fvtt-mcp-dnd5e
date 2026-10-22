@@ -3,6 +3,16 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **Teleporters no longer ask by default.** `manage-placeables` `create-teleporter`'s `confirm` and
+  `add-behavior`'s `teleportToken` `system.choice` now default to false. The confirmation dialog
+  parked every token on the pad until its owner answered, so a party moving together stranded
+  anyone who missed it or declined; the copies a GM then drops to keep play moving stop Foundry
+  pulling those players on the next GM move (a user who still owns another sighted token on the
+  scene left behind is not pulled). Both reproduced on a live server with four players at once.
+  `confirm:true` still asks. scene-builder carries the rule and the pull trap.
+
 ## 4.6.2 — 2026-10-19 — the bestiary in the campaign's own art, brief
 
 - **`bestiary-builder` uses the campaign's own art and keeps a page brief.** A page is the
