@@ -275,12 +275,13 @@ describe.skipIf(!LIVE)('write cycles (live)', () => {
 
   // --- Actor from compendium: create -> add item -> remove item -> delete ---
   it('createActorFromCompendium', async ctx => {
-    const idx = await foundry.call<Array<{ pack?: string; id?: string; name?: string }>>(
-      'searchCompendiumFaceted',
-      { documentType: 'creature', limit: 1 }
-    );
-    const creatures = Array.isArray(idx) ? idx : [];
-    const c = creatures?.[0];
+    // The engine answers { results, totalFound } since 3.0 (M2); the bare-array read this had
+    // skipped the whole actor chain below on every run since.
+    const idx = await foundry.call('searchCompendiumFaceted', {
+      documentType: 'creature',
+      limit: 1,
+    });
+    const c = idx?.results?.[0];
     if (!c?.pack || !c?.id) return ctx.skip();
     const out = await foundry.call<{ totalCreated?: number; actors?: Array<{ id?: string }> }>(
       'createActorFromCompendium',
@@ -305,6 +306,19 @@ describe.skipIf(!LIVE)('write cycles (live)', () => {
       items: [{ name: `${TAG} Dagger`, type: 'weapon' }],
     });
     expect(out?.created?.length).toBe(1);
+  });
+
+  it('addActorItems copies by uuid (a compendium Item, quantity on the copy)', async ctx => {
+    if (!ids.actorId) return ctx.skip();
+    const hits = await foundry.call('searchCompendium', { query: 'arrows', packType: 'Item' });
+    const hit = hits?.results?.find(h => h.type === 'consumable') ?? hits?.results?.[0];
+    if (!hit?.uuid) return ctx.skip();
+    const out = await foundry.call('addActorItems', {
+      actorIdentifier: ids.actorId,
+      items: [{ uuid: hit.uuid, name: `${TAG} Arrows`, quantity: 20 }],
+    });
+    expect(out?.created?.length).toBe(1);
+    expect(out?.created?.[0]?.name).toBe(`${TAG} Arrows`);
   });
 
   it('removeActorItems', async ctx => {

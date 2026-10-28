@@ -39,10 +39,9 @@ describe.skipIf(!LIVE)('read-side page library (live)', () => {
     const tables = await foundry.call<Array<{ id?: string }>>('listRollTables');
     seed.tableId = tables?.[0]?.id;
 
-    const search = await foundry.call<Array<{ pack?: string; id?: string }>>('searchCompendium', {
-      query: 'goblin',
-    });
-    const sc0 = search?.[0];
+    // { results, totalFound } since 3.0 (M2); the bare-array read skipped the entry read below.
+    const search = await foundry.call('searchCompendium', { query: 'goblin' });
+    const sc0 = search?.results?.[0];
     if (sc0?.pack && sc0?.id) seed.compendium = { pack: sc0.pack, id: sc0.id };
   }, CONNECT_TIMEOUT_MS);
 
