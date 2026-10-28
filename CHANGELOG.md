@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.6.4 — 2026-10-28 — a choices entry nothing reads is refused
 
 - **`create-pc` and `level-up-pc` refuse a `choices` entry nothing reads** (issue #21). An entry
   keyed by a word instead of the advancement id (`"subclass"`), a mistyped id, or a level the build
@@ -14,6 +14,24 @@ What changed for a user of the tools and skills, release by release. The measure
   `rolled-back`, each entry named with a did-you-mean when it reads as a pick's type or title, and
   the `level → id` pairs the build asks for. Nothing persists; a level-up is put back. Live:
   `verify-pc-build` 72/72 (the case added), the PC integration suite 4/4.
+
+**Verified** (2026-10-28, the local sandbox: Foundry 14.369, dnd5e 6.0.6, only the bridge
+connected throughout):
+- offline: biome · `tsc --noEmit` · vitest **114 files, 2,130 tests** (3 skipped) · build (page
+  bundle 571.2 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 157 handlers, 0 `any` /
+  `unknown`);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 ·
+  settings-calendar 52 · item-tooling 24 · actor-tooling 51 · pc-build 72 ·
+  teleporter-scene-fields 13 · placeables-tooling 87 · scene-tools 24 · cast-activity 25 ·
+  region-tooling 22 · receipts 30 · toolsets 19;
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.6.3);
+- the MCP smoke on the sandbox registration: `get-world-info`; a Fighter 2 / Rogue 1 (`success`,
+  HP 27, 0 unresolved `@scale`); a bad subclass uuid on the Subclass advancement is an error,
+  `[rolled-back]`, no actor persisted. The registration's process predates the build (bridge
+  4.6.2); the refusal itself was driven on the built code (`verify-pc-build` E-keys).
+- Budgets: per prompt 13,995 (≤ 14,000), names 6,143 (≤ 7,000), skill descriptions 7,852
+  (≤ 8,000), per fetch 38,981 (≤ 39,000), tools/list 208,918 (81 tools; ≤ 220,000), always-on
+  1,778 (≤ 2,100).
 
 ## 4.6.3 — 2026-10-28 — a token's own light, copies by uuid, one search leaf
 
