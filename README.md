@@ -85,7 +85,7 @@ nothing about one table lives here.
 
 ## Tools
 
-**81 tools.** One family tool per document type, selected by `action`: `manage-actors`,
+**80 tools.** One family tool per document type, selected by `action`: `manage-actors`,
 `manage-scenes`, `manage-placeables` (with a `kind`: walls, lights, tokens, regions, sounds,
 tiles, drawings, notes), `manage-items`, `manage-journals`, `manage-rolltables`, `manage-cards`,
 `manage-playlists`, `manage-folders`, `manage-macros`. Around them:
@@ -112,14 +112,13 @@ is refused by name. Every write to the world's documents answers with a receipt,
 `run-script { "undo": "rcpt_…" }` reverses; a change outside them (a file in `Data/`, a player's
 view) cannot be undone, and its answer ends with a "not undoable" line saying what it changed. The
 full table is [`src/registry.ts`](src/registry.ts). `FOUNDRY_TOOLSETS`
-lets a registration advertise a subset (`chat,combat` is 11 tools instead of 81).
+lets a registration advertise a subset (`chat,combat` is 11 tools instead of 80).
 `FOUNDRY_TOOLSETS=readonly` advertises every toolset's reads (41 tools) and refuses every other
 call by name before it runs; pair it with a Player or Trusted Player join user, whose role is the
 real boundary ([`docs/hosts.md`](docs/hosts.md#toolsets--advertise-less)).
 
-Two tools need a companion module and warn when it is absent: `configure-area-sounds`
-([Open Roll 5e: Area Sounds](https://github.com/Txpple/fvtt-mod-areasounds)) and `set-landing-scene`
-([Open Roll 5e: Open Server](https://github.com/Txpple/fvtt-mod-openserver)).
+One tool needs a companion module and warns when it is absent: `configure-area-sounds`
+([Open Roll 5e: Area Sounds](https://github.com/Txpple/fvtt-mod-areasounds)).
 
 ## Hosts
 
@@ -184,7 +183,7 @@ The modules, each of which installs and works on its own and none of which needs
 - [Open Roll 5e: Errata](https://github.com/Txpple/fvtt-mod-errata5e): corrects, in memory, bugs in the premium D&D 2024 books, the dnd5e system and Foundry itself, each fix held until the vendor ships its own.
 - [Open Roll 5e: FX Studio](https://github.com/Txpple/fvtt-mod-fxstudio): visual and sound effects for dnd5e, played from what actually happened at the table, with about a thousand stock FX and a window for authoring your own.
 - [Open Roll 5e: Loot Shelf](https://github.com/Txpple/fvtt-mod-lootshelf): loot chests and merchant shelves that players can take from, buy from and sell to without owning them, with a receipt for every trade.
-- [Open Roll 5e: Open Server](https://github.com/Txpple/fvtt-mod-openserver): for hosted worlds: clears the startup pause so players can play before the GM arrives, and gives any user a landing scene of their own.
+- [Open Roll 5e: Open Server](https://github.com/Txpple/fvtt-mod-openserver): for hosted worlds: clears the startup pause so players can play before the GM arrives, and gives every user a one-click jump to their character's token, and their familiar's, from the Players list.
 - [Open Roll 5e: Party Stash](https://github.com/Txpple/fvtt-mod-partystash): makes a dnd5e Group actor's inventory a working party stash: drags move instead of copying, coin moves through a dialog, and every transfer posts a receipt.
 - [Open Roll 5e: Area Sounds](https://github.com/Txpple/fvtt-mod-areasounds): background sound for scenes: random one-shots with silence between them, seamless crossfaded loops, day and night gating, and quiet during combat.
 - [Open Roll 5e: Token Art](https://github.com/Txpple/fvtt-mod-tokenart): gives every token the look of its state, ready, in combat or dead, each a file named beside the base art, with nothing to configure.

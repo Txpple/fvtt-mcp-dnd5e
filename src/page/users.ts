@@ -22,8 +22,7 @@ const ROLE_LABELS = ['none', 'player', 'trusted', 'assistant', 'gamemaster'] as 
  * Resolve a user by exact id, exact name, then case-insensitive exact name (`fuzzyTier` with no
  * substring tier); falls back to the current bridge user when no identifier is given. A write
  * (`mode: 'write'`) refuses a name two users share without case (`ambiguous`, naming them); a
- * read takes the first. Shared with macros.ts (hotbar targets) and scenes.ts (the pulls and the
- * landing scenes).
+ * read takes the first. Shared with macros.ts (hotbar targets) and scenes.ts (the pulls).
  */
 export function resolveUser(identifier?: string, mode: 'read' | 'write' = 'read'): any {
   if (!identifier) return game.user;
@@ -34,8 +33,6 @@ export function resolveUser(identifier?: string, mode: 'read' | 'write' = 'read'
 
 /** One user as the tools see it — listUsers and updateUser's echo. */
 export interface UserSummary {
-  /** Where this user comes up at login (set-landing-scene); null = follows the active scene. */
-  landingScene: { id: string; name: string | null } | null;
   id: string;
   name: string;
   role: number;
@@ -52,15 +49,7 @@ export interface UserSummary {
 /** One user's listing shape — shared by listUsers and updateUser's echo. */
 function describeUser(user: any): UserSummary {
   const character = user.character ? { id: user.character.id, name: user.character.name } : null;
-  // Landing scene (set-landing-scene / fvtt-mod-openserver): where this user comes up at LOGIN.
-  // null = no assignment, so they follow the ACTIVE scene like core does. Resolved to a name here
-  // because a bare id in a listing tells a reader nothing, and a dangling id must be visible.
-  const landingId = user.getFlag?.('fvtt-mod-openserver', 'landingScene') ?? null;
-  const landingScene = landingId
-    ? { id: landingId, name: game.scenes?.get(landingId)?.name ?? null }
-    : null;
   return {
-    landingScene,
     id: user.id,
     name: user.name,
     role: user.role,

@@ -97,7 +97,6 @@ export const TOOL_KINDS = {
   'manage-scenes': { readActions: ['list'] },
   'activate-scene': 'write',
   'pull-users-to-scene': 'write',
-  'set-landing-scene': 'write',
   'get-scene-dimensions': 'read',
   'screenshot-scene': 'read',
   'manage-placeables': { readActions: ['list'] },

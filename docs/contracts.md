@@ -53,13 +53,13 @@ flag. Each row names the writer, the reader and where the shape is documented.
 | --- | --- | --- | --- | --- |
 | `flags["fvtt-mod-bythebooks"]`, and `flags["fvtt-mod-battleflow"]` on cards from before By the Books 3.0.0 (Battle Flow until then; the shape is the same) — the stat stamps (`combat`, `sourceUuid`, `reverted`, the roll / damage / heal families) | ChatMessage | [`fvtt-mod-bythebooks`](https://github.com/Txpple/fvtt-mod-bythebooks) | nothing here since 4.0.0; `fvtt-mcp-sessionscribe`'s `analyze-combat` (read-only scan) | By the Books' `contracts/card-flags.json` (every key, recorded) and `ARCHITECTURE.md` §4 "The data plane — stat stamps"; the read essentials are the header of the scribe's `src/page/combat-stats.ts` |
 | `flags["fvtt-mod-areasounds"].sets` — the scene's sound sets | Scene | `configure-area-sounds` (`src/page/areasounds.ts` owns the set schema, the clamps, the KEEP+WARN file check) | [`fvtt-mod-areasounds`](https://github.com/Txpple/fvtt-mod-areasounds) at scene load | the module's `contracts/sets.json` (every field, default and clamp, versioned) and its `scripts/engine.js` `normalizeSet`; `src/page/areasounds.contract.test.ts` holds the mirror to both from the clone beside this repo, at the version `contracts/consumes.json` names (skipped without the clone); the tool warns when the module is absent or disabled |
-| `flags["fvtt-mod-openserver"].landingScene` — a scene id | User | `set-landing-scene` (`src/page/scenes.ts`) | [`fvtt-mod-openserver`](https://github.com/Txpple/fvtt-mod-openserver) at login; `list-users` reports it | this repo (the tool is the writer); the tool warns when the module is absent or disabled |
 | `flags["fvtt-mod-autoexplore"].enabled` — render the scene born-explored | Scene | `manage-scenes` `create` / `update` `flags` (the `tom-cartos-import` skill's born-explored option; any scene by hand) | `fvtt-mod-autoexplore` at canvas draw | the module |
 | `flags["tom-cartos-import"]` — `sourceModule`, `sourceId` provenance | Scene, Region, JournalEntry | `manage-scenes` `create` + `manage-placeables` `{ kind: "regions" }` (`src/page/scenes.ts`) | `manage-placeables` `remap-teleporters` (old → new id maps), `manage-scenes` `list` with `flagScope` (dedup) | this repo — `TOM_CARTOS_FLAG_SCOPE` |
 
-Tools that need a companion module say so in their description and **warn instead of claiming
-success** when the module is missing: `configure-area-sounds` (areasounds) and
-`set-landing-scene` (openserver). Everything else is core Foundry + dnd5e.
+A tool that needs a companion module says so in its description and **warns instead of claiming
+success** when the module is missing: `configure-area-sounds` (areasounds). Everything else is core
+Foundry + dnd5e. (`set-landing-scene` wrote `flags["fvtt-mod-openserver"].landingScene` until 4.6.5;
+Open Server 1.4 stopped reading it, and the tool went with it.)
 
 ## 4. The campaign repo
 

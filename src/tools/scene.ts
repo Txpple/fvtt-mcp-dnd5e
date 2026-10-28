@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { SCENE_TARGET, sceneTargetRequired } from './_targets.js';
+import { sceneTargetRequired } from './_targets.js';
 import type { FoundryBridge } from '../foundry.js';
 import type { Host } from '../hosts/types.js';
 import { filePlaneFor } from '../hosts/index.js';
@@ -92,16 +92,6 @@ const PullUsersToSceneSchema = z.object({
     .array(z.string().min(1))
     .min(1, 'At least one user identifier is required')
     .describe('User ids or exact names; only connected users can be pulled.'),
-});
-
-const SetLandingSceneSchema = z.object({
-  sceneIdentifier: sceneTargetRequired.describe(
-    `${SCENE_TARGET} they log in to; "none" clears it (back to the active scene).`
-  ),
-  userIdentifiers: z
-    .array(z.string().min(1))
-    .min(1, 'At least one user identifier is required')
-    .describe('User ids or exact names; offline users included.'),
 });
 
 // --- Scene authoring (create/list/update/delete) ----------------------------------------------
@@ -519,14 +509,6 @@ export class SceneTools {
         inputSchema: toInputSchema(PullUsersToSceneSchema),
       },
       {
-        name: 'set-landing-scene',
-        description:
-          'Set the scene users land on at login (a persistent User flag the openserver companion ' +
-          'module acts on; warns when it is not installed). Works on offline users; "none" clears. ' +
-          'Reports who is assigned and who follows the active scene. GM-only.',
-        inputSchema: toInputSchema(SetLandingSceneSchema),
-      },
-      {
         name: 'get-scene-dimensions',
         description:
           "A scene's padded-canvas geometry: total width / height, the background rect within the " +
@@ -709,58 +691,6 @@ export class SceneTools {
           `sending client. Nothing to do: the bridge has no visible canvas anyone is watching.`
         : '') +
       (notFound.length ? `\n⚠️ No such user: ${notFound.join(', ')}` : '')
-    );
-  }
-
-  async handleSetLandingScene(args: any): Promise<string> {
-    const parsed = SetLandingSceneSchema.parse(args ?? {});
-    const result = await this.foundry.call('setLandingScene', parsed);
-
-    if (result?.sceneNotFound) {
-      throw new ToolError(
-        'not-found',
-        `Scene not found: "${result.sceneNotFound}". Nothing changed. ` +
-          '(Pass "none" if you meant to CLEAR the assignment.)'
-      );
-    }
-
-    const assigned: Array<{ name: string; previous: string | null }> = result?.assigned ?? [];
-    const unchanged: Array<{ name: string }> = result?.unchanged ?? [];
-    const notFound: string[] = result?.notFound ?? [];
-    const followActive: Array<{ name: string }> = result?.followActive ?? [];
-    const warnings: string[] = result?.warnings ?? [];
-    const active = result?.activeScene
-      ? `"${result.activeScene.name}" (${result.activeScene.id})`
-      : 'none';
-
-    let head: string;
-    if (!assigned.length) {
-      head = '⚠️ No landing-scene assignments changed.';
-    } else if (result?.cleared) {
-      head =
-        `🧭 Cleared the landing scene for ${assigned.length} user(s): ` +
-        `${assigned.map(u => `${u.name}${u.previous ? ` (was "${u.previous}")` : ''}`).join(', ')}` +
-        `\n  They now log in to the ACTIVE scene like everyone else.`;
-    } else {
-      head =
-        `🧭 ${assigned.length} user(s) will now LOG IN to "${result.scene?.name}" ` +
-        `(${result.scene?.id}): ` +
-        `${assigned.map(u => `${u.name}${u.previous ? ` (was "${u.previous}")` : ''}`).join(', ')}` +
-        `\n  Sticky until cleared, and it takes effect on their next login/refresh — ` +
-        `use pull-users-to-scene to move someone who is already connected.`;
-    }
-
-    return (
-      head +
-      `\n  active scene (where unassigned users land): ${active}` +
-      (followActive.length
-        ? `\n  still following the active scene: ${followActive.map(u => u.name).join(', ')}`
-        : '\n  every user now has an explicit landing scene.') +
-      (unchanged.length
-        ? `\n  already set that way, untouched: ${unchanged.map(u => u.name).join(', ')}`
-        : '') +
-      (notFound.length ? `\n⚠️ No such user: ${notFound.join(', ')}` : '') +
-      (warnings.length ? `\n\n⚠️ ${warnings.map(w => `- ${w}`).join('\n')}` : '')
     );
   }
 

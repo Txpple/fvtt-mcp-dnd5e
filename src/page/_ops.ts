@@ -45,7 +45,6 @@ export const OPS = {
   activateScene: 'write',
   // a socket emit that moves connected players' views; no document changes
   pullUsersToScene: 'write',
-  setLandingScene: 'write',
   getSceneDimensions: 'read',
   // views and frames the scene in the bridge's own canvas; nothing persists
   prepareSceneShot: 'read',

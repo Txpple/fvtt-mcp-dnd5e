@@ -22,7 +22,6 @@ import {
   deleteScenes,
   activateScene,
   pullUsersToScene,
-  setLandingScene,
   getSceneDimensions,
   prepareSceneShot,
 } from './scenes.js';
@@ -200,7 +199,6 @@ const api = {
   deleteScenes,
   activateScene,
   pullUsersToScene,
-  setLandingScene,
   getSceneDimensions,
   prepareSceneShot,
   // house module #6 (fvtt-mod-areasounds): per-scene atmospheric sound sets, flags-only

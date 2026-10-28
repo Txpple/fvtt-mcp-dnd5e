@@ -93,9 +93,6 @@ describe('tool registry', () => {
     // + activate-scene + pull-users-to-scene (the two halves of "who is looking at what":
     //   the ONE world-wide active flag, which update-scene deliberately never touches, and
     //   Scene#pullUsers for moving only SOME users — the party-split path)
-    // + set-landing-scene (where a user comes up at LOGIN — core has no per-user landing scene
-    //   at all, so this writes a durable User flag the house module fvtt-mod-openserver acts
-    //   on at ready; the OFFLINE counterpart to pull-users-to-scene)
     // + configure-area-sounds (per-scene sound sets for house module fvtt-mod-areasounds: a POOL of
     //   files played at randomized intervals with silence between, or crossfaded into a seamless
     //   bed — the shape neither AmbientSound placeables nor Playlists can express)
@@ -129,7 +126,8 @@ describe('tool registry', () => {
     // − 3 (M8): list / get / update / delete-actor → manage-actors (action).
     // − 3 (M8): search-compendium-creatures / -spells / -items → search-compendium (type).
     // − 2 (M8): get-actor-entity / export-actor → manage-actors get-entity / export.
-    expect(names.length).toBe(81);
+    // − 1 (4.6.5): set-landing-scene retired with Open Server 1.4's landing scene.
+    expect(names.length).toBe(80);
   });
 
   it('registers configure-dnd5e-settings (the allow-listed dnd5e 6.0 automation switches)', () => {
@@ -566,7 +564,7 @@ describe('toolsets (src/toolsets.ts) — a registration advertises a subset', ()
   it('unset = the whole surface, in every toolset', () => {
     const { tools, enabledToolsets } = build();
     expect([...enabledToolsets].sort()).toEqual([...TOOLSET_NAMES].sort());
-    expect(tools.length).toBe(81);
+    expect(tools.length).toBe(80);
   });
 
   it('a selection advertises only those toolsets — plus session, always', () => {
@@ -1313,7 +1311,6 @@ describe('the writes no receipt records (NO_RECEIPT): a "not undoable" line ends
     'set-actor-art',
     'set-actor-ownership',
     'set-journal-page-visibility',
-    'set-landing-scene',
     'set-primary-party',
     'set-user-avatar',
     'update-actor-item',

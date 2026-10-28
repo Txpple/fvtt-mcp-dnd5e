@@ -5,10 +5,13 @@
 
 export type FamilyModuleKey = 'bythebooks' | 'areasounds' | 'openserver';
 
-/** A family module's report name, what needs it, and the package it replaced, if it was renamed. */
+/**
+ * A family module's report name, what needs it (none: its absence is reported, never warned
+ * about), and the package it replaced, if it was renamed.
+ */
 interface FamilyModule {
   name: string;
-  neededBy: string;
+  neededBy?: string;
   /**
    * The package this module was before a rename (its old id and name, and the new id to install).
    * A world still on the old package reads as it, flagged legacy, rather than as not active.
@@ -28,7 +31,8 @@ export const FAMILY_MODULES: Record<FamilyModuleKey, FamilyModule> = {
     legacy: { id: 'fvtt-mod-battleflow', name: 'Battle Flow', install: 'fvtt-mod-bythebooks' },
   },
   areasounds: { name: 'Area Sounds', neededBy: 'configure-area-sounds' },
-  openserver: { name: 'Open Server', neededBy: 'set-landing-scene' },
+  // Open Server 1.4 dropped the landing scene set-landing-scene wrote; nothing here needs it now.
+  openserver: { name: 'Open Server' },
 };
 
 const FAMILY_KEYS = Object.keys(FAMILY_MODULES) as FamilyModuleKey[];
@@ -108,8 +112,9 @@ export function bridgeLine(b: BridgeFacts | undefined): { text: string; amber: b
 }
 
 /**
- * The bridge block's module warnings: each inactive family module, naming what needs it, and each
- * one only its old package stands in for, naming the package to install and the one to disable.
+ * The bridge block's module warnings: each inactive family module something needs, naming what,
+ * and each one only its old package stands in for, naming the package to install and the one to
+ * disable.
  */
 export function moduleWarnings(b: BridgeFacts | undefined): string[] {
   if (!b?.modules) return [];
@@ -124,7 +129,7 @@ export function moduleWarnings(b: BridgeFacts | undefined): string[] {
         `Only the legacy ${legacy.name}${version} is active in this world: it is now ${name}; ` +
           `install ${legacy.install} and disable ${legacy.name}`
       );
-    } else if (!m?.active) {
+    } else if (!m?.active && neededBy) {
       out.push(`${name} is not active in this world: ${neededBy} needs it`);
     }
   }

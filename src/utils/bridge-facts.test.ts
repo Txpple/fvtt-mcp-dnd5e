@@ -122,7 +122,6 @@ describe('moduleWarnings', () => {
     expect(moduleWarnings(facts({ modules }))).toEqual([
       'By the Books is not active in this world: the combat report needs it',
       'Area Sounds is not active in this world: configure-area-sounds needs it',
-      'Open Server is not active in this world: set-landing-scene needs it',
     ]);
   });
 

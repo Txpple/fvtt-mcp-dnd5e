@@ -61,7 +61,6 @@ export const TOOLSETS = {
     'manage-scenes',
     'activate-scene',
     'pull-users-to-scene',
-    'set-landing-scene',
     'get-scene-dimensions',
     'screenshot-scene',
     'manage-placeables',
