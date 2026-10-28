@@ -3,6 +3,18 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **`create-pc` and `level-up-pc` refuse a `choices` entry nothing reads** (issue #21). An entry
+  keyed by a word instead of the advancement id (`"subclass"`), a mistyped id, or a level the build
+  never reaches was dropped without a trace; with `acceptDefaults` the advancement then took its
+  default and the answer said `success` with no warning. The build now records every key an
+  applied advancement reads (the class's, a multiclass's, the species', the background's and the
+  subclass's own, whose ids exist only once the subclass is applied) and refuses the rest:
+  `rolled-back`, each entry named with a did-you-mean when it reads as a pick's type or title, and
+  the `level → id` pairs the build asks for. Nothing persists; a level-up is put back. Live:
+  `verify-pc-build` 72/72 (the case added), the PC integration suite 4/4.
+
 ## 4.6.3 — 2026-10-28 — a token's own light, copies by uuid, one search leaf
 
 - **A placed token's own light.** `manage-placeables` tokens `create` and `update` take `light{}`

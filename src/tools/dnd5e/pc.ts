@@ -56,7 +56,9 @@ const CreatePcSchema = z.object({
   choices: z
     .record(z.string(), z.record(z.string(), ChoiceDataSchema))
     .optional()
-    .describe('level → advancement id → pick, as needsChoices lists them.'),
+    .describe(
+      'level → advancement id → pick, as needsChoices lists them; an unread entry is refused.'
+    ),
   // Caster spell picks by NAME (slots auto-derive from the class; this imports chosen spells).
   spells: z
     .object({
@@ -124,7 +126,12 @@ const LevelUpPcSchema = z.object({
   className: z.string().min(1, 'className cannot be empty'),
   // choices for the NEW level (keyed level → advancement-id → data) — e.g. a subclass at the class's
   // level 3 → choices: { "3": { "<subclass-adv-id>": { uuid } } }.
-  choices: z.record(z.string(), z.record(z.string(), ChoiceDataSchema)).optional(),
+  choices: z
+    .record(z.string(), z.record(z.string(), ChoiceDataSchema))
+    .optional()
+    .describe(
+      'level → advancement id → pick, as needsChoices lists them; an unread entry is refused.'
+    ),
   hpMode: z.enum(['avg', 'max']).default('avg'),
   acceptDefaults: z.boolean().default(false),
 });

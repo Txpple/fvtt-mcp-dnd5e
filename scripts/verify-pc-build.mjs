@@ -393,6 +393,44 @@ try {
     `E2b: Champion is among the Fighter subclass options (${(subChoice?.options || []).map(o => o.label).join(', ')})`
   );
   if (champOpt) e5Choices[String(subChoice.level)][subChoice.id] = { uuid: champOpt.value };
+
+  // E-keys (issue #21): the same build with one extra entry keyed by the WORD "subclass" instead of
+  // the advancement id. acceptDefaults used to swallow it silently; it is refused now, rolled back,
+  // named with a did-you-mean, and nothing persists.
+  const keyedName = `${TAG} Fighter Keyed Wrong`;
+  const keyedErr = await withNodeTimeout(
+    f
+      .call('createPcActor', {
+        name: keyedName,
+        className: 'Fighter',
+        background: 'Soldier',
+        abilities: { str: 16, dex: 13, con: 14, int: 10, wis: 12, cha: 8 },
+        choices: {
+          ...e5Choices,
+          3: { ...(e5Choices['3'] ?? {}), subclass: { uuid: champOpt?.value ?? 'x' } },
+        },
+        acceptDefaults: true,
+        level: 5,
+      })
+      .then(
+        () => null,
+        e => e
+      ),
+    180_000,
+    'eKeyed'
+  );
+  createdNames.push(keyedName);
+  const keyedMsg = String(keyedErr?.message ?? '');
+  assert(
+    /rolled-back/.test(`${keyedErr?.code ?? ''} ${keyedMsg}`) &&
+      /choices\["3"\]\["subclass"\] \(did you mean choices\["3"\]\["[^"]+"\], Subclass\?\)/.test(
+        keyedMsg
+      ),
+    `E-keys: a choices entry keyed "subclass" is refused, rolled back, with a did-you-mean (${keyedMsg.slice(0, 160)})`
+  );
+  const keyedLeft = await f.evaluate(n => game.actors.filter(a => a.name === n).length, keyedName);
+  assert(keyedLeft === 0, `E-keys: nothing persisted (${keyedLeft} actor(s) named "${keyedName}")`);
+
   const e5 = await withNodeTimeout(
     f.call('createPcActor', {
       name: lvl5Name,

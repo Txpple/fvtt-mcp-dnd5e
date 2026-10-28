@@ -428,6 +428,57 @@ export function computeMissingChoices(
   return specs.filter(s => !isChoiceSatisfied(s, choices));
 }
 
+/** The `level/id` key a build records when it reads `choices[level][id]` (see applyItemAdvancements). */
+export const choiceKey = (level: number | string, id: string): string => `${level}/${id}`;
+
+/**
+ * The supplied `choices` entries the build never read, as `level/id` keys in the caller's order.
+ * `used` holds every key an applied advancement looked up — the class's, a multiclass's, the
+ * species', the background's and the subclass's own (whose ids are only known once the subclass is
+ * applied, so a pre-build check against the needsChoices specs would refuse a real subclass pick).
+ * An entry left unread names no advancement this build applies: a mistyped id, a word in place of
+ * an id ("subclass"), or a level the build never reaches. PURE.
+ */
+export function unusedChoiceKeys(choices: PcChoiceMap | undefined, used: Set<string>): string[] {
+  const out: string[] = [];
+  for (const [level, byId] of Object.entries(choices ?? {})) {
+    for (const id of Object.keys(byId ?? {})) {
+      if (!used.has(choiceKey(level, id))) out.push(choiceKey(level, id));
+    }
+  }
+  return out;
+}
+
+const looseName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * The refusal for unread `choices` entries: each named as the caller wrote it, a "did you mean" when
+ * the key reads as one pick's type or title ("subclass" → the Subclass advancement), and the
+ * level → id pairs this build asks for. PURE.
+ */
+export function unusedChoicesMessage(unused: string[], specs: AdvancementChoice[]): string {
+  const named = unused.map(key => {
+    const slash = key.indexOf('/');
+    const level = key.slice(0, slash);
+    const id = key.slice(slash + 1);
+    const want = looseName(id);
+    const guess = specs.find(
+      s => want !== '' && (looseName(s.type) === want || looseName(s.title) === want)
+    );
+    const hint = guess
+      ? ` (did you mean choices["${guess.level}"]["${guess.id}"], ${guess.title}?)`
+      : '';
+    return `choices["${level}"]["${id}"]${hint}`;
+  });
+  const valid = specs.map(s => `${s.level} → ${s.id} (${s.title})`).join(', ');
+  return (
+    `${unused.length} choices entr${unused.length === 1 ? 'y names' : 'ies name'} no advancement ` +
+    `this build applies: ${named.join(', ')}. Choices are keyed by level → advancement id` +
+    (valid ? `; this build's picks: ${valid}` : '') +
+    '.'
+  );
+}
+
 // =============================================================================
 // LIVE helpers — touch Foundry globals (covered by the verify script, not unit tests).
 // =============================================================================
@@ -555,7 +606,9 @@ async function applyItemAdvancements(
   applied: PcBuildResult['applied'],
   errors: string[],
   hpMode: 'avg' | 'max' = 'avg',
-  classRole?: 'primary' | 'secondary'
+  classRole?: 'primary' | 'secondary',
+  /** Every `choices` key this apply reads (choiceKey); the caller refuses the supplied ones left unread. */
+  used?: Set<string>
 ): Promise<void> {
   const want = new Set(levels);
   const todo = extractAdvancements(item)
@@ -564,6 +617,7 @@ async function applyItemAdvancements(
 
   for (const { raw, level } of todo) {
     const rec = { source, level, type: raw.type, title: raw.title, result: 'applied' };
+    used?.add(choiceKey(level, raw.id));
     try {
       // The DECISION (role subset, original-L1-max HP, ASI skip, two-step forced-then-pick) is the pure
       // planAdvancementApply (unit-tested); here we only EXECUTE its steps. The only side effect — the
@@ -637,7 +691,8 @@ async function embedClassAndApply(
   choices: PcChoiceMap | undefined,
   applied: PcBuildResult['applied'],
   errors: string[],
-  hpMode: 'avg' | 'max'
+  hpMode: 'avg' | 'max',
+  used: Set<string>
 ): Promise<string> {
   const classLevels = levelsUpTo(classLevel);
   const classData = classDoc.toObject();
@@ -656,7 +711,8 @@ async function embedClassAndApply(
     applied,
     errors,
     hpMode,
-    role
+    role,
+    used
   );
 
   // Subclass (level 3+): the class's Subclass advancement EMBEDS the subclass item but does NOT run its
@@ -674,7 +730,9 @@ async function embedClassAndApply(
       choices,
       applied,
       errors,
-      hpMode
+      hpMode,
+      undefined,
+      used
     );
   }
   return classItem.id;
@@ -885,6 +943,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
   // 3. Build on a TEMP actor, then snapshot → persist. disableAdvancements true for the build
   //    (prevents the auto-AdvancementManager render on class embed); restored in finally.
   const applied: PcBuildResult['applied'] = [];
+  const usedChoices = new Set<string>(); // every choices key an applied advancement read
   let tmp: any = null;
   let priorDisable: unknown;
   let disableTouched = false;
@@ -913,7 +972,8 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
       plan.choices,
       applied,
       errors,
-      hpMode
+      hpMode,
+      usedChoices
     );
     for (const mc of multiclassRes) {
       await embedClassAndApply(
@@ -924,7 +984,8 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
         plan.choices,
         applied,
         errors,
-        hpMode
+        hpMode,
+        usedChoices
       );
     }
 
@@ -939,7 +1000,10 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
         levels,
         plan.choices,
         applied,
-        errors
+        errors,
+        undefined,
+        undefined,
+        usedChoices
       );
     }
 
@@ -954,7 +1018,10 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
         levels,
         plan.choices,
         applied,
-        errors
+        errors,
+        undefined,
+        undefined,
+        usedChoices
       );
     }
 
@@ -987,6 +1054,17 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
       } catch (e) {
         warnings.push(`Spell import failed: ${e instanceof Error ? e.message : String(e)}`);
       }
+    }
+
+    // A supplied pick no applied advancement read would be dropped without a trace (acceptDefaults
+    // then fills that advancement with its default and the answer says nothing): refuse the build,
+    // naming each entry and the level → id pairs this build asks for. Nothing persists.
+    const unusedChoices = unusedChoiceKeys(plan.choices, usedChoices);
+    if (unusedChoices.length > 0) {
+      throw rolledBack(
+        `"${plan.name}" was not created: ${unusedChoicesMessage(unusedChoices, choiceSpecs)} ` +
+          'Nothing was persisted; fix the keys and re-call create-pc.'
+      );
     }
 
     // A corrupting advancement failed (a forced grant / supplied pick / subclass embed / HP apply that
@@ -1199,6 +1277,7 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
 
   // 5. Mutate IN PLACE. disableAdvancements true during the apply; restored in finally.
   const applied: PcBuildResult['applied'] = [];
+  const usedChoices = new Set<string>(); // every choices key an applied advancement read
   let priorDisable: unknown;
   let disableTouched = false;
   try {
@@ -1236,7 +1315,8 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
       applied,
       errors,
       hpMode,
-      role
+      role,
+      usedChoices
     );
 
     // Subclass features fire AT the new level only (never re-grant lower-level subclass features).
@@ -1249,7 +1329,9 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
         plan.choices,
         applied,
         errors,
-        hpMode
+        hpMode,
+        undefined,
+        usedChoices
       );
     }
 
@@ -1259,8 +1341,16 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     // A refused level-up is an error (design.md §3): `rolled-back` once the PC is back where it
     // was; an incomplete rollback is not "nothing written", so it is its own words, uncoded, and the
     // call's receipt names what stayed.
-    if (errors.length > 0) {
-      const failed = `${errors.length} advancement(s) failed — ${errors.join('; ')}`;
+    // A supplied pick no applied advancement read is refused the same way (it would be dropped, the
+    // advancement left to its default, and the answer silent).
+    const unusedChoices = unusedChoiceKeys(plan.choices, usedChoices);
+    if (errors.length > 0 || unusedChoices.length > 0) {
+      const failed = [
+        ...(unusedChoices.length > 0 ? [unusedChoicesMessage(unusedChoices, specs)] : []),
+        ...(errors.length > 0
+          ? [`${errors.length} advancement(s) failed — ${errors.join('; ')}`]
+          : []),
+      ].join('; ');
       try {
         if (isNewClass) {
           await actor.deleteEmbeddedDocuments('Item', [classItemId]);

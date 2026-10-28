@@ -187,6 +187,42 @@ describe('createPcActor orchestration', () => {
     // No junk actor: the temp build actor was deleted in finally and nothing was persisted.
     expect(mock.persistedActorCount()).toBe(0);
   });
+
+  it('refuses a choices entry no applied advancement reads (a word in place of an id), even with acceptDefaults', async () => {
+    mock = installFoundryMock([fighter()]);
+    const err: any = await createPcActor({
+      name: 'Keyed Wrong',
+      className: 'Fighter',
+      level: 1,
+      folder: 'fixed-folder',
+      acceptDefaults: true,
+      choices: {
+        '1': { grant1: {} }, // a real id at a built level: read, so not refused
+        '3': { subclass: { uuid: 'Compendium.x.Item.y' } },
+      },
+    }).catch(e => e);
+
+    expect(err).toBeInstanceOf(PageError);
+    expect(err.code).toBe('rolled-back');
+    expect(err.message).toMatch(
+      /^"Keyed Wrong" was not created: 1 choices entry names no advancement this build applies: choices\["3"\]\["subclass"\]\./
+    );
+    expect(err.message).not.toMatch(/grant1"\]/);
+    expect(mock.persistedActorCount()).toBe(0);
+  });
+
+  it('a build whose every choices entry is read persists as before', async () => {
+    mock = installFoundryMock([fighter()]);
+    const res: any = await createPcActor({
+      name: 'Keyed Right',
+      className: 'Fighter',
+      level: 1,
+      folder: 'fixed-folder',
+      choices: { '1': { grant1: {}, hp1: {} } },
+    });
+    expect(res.success).toBe(true);
+    expect(mock.persistedActorCount()).toBe(1);
+  });
 });
 
 describe('levelUpPc orchestration', () => {
@@ -234,6 +270,39 @@ describe('levelUpPc orchestration', () => {
     const actor = [...mock.store.actors.values()].find(a => a.id === id);
     const fighterItem = actor?.items.find((i: any) => i.type === 'class');
     expect(fighterItem?.system.levels).toBe(1);
+  });
+
+  it('rolls back and refuses a choices entry the new level never reads', async () => {
+    mock = installFoundryMock([
+      fighter({
+        advancements: [
+          {
+            id: 'hp1',
+            type: 'HitPoints',
+            title: 'Hit Points',
+            levels: [1],
+            effect: actor => {
+              actor.system.attributes = { hp: { value: 0, max: 10 } };
+            },
+          },
+          { id: 'hp2', type: 'HitPoints', title: 'Hit Points', levels: [2] },
+        ],
+      }),
+    ]);
+    const id = await buildL1();
+
+    const err: any = await levelUpPc({
+      actorIdentifier: id,
+      className: 'Fighter',
+      choices: { '2': { hp2: {} }, '3': { subclass: { uuid: 'Compendium.x.Item.y' } } },
+    }).catch(e => e);
+
+    expect(err?.code).toBe('rolled-back');
+    expect(err.message).toMatch(
+      /was not leveled: 1 choices entry names no advancement this build applies: choices\["3"\]\["subclass"\]\..*put back to its prior level/
+    );
+    const actor = [...mock.store.actors.values()].find(a => a.id === id);
+    expect(actor?.items.find((i: any) => i.type === 'class')?.system.levels).toBe(1);
   });
 
   it('rolls back by deleting a newly-embedded multiclass class when its first level errors', async () => {

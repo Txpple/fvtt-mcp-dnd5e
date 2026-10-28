@@ -13,6 +13,9 @@ import {
   summarizeChoice,
   isChoiceSatisfied,
   computeMissingChoices,
+  choiceKey,
+  unusedChoiceKeys,
+  unusedChoicesMessage,
   allowedForRole,
   planAdvancementApply,
   type AdvancementChoice,
@@ -412,5 +415,54 @@ describe('isChoiceSatisfied / computeMissingChoices', () => {
     const choices: PcChoiceMap = { '1': { adv1: { chosen: ['skills:acr', 'skills:ath'] } } };
     const missing = computeMissingChoices([trait, item], choices);
     expect(missing).toEqual([item]);
+  });
+
+  describe('unusedChoiceKeys / unusedChoicesMessage — a supplied pick nothing read', () => {
+    const used = new Set([choiceKey(1, 'adv1'), choiceKey(1, 'advFS'), choiceKey(3, 'advSub')]);
+
+    it('returns nothing when every supplied entry was read (or nothing was supplied)', () => {
+      expect(
+        unusedChoiceKeys(
+          { '1': { adv1: { chosen: ['skills:acr'] } }, '3': { advSub: { uuid: 'x' } } },
+          used
+        )
+      ).toEqual([]);
+      expect(unusedChoiceKeys(undefined, used)).toEqual([]);
+      expect(unusedChoiceKeys({}, used)).toEqual([]);
+    });
+
+    it('names a word in place of an id, a mistyped id, and a level the build never reaches', () => {
+      const choices: PcChoiceMap = {
+        '1': { adv1: { chosen: ['skills:acr'] }, advFX: { selected: ['u'] } },
+        '3': { subclass: { uuid: 'Compendium.x.Item.y' } },
+        '7': { adv1: { chosen: ['skills:ath'] } },
+      };
+      expect(unusedChoiceKeys(choices, used)).toEqual(['1/advFX', '3/subclass', '7/adv1']);
+    });
+
+    it('a subclass feature pick read during the build is not refused (no pre-build spec needed)', () => {
+      const withFeature = new Set([...used, choiceKey(3, 'advManeuvers')]);
+      expect(
+        unusedChoiceKeys({ '3': { advManeuvers: { selected: ['u1', 'u2', 'u3'] } } }, withFeature)
+      ).toEqual([]);
+    });
+
+    it('the message names each entry, guesses by type or title, and lists the valid pairs', () => {
+      const msg = unusedChoicesMessage(
+        ['3/subclass', '1/fighting-style', '7/zz'],
+        [trait, item, sub]
+      );
+      expect(msg).toBe(
+        '3 choices entries name no advancement this build applies: ' +
+          'choices["3"]["subclass"] (did you mean choices["3"]["advSub"], Subclass?), ' +
+          'choices["1"]["fighting-style"] (did you mean choices["1"]["advFS"], Fighting Style?), ' +
+          'choices["7"]["zz"]. Choices are keyed by level → advancement id; this build\'s picks: ' +
+          '1 → adv1 (Skill Proficiencies), 1 → advFS (Fighting Style), 3 → advSub (Subclass).'
+      );
+      expect(unusedChoicesMessage(['0/x'], [])).toBe(
+        '1 choices entry names no advancement this build applies: choices["0"]["x"]. ' +
+          'Choices are keyed by level → advancement id.'
+      );
+    });
   });
 });
