@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.6.3 — 2026-10-28 — a token's own light, copies by uuid, one search leaf
 
 - **A placed token's own light.** `manage-placeables` tokens `create` and `update` take `light{}`
   (dim / bright radii, color, alpha, angle, luminosity, attenuation, the animation, `negative`):
@@ -30,6 +30,35 @@ What changed for a user of the tools and skills, release by release. The measure
   pulling those players on the next GM move (a user who still owns another sighted token on the
   scene left behind is not pulled). Both reproduced on a live server with four players at once.
   `confirm:true` still asks. scene-builder carries the rule and the pull trap.
+
+- **The live integration suite reads the searches' `{ results }` again.** Two tests still read
+  the compendium searches as the bare array they stopped being in 3.0, so the actor chain
+  (`createActorFromCompendium`, `addActorItems`, `removeActorItems`, `deleteActor`) and the
+  compendium-entry read had skipped on every live run since: five of "the same six" skips. They
+  run now, with a uuid copy in the chain.
+
+**Verified** (2026-10-28, the local sandbox mirrored from prod that day: Foundry 14.369, dnd5e
+6.0.6, one world-driver at a time):
+- offline: biome · `tsc --noEmit` · vitest **114 files, 2,123 tests** (3 skipped) · build (page
+  bundle 569.0 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 157 handlers, 0 `any` /
+  `unknown`);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 ·
+  settings-calendar 52 · item-tooling 24 · actor-tooling 51 · pc-build 70 ·
+  teleporter-scene-fields 13 · placeables-tooling 87 · scene-tools 24 · cast-activity 25 ·
+  region-tooling 22 · receipts 30 · toolsets 19, each clean in `finally`;
+- the four changes live through the registry on the built code **17 / 17** (a token lit, re-lit in
+  part and put out; a container imported at quantity 1 with the warning; `query` refused by name;
+  an Arrows copy by uuid at 20 with its art; an SRD uuid refused);
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (`post-item-card`: no file
+  plane for it here; `rollOnTable`: the mirrored world has no table);
+- the MCP smoke on the sandbox registration: `get-world-info` (host `local`, role ASSISTANT, 4
+  books present / 1 missing); a Fighter 2 / Rogue 1 in one `create-pc` call (`success`, HP 27, 0
+  unresolved `@scale`); a bad subclass uuid on the Subclass advancement is an error,
+  `[rolled-back]`, naming the advancement, no actor persisted. The registration's process predates
+  the build (bridge 4.6.2), so the new schemas were driven on the built code, above, not over it.
+- Budgets: per prompt 13,995 (≤ 14,000), names 6,143 (≤ 7,000), skill descriptions 7,852
+  (≤ 8,000), per fetch 38,981 (`manage-placeables`; ≤ 39,000), tools/list 208,787 (81 tools;
+  ≤ 220,000), always-on 1,778 (≤ 2,100).
 
 ## 4.6.2 — 2026-10-19 — the bestiary in the campaign's own art, brief
 
