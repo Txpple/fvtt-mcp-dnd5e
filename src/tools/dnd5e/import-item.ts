@@ -5,6 +5,7 @@ import { Logger } from '../../logger.js';
 import { assertDnd5e } from '../../utils/system-detection.js';
 import { assertNoSrdPacks } from '../../utils/compendium-sources.js';
 import { formatUnresolvedScale } from '../../utils/format.js';
+import { warningBlock } from '../../utils/lines.js';
 
 /**
  * manage-items `import` — COPY a physical item from a compendium pack onto an actor (or into the
@@ -31,7 +32,12 @@ export const ImportItemSchema = z.object({
     .describe('Entry id within the pack (from search-compendium).'),
   actorIdentifier: actorTarget.optional().describe(`${ACTOR_TARGET} Omit: a world Item.`),
   name: z.string().min(1).optional().describe('Rename the copy.'),
-  quantity: z.number().int().min(0).optional().describe('Stack count on the copy.'),
+  quantity: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Stack count on the copy; a container is always one (ignored with a warning).'),
   equipped: z.boolean().optional().describe('Equipped state (equippable items only).'),
   identified: z.boolean().optional().describe('false = unidentified loot.'),
   container: z
@@ -93,6 +99,7 @@ export async function importItem(
     (loot
       ? `; loot copy "${loot.name}" (${loot.id}) in folder "${loot.folderName ?? 'Loot'}"`
       : '') +
-    formatUnresolvedScale(unresolvedScale)
+    formatUnresolvedScale(unresolvedScale) +
+    warningBlock(result?.warnings)
   );
 }

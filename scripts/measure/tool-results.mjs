@@ -42,7 +42,7 @@ const CALLS = [
   ['manage-folders', { action: 'list' }],
   ['list-users', {}],
   ['list-compendium-packs', {}],
-  ['search-compendium', { type: 'any', query: 'sword' }],
+  ['search-compendium', { type: 'any', name: 'sword' }],
   ['search-compendium', { type: 'creatures', name: 'goblin' }],
   ['search-compendium', { type: 'spells', name: 'fire' }],
   ['list-chat-messages', { limit: 50 }],

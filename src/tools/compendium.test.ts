@@ -58,11 +58,14 @@ describe('CompendiumTools.getToolDefinitions', () => {
       .find(t => t.name === SEARCH_COMPENDIUM)!;
     const schema = def.inputSchema as any;
     expect(schema.properties.type.enum).toEqual(['any', 'creatures', 'spells', 'items']);
-    expect(schema.properties.name.description).toBe('Case-insensitive name substring.');
+    expect(schema.properties.name.description).toBe(
+      'Case-insensitive name match (type any: every term must appear).'
+    );
     const byType = Object.fromEntries(schema.anyOf.map((m: any) => [m.properties.type.const, m]));
     for (const m of schema.anyOf) expect(m.additionalProperties).toBe(false);
-    expect(byType.any.required).toEqual(['type', 'query']);
-    expect(byType.any.properties.name).toBeUndefined();
+    expect(byType.any.required).toEqual(['type', 'name']);
+    expect(byType.any.properties.name).toEqual({ type: 'string' });
+    expect(byType.any.properties.query).toBeUndefined();
     expect(byType.creatures.properties.name).toEqual({ type: 'string' });
     expect(byType.creatures.required).toEqual(['type']);
     expect(byType.spells.required).toEqual(['type']);
@@ -76,6 +79,10 @@ describe('CompendiumTools.getToolDefinitions', () => {
     );
     await expect(tools.handleSearchCompendium({ type: 'spells', query: 'fire' })).rejects.toThrow(
       'search-compendium (type "spells"): unknown argument "query" — it takes: type, name, spellLevel, spellSchool, damageType, limit.'
+    );
+    // the name search took `query` alone until 4.6.3; it is the shared `name` leaf now
+    await expect(tools.handleSearchCompendium({ type: 'any', query: 'fire' })).rejects.toThrow(
+      'search-compendium (type "any"): unknown argument "query" — it takes: type, name, packType, limit.'
     );
   });
 
@@ -104,7 +111,7 @@ describe('handleSearchCompendium', () => {
     img: 'icons/goblin.png',
   });
 
-  it('forwards query + packType + limit to searchCompendium (name-only) and shapes the result', async () => {
+  it('forwards name (as the page query) + packType + limit to searchCompendium and shapes the result', async () => {
     const { tools, calls } = build('dnd5e', {
       results: [hit('i1', 'Goblin'), hit('i2', 'Goblin Boss')],
       totalFound: 2,
@@ -112,7 +119,7 @@ describe('handleSearchCompendium', () => {
 
     const out = await tools.handleSearchCompendium({
       type: 'any',
-      query: 'goblin',
+      name: 'goblin',
       packType: 'Actor',
     });
 
@@ -123,7 +130,7 @@ describe('handleSearchCompendium', () => {
 
     // The one search body: head, compact hits, showing, totalFound — nothing else.
     expect(out).toEqual({
-      query: 'goblin',
+      name: 'goblin',
       results: [
         {
           id: 'i1',
@@ -149,7 +156,7 @@ describe('handleSearchCompendium', () => {
 
   it('reports an empty result set cleanly', async () => {
     const { tools } = build('dnd5e', { results: [], totalFound: 0 });
-    const out = await tools.handleSearchCompendium({ type: 'any', query: 'zzzznothing' });
+    const out = await tools.handleSearchCompendium({ type: 'any', name: 'zzzznothing' });
     expect(out.totalFound).toBe(0);
     expect(out.showing).toBe(0);
     expect(out.results).toEqual([]);
@@ -160,19 +167,19 @@ describe('handleSearchCompendium', () => {
       results: [hit('a', 'Sword A'), hit('b', 'Sword B')],
       totalFound: 5,
     });
-    const out = await tools.handleSearchCompendium({ type: 'any', query: 'sword', limit: 2 });
+    const out = await tools.handleSearchCompendium({ type: 'any', name: 'sword', limit: 2 });
     expect(calls.find(c => c[0] === 'searchCompendium')![1].limit).toBe(2);
     expect(out.totalFound).toBe(5);
     expect(out.showing).toBe(2);
     expect(out.results).toHaveLength(2);
   });
 
-  it('rejects a query shorter than 2 characters', async () => {
+  it('rejects a name shorter than 2 characters', async () => {
     const { tools } = build();
-    await expect(tools.handleSearchCompendium({ type: 'any', query: 'a' })).rejects.toThrow();
+    await expect(tools.handleSearchCompendium({ type: 'any', name: 'a' })).rejects.toThrow();
   });
 
-  it('rejects a missing query', async () => {
+  it('rejects a missing name', async () => {
     const { tools } = build();
     await expect(tools.handleSearchCompendium({ type: 'any' })).rejects.toThrow();
   });
@@ -180,18 +187,18 @@ describe('handleSearchCompendium', () => {
   it('rejects a limit above the maximum of 500 (the one leaf every search type shares)', async () => {
     const { tools } = build();
     await expect(
-      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 501 })
+      tools.handleSearchCompendium({ type: 'any', name: 'dragon', limit: 501 })
     ).rejects.toThrow();
     // the cap was 50 for the name search alone until the four searches shared one leaf
     await expect(
-      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 51 })
+      tools.handleSearchCompendium({ type: 'any', name: 'dragon', limit: 51 })
     ).resolves.toBeTruthy();
   });
 
   it('rejects a limit below the minimum of 1', async () => {
     const { tools } = build();
     await expect(
-      tools.handleSearchCompendium({ type: 'any', query: 'dragon', limit: 0 })
+      tools.handleSearchCompendium({ type: 'any', name: 'dragon', limit: 0 })
     ).rejects.toThrow();
   });
 
@@ -205,7 +212,7 @@ describe('handleSearchCompendium', () => {
       totalFound: 3,
     });
 
-    const out = await tools.handleSearchCompendium({ type: 'any', query: 'goblin' });
+    const out = await tools.handleSearchCompendium({ type: 'any', name: 'goblin' });
 
     // Only the premium-book hit survives as a result (the page already excludes SRD packs; this
     // is the backstop).

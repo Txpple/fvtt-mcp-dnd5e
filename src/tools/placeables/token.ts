@@ -25,6 +25,27 @@ const tokenIds = z
   .min(1)
   .describe('Placed-token ids (from action list); the sidebar actor is untouched.');
 
+// The token's own light emission (TokenDocument.light, the same LightData an ambient light carries):
+// a carried torch, a glowing creature, a darkness aura. One sub-object on create and on update; the
+// page folds it under `light` (create) or `light.*` dot-paths (update) so a partial change keeps the
+// rest of the emission.
+const tokenLight = z
+  .object({
+    dim: z.number().min(0).optional().describe('Dim radius (grid units); 0 = none.'),
+    bright: z.number().min(0).optional().describe('Bright radius (grid units); 0 = none.'),
+    color: z.string().optional().describe('Tint hex, e.g. "#fcd674"; "" clears.'),
+    alpha: z.number().min(0).max(1).optional().describe('Tint intensity 0–1.'),
+    angle: z.number().optional().describe('Cone angle (360 = full).'),
+    luminosity: z.number().min(-1).max(1).optional().describe('Luminosity -1..1 (0.5 default).'),
+    attenuation: z.number().min(0).max(1).optional().describe('Falloff 0–1 (higher = softer).'),
+    animationType: z.string().optional().describe('"torch", "flame", "pulse" …; "" clears.'),
+    animationSpeed: z.number().int().min(0).max(10).optional().describe('Speed 0–10.'),
+    animationIntensity: z.number().int().min(0).max(10).optional().describe('Intensity 0–10.'),
+    negative: z.boolean().optional().describe('Darkness source.'),
+  })
+  .optional()
+  .describe("The token's own light (a carried torch, a glow): only the sub-fields passed change.");
+
 const PlaceTokensSchema = z.object({
   sceneIdentifier: sceneTarget,
   tokens: z
@@ -41,6 +62,7 @@ const PlaceTokensSchema = z.object({
           .enum(['friendly', 'neutral', 'hostile', 'secret'])
           .optional()
           .describe('Overrides the prototype for this copy.'),
+        light: tokenLight,
       })
     )
     .min(1)
@@ -123,6 +145,7 @@ const UpdateTokensSchema = z
         "Hit points on the token's own delta (linked: the base actor); only the sub-fields passed " +
           'change.'
       ),
+    light: tokenLight,
   })
   .refine(v => (v.tokenIds?.length ?? 0) > 0 || (v.actorIds?.length ?? 0) > 0, {
     message: 'Provide at least one target: tokenIds and/or actorIds.',
@@ -134,7 +157,7 @@ const UpdateTokensSchema = z
       ),
     {
       message:
-        'Provide at least one field to change (rotation, randomizeRotation, scale, imagePath, elevation, hidden, lockRotation, x, y, name, displayName, displayBars, bar1, bar2, ring, or hp).',
+        'Provide at least one field to change (rotation, randomizeRotation, scale, imagePath, elevation, hidden, lockRotation, x, y, name, displayName, displayBars, bar1, bar2, ring, hp, or light).',
     }
   );
 
@@ -145,7 +168,7 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
       action: 'create',
       description:
         "Place actors' tokens on a scene from their prototypes, at canvas-pixel x / y, with " +
-        'per-copy hidden / elevation / rotation / name / disposition overrides.',
+        'per-copy hidden / elevation / rotation / name / disposition / light overrides.',
       schema: PlaceTokensSchema,
       handler: async ({ sceneIdentifier, tokens }) => {
         const result = await foundry.call('placeSceneTokens', { sceneIdentifier, items: tokens });
@@ -156,7 +179,7 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
       action: 'list',
       description:
         'Every placed token on a scene: id, name, x / y, size, rotation, elevation, hidden, ' +
-        'disposition, actorId, art + scale, lockRotation. A token id is also an actor target for the ' +
+        'disposition, actorId, art + scale, lockRotation, light radii. A token id is also an actor target for the ' +
         "actor tools (that token's own delta, not the base actor).",
       schema: ListTokensSchema,
       handler: async parsed => {
@@ -170,7 +193,7 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
         'Edit placed tokens (not the prototype: manage-actors update) by tokenIds and/or actorIds ' +
         '(every placed copy of an actor) — ONE patch for every match: rotation, scale, art, ' +
         'elevation, hidden, lockRotation, position, name, nameplate / bar visibility, bars, ring, ' +
-        "hp on the token's own delta. Reports each token as it stands.",
+        "hp on the token's own delta, its own light. Reports each token as it stands.",
       schema: UpdateTokensSchema,
       handler: async parsed => {
         const result = await foundry.call('updateSceneTokens', parsed);
@@ -197,6 +220,7 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
                   `${t.hidden ? ', hidden' : ''}, name ${t.displayName}, bars ${t.displayBars}` +
                   `${t.bar1 ? ` (${t.bar1})` : ''}, ring ${t.ring ? 'on' : 'off'}` +
                   `${t.hp ? `, hp ${t.hp.value}/${t.hp.max}` : ''}` +
+                  `${t.light ? `, light ${t.light.dim}/${t.light.bright}` : ''}` +
                   `${t.src ? `, art ${t.src}` : ''}`
               )
               .join('')

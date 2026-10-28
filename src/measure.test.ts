@@ -51,8 +51,9 @@ const BUDGET = {
   // 2026-10-15 with one kind's shapes under `items` / `patches` / `ids` (the lossy view: the tiles'
   // fields shown for every kind); 36,758 the same day once each kind's entries ride its own key
   // (tiles / tilePatches / tileIds …), so the view carries every kind's real fields — the cost of
-  // a view that is right, paid once per session that uses the tool.
-  perFetch: 36_800,
+  // a view that is right, paid once per session that uses the tool. 38,981 on 2026-10-28: the
+  // token's own light (`light{}` on tokens create and update, eleven sub-fields each).
+  perFetch: 39_000,
   // (c) the eager list: 283,945 at 2.2.0; +4,379 for the closed top level
   // (`additionalProperties:false` × 151, M2 — the cost the plan accepted for refusing unknown
   // arguments); 205,248 after M7 (the prose diet: every leaf ≤ 120, every description ≤ 400 — the
@@ -74,10 +75,10 @@ const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
   // every row: the 2026-10-15 measurement (4.6.0 plus the vetoed-delete fix), rounded up
   session: 1_800, // 1,778
   settings: 6_900, // 6,809
-  actors: 75_000, // 74,911
+  actors: 75_700, // 74,911; 75,594 with add-feature's uuid copies (2026-10-28)
   items: 4_700, // 4,615
   compendium: 6_700, // 6,541; 6,662 once the four searches share one `limit` leaf (2026-10-15)
-  scenes: 62_500, // 62,106; 62,398 with manage-placeables' per-kind keys (2026-10-15)
+  scenes: 64_700, // 62,106; 62,398 with manage-placeables' per-kind keys (2026-10-15); 64,656 with the token light (2026-10-28)
   journals: 14_700, // 14,380; 14,635 once the members share one `name` and one `pageId` leaf
   tables: 6_200, // 5,935; 6,138 once create and update share their five leaves (2026-10-15)
   cards: 2_100, // 2,009

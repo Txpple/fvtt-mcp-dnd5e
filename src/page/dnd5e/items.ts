@@ -62,6 +62,8 @@ export interface ImportItemResult {
   item: CreatedItemRef;
   unresolvedScale?: Array<{ path: string; formula: string }> | undefined;
   lootCopy?: LootCopy | undefined;
+  /** An override that could not land as asked (a quantity on a container). */
+  warnings?: string[] | undefined;
 }
 
 /** The finer kind used to pick a default icon: equipmentType for wondrous, consumableType for a
@@ -642,6 +644,38 @@ export async function addItem(data: AddItemArgs): Promise<AddItemResult> {
  * of immediate overrides (rename, quantity, equipped, identified, container) are applied on the copy so
  * the common "drop in a copy, ready to use" case is one call. Returns { success, target, item }.
  */
+/**
+ * PURE: apply the import's immediate overrides (rename, quantity, identified, equipped) onto the
+ * fetched copy. A container is one item however many it holds — dnd5e's capacity and the inventory
+ * sheet treat it as a single document, and add-item forces its quantity to 1 for the same reason —
+ * so a `quantity` on a container copy is refused with a warning instead of written. Returns the
+ * warnings (empty when every override landed). Exported for unit testing.
+ */
+export function applyImportOverrides(
+  doc: { name?: string; type?: string; system?: Record<string, any> },
+  data: Pick<ImportItemArgs, 'name' | 'quantity' | 'identified' | 'equipped'>
+): string[] {
+  const warnings: string[] = [];
+  doc.system = doc.system ?? {};
+  if (data.name) doc.name = data.name; // rename (the base for a custom variant)
+  if (typeof data.quantity === 'number') {
+    if (doc.type === 'container') {
+      doc.system.quantity = 1;
+      warnings.push(
+        `quantity ${data.quantity} ignored: "${doc.name}" is a container, always one item ` +
+          '(import it once per copy wanted).'
+      );
+    } else {
+      doc.system.quantity = data.quantity;
+    }
+  }
+  if (typeof data.identified === 'boolean') doc.system.identified = data.identified;
+  if (typeof data.equipped === 'boolean' && doc.type && EQUIPPABLE_DOC.has(doc.type)) {
+    doc.system.equipped = data.equipped;
+  }
+  return warnings;
+}
+
 export async function importItemFromCompendium(data: ImportItemArgs): Promise<ImportItemResult> {
   if (game.system.id !== 'dnd5e') {
     throw unsupported(`importItemFromCompendium requires D&D 5e (current: "${game.system.id}").`);
@@ -653,13 +687,7 @@ export async function importItemFromCompendium(data: ImportItemArgs): Promise<Im
     requirePackType: 'Item',
   });
   const sourceName = doc.name;
-  doc.system = doc.system ?? {};
-  if (data.name) doc.name = data.name; // rename (the base for a custom variant)
-  if (typeof data.quantity === 'number') doc.system.quantity = data.quantity;
-  if (typeof data.identified === 'boolean') doc.system.identified = data.identified;
-  if (typeof data.equipped === 'boolean' && EQUIPPABLE_DOC.has(doc.type)) {
-    doc.system.equipped = data.equipped;
-  }
+  const warnings = applyImportOverrides(doc, data);
 
   // --- Target: actor (embedded) vs world (sidebar) ---
   if (data.actorIdentifier) {
@@ -687,6 +715,7 @@ export async function importItemFromCompendium(data: ImportItemArgs): Promise<Im
       target: { type: 'actor', id: actor.id, name: actor.name },
       item: { id: created.id, name: created.name, type: created.type },
       ...(unresolvedScale.length > 0 ? { unresolvedScale } : {}),
+      ...(warnings.length > 0 ? { warnings } : {}),
     };
 
     // Rule 9 — a magic item copied onto an NPC is ALSO loot. Mint a loose world-Item twin (same art +
@@ -729,5 +758,6 @@ export async function importItemFromCompendium(data: ImportItemArgs): Promise<Im
     target: { type: 'world', folderId: res.folderId, folderName: res.folderName },
     item: created,
     ...(unresolvedScale.length > 0 ? { unresolvedScale } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
   };
 }

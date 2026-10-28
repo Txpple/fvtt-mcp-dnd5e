@@ -351,9 +351,11 @@ describe('tool registry', () => {
       'feature',
       'items',
     ]);
-    // items[] composes the canonical ItemTools zod (item shape with name+type required).
+    // items[] composes the canonical ItemTools zod: an item authored raw (name + type required) or
+    // a copy by uuid.
     expect(af.inputSchema.properties.items.type).toBe('array');
-    expect(af.inputSchema.properties.items.items.required).toEqual(['name', 'type']);
+    const entry = af.inputSchema.properties.items.items;
+    expect(entry.anyOf.map((e: any) => e.required)).toEqual([['name', 'type'], ['uuid']]);
   });
 
   it('advertises the six chat-log tools by name', () => {

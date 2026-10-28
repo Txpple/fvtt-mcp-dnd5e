@@ -36,11 +36,10 @@ const searchLimit = z
   .default(50)
   .describe('Max results (default 50); totalFound is the full count.');
 
+// The name search takes the union's shared `name` leaf, as the three faceted members do (the leaf
+// was `query` here alone until 4.6.3, so a caller writing `name` for every type was refused).
 const SearchCompendiumSchema = z.object({
-  query: z
-    .string()
-    .min(2, 'Search query must be at least 2 characters')
-    .describe('Name terms (all must appear); descriptions are not searched.'),
+  name: z.string().min(2, 'Search name must be at least 2 characters'),
   packType: z.string().optional().describe('Pack document type ("Item", "Actor", "JournalEntry").'),
   limit: searchLimit,
 });
@@ -285,7 +284,11 @@ export class CompendiumTools {
         'any = a name search over every document type; creatures / spells / items = facets on real ' +
         'system data. Hits are {id, name, type, uuid, pack, img, facets} with totalFound.',
       discriminators: ['type'],
-      shared: { name: z.string().describe('Case-insensitive name substring.') },
+      shared: {
+        name: z
+          .string()
+          .describe('Case-insensitive name match (type any: every term must appear).'),
+      },
       members: [
         unionMember({
           select: { type: 'any' },
@@ -354,7 +357,7 @@ export class CompendiumTools {
   }
 
   private async searchByName({
-    query,
+    name: query,
     packType,
     limit,
   }: z.output<typeof SearchCompendiumSchema>): Promise<Record<string, unknown>> {
@@ -379,7 +382,7 @@ export class CompendiumTools {
       returned: results.length,
     });
 
-    return searchBody({ query }, results, found?.totalFound ?? results.length);
+    return searchBody({ name: query }, results, found?.totalFound ?? results.length);
   }
 
   async handleGetCompendiumItem(args: any): Promise<any> {

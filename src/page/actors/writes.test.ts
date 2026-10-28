@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, it, expect } from 'vitest';
-import { extractDamageProfile, removeActorItems } from './writes.js';
+import { extractDamageProfile, prepareUuidItemCopy, removeActorItems } from './writes.js';
 
 // Minimal source-item shapes (as toSource(item) yields): a weapon's base damage + activity parts.
 const weapon = (name: string, baseTypes: string[]) => ({
@@ -60,6 +60,51 @@ describe('extractDamageProfile', () => {
 
 // removeActorItems (remove-from-actor): an item name several items share is refused before
 // anything is deleted (design.md §3, a write never breaks a tie), never "the first one".
+describe('prepareUuidItemCopy — the create-doc for an add-feature items uuid copy', () => {
+  const source = {
+    _id: 'src00000000000001',
+    name: 'Arrow',
+    type: 'consumable',
+    img: 'icons/arrow.webp',
+    system: { quantity: 1, price: { value: 5, denomination: 'cp' } },
+  };
+
+  it('drops the source id and applies rename, quantity and a system patch; the source is untouched', () => {
+    const { doc, warnings } = prepareUuidItemCopy(
+      source,
+      { name: 'Silvered Arrow', quantity: 20, system: { price: { value: 1 } } },
+      'items[0]'
+    );
+    expect(warnings).toEqual([]);
+    expect(doc._id).toBeUndefined();
+    expect(doc.name).toBe('Silvered Arrow');
+    expect(doc.img).toBe('icons/arrow.webp');
+    expect(doc.system.quantity).toBe(20);
+    expect(doc.system.price.value).toBe(1);
+    expect(source.system.quantity).toBe(1);
+    expect(source._id).toBe('src00000000000001');
+  });
+
+  it('a container copy keeps quantity 1 and says so', () => {
+    const { doc, warnings } = prepareUuidItemCopy(
+      { _id: 'x', name: 'Backpack', type: 'container', system: {} },
+      { quantity: 3 },
+      'items[1]'
+    );
+    expect(doc.system.quantity).toBe(1);
+    expect(warnings).toEqual([
+      'items[1]: quantity 3 ignored — "Backpack" is a container, always one item.',
+    ]);
+  });
+
+  it('with no overrides the copy is the source minus its id', () => {
+    const { doc, warnings } = prepareUuidItemCopy(source, {}, 'items[0]');
+    expect(warnings).toEqual([]);
+    expect(doc).toEqual({ ...source, _id: undefined, system: source.system });
+    expect('_id' in doc).toBe(false);
+  });
+});
+
 describe('removeActorItems: a name several items share is refused', () => {
   const items = [
     { id: 'i1', name: 'Fortified Familiar', type: 'feat' },

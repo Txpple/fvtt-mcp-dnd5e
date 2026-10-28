@@ -89,7 +89,7 @@ try {
   }
   await check(
     'search-compendium type any ("goblin")',
-    () => compendium.handleSearchCompendium({ type: 'any', query: 'goblin' }),
+    () => compendium.handleSearchCompendium({ type: 'any', name: 'goblin' }),
     o => o && Array.isArray(o.results) && typeof o.totalFound === 'number'
   );
   await check(

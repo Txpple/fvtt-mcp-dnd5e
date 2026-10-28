@@ -28,8 +28,8 @@ const AddFeatureWrapperSchema = z.object({
   mode: z
     .enum(['compendium-features', 'feature', 'items'])
     .describe(
-      'compendium-features imports by name (compendiumFeatures); feature authors one (feature); ' +
-        'items attaches raw items.'
+      'compendium-features imports by name; feature authors one; items attaches raw items or ' +
+        'uuid copies.'
     ),
   feature: AddFeatureSchema.omit({ actorIdentifier: true })
     .optional()
@@ -37,7 +37,9 @@ const AddFeatureWrapperSchema = z.object({
   compendiumFeatures: AddFeaturesFromCompendiumSchema.omit({ actorIdentifier: true })
     .optional()
     .describe("mode 'compendium-features': the names and packs."),
-  items: AddToActorItemsSchema.optional().describe("mode 'items': raw items (name, type, system)."),
+  items: AddToActorItemsSchema.optional().describe(
+    "mode 'items': raw items (name, type, system) and / or copies by uuid."
+  ),
 });
 
 export function buildAddFeatureTool() {
@@ -47,7 +49,7 @@ export function buildAddFeatureTool() {
       'Add a feature, attack, spellcasting setup or spells to an actor. mode compendium-features ' +
       'imports named features from a pack (a copied feature reports any unresolved @scale formula); ' +
       'feature authors one by featureType (a duplicate name is refused); items attaches raw item ' +
-      'data. Gear: manage-items import / add-item.',
+      'data or copies Items by uuid. Gear: manage-items import / add-item.',
     inputSchema: toInputSchema(AddFeatureWrapperSchema),
   };
 }

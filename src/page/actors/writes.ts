@@ -693,20 +693,63 @@ export async function duplicateActor(request: {
   };
 }
 
+/** One entry of add-feature mode "items": authored raw (name + type) or copied by uuid. */
+export interface AddActorItemInput {
+  name?: string | undefined;
+  type?: string | undefined;
+  img?: string | undefined;
+  system?: Record<string, any> | undefined;
+  /** A compendium or world Item uuid to copy whole (art, system data, activities, effects). */
+  uuid?: string | undefined;
+  /** Stack count on a uuid copy; a container is always one (ignored with a warning). */
+  quantity?: number | undefined;
+}
+
 /**
- * Add one or more freshly-authored embedded Items to an existing actor (no
- * compendium lookup). name + type are required; type is checked against the
- * active system's declared Item document types when available, then the rest is
- * delegated to Foundry's DataModel layer. Returns { actorId, actorName, created }.
+ * PURE: the create-doc for a uuid copy from the source's plain object (`toObject()`): the source
+ * id dropped, the rename / quantity / system overrides applied. A container copy keeps quantity 1
+ * (the rule add-item and manage-items import share). Returns the doc and any warning. Exported
+ * for unit testing.
+ */
+export function prepareUuidItemCopy(
+  source: Record<string, any>,
+  entry: Pick<AddActorItemInput, 'name' | 'quantity' | 'system'>,
+  label: string
+): { doc: Record<string, any>; warnings: string[] } {
+  const warnings: string[] = [];
+  const doc: Record<string, any> = { ...source };
+  delete doc._id;
+  doc.system = { ...(doc.system ?? {}) };
+  if (typeof entry.name === 'string' && entry.name.trim() !== '') doc.name = entry.name.trim();
+  if (typeof entry.quantity === 'number') {
+    if (doc.type === 'container') {
+      doc.system.quantity = 1;
+      warnings.push(
+        `${label}: quantity ${entry.quantity} ignored — "${doc.name}" is a container, always one item.`
+      );
+    } else {
+      doc.system.quantity = entry.quantity;
+    }
+  }
+  if (entry.system && typeof entry.system === 'object') {
+    doc.system =
+      typeof foundry !== 'undefined' && foundry?.utils?.mergeObject
+        ? foundry.utils.mergeObject(doc.system, entry.system, { inplace: false })
+        : { ...doc.system, ...entry.system };
+  }
+  return { doc, warnings };
+}
+
+/**
+ * Add one or more embedded Items to an existing actor: authored raw (name + type required; type is
+ * checked against the active system's declared Item document types when available, the rest is
+ * Foundry's DataModel layer's), or copied whole from a compendium or world Item by `uuid` (an
+ * optional rename, stack count and system patch on the copy). Returns
+ * { actorId, actorName, created, warnings? }.
  */
 export async function addActorItems(params: {
   actorIdentifier: string;
-  items: Array<{
-    name: string;
-    type: string;
-    img?: string | undefined;
-    system?: Record<string, any> | undefined;
-  }>;
+  items: AddActorItemInput[];
 }) {
   const { actorIdentifier, items } = params;
 
@@ -728,9 +771,29 @@ export async function addActorItems(params: {
   const validTypes: string[] | null =
     itemDocTypes && typeof itemDocTypes === 'object' ? Object.keys(itemDocTypes) : null;
 
-  const payload = items.map((it, idx) => {
+  const warnings: string[] = [];
+  const payload: Record<string, any>[] = [];
+  for (const [idx, it] of items.entries()) {
+    if (it && typeof it.uuid === 'string' && it.uuid.trim() !== '') {
+      const uuid = it.uuid.trim();
+      const source = await fromUuid(uuid);
+      if (!source) {
+        throw notFoundError(
+          `items[${idx}]: nothing at uuid "${uuid}" (search-compendium gives a hit's uuid).`
+        );
+      }
+      if (source.documentName !== 'Item') {
+        throw invalid(`items[${idx}]: uuid "${uuid}" is a ${source.documentName}, not an Item.`);
+      }
+      const { doc, warnings: w } = prepareUuidItemCopy(source.toObject(), it, `items[${idx}]`);
+      warnings.push(...w);
+      payload.push(doc);
+      continue;
+    }
     if (!it || typeof it.name !== 'string' || it.name.trim().length === 0) {
-      throw invalid(`items[${idx}]: "name" is required and must be a non-empty string`);
+      throw invalid(
+        `items[${idx}]: "name" is required and must be a non-empty string (or a "uuid")`
+      );
     }
     if (typeof it.type !== 'string' || it.type.trim().length === 0) {
       throw invalid(`items[${idx}] ("${it.name}"): "type" is required`);
@@ -745,8 +808,8 @@ export async function addActorItems(params: {
     const doc: Record<string, any> = { name: it.name, type: it.type };
     if (it.img) doc.img = it.img;
     if (it.system && typeof it.system === 'object') doc.system = it.system;
-    return doc;
-  });
+    payload.push(doc);
+  }
 
   const created = await actor.createEmbeddedDocuments('Item', payload);
 
@@ -758,6 +821,7 @@ export async function addActorItems(params: {
       name: doc.name,
       type: doc.type,
     })),
+    ...(warnings.length > 0 ? { warnings } : {}),
   };
 }
 

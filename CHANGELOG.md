@@ -5,6 +5,24 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **A placed token's own light.** `manage-placeables` tokens `create` and `update` take `light{}`
+  (dim / bright radii, color, alpha, angle, luminosity, attenuation, the animation, `negative`):
+  a carried torch or a glowing creature without opening the token config. A partial `light` keeps
+  the rest of the emission (create merges onto the prototype's, update writes `light.*` paths);
+  `list` shows `lightDim` / `lightBright`, the update report `light dim/bright`. The per-fetch
+  ratchet moves 36,800 → 39,000 and the scenes row 62,500 → 64,700 for it.
+- **`manage-items` `import` on a container keeps quantity 1.** A `quantity` asked on a container
+  copy is reported as a warning and not written, the rule `add-item` already applied; dnd5e treats
+  a container as one document however many it holds.
+- **`search-compendium` `type: "any"` takes `name`**, the leaf the other three types share; its
+  `query` leaf is gone (an unknown argument, refused by name). The body's head says `name` too.
+  The run-script skill's example now passes the page function's real arguments (`query`,
+  `packType`) and reads a hit's `pack`.
+- **`add-feature` mode `items` copies by uuid.** An entry is either the raw `{name, type, img?,
+  system?}` or `{uuid, name?, quantity?, system?}`: the Item at that compendium or world uuid is
+  copied whole (art, system data, activities, effects), renamed and stacked on request, its
+  `system` patch merged in; an SRD uuid is refused like `manage-items` `import`'s pack. The
+  actors row moves 75,000 → 75,700.
 - **Teleporters no longer ask by default.** `manage-placeables` `create-teleporter`'s `confirm` and
   `add-behavior`'s `teleportToken` `system.choice` now default to false. The confirmation dialog
   parked every token on the pad until its owner answered, so a party moving together stranded

@@ -47,6 +47,21 @@ const DISPLAY_MODE_NAME: Record<number, string> = Object.fromEntries(
   Object.entries(DISPLAY_MODES).map(([k, v]) => [v, k])
 );
 
+/** The token's own light emission (TokenDocument.light — the LightData an ambient light carries). */
+export interface TokenLightArgs {
+  dim?: number | undefined;
+  bright?: number | undefined;
+  color?: string | undefined; // "" clears the tint
+  alpha?: number | undefined;
+  angle?: number | undefined;
+  luminosity?: number | undefined;
+  attenuation?: number | undefined;
+  animationType?: string | undefined; // "" / "none" clears the animation
+  animationSpeed?: number | undefined;
+  animationIntensity?: number | undefined;
+  negative?: boolean | undefined;
+}
+
 export interface TokenPlaceInput {
   actor?: string | undefined;
   x?: number | undefined;
@@ -56,6 +71,55 @@ export interface TokenPlaceInput {
   rotation?: number | undefined;
   name?: string | undefined;
   disposition?: string | undefined;
+  light?: TokenLightArgs | undefined;
+}
+
+/** "" or "none" clears the animation (Foundry stores no animation as type null). */
+const animationNone = (t: string) => t.trim() === '' || t.trim().toLowerCase() === 'none';
+
+/**
+ * PURE: the `light.*` dot-path entries for the supplied sub-fields only, so a partial change never
+ * wipes the rest of the emission. Shared by place (nested through `expandLightPatch`) and update.
+ * Returns an empty object when nothing light-related was supplied.
+ */
+export function buildLightPatch(light?: TokenLightArgs): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (!light) return patch;
+  for (const k of ['dim', 'bright', 'alpha', 'angle', 'luminosity', 'attenuation'] as const)
+    if (typeof light[k] === 'number') patch[`light.${k}`] = light[k];
+  if (typeof light.color === 'string') patch['light.color'] = light.color.trim() || null;
+  if (typeof light.negative === 'boolean') patch['light.negative'] = light.negative;
+  if (typeof light.animationType === 'string')
+    patch['light.animation.type'] = animationNone(light.animationType) ? null : light.animationType;
+  if (typeof light.animationSpeed === 'number')
+    patch['light.animation.speed'] = light.animationSpeed;
+  if (typeof light.animationIntensity === 'number')
+    patch['light.animation.intensity'] = light.animationIntensity;
+  return patch;
+}
+
+/** PURE: the same patch as a nested `{ light: {...} }` object, for the create path's merge. */
+export function expandLightPatch(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [path, value] of Object.entries(patch)) {
+    const keys = path.split('.');
+    let cursor = out;
+    for (const k of keys.slice(0, -1)) {
+      cursor[k] = (cursor[k] as Record<string, unknown> | undefined) ?? {};
+      cursor = cursor[k] as Record<string, unknown>;
+    }
+    cursor[keys[keys.length - 1]!] = value;
+  }
+  return out;
+}
+
+/** The radii a list / update report shows (`dim/bright` in grid units; absent when both are 0). */
+function lightSummary(doc: any): { dim: number; bright: number } | undefined {
+  const l = doc?.light;
+  if (!l) return undefined;
+  const dim = Number(l.dim ?? 0);
+  const bright = Number(l.bright ?? 0);
+  return dim === 0 && bright === 0 ? undefined : { dim, bright };
 }
 
 /**
@@ -86,6 +150,8 @@ export function tokenPlacementOverrides(input: TokenPlaceInput): {
     }
     overrides.disposition = d;
   }
+  const light = buildLightPatch(input.light);
+  if (Object.keys(light).length > 0) Object.assign(overrides, expandLightPatch(light));
   return { overrides };
 }
 
@@ -112,7 +178,18 @@ async function toCreateDoc(input: TokenPlaceInput): Promise<CreateDocResult> {
     doc = td.toObject();
     delete doc._id; // the create path mints a fresh id
   } else {
-    doc = { ...(actor as any).prototypeToken.toObject(), actorId: actor.id, ...overrides };
+    const proto = (actor as any).prototypeToken.toObject();
+    const { light: lightOverride, ...rest } = overrides as { light?: Record<string, unknown> };
+    doc = { ...proto, actorId: actor.id, ...rest };
+    // A partial light override merges into the prototype's emission instead of replacing it.
+    if (lightOverride) {
+      const { animation, ...flat } = lightOverride as { animation?: Record<string, unknown> };
+      doc.light = {
+        ...(proto.light ?? {}),
+        ...flat,
+        ...(animation ? { animation: { ...(proto.light?.animation ?? {}), ...animation } } : {}),
+      };
+    }
     delete doc.randomImg; // prototype-only field — not part of the TokenDocument schema
   }
   return { doc };
@@ -147,6 +224,8 @@ function dump(doc: any): Record<string, unknown> {
     src: doc.texture?.src,
     scale: doc.texture?.scaleX,
     sort: doc.sort,
+    lightDim: Number(doc.light?.dim ?? 0),
+    lightBright: Number(doc.light?.bright ?? 0),
   };
 }
 
@@ -185,6 +264,7 @@ export interface TokenPatchArgs {
   bar2?: string | undefined; // bar2 resource attribute; "" clears it
   ring?: boolean | undefined; // dynamic token ring on/off (ring.enabled)
   hp?: TokenHpArgs | undefined; // per-token hit points, written to the token's OWN actor (delta) — see buildHpPatch
+  light?: TokenLightArgs | undefined; // the token's own emission, light.* dot-paths — see buildLightPatch
 }
 
 /** The hit-point sub-fields update-token can set on a placed token's own actor. */
@@ -270,6 +350,8 @@ export function buildTokenUpdate(
   if (typeof args.bar2 === 'string') update['bar2.attribute'] = args.bar2.trim() || null;
   // Dynamic token ring on/off (the house default is OFF — a plain token).
   if (typeof args.ring === 'boolean') update['ring.enabled'] = args.ring;
+  // The token's own light: dot-paths under light.* so the unsupplied sub-fields stay.
+  Object.assign(update, buildLightPatch(args.light));
 
   const changed = Object.keys(update).length > 1; // more than just _id
   return { update, warnings, changed };
@@ -356,10 +438,11 @@ export async function updateSceneTokens(
     args.bar1 !== undefined ||
     args.bar2 !== undefined ||
     args.ring !== undefined ||
-    hpPatch !== null;
+    hpPatch !== null ||
+    Object.keys(buildLightPatch(args.light)).length > 0;
   if (!hasField) {
     throw invalid(
-      'provide at least one field to change (rotation, randomizeRotation, scale, imagePath, elevation, hidden, lockRotation, x, y, name, displayName, displayBars, bar1, bar2, ring, or hp)'
+      'provide at least one field to change (rotation, randomizeRotation, scale, imagePath, elevation, hidden, lockRotation, x, y, name, displayName, displayBars, bar1, bar2, ring, hp, or light)'
     );
   }
 
@@ -431,6 +514,7 @@ export async function updateSceneTokens(
     hp: t.actor?.system?.attributes?.hp
       ? { value: t.actor.system.attributes.hp.value, max: t.actor.system.attributes.hp.max }
       : undefined,
+    light: lightSummary(t),
   });
 
   const unmatched: { tokenIds?: string[] | undefined; actorIds?: string[] | undefined } = {};

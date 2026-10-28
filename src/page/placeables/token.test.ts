@@ -8,7 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildHpPatch,
+  buildLightPatch,
   buildTokenUpdate,
+  expandLightPatch,
   tokenDescriptor,
   tokenPlacementOverrides,
 } from './token.js';
@@ -39,6 +41,12 @@ describe('tokenDescriptor.dump', () => {
       src: 'tokens/guard.webp',
       scale: 1.5,
       lockRotation: true,
+      lightDim: 0,
+      lightBright: 0,
+    });
+    expect(tokenDescriptor.dump({ ...doc, light: { dim: 40, bright: 20 } })).toMatchObject({
+      lightDim: 40,
+      lightBright: 20,
     });
   });
 
@@ -119,6 +127,57 @@ describe('tokenPlacementOverrides — the pure place-tokens override builder', (
       rotation: 45,
       name: 'Hobgoblin Captain',
     });
+  });
+
+  it('folds a light override into a NESTED light object (merged onto the prototype by getTokenDocument)', () => {
+    const { overrides } = tokenPlacementOverrides({
+      x: 1,
+      y: 2,
+      light: { dim: 40, bright: 20, color: '#fcd674', animationType: 'torch', animationSpeed: 3 },
+    });
+    expect(overrides).toEqual({
+      x: 1,
+      y: 2,
+      light: {
+        dim: 40,
+        bright: 20,
+        color: '#fcd674',
+        animation: { type: 'torch', speed: 3 },
+      },
+    });
+    expect(tokenPlacementOverrides({ x: 1, y: 2, light: {} }).overrides).toEqual({ x: 1, y: 2 });
+  });
+});
+
+describe('buildLightPatch / expandLightPatch — the token light emission', () => {
+  it('writes only the supplied sub-fields as light.* dot-paths', () => {
+    expect(buildLightPatch({ dim: 30, bright: 15, alpha: 0.4, negative: true })).toEqual({
+      'light.dim': 30,
+      'light.bright': 15,
+      'light.alpha': 0.4,
+      'light.negative': true,
+    });
+    expect(buildLightPatch(undefined)).toEqual({});
+    expect(buildLightPatch({})).toEqual({});
+  });
+
+  it('clears the tint with "" and the animation with "" or "none"; 0 radii are real values', () => {
+    expect(buildLightPatch({ color: '', animationType: 'none', dim: 0, bright: 0 })).toEqual({
+      'light.color': null,
+      'light.animation.type': null,
+      'light.dim': 0,
+      'light.bright': 0,
+    });
+  });
+
+  it('expands the dot-paths to the nested object the create path merges', () => {
+    expect(
+      expandLightPatch({
+        'light.dim': 40,
+        'light.animation.type': 'torch',
+        'light.animation.speed': 5,
+      })
+    ).toEqual({ light: { dim: 40, animation: { type: 'torch', speed: 5 } } });
   });
 });
 
@@ -247,6 +306,26 @@ describe('buildTokenUpdate — the pure placed-token patch builder (update-token
     const { update, changed } = buildTokenUpdate({ id: 't1' }, { imagePath: '   ' });
     expect(update).toEqual({ _id: 't1' });
     expect(changed).toBe(false);
+  });
+});
+
+describe('buildTokenUpdate — the token light', () => {
+  it('carries the light.* dot-paths and registers a change on a light-only patch', () => {
+    const { update, changed } = buildTokenUpdate(
+      { id: 't1' },
+      { light: { dim: 40, bright: 20, animationType: 'torch' } }
+    );
+    expect(update).toEqual({
+      _id: 't1',
+      'light.dim': 40,
+      'light.bright': 20,
+      'light.animation.type': 'torch',
+    });
+    expect(changed).toBe(true);
+  });
+
+  it('an empty light object changes nothing', () => {
+    expect(buildTokenUpdate({ id: 't1' }, { light: {} }).changed).toBe(false);
   });
 });
 

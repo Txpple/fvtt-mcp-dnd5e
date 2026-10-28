@@ -290,6 +290,20 @@ describe('manage-items import (the compendium copy — dnd5e-guarded)', () => {
     expect(out).toContain('Staff — `system.damage.base` = `@scale.monk.die`');
   });
 
+  it('appends the page warnings (a quantity asked on a container copy)', async () => {
+    const { run } = build({
+      importItemFromCompendium: {
+        source: { packId: 'p', itemId: 'x', name: 'Backpack' },
+        target: { type: 'actor', name: 'Rhogar' },
+        item: { id: 'i4', name: 'Backpack', type: 'container' },
+        warnings: ['quantity 3 ignored: "Backpack" is a container, always one item.'],
+      },
+    });
+    const out = String(await run({ action: 'import', packId: 'p', itemId: 'x', quantity: 3 }));
+    expect(out).toContain('Copied "Backpack" onto actor "Rhogar": id i4, type container');
+    expect(out).toContain('⚠️ 1 warning(s):\n- quantity 3 ignored');
+  });
+
   it('rejects a missing packId / itemId and an SRD pack', async () => {
     const { run } = build();
     await expect(run({ action: 'import', itemId: 'x' })).rejects.toThrow();
@@ -314,6 +328,34 @@ describe('handleAddActorItems (add-feature mode "items" rides it; not advertised
       items: [{ name: 'Potion', type: 'consumable' }],
     });
     expect(out).toEqual({ actorName: 'Aria', created: [{ id: 'n1' }] });
+  });
+
+  it('forwards a uuid copy entry (rename, quantity) beside a raw one; an SRD uuid is refused', async () => {
+    const { tools, calls } = build({
+      addActorItems: { actorName: 'Aria', created: [{ id: 'n1' }, { id: 'n2' }] },
+    });
+    await tools.handleAddActorItems({
+      actorIdentifier: 'Aria',
+      items: [
+        { uuid: 'Compendium.dnd-players-handbook.equipment.Item.phbArrow0000001', quantity: 20 },
+        { uuid: 'Item.worldItem0001', name: 'Old Lantern' },
+        { name: 'Potion', type: 'consumable' },
+      ],
+    });
+    expect(callFor(calls, 'addActorItems')![1]).toEqual({
+      actorIdentifier: 'Aria',
+      items: [
+        { uuid: 'Compendium.dnd-players-handbook.equipment.Item.phbArrow0000001', quantity: 20 },
+        { uuid: 'Item.worldItem0001', name: 'Old Lantern' },
+        { name: 'Potion', type: 'consumable' },
+      ],
+    });
+    await expect(
+      tools.handleAddActorItems({
+        actorIdentifier: 'Aria',
+        items: [{ uuid: 'Compendium.dnd5e.items.Item.srdArrow00000001' }],
+      })
+    ).rejects.toThrow(/SRD/);
   });
 
   it('rejects an empty items array, an item with an empty name, a missing actorIdentifier', async () => {

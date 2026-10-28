@@ -4,6 +4,7 @@ import type { FoundryBridge } from '../foundry.js';
 import { Logger } from '../logger.js';
 import { deletedLine, listLines, warningBlock } from '../utils/lines.js';
 import { toInputSchema } from '../utils/schema.js';
+import { assertNoSrdPacks } from '../utils/compendium-sources.js';
 import { IMPORT_ITEM_DESCRIPTION, ImportItemSchema, importItem } from './dnd5e/import-item.js';
 import { unionMember, unionTool, type UnionTool } from './_union.js';
 
@@ -102,14 +103,40 @@ const RemoveFromActorSchema = z
 // contract is generated from the same zod this handler enforces, never a hand-written duplicate.
 export const AddToActorItemsSchema = z
   .array(
-    z.object({
-      name: z.string().min(1),
-      type: z.string().min(1).describe('dnd5e item type (weapon, equipment, …).'),
-      img: z.string().optional().describe('Icon path.'),
-      system: z.record(z.string(), z.any()).optional().describe('System data, as-is.'),
-    })
+    z.union([
+      z
+        .object({
+          name: z.string().min(1),
+          type: z.string().min(1).describe('dnd5e item type (weapon, equipment, …).'),
+          img: z.string().optional().describe('Icon path.'),
+          system: z.record(z.string(), z.any()).optional().describe('System data, as-is.'),
+        })
+        .describe('An item authored raw.'),
+      z
+        .object({
+          uuid: z
+            .string()
+            .min(1)
+            .describe('Compendium or world Item uuid to copy whole (from search-compendium).'),
+          name: z.string().min(1).optional().describe('Rename the copy.'),
+          quantity: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe('Stack count on the copy; a container is always one.'),
+          system: z.record(z.string(), z.any()).optional().describe('Merged into the copy.'),
+        })
+        .describe('A copy of an existing Item by uuid; premium packs only.'),
+    ])
   )
   .min(1, 'At least one item is required');
+
+/** The pack id a compendium uuid names (`Compendium.<scope>.<pack>.<Type>.<id>`), else null. */
+export function packIdOfUuid(uuid: string): string | null {
+  const m = /^Compendium\.([^.]+\.[^.]+)\./.exec(uuid);
+  return m ? m[1]! : null;
+}
 
 // add-to-actor is reached via handleAddActorItems (add-feature mode "items"), not advertised as
 // its own tool — so this is a parse-only contract.
@@ -262,10 +289,18 @@ export class ItemTools {
   async handleAddActorItems(args: any): Promise<any> {
     const { actorIdentifier, items } = AddToActorSchema.parse(args);
 
+    // A uuid copy sources from the premium books only, like manage-items import (design.md §2.3).
+    for (const it of items) {
+      if ('uuid' in it) {
+        const packId = packIdOfUuid(it.uuid);
+        if (packId) assertNoSrdPacks(packId, 'add-feature items');
+      }
+    }
+
     this.logger.info('Adding items to actor', {
       actorIdentifier,
       count: items.length,
-      types: items.map(i => i.type),
+      types: items.map(i => ('uuid' in i ? `uuid:${i.uuid}` : i.type)),
     });
 
     const result = await this.foundry.call('addActorItems', {

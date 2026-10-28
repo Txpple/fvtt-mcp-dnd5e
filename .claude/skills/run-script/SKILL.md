@@ -36,13 +36,13 @@ advertised by default, because undo lives on this tool.
 
 ```js
 const camp = { x: 2400, y: 1800 };
-const found = await fvtt.searchCompendium({ query: "Goblin", type: "npc", limit: 5 });
+const found = await fvtt.searchCompendium({ query: "Goblin", packType: "Actor", limit: 5 });
 const goblin = found.results.find(r => r.name === "Goblin");
 const placed = [];
 for (let i = 0; i < 6; i++) {
   const angle = (i / 6) * Math.PI * 2;
   const r = await fvtt.createActorFromCompendium({
-    packId: goblin.packId, itemId: goblin.id, customNames: [`Goblin ${i + 1}`],
+    packId: goblin.pack, itemId: goblin.id, customNames: [`Goblin ${i + 1}`],
     folder: "Encounters/Ambush", addToScene: true,
     placement: { type: "coordinates", coordinates: [{ x: camp.x + Math.cos(angle) * 300, y: camp.y + Math.sin(angle) * 300 }] },
   });

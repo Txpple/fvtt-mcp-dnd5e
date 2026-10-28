@@ -138,13 +138,13 @@ Returns `{ warnings?: string[]; success: boolean; actor: { id: any; name: any; }
 
 ### `fvtt.addActorItems(params)`
 
-Add one or more freshly-authored embedded Items to an existing actor (no compendium lookup). name + type are required; type is checked against the active system's declared Item document types when available, then the rest is delegated to Foundry's DataModel layer. Returns { actorId, actorName, created }.
+Add one or more embedded Items to an existing actor: authored raw (name + type required; type is checked against the active system's declared Item document types when available, the rest is Foundry's DataModel layer's), or copied whole from a compendium or world Item by `uuid` (an optional rename, stack count and system patch on the copy). Returns { actorId, actorName, created, warnings? }.
 
 params:
 - `actorIdentifier: string`
-- `items: { name: string; type: string; img?: string | undefined; system?: Record<string, any> | undefined; }[]`
+- `items: AddActorItemInput[]`
 
-Returns `{ actorId: any; actorName: any; created: any; }`
+Returns `{ warnings?: string[]; actorId: any; actorName: any; created: any; }`
 
 ### `fvtt.createActorFromCompendium(request)`
 
@@ -900,8 +900,6 @@ data:
 Returns `AddItemResult`
 
 ### `fvtt.importItemFromCompendium(data)`
-
-Copy an item from a compendium pack onto an actor's inventory (or into the world Items sidebar), preserving its art, system data, and activities. This is the COMPENDIUM-FIRST counterpart to addItem: the policy is to grab the real PHB/DMG entry (correct stats + graphic) and then tweak it with update-actor-item / manage-activity / manage-effect, rather than author gear from scratch. A handful of immediate overrides (rename, quantity, equipped, identified, container) are applied on the copy so the common "drop in a copy, ready to use" case is one call. Returns { success, target, item }.
 
 data:
 - `packId: string`
@@ -1702,6 +1700,7 @@ args:
 - `bar2?: string`
 - `ring?: boolean`
 - `hp?: TokenHpArgs`
+- `light?: TokenLightArgs`
 
 Returns `{ success: boolean; matched: number; updated: number; notFound?: string | undefined; sceneId?: string | undefined; sceneName?: string | undefined; tokens?: Record<string, unknown>[] | undefined; warnings?: string[] | undefined; unmatched?: { tokenIds?: string[] | undefined; actorIds?: string[] | undefined; } | undefined; }`
 

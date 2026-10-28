@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  applyImportOverrides,
   buildPhysicalItemData,
   isMagicItemDoc,
   wantsLootCopy,
@@ -253,6 +254,38 @@ describe('buildPhysicalItemData — consumable', () => {
     expect(doc.system.damage.replace).toBe(false);
     expect(doc.system.magicalBonus).toBe('1');
     expect(doc.system.quantity).toBe(20);
+  });
+});
+
+describe('applyImportOverrides — the import copy overrides', () => {
+  it('writes rename / quantity / identified / equipped onto a stackable copy', () => {
+    const doc: any = { name: 'Arrow', type: 'consumable', system: { quantity: 1 } };
+    const warnings = applyImportOverrides(doc, {
+      name: 'Silvered Arrow',
+      quantity: 20,
+      identified: false,
+      equipped: true,
+    });
+    expect(warnings).toEqual([]);
+    expect(doc).toEqual({
+      name: 'Silvered Arrow',
+      type: 'consumable',
+      system: { quantity: 20, identified: false, equipped: true },
+    });
+  });
+
+  it('a container keeps quantity 1 and the request is reported, not written', () => {
+    const doc: any = { name: 'Backpack', type: 'container', system: {} };
+    const warnings = applyImportOverrides(doc, { quantity: 3 });
+    expect(doc.system.quantity).toBe(1);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/quantity 3 ignored: "Backpack" is a container/);
+  });
+
+  it('a container with no quantity asked is untouched and warns nothing', () => {
+    const doc: any = { name: 'Chest', type: 'container', system: {} };
+    expect(applyImportOverrides(doc, {})).toEqual([]);
+    expect(doc.system.quantity).toBeUndefined();
   });
 });
 

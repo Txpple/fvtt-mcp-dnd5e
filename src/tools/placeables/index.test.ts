@@ -637,15 +637,68 @@ describe('manage-placeables — tokens', () => {
           src: 'tokens/guard.webp',
           scale: 1,
           sort: 0,
+          lightDim: 40,
+          lightBright: 20,
         },
       ],
     });
     const out = await manage('tokens', 'list', { sceneIdentifier: 'Bridge' });
     expect(calls[0][0]).toBe('listSceneTokens');
     expect(out).toBe(
-      '1 token(s) on "Bridge" (sc1): id name x y width height rotation elevation hidden lockRotation disposition actorId src scale sort\n' +
-        'tk1 Guard 100 200 1 1 0 0 false true hostile a1 tokens/guard.webp 1 0'
+      '1 token(s) on "Bridge" (sc1): id name x y width height rotation elevation hidden lockRotation disposition actorId src scale sort lightDim lightBright\n' +
+        'tk1 Guard 100 200 1 1 0 0 false true hostile a1 tokens/guard.webp 1 0 40 20'
     );
+  });
+
+  it('create and update forward the light sub-object; update echoes the radii', async () => {
+    const { calls, manage } = build({
+      success: true,
+      matched: 1,
+      updated: 1,
+      sceneId: 'sc1',
+      sceneName: 'Bridge',
+      created: 1,
+      items: [{ id: 'tk1', name: 'Torchbearer' }],
+      tokens: [
+        {
+          id: 'tk1',
+          name: 'Torchbearer',
+          rotation: 0,
+          scale: 1,
+          elevation: 0,
+          hidden: false,
+          light: { dim: 40, bright: 20 },
+        },
+      ],
+    });
+    await manage('tokens', 'create', {
+      sceneIdentifier: 'Bridge',
+      tokens: [
+        {
+          actor: 'Torchbearer',
+          x: 0,
+          y: 0,
+          light: { dim: 40, bright: 20, animationType: 'torch' },
+        },
+      ],
+    });
+    expect(calls[0][1]).toMatchObject({
+      items: [{ actor: 'Torchbearer', light: { dim: 40, bright: 20, animationType: 'torch' } }],
+    });
+    const out = await manage('tokens', 'update', {
+      sceneIdentifier: 'Bridge',
+      tokenIds: ['tk1'],
+      light: { dim: 40, bright: 20 },
+    });
+    expect(calls[1][1]).toMatchObject({ tokenIds: ['tk1'], light: { dim: 40, bright: 20 } });
+    expect(out).toContain('light 40/20');
+    await expect(
+      manage('tokens', 'update', {
+        sceneIdentifier: 'Bridge',
+        tokenIds: ['tk1'],
+        light: { alpha: 2 },
+      })
+    ).rejects.toThrow();
   });
 
   it('create forwards {items} with actor + placement overrides', async () => {
