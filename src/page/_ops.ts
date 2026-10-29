@@ -49,6 +49,10 @@ export const OPS = {
   // views and frames the scene in the bridge's own canvas; nothing persists
   prepareSceneShot: 'read',
   configureAreaSounds: { readActions: ['list', 'library'], deleteActions: ['remove'] },
+  // the party's clues (fvtt-mod-clueboard): an entry is a flag on the Group actor, through the module
+  listClues: 'read',
+  collectClues: 'write',
+  uncollectClues: 'delete',
   // scene placeables
   createSceneTiles: 'write',
   listSceneTiles: 'read',

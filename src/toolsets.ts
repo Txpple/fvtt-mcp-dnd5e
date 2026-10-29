@@ -74,6 +74,7 @@ export const TOOLSETS = {
     'search-journals',
     'set-journal-page-visibility',
     'add-journal-image',
+    'manage-clues',
   ],
   /** Roll tables. */
   tables: ['manage-rolltables', 'roll-on-table'],

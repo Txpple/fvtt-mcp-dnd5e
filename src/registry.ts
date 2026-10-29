@@ -75,6 +75,7 @@ import { PlaylistTools } from './tools/playlist.js';
 import { AreaSoundsTools } from './tools/areasounds.js';
 import { TableTools } from './tools/tables.js';
 import { CardsTools } from './tools/cards.js';
+import { CluesTools } from './tools/clues.js';
 import { ChatTools } from './tools/chat.js';
 import { UserTools } from './tools/users.js';
 import { MacroTools } from './tools/macros.js';
@@ -202,6 +203,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
   const areaSoundsTools = new AreaSoundsTools({ foundry, logger });
   const tableTools = new TableTools({ foundry, logger });
   const cardsTools = new CardsTools({ foundry, logger });
+  // House module fvtt-mod-clueboard: the party's clues, through the module's own API.
+  const cluesTools = new CluesTools({ foundry, logger });
   const chatTools = new ChatTools({ foundry, logger, host });
   const userTools = new UserTools({ foundry, logger });
   const macroTools = new MacroTools({ foundry, logger });
@@ -256,6 +259,7 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
     ...areaSoundsTools.getToolDefinitions(),
     ...tableTools.getToolDefinitions(),
     ...cardsTools.getToolDefinitions(),
+    ...cluesTools.getToolDefinitions(),
     ...chatTools.getToolDefinitions(),
     ...userTools.getToolDefinitions(),
     ...macroTools.getToolDefinitions(),
@@ -404,6 +408,8 @@ export function buildToolRegistry(deps: ToolRegistryDeps): ToolRegistry {
 
     // Cards — ONE tool (action; M8)
     'manage-cards': args => cardsTools.handle('manage-cards', args),
+    // Clues — ONE tool (action): the party's Clue Board record
+    'manage-clues': args => cluesTools.handle('manage-clues', args),
 
     // Chat log
     'send-chat-message': args => chatTools.handleSendChatMessage(args),

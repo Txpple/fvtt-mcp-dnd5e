@@ -7,7 +7,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { deleteWorldItems } from './items.js';
+import { deleteWorldItems, worldItemTypes } from './items.js';
 
 function stubWorld(items: Array<{ id: string; name: string; type: string }>) {
   const live = new Map<string, any>();
@@ -62,5 +62,21 @@ describe('deleteWorldItems: strict, and a shared name is refused', () => {
     expect(deleted).toEqual(['w2', 'w3']);
     expect(r.deletedCount).toBe(2);
     expect(r.notFound).toEqual(['rope', 'Potion']);
+  });
+});
+
+describe('worldItemTypes: the system and the active modules', () => {
+  it('takes game.documentTypes, a module type included, never "base"', () => {
+    (globalThis as any).game = {
+      documentTypes: { Item: ['base', 'weapon', 'loot', 'fvtt-mod-clueboard.clue'] },
+      system: { documentTypes: { Item: { weapon: {}, loot: {} } } },
+    };
+    expect(worldItemTypes()).toEqual(['weapon', 'loot', 'fvtt-mod-clueboard.clue']);
+  });
+  it("falls back to the system's own types, then to null", () => {
+    (globalThis as any).game = { system: { documentTypes: { Item: { weapon: {}, loot: {} } } } };
+    expect(worldItemTypes()).toEqual(['weapon', 'loot']);
+    (globalThis as any).game = {};
+    expect(worldItemTypes()).toBeNull();
   });
 });

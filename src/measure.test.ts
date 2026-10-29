@@ -42,8 +42,9 @@ import { ALWAYS_ON, READONLY, TOOLSET_NAMES, type ToolsetName, toolsetOf } from 
 /** The ratchets (chars). The comment names who pays each and the commit that set it. */
 const BUDGET = {
   // (a) per prompt, Claude Code: 13,916 on 2026-10-15 (6,143 names for two registrations +
-  // 7,773 skill descriptions); a new tool costs it about 90 chars.
-  perPrompt: 14_000,
+  // 7,773 skill descriptions); a new tool costs it about 90 chars. 14,103 on 2026-10-29: manage-clues
+  // and the clue-builder skill (its description cut to the trigger phrases).
+  perPrompt: 14_200,
   // 11,147 at 2.2.0; 6,153 after M8 (151 names → 81; the target was ≤ 7,000, now the ceiling)
   nameChars: 7_000,
   skillDescriptionChars: 8_000, // 15,381 at 2.2.0; 7,998 after M3 (all 17 rewritten, 120/120 trigger phrases kept)
@@ -79,7 +80,7 @@ const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
   items: 4_700, // 4,615
   compendium: 6_700, // 6,541; 6,662 once the four searches share one `limit` leaf (2026-10-15)
   scenes: 64_700, // 62,106; 62,398 with manage-placeables' per-kind keys (2026-10-15); 64,656 with the token light (2026-10-28)
-  journals: 14_700, // 14,380; 14,635 once the members share one `name` and one `pageId` leaf
+  journals: 16_100, // 14,380; 14,635 once the members share one `name` and one `pageId` leaf; 16,053 with manage-clues (2026-10-29)
   tables: 6_200, // 5,935; 6,138 once create and update share their five leaves (2026-10-15)
   cards: 2_100, // 2,009
   audio: 5_200, // 5,119

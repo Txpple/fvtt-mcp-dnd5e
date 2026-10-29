@@ -245,10 +245,24 @@ interface CreateWorldItemsArgs {
 }
 
 /**
+ * The Item types this world knows: the system's and every active module's own
+ * (`<module>.<type>`, declared in its manifest's `documentTypes`), from
+ * `game.documentTypes`; the system's alone where that is absent. Null when
+ * neither says, and then nothing is refused.
+ */
+export function worldItemTypes(): string[] | null {
+  const all = game.documentTypes?.Item;
+  if (Array.isArray(all) && all.length > 0) return all.filter((t: string) => t !== 'base');
+  const sys = game.system?.documentTypes?.Item;
+  return sys && typeof sys === 'object' ? Object.keys(sys) : null;
+}
+
+/**
  * Create one or more world-level Item documents (Items sidebar, not embedded on
- * an actor). Validates each item's name/type against the system's known Item
- * types, optionally places them in a named/id-resolved Item folder (created when
- * absent), and returns { folderId, folderName, created }.
+ * an actor). Validates each item's name/type against the world's known Item
+ * types (the system's and the active modules'), optionally places them in a
+ * named/id-resolved Item folder (created when absent), and returns
+ * { folderId, folderName, created }.
  */
 export async function createWorldItems(args: CreateWorldItemsArgs) {
   const { items, folder } = args ?? ({} as CreateWorldItemsArgs);
@@ -257,9 +271,7 @@ export async function createWorldItems(args: CreateWorldItemsArgs) {
     throw invalid('items array is required and must contain at least one entry');
   }
 
-  const itemDocTypes = game.system?.documentTypes?.Item;
-  const validTypes: string[] | null =
-    itemDocTypes && typeof itemDocTypes === 'object' ? Object.keys(itemDocTypes) : null;
+  const validTypes = worldItemTypes();
 
   const payload = items.map((it, idx) => {
     if (!it || typeof it.name !== 'string' || it.name.trim().length === 0) {
@@ -270,7 +282,7 @@ export async function createWorldItems(args: CreateWorldItemsArgs) {
     }
     if (validTypes && !validTypes.includes(it.type)) {
       throw invalid(
-        `items[${idx}] ("${it.name}"): unknown type "${it.type}" for system "${game.system?.id}". ` +
+        `items[${idx}] ("${it.name}"): unknown type "${it.type}" in this world. ` +
           `Valid Item types: ${validTypes.join(', ')}`
       );
     }

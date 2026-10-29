@@ -26,6 +26,7 @@ import {
   prepareSceneShot,
 } from './scenes.js';
 import { configureAreaSounds } from './areasounds.js';
+import { listClues, collectClues, uncollectClues } from './clues.js';
 import {
   createSceneTiles,
   listSceneTiles,
@@ -203,6 +204,10 @@ const api = {
   prepareSceneShot,
   // house module #6 (fvtt-mod-areasounds): per-scene atmospheric sound sets, flags-only
   configureAreaSounds,
+  // house module fvtt-mod-clueboard: the party's clues, through the module's own API
+  listClues,
+  collectClues,
+  uncollectClues,
   // scene placeables (per-type CRUD over the shared kernel, src/page/placeables/**)
   createSceneTiles,
   listSceneTiles,

@@ -107,6 +107,7 @@ export const TOOL_KINDS = {
   'manage-rolltables': { readActions: ['list', 'get'] },
   'roll-on-table': 'read',
   'manage-cards': { readActions: ['list'] },
+  'manage-clues': { readActions: ['list'] },
   // chat (an export's remotePath copy is a file in Data/; its localPath copy is on this machine)
   'send-chat-message': 'write',
   'list-chat-messages': 'read',
