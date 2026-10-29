@@ -33,8 +33,10 @@ description); names ×2 6,133; skill descriptions 7,970 / 8,000; tools/list 209,
   placeables-tooling 87 · scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 ·
   toolsets 19; and the new **verify-clue-tooling 9 / 9**;
 - the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.6.5);
-- the MCP smoke over a Claude Code restart is the user's (the registration's schemas change with
-  `manage-clues`).
+- the MCP smoke over a Claude Code restart (2026-10-29): `get-world-info` on the sandbox (bridge 4.7.0);
+  `manage-clues list` on the live world, 24 clues; a Fighter 2 / Wizard 1 built with `success`, zero
+  unresolved `@scale` and Shield `prepared: 1`; a bad subclass uuid an error, `[rolled-back]`, naming
+  the Subclass advancement, no actor created.
 
 ## 4.6.5 — 2026-10-28 — set-landing-scene retired
 
