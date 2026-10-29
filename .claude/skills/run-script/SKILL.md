@@ -14,10 +14,14 @@ user the bridge joined as. The script's `return` value and a receipt come back; 
 enters the conversation. The reference of every function — 155 of them, with their arguments one
 level deep and their return types — is [`docs/run-script-api.md`](../../../docs/run-script-api.md),
 generated from the code. Read the entry for each function you call; the shapes are the tools' own.
-The scene placeable lists (`listSceneTokens`, `listSceneTiles`, `listSceneLights`,
-`listSceneWalls`, `listSceneNotes`, `listSceneRegions`, `listSceneSounds`, `listSceneDrawings`)
-take the scene as `sceneIdentifier` (an id or exact name; none means the active scene), never
-`sceneId`: a key they do not take throws, naming the ones they do.
+The scene placeable functions (`listScene<Kind>`, `createScene<Kind>` / `placeSceneTokens`,
+`updateScene<Kind>`, `deleteScene<Kind>` for Tokens, Tiles, Lights, Walls, Notes, Regions,
+Sounds, Drawings) take the scene as `sceneIdentifier` (an id or exact name; none means the active
+scene), never `sceneId`; the rest is `items` (create), `patches` (update), `ids` (delete), plus
+`doorsOnly` on `listSceneWalls`, and `updateSceneTokens` takes `tokenIds` / `actorIds` and the
+patch fields flat. A key they do not take throws, naming the ones they do. Actors are
+`identifier` on the reads (`exportActorData`) and `actorIdentifier` on the writes (`updateActor`,
+`addActorItems`, `removeActorItems`, `updateActorItem`), never `actorId`.
 
 ## When a script, when a tool
 

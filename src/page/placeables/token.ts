@@ -10,6 +10,7 @@
 //  - DELETE removes the placed instance only — the sidebar actor is untouched (that's delete-actor).
 
 import {
+  assertKnownKeys,
   crudCreate,
   crudDelete,
   crudList,
@@ -267,6 +268,32 @@ export interface TokenPatchArgs {
   light?: TokenLightArgs | undefined; // the token's own emission, light.* dot-paths — see buildLightPatch
 }
 
+/** Every key updateSceneTokens takes: an unknown one throws, never falls back to the active scene. */
+export const UPDATE_SCENE_TOKENS_KEYS = [
+  'sceneIdentifier',
+  'tokenIds',
+  'actorIds',
+  'rotation',
+  'randomizeRotation',
+  'scale',
+  'imagePath',
+  'elevation',
+  'hidden',
+  'lockRotation',
+  'x',
+  'y',
+  'name',
+  'displayName',
+  'displayBars',
+  'bar1',
+  'bar2',
+  'ring',
+  'hp',
+  'light',
+] as const satisfies ReadonlyArray<
+  keyof TokenPatchArgs | 'sceneIdentifier' | 'tokenIds' | 'actorIds'
+>;
+
 /** The hit-point sub-fields update-token can set on a placed token's own actor. */
 export interface TokenHpArgs {
   value?: number | undefined; // current HP
@@ -405,6 +432,7 @@ export async function updateSceneTokens(
   warnings?: string[] | undefined;
   unmatched?: { tokenIds?: string[] | undefined; actorIds?: string[] | undefined } | undefined;
 }> {
+  assertKnownKeys('updateSceneTokens', args, UPDATE_SCENE_TOKENS_KEYS);
   const scene = resolveTargetScene(args?.sceneIdentifier);
   if (!scene) return { success: true, matched: 0, updated: 0, notFound: args!.sceneIdentifier! };
 

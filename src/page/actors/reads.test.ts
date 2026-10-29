@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { extractDnd5eSpellSlots, extractDnd5eSpellTargeting } from './reads.js';
+import { exportActorData, extractDnd5eSpellSlots, extractDnd5eSpellTargeting } from './reads.js';
+import { updateActor } from './update.js';
 
 describe('extractDnd5eSpellTargeting', () => {
   it('renders the range units the way the sheet does', () => {
@@ -51,5 +52,22 @@ describe('extractDnd5eSpellSlots', () => {
     });
     expect(extractDnd5eSpellSlots({ spell1: { value: 0, max: 0 } })).toBeUndefined();
     expect(extractDnd5eSpellSlots(undefined)).toBeUndefined();
+  });
+});
+
+describe('a missing actor key names the function and the keys it got (issue #22)', () => {
+  it('exportActorData({ actorId }) asks for identifier', () => {
+    expect(() => exportActorData({ actorId: 'a1' } as any)).toThrow(
+      "exportActorData: identifier is required (got 'actorId')"
+    );
+    expect(() => exportActorData(undefined as any)).toThrow(
+      /^exportActorData: identifier is required$/
+    );
+  });
+
+  it('updateActor({ identifier }) asks for actorIdentifier', async () => {
+    await expect(updateActor({ identifier: 'a1' } as any)).rejects.toThrow(
+      "updateActor: actorIdentifier is required (got 'identifier')"
+    );
   });
 });

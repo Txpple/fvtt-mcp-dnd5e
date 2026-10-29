@@ -23,7 +23,7 @@ import {
   tokenDefaults,
   type DispositionKey,
 } from '../dnd5e/token-defaults.js';
-import { invalid, notFound as notFoundError } from '../errors.js';
+import { invalid, missingKey, notFound as notFoundError } from '../errors.js';
 
 import { updateActor } from './update.js';
 
@@ -754,7 +754,7 @@ export async function addActorItems(params: {
   const { actorIdentifier, items } = params;
 
   if (!actorIdentifier) {
-    throw invalid('actorIdentifier is required');
+    throw missingKey('addActorItems', 'actorIdentifier', params);
   }
   if (!Array.isArray(items) || items.length === 0) {
     throw invalid('items array is required and must contain at least one entry');
@@ -841,7 +841,7 @@ export async function removeActorItems(params: {
   const { actorIdentifier, itemIds, itemNames, type } = params;
 
   if (!actorIdentifier) {
-    throw invalid('actorIdentifier is required');
+    throw missingKey('removeActorItems', 'actorIdentifier', params);
   }
   const hasIds = Array.isArray(itemIds) && itemIds.length > 0;
   const hasNames = Array.isArray(itemNames) && itemNames.length > 0;

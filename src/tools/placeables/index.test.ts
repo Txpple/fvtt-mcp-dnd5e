@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { MANAGE_PLACEABLES, PlaceableTools } from './index.js';
 import { makeLogger, makeFoundry } from '../test-helpers.js';
+import { UPDATE_SCENE_TOKENS_KEYS } from '../../page/placeables/token.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
@@ -779,6 +780,35 @@ describe('manage-placeables — tokens', () => {
     });
     expect(out).toContain('Updated 2 of 2 matched token(s) on "Bridge" (sc1)');
     expect(out).toContain('auto-unlocked');
+  });
+
+  it('update forwards only keys updateSceneTokens takes (the page refuses any other, issue #22)', async () => {
+    const { calls, manage } = build({ success: true, matched: 0, updated: 0 });
+    const every = {
+      sceneIdentifier: 'Bridge',
+      tokenIds: ['tk1'],
+      actorIds: ['Guard'],
+      rotation: 90,
+      randomizeRotation: true,
+      scale: 1.5,
+      imagePath: 'tokens/guard.webp',
+      elevation: 5,
+      hidden: true,
+      lockRotation: false,
+      x: 100,
+      y: 200,
+      name: 'Guard',
+      displayName: 'hover',
+      displayBars: 'owner',
+      bar1: 'attributes.hp',
+      bar2: '',
+      ring: true,
+      hp: { value: 3 },
+      light: { dim: 20 },
+    };
+    await manage('tokens', 'update', every);
+    expect(calls[0][0]).toBe('updateSceneTokens');
+    expect(Object.keys(calls[0][1]).sort()).toEqual([...UPDATE_SCENE_TOKENS_KEYS].sort());
   });
 
   it('update requires a target and a field (refines)', async () => {

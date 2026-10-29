@@ -66,6 +66,42 @@ function toArray(coll: any): any[] {
   return [];
 }
 
+/**
+ * Throw on a key a scene placeable function does not take. An unread key is not harmless here: a
+ * missing `sceneIdentifier` means the ACTIVE scene, so `{ sceneId }` used to list (or write) the
+ * active scene's placeables as if they were the requested scene's (a run-script sweep read "none
+ * placed", issue #22).
+ */
+export function assertKnownKeys(
+  fn: string,
+  args: unknown,
+  allowed: readonly string[] = ['sceneIdentifier']
+): void {
+  if (args == null) return;
+  if (typeof args !== 'object' || Array.isArray(args)) {
+    throw invalid(`${fn}: expected an object like { sceneIdentifier }`);
+  }
+  const unknown = Object.keys(args).filter(k => !allowed.includes(k));
+  if (unknown.length === 0) return;
+  const sceneLike = unknown.some(k => /scene|^identifier$|^id$/i.test(k));
+  throw invalid(
+    `${fn}: unknown key${unknown.length > 1 ? 's' : ''} ${unknown.map(k => `'${k}'`).join(', ')}` +
+      (sceneLike
+        ? ' — use sceneIdentifier (a scene id or exact name; none means the active scene)'
+        : '') +
+      `; it takes ${allowed.join(', ')}`
+  );
+}
+
+/** The page function a kernel op runs as, for its errors: listSceneLights, placeSceneTokens, … */
+function sceneFnName(
+  op: 'create' | 'list' | 'update' | 'delete',
+  desc: PlaceableDescriptor
+): string {
+  const kind = `${desc.docName.replace(/^Ambient/, '')}s`;
+  return `${op === 'create' && kind === 'Tokens' ? 'place' : op}Scene${kind}`;
+}
+
 export interface CrudCreateResult {
   success: true;
   sceneId?: string | undefined;
@@ -87,6 +123,7 @@ export async function crudCreate(
   args: { sceneIdentifier?: string | undefined; items: any[] }
 ): Promise<CrudCreateResult> {
   if (!desc.toCreateDoc) throw unsupported(`${desc.docName}: create is not supported`);
+  assertKnownKeys(sceneFnName('create', desc), args, ['sceneIdentifier', 'items']);
   if (!Array.isArray(args?.items) || args.items.length === 0) {
     throw invalid('items array is required and must contain at least one entry');
   }
@@ -149,36 +186,12 @@ export interface CrudListResult {
   items?: Array<Record<string, unknown>> | undefined;
 }
 
-/**
- * Throw on a key the list function does not take. An unread key is not harmless here: a missing
- * `sceneIdentifier` means the ACTIVE scene, so `{ sceneId }` used to list the active scene's
- * placeables as if they were the requested scene's (a run-script sweep read "none placed").
- */
-export function assertListKeys(
-  fn: string,
-  args: unknown,
-  allowed: readonly string[] = ['sceneIdentifier']
-): void {
-  if (args == null) return;
-  if (typeof args !== 'object' || Array.isArray(args)) {
-    throw invalid(`${fn}: expected an object like { sceneIdentifier }`);
-  }
-  const unknown = Object.keys(args).filter(k => !allowed.includes(k));
-  if (unknown.length > 0) {
-    throw invalid(
-      `${fn}: unknown key${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')}; ` +
-        `it takes ${allowed.join(', ')} (the scene is sceneIdentifier, an id or exact name; ` +
-        'none means the active scene)'
-    );
-  }
-}
-
 /** List every placeable of one type on a scene (id + salient fields via `dump`). Read-only. */
 export function crudList(
   desc: PlaceableDescriptor,
   args?: { sceneIdentifier?: string | undefined }
 ): CrudListResult {
-  assertListKeys(`listScene${desc.docName.replace(/^Ambient/, '')}s`, args);
+  assertKnownKeys(sceneFnName('list', desc), args);
   const scene = resolveTargetScene(args?.sceneIdentifier);
   if (!scene) return { found: false as const, notFound: args!.sceneIdentifier! };
   const items = toArray(desc.collection(scene)).map(d => desc.dump(d));
@@ -214,6 +227,7 @@ export async function crudUpdate<P extends { id: string }>(
   args: { sceneIdentifier?: string | undefined; patches: P[] }
 ): Promise<CrudUpdateResult> {
   if (!desc.buildPatch) throw unsupported(`${desc.docName}: update is not supported`);
+  assertKnownKeys(sceneFnName('update', desc), args, ['sceneIdentifier', 'patches']);
   if (!Array.isArray(args?.patches) || args.patches.length === 0) {
     throw invalid('patches array is required and must contain at least one entry');
   }
@@ -274,6 +288,7 @@ export async function crudDelete(
   desc: PlaceableDescriptor,
   args: { sceneIdentifier?: string | undefined; ids: string[] }
 ): Promise<CrudDeleteResult> {
+  assertKnownKeys(sceneFnName('delete', desc), args, ['sceneIdentifier', 'ids']);
   if (!Array.isArray(args?.ids) || args.ids.length === 0) {
     throw invalid('ids array is required and must contain at least one entry');
   }

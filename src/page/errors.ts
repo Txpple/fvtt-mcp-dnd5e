@@ -46,6 +46,17 @@ export const notFound = (message: string): PageError => new PageError('not-found
 export const ambiguous = (message: string): PageError => new PageError('ambiguous', message);
 /** An argument the page rejects: a missing field, a bad shape, a value outside its vocabulary. */
 export const invalid = (message: string): PageError => new PageError('invalid', message);
+/**
+ * A required key missing from a call's args, naming the function and the keys it did get — so
+ * `exportActorData({ actorId })` says what to use instead of only "identifier is required".
+ */
+export const missingKey = (fn: string, key: string, args: unknown): PageError => {
+  const got = args && typeof args === 'object' && !Array.isArray(args) ? Object.keys(args) : [];
+  return invalid(
+    `${fn}: ${key} is required` +
+      (got.length > 0 ? ` (got ${got.map(k => `'${k}'`).join(', ')})` : '')
+  );
+};
 /** A permission refusal — the bridge user's role or the document's ownership. */
 export const forbidden = (message: string): PageError => new PageError('permission', message);
 /** The world / game system / module cannot do this. */

@@ -15,7 +15,7 @@
 //  - Foundry defaults an omitted sight/move/light/sound to 20 (blocking) — the normal solid wall.
 
 import {
-  assertListKeys,
+  assertKnownKeys,
   crudCreate,
   crudDelete,
   crudList,
@@ -186,7 +186,7 @@ export const listSceneWalls = (args: {
   sceneIdentifier?: string | undefined;
   doorsOnly?: boolean | undefined;
 }) => {
-  assertListKeys('listSceneWalls', args, ['sceneIdentifier', 'doorsOnly']);
+  assertKnownKeys('listSceneWalls', args, ['sceneIdentifier', 'doorsOnly']);
   const r = crudList(wallDescriptor, { sceneIdentifier: args?.sceneIdentifier });
   if (!args?.doorsOnly || !r.items) return r;
   const doors = r.items.filter(w => typeof w.door === 'number' && w.door > 0);

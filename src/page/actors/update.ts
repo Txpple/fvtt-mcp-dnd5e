@@ -18,7 +18,7 @@ import { normalizeRarities } from '../dnd5e/items.js';
 import { imgResolves, badAssetWarning } from '../img-resolve.js';
 import { resolveCreatureIcon, GENERIC_ICON } from '../dnd5e/icons.js';
 import { resolveDisposition, TOKEN_DISPOSITION } from '../dnd5e/token-defaults.js';
-import { invalid, notFound as notFoundError } from '../errors.js';
+import { invalid, missingKey, notFound as notFoundError } from '../errors.js';
 import type { UpdateActorArgs } from '../../tools/dnd5e/update-actor.js';
 
 // Nameplate / resource-bar visibility keys → CONST.TOKEN_DISPLAY_MODES numbers. Mirrors the same
@@ -60,7 +60,7 @@ const TOKEN_DISPLAY_MODES: Record<string, number> = {
  */
 export async function updateActor(params: UpdateActorArgs) {
   const identifier = params?.actorIdentifier;
-  if (!identifier) throw invalid('actorIdentifier is required');
+  if (!identifier) throw missingKey('updateActor', 'actorIdentifier', params);
   const actor = resolveActorFuzzy(identifier, 'write');
   if (!actor) throw notFoundError(`Actor not found: ${identifier}`);
 
@@ -596,7 +596,7 @@ export async function updateActorItem(params: {
   deletePaths?: string[] | undefined;
 }) {
   const { actorIdentifier, itemIdentifier } = params ?? ({} as any);
-  if (!actorIdentifier) throw invalid('actorIdentifier is required');
+  if (!actorIdentifier) throw missingKey('updateActorItem', 'actorIdentifier', params);
   if (!itemIdentifier) throw invalid('itemIdentifier is required');
 
   const actor = resolveActorFuzzy(actorIdentifier, 'write');

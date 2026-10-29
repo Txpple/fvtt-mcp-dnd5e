@@ -10,7 +10,7 @@ import {
   sanitizeDocData as sanitize,
 } from '../_shared.js';
 import { describeRule, parseConditions, projectDuration } from '../effect-changes.js';
-import { invalid, notFound as notFoundError } from '../errors.js';
+import { invalid, missingKey, notFound as notFoundError } from '../errors.js';
 
 // ---------------------------------------------------------------------------
 // Local helpers (kept in-file; cross-domain candidates listed in the handoff).
@@ -478,7 +478,7 @@ export function getCharacterInfo(args: {
 export function exportActorData(args: { identifier?: string | undefined }) {
   const identifier = args?.identifier;
   if (!identifier) {
-    throw invalid('identifier is required');
+    throw missingKey('exportActorData', 'identifier', args);
   }
 
   const actor: any = resolveActorFuzzy(identifier);
