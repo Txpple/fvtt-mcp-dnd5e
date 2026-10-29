@@ -23,7 +23,11 @@ try {
         name: NAME,
         type: 'fvtt-mod-clueboard.clue',
         img: 'icons/sundries/documents/document-sealed-red.webp',
-        system: { kind: 'object', text: '<p>A scratch clue.</p>', foundAt: 'Found by the verify script.' },
+        system: {
+          kind: 'object',
+          text: '<p>A scratch clue.</p>',
+          foundAt: 'Found by the verify script.',
+        },
       },
     ],
     folder: 'Objects',
@@ -33,27 +37,43 @@ try {
   assert(made?.folderName === 'Objects', `filed in "${made?.folderName}"`);
 
   const before = await f.call('listClues', {});
-  assert(before.uncollected.some(c => c.id === id), `listClues lists it uncollected (${before.entries.length} on "${before.party.name}")`);
+  assert(
+    before.uncollected.some(c => c.id === id),
+    `listClues lists it uncollected (${before.entries.length} on "${before.party.name}")`
+  );
 
   const got = await f.call('collectClues', { clues: [NAME], stamp: false });
-  assert(got.collected.length === 1 && got.collected[0].id === id, 'collectClues collects it by name');
+  assert(
+    got.collected.length === 1 && got.collected[0].id === id,
+    'collectClues collects it by name'
+  );
   assert(got.collected[0].scene === '', 'stamp: false leaves the scene out');
   assert(got.entries === before.entries.length + 1, `the record grew by one (${got.entries})`);
 
   const again = await f.call('collectClues', { clues: [id] });
-  assert(again.collected.length === 0 && again.already.length === 1, 'a second collect reports it already there');
+  assert(
+    again.collected.length === 0 && again.already.length === 1,
+    'a second collect reports it already there'
+  );
 
   const gone = await f.call('uncollectClues', { clues: [id] });
-  assert(gone.removed.length === 1 && gone.entries === before.entries.length, 'uncollectClues takes it off');
+  assert(
+    gone.removed.length === 1 && gone.entries === before.entries.length,
+    'uncollectClues takes it off'
+  );
 
-  const bad = await f.call('collectClues', { clues: ['ZZ-CLUE No Such'] }).then(() => null, e => e);
+  const bad = await f.call('collectClues', { clues: ['ZZ-CLUE No Such'] }).then(
+    () => null,
+    e => e
+  );
   assert(/No world Clue/.test(String(bad?.message ?? bad)), 'an unknown Clue is refused by name');
 } finally {
   if (id) {
     await f
       .evaluate(async i => {
         const api = game.modules.get('fvtt-mod-clueboard')?.api;
-        for (const g of api?.parties() ?? []) if (api.entry(g, i)) await api.uncollect(g, i, { confirm: false });
+        for (const g of api?.parties() ?? [])
+          if (api.entry(g, i)) await api.uncollect(g, i, { confirm: false });
         await game.items.get(i)?.delete();
       }, id)
       .catch(e => console.log(`  cleanup: ${e?.message ?? e}`));
