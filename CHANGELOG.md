@@ -3,6 +3,30 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.6.5 — 2026-10-28 — set-landing-scene retired
+
+- **`set-landing-scene` is gone.** Open Server 1.4.0 dropped its per-user landing scene (a crosshair in
+  the Players list jumps a player to their character's token instead), so the User flag the tool wrote,
+  `flags["fvtt-mod-openserver"].landingScene`, is read by nothing. The tool, its page function
+  (`fvtt.setLandingScene`), `list-users`' "lands on" line and the `verify-landing-scene` live script go
+  with it. `get-world-info` still names Open Server among the family modules for its version, but no
+  longer warns when it is inactive: nothing here needs it. 80 tools; `pull-users-to-scene` remains the way
+  to move a connected player's view.
+
+**Verified** (2026-10-28, the local sandbox: Foundry 14.369, dnd5e 6.0.6):
+- offline: biome · `tsc --noEmit` · vitest **114 files, 2,122 tests** (3 skipped) · build (page
+  bundle 568.2 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 156 handlers, 0 `any` /
+  `unknown`);
+- the release set **14 / 14** (the sandbox fresh from a prod mirror, only the bridge connected):
+  effects-6 51 · region-effects 37 · activities-6 37 · settings-calendar 52 · item-tooling 24 ·
+  actor-tooling 51 · pc-build 72 · teleporter-scene-fields 13 · placeables-tooling 87 ·
+  scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 · toolsets 19;
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.6.4);
+- the MCP smoke over a Claude Code restart is the user's, after the reboot (the registration's
+  process predates this build).
+- Budgets: per prompt 13,916 (≤ 14,000), names 6,064 (≤ 7,000), skill descriptions 7,852
+  (≤ 8,000), tools/list 208,124 (80 tools; ≤ 220,000), always-on 1,702 (≤ 2,100).
+
 ## 4.6.4 — 2026-10-28 — a choices entry nothing reads is refused
 
 - **`create-pc` and `level-up-pc` refuse a `choices` entry nothing reads** (issue #21). An entry
