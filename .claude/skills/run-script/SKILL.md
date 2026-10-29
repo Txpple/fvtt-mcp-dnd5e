@@ -14,6 +14,10 @@ user the bridge joined as. The script's `return` value and a receipt come back; 
 enters the conversation. The reference of every function — 155 of them, with their arguments one
 level deep and their return types — is [`docs/run-script-api.md`](../../../docs/run-script-api.md),
 generated from the code. Read the entry for each function you call; the shapes are the tools' own.
+The scene placeable lists (`listSceneTokens`, `listSceneTiles`, `listSceneLights`,
+`listSceneWalls`, `listSceneNotes`, `listSceneRegions`, `listSceneSounds`, `listSceneDrawings`)
+take the scene as `sceneIdentifier` (an id or exact name; none means the active scene), never
+`sceneId`: a key they do not take throws, naming the ones they do.
 
 ## When a script, when a tool
 

@@ -149,11 +149,36 @@ export interface CrudListResult {
   items?: Array<Record<string, unknown>> | undefined;
 }
 
+/**
+ * Throw on a key the list function does not take. An unread key is not harmless here: a missing
+ * `sceneIdentifier` means the ACTIVE scene, so `{ sceneId }` used to list the active scene's
+ * placeables as if they were the requested scene's (a run-script sweep read "none placed").
+ */
+export function assertListKeys(
+  fn: string,
+  args: unknown,
+  allowed: readonly string[] = ['sceneIdentifier']
+): void {
+  if (args == null) return;
+  if (typeof args !== 'object' || Array.isArray(args)) {
+    throw invalid(`${fn}: expected an object like { sceneIdentifier }`);
+  }
+  const unknown = Object.keys(args).filter(k => !allowed.includes(k));
+  if (unknown.length > 0) {
+    throw invalid(
+      `${fn}: unknown key${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')}; ` +
+        `it takes ${allowed.join(', ')} (the scene is sceneIdentifier, an id or exact name; ` +
+        'none means the active scene)'
+    );
+  }
+}
+
 /** List every placeable of one type on a scene (id + salient fields via `dump`). Read-only. */
 export function crudList(
   desc: PlaceableDescriptor,
   args?: { sceneIdentifier?: string | undefined }
 ): CrudListResult {
+  assertListKeys(`listScene${desc.docName.replace(/^Ambient/, '')}s`, args);
   const scene = resolveTargetScene(args?.sceneIdentifier);
   if (!scene) return { found: false as const, notFound: args!.sceneIdentifier! };
   const items = toArray(desc.collection(scene)).map(d => desc.dump(d));

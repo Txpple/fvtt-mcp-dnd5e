@@ -74,3 +74,58 @@ describe('crudList — scene default', () => {
     });
   });
 });
+
+describe('the scene placeable lists — an unknown key throws', () => {
+  // A missing sceneIdentifier means the active scene, so `{ sceneId }` once listed the active
+  // scene's placeables as the requested scene's (issue #22).
+  const lists: Array<[string, () => Promise<any>]> = [
+    ['listSceneTokens', async () => (await import('./placeables/token.js')).listSceneTokens],
+    ['listSceneTiles', async () => (await import('./placeables/tile.js')).listSceneTiles],
+    ['listSceneLights', async () => (await import('./placeables/light.js')).listSceneLights],
+    ['listSceneWalls', async () => (await import('./placeables/wall.js')).listSceneWalls],
+    ['listSceneNotes', async () => (await import('./placeables/note.js')).listSceneNotes],
+    ['listSceneRegions', async () => (await import('./placeables/region.js')).listSceneRegions],
+    ['listSceneSounds', async () => (await import('./placeables/sound.js')).listSceneSounds],
+    ['listSceneDrawings', async () => (await import('./placeables/drawing.js')).listSceneDrawings],
+  ];
+
+  it.each(lists)('%s refuses sceneId, scene, identifier and sceneName', async (name, load) => {
+    stubScenes([cave, crypt], cave);
+    const fn = await load();
+    for (const key of ['sceneId', 'scene', 'identifier', 'sceneName']) {
+      expect(() => fn({ [key]: 'sc2' })).toThrow(
+        new RegExp(`^${name}: unknown key ${key}; it takes sceneIdentifier`)
+      );
+    }
+  });
+
+  it.each(lists)('%s still takes sceneIdentifier, or nothing', async (_name, load) => {
+    stubScenes(
+      [
+        {
+          ...crypt,
+          tokens: [],
+          lights: [],
+          walls: [],
+          notes: [],
+          regions: [],
+          sounds: [],
+          drawings: [],
+        },
+      ],
+      cave
+    );
+    const fn = await load();
+    expect(fn({ sceneIdentifier: 'Nowhere' })).toEqual({ found: false, notFound: 'Nowhere' });
+    expect(() => fn(undefined)).not.toThrow(/unknown key/);
+  });
+
+  it('listSceneWalls also takes doorsOnly', async () => {
+    const { listSceneWalls } = await import('./placeables/wall.js');
+    stubScenes([cave, crypt], cave);
+    expect(() => listSceneWalls({ doorsOnly: true, sceneIdentifier: 'Nowhere' })).not.toThrow();
+    expect(() => listSceneWalls({ doorsOnly: true, sceneId: 'sc2' } as any)).toThrow(
+      /unknown key sceneId; it takes sceneIdentifier, doorsOnly/
+    );
+  });
+});
