@@ -18,6 +18,7 @@
 //    size (gridRectShape) — the by-hand move/resize loop the live session did.
 
 import {
+  assertKnownKeys,
   crudCreate,
   crudDelete,
   crudList,
@@ -622,6 +623,33 @@ export async function createSceneTeleporter(args: {
   };
 }
 
+/** Every key addRegionBehavior takes: an unknown one throws, never falls back to the active scene. */
+export const ADD_REGION_BEHAVIOR_KEYS = [
+  'sceneIdentifier',
+  'regionIdentifier',
+  'type',
+  'name',
+  'disabled',
+  'system',
+  'teleportTo',
+  'effects',
+  'dispositions',
+  'sizes',
+  'creatureTypes',
+  'terrainTypes',
+  'magical',
+  'rotate',
+] as const satisfies ReadonlyArray<
+  | keyof Dnd5eBehaviorOpts
+  | 'sceneIdentifier'
+  | 'regionIdentifier'
+  | 'type'
+  | 'name'
+  | 'disabled'
+  | 'system'
+  | 'teleportTo'
+>;
+
 /**
  * Add ONE behavior to an EXISTING region — the gap between create-region (behaviors only at create
  * time) and update-region (deliberately never touches behaviors): a real
@@ -642,6 +670,7 @@ export async function addRegionBehavior(
     teleportTo?: { sceneIdentifier: string; regionIdentifier: string } | undefined;
   } & Dnd5eBehaviorOpts
 ): Promise<Record<string, unknown>> {
+  assertKnownKeys('addRegionBehavior', args, ADD_REGION_BEHAVIOR_KEYS);
   if (!args?.regionIdentifier) throw invalid('regionIdentifier is required');
   if (!args?.type) throw invalid('type is required');
   const scene = resolveTargetScene(args.sceneIdentifier);

@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { MANAGE_PLACEABLES, PlaceableTools } from './index.js';
 import { makeLogger, makeFoundry } from '../test-helpers.js';
 import { UPDATE_SCENE_TOKENS_KEYS } from '../../page/placeables/token.js';
+import { ADD_REGION_BEHAVIOR_KEYS } from '../../page/placeables/region.js';
 
 function build(response: any = {}) {
   const { foundry, calls } = makeFoundry(response);
@@ -1188,6 +1189,16 @@ function addBehaviorMember(tools: PlaceableTools): any {
       m.properties.kind.const === 'regions' && m.properties.action.const === 'add-behavior'
   );
 }
+
+describe('add-behavior keys (issue #22)', () => {
+  it('every add-behavior field reaches a key addRegionBehavior takes (label goes as name)', () => {
+    const { tools } = build();
+    const fields = Object.keys(addBehaviorMember(tools).properties)
+      .filter(k => k !== 'kind' && k !== 'action')
+      .map(k => (k === 'label' ? 'name' : k));
+    expect(fields.sort()).toEqual([...ADD_REGION_BEHAVIOR_KEYS].sort());
+  });
+});
 
 describe('teleporter special ops', () => {
   it('create-teleporter forwards from/to + defaults and reports both regions', async () => {

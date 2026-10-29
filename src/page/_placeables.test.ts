@@ -149,6 +149,19 @@ describe('the scene placeable functions — an unknown key throws', () => {
     );
   });
 
+  it('addRegionBehavior refuses sceneId before resolving anything', async () => {
+    stubScenes([cave, crypt], cave);
+    await expect(
+      region.addRegionBehavior({
+        sceneId: 'sc2',
+        regionIdentifier: 'Door',
+        type: 'teleportToken',
+      } as any)
+    ).rejects.toThrow(
+      `addRegionBehavior: unknown key 'sceneId' ${sceneHint}; it takes sceneIdentifier, regionIdentifier`
+    );
+  });
+
   it('listSceneWalls also takes doorsOnly', async () => {
     const { listSceneWalls } = await load('wall');
     stubScenes([cave, crypt], cave);

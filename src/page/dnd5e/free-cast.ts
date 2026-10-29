@@ -30,7 +30,7 @@ import {
   settleCachedSpellCopies,
   type CastSpellFacts,
 } from './cast-spells.js';
-import { invalid, notFound } from '../errors.js';
+import { invalid, missingKey, notFound } from '../errors.js';
 
 /** Recovery periods a feature-granted free cast can meaningfully use (dnd5e 5.3 uses.recovery). */
 const RECOVERY_PERIODS = new Set(['lr', 'sr', 'day', 'dawn', 'dusk']);
@@ -198,7 +198,7 @@ export async function addFreeCast(params: {
   recoveryPeriod?: string | undefined;
 }) {
   const { actorIdentifier, spellIdentifier, grantedBy } = params ?? ({} as any);
-  if (!actorIdentifier) throw invalid('actorIdentifier is required');
+  if (!actorIdentifier) throw missingKey('addFreeCast', 'actorIdentifier', params);
   if (!spellIdentifier) throw invalid('spellIdentifier is required');
   if (!grantedBy || !String(grantedBy).trim()) {
     throw invalid('grantedBy is required — the feature ITEM on the actor that grants the cast');
