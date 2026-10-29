@@ -213,7 +213,7 @@ This is the architectural backbone that makes principle #1 real.
 | | **The bridge in `get-world-info`** — the server's version, the seat, the renderer, the family modules, the registration's toolsets, and a warning for whatever of it is amber | ✅ done 4.4.0 |
 | **The table** (the 4.x line) | **Lights read and written whole** — every field of the v14 AmbientLight reads back under the name its input takes, so a read row passes straight back as a patch | ✅ done 4.6.0 |
 | | **`screenshot-scene` `asToken`** — the player's view through a token (its vision, fog and lighting), so a light is judged the way the table sees it | ✅ done 4.6.0 |
-| | **The party's clues** — `manage-clues` (list / collect / uncollect) puts world Clues on a party's Clue Board record through house module fvtt-mod-clueboard's own API, never its flags; a Clue itself is a module Item type, which `manage-items create` makes now that a world's module types are valid (`clue-builder`) | ✅ built 2026-10-29, unreleased |
+| | **The party's clues** — `manage-clues` (list / collect / uncollect) puts world Clues on a party's Clue Board record through house module fvtt-mod-clueboard's own API, never its flags; a Clue itself is a module Item type, which `manage-items create` makes now that a world's module types are valid (`clue-builder`) | ✅ done 4.7.0 |
 
 Legend: ✅ done · ➡️ moved to a sibling repo. The line is open behind §1's gate: a row is written
 here before its feature is built.

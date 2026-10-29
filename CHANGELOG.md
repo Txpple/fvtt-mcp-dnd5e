@@ -3,6 +3,39 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.7.0 — 2026-10-29 — clues, and create-pc's prepared spells
+
+- **`manage-clues`** (list / collect / uncollect, in the `journals` toolset): the party's record in house
+  module [Clue Board](https://github.com/Txpple/fvtt-mod-clueboard), worked through the module's own API.
+  `collect` takes world Clues by exact id or name, refuses before writing when one does not resolve, and
+  reports one already on the record instead of collecting it twice; `stamp: false` leaves the scene and
+  date out, for a clue found before it was collected (Clue Board 1.2.0+). `list` shows the record and the
+  world Clues not yet collected; `uncollect` takes one off, its readers and note with it. The writes ride
+  the receipt like any other. Refused, with the reason, in a world without the module. 81 tools.
+- **`manage-items` `create` makes a module's own Item type.** The type check read the system's types
+  alone, so `fvtt-mod-clueboard.clue` (or any module's `documentTypes`) was refused; it now takes the
+  world's (`game.documentTypes.Item`).
+- **`create-pc`: `spells.prepared` picks land prepared** (#20). The levelled spells in the prepared list
+  came out `system.prepared: 0`, as if only in the spellbook; they now land 1. `alwaysPrepared` still
+  gives every spell 2; cantrips are as before.
+- **The `clue-builder` skill**: making a Clue (from a carried item's sheet when a PC already has it) and
+  collecting it. `docs/contracts.md` names the one tool that meets a module on its API, not a flag.
+
+**Budgets** (`npm test`): per prompt 14,103 (ceiling 14,000 → 14,200: the tool's name and the skill's
+description); names ×2 6,133; skill descriptions 7,970 / 8,000; tools/list 209,542 (81 tools); the
+`journals` row 16,053 (ceiling 14,700 → 16,100); per fetch unchanged.
+
+**Verified** (2026-10-29, the local sandbox: Foundry 14.369, dnd5e 6.0.6, Clue Board 1.2.0):
+- offline: biome · `tsc --noEmit` · vitest **115 files, 2,133 tests** (3 skipped) · build (page bundle
+  586.9 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 159 handlers, 0 `any` / `unknown`);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 · settings-calendar 52 ·
+  item-tooling 24 · actor-tooling 51 · pc-build 73 (D3d new: #20) · teleporter-scene-fields 13 ·
+  placeables-tooling 87 · scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 ·
+  toolsets 19; and the new **verify-clue-tooling 9 / 9**;
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.6.5);
+- the MCP smoke over a Claude Code restart is the user's (the registration's schemas change with
+  `manage-clues`).
+
 ## 4.6.5 — 2026-10-28 — set-landing-scene retired
 
 - **`set-landing-scene` is gone.** Open Server 1.4.0 dropped its per-user landing scene (a crosshair in

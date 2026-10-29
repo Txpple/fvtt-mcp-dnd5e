@@ -56,8 +56,17 @@ flag. Each row names the writer, the reader and where the shape is documented.
 | `flags["fvtt-mod-autoexplore"].enabled` — render the scene born-explored | Scene | `manage-scenes` `create` / `update` `flags` (the `tom-cartos-import` skill's born-explored option; any scene by hand) | `fvtt-mod-autoexplore` at canvas draw | the module |
 | `flags["tom-cartos-import"]` — `sourceModule`, `sourceId` provenance | Scene, Region, JournalEntry | `manage-scenes` `create` + `manage-placeables` `{ kind: "regions" }` (`src/page/scenes.ts`) | `manage-placeables` `remap-teleporters` (old → new id maps), `manage-scenes` `list` with `flagScope` (dedup) | this repo — `TOM_CARTOS_FLAG_SCOPE` |
 
+**One exception meets on an API instead of a flag:** `manage-clues` (`src/page/clues.ts`) calls
+[`fvtt-mod-clueboard`](https://github.com/Txpple/fvtt-mod-clueboard)'s
+`game.modules.get("fvtt-mod-clueboard").api` (`parties`, `entries`, `entry`, `collect`, `uncollect`),
+because the party's record on the Group actor is that module's schema, validated by its own data
+models; the tool never writes the record's flags. `stamp: false` needs Clue Board 1.2.0+ and is
+refused by an older one. A Clue itself is the module's Item type `fvtt-mod-clueboard.clue`
+(`kind`, `text`, `foundAt`), made by `manage-items` `create`.
+
 A tool that needs a companion module says so in its description and **warns instead of claiming
-success** when the module is missing: `configure-area-sounds` (areasounds). Everything else is core
+success** when the module is missing: `configure-area-sounds` (areasounds); `manage-clues`
+(clueboard) refuses instead, since it has nothing to do without it. Everything else is core
 Foundry + dnd5e. (`set-landing-scene` wrote `flags["fvtt-mod-openserver"].landingScene` until 4.6.5;
 Open Server 1.4 stopped reading it, and the tool went with it.)
 
