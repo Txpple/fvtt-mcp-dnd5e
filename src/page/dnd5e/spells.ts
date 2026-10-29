@@ -261,14 +261,30 @@ export async function setActorSpellcasting(
 
 /**
  * What `addSpellsToActor` reads. Wider than the add-feature tool's `spells` schema: create-pc calls
- * it page-side with `alwaysPrepared` (the house rule for known-style casters), which the tool does
- * not expose.
+ * it page-side with `alwaysPrepared` (the house rule for known-style casters) and `prepare` (its
+ * `spells.prepared` list), which the tool does not expose.
  */
 export interface AddSpellsArgs {
   actorIdentifier: string;
   spellNames: string[];
   compendiumPacks?: string[] | undefined;
   alwaysPrepared?: boolean | undefined;
+  /** Import every levelled spell PREPARED (`system.prepared: 1`); `alwaysPrepared` wins. */
+  prepare?: boolean | undefined;
+}
+
+/**
+ * The `system.prepared` an imported spell is given, or null to keep the compendium's own:
+ * ALWAYS PREPARED (2) under `alwaysPrepared`, PREPARED (1) for a levelled spell under `prepare`
+ * (a cantrip has no preparation to toggle). Issue #20: the prepared list once kept the copy's 0.
+ */
+export function preparedStateFor(
+  level: unknown,
+  opts: { alwaysPrepared?: boolean | undefined; prepare?: boolean | undefined }
+): number | null {
+  if (opts.alwaysPrepared === true) return 2;
+  if (opts.prepare === true && Number(level) > 0) return 1;
+  return null;
 }
 
 export async function addSpellsToActor(data: AddSpellsArgs) {
@@ -286,7 +302,7 @@ export async function addSpellsToActor(data: AddSpellsArgs) {
   const compendiumPacks: string[] = data.compendiumPacks ?? [...DEFAULT_SPELL_PACKS];
   // Import as ALWAYS PREPARED (CONFIG.DND5E.spellPreparationStates.always = 2) — the house rule for
   // known-style casters, and what free-cast.ts writes for a feature-granted spell.
-  const alwaysPrepared = data.alwaysPrepared === true;
+  const stateOpts = { alwaysPrepared: data.alwaysPrepared, prepare: data.prepare };
   const warnings: string[] = [];
 
   // ── Phase A: deduplicate input (case-insensitive) ─────────────────────
@@ -394,7 +410,8 @@ export async function addSpellsToActor(data: AddSpellsArgs) {
     // 4. Prepare data for embedding
     const spellData = document.toObject() as Record<string, any>;
     delete spellData._id; // Let Foundry assign a new local id; prevents id clash
-    if (alwaysPrepared) spellData.system = { ...(spellData.system ?? {}), prepared: 2 };
+    const state = preparedStateFor(spellData.system?.level, stateOpts);
+    if (state !== null) spellData.system = { ...(spellData.system ?? {}), prepared: state };
 
     // 5. Embed individually — per-spell error isolation
     try {

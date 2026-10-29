@@ -1039,13 +1039,18 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
     // dnd5e `rulesVersion` setting.)
 
     // Caster spell picks (slots auto-derive from the class; this just imports chosen cantrips/spells).
-    const spellNames = [...(plan.spells?.cantrips ?? []), ...(plan.spells?.prepared ?? [])];
-    if (spellNames.length > 0) {
+    // Two imports: the prepared list lands PREPARED (issue #20), the cantrips as the compendium has them.
+    const spellLists = [
+      { spellNames: plan.spells?.cantrips ?? [], prepare: false },
+      { spellNames: plan.spells?.prepared ?? [], prepare: true },
+    ].filter(l => l.spellNames.length > 0);
+    for (const list of spellLists) {
       try {
         const spellRes: any = await addSpellsToActor({
           actorIdentifier: tmp.id,
-          spellNames,
+          spellNames: list.spellNames,
           alwaysPrepared: plan.spells?.alwaysPrepared === true,
+          prepare: list.prepare,
         });
         if (Array.isArray(spellRes?.notFound) && spellRes.notFound.length) {
           warnings.push(`Spells not found in the premium PHB: ${spellRes.notFound.join(', ')}`);

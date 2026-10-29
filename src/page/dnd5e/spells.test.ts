@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { planSpellcasting } from './spells.js';
+import { planSpellcasting, preparedStateFor } from './spells.js';
 
 describe('planSpellcasting — full casters', () => {
   it('level 1 wizard: one 1st-level slot, the casting ability, nothing else', () => {
@@ -119,5 +119,23 @@ describe('planSpellcasting — warlock pact magic', () => {
 describe('planSpellcasting — level validation', () => {
   it.each([0, 21, -1, 1.5, Number.NaN])('rejects out-of-range/non-integer level %s', lvl => {
     expect(() => planSpellcasting('wizard', lvl, 'int')).toThrow(/integer 1-20/);
+  });
+});
+
+describe('preparedStateFor — the state an imported spell is given (issue #20)', () => {
+  it('a levelled pick from the prepared list lands prepared (1)', () => {
+    expect(preparedStateFor(1, { prepare: true })).toBe(1);
+    expect(preparedStateFor(3, { prepare: true, alwaysPrepared: false })).toBe(1);
+  });
+  it('a cantrip keeps the compendium state, prepared list or not', () => {
+    expect(preparedStateFor(0, { prepare: true })).toBeNull();
+    expect(preparedStateFor(0, {})).toBeNull();
+  });
+  it('alwaysPrepared gives 2 to every spell, cantrips included', () => {
+    expect(preparedStateFor(0, { alwaysPrepared: true })).toBe(2);
+    expect(preparedStateFor(2, { alwaysPrepared: true, prepare: true })).toBe(2);
+  });
+  it('no list flag keeps the compendium state', () => {
+    expect(preparedStateFor(1, {})).toBeNull();
   });
 });

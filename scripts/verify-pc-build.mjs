@@ -335,6 +335,40 @@ try {
     !wizRead?.img || !/dnd-players-handbook/.test(wizRead.img),
     `D3c: defaultArt:false → no pregen art (img ${wizRead?.img})`
   );
+  // D3d (issue #20): without alwaysPrepared, the prepared list lands PREPARED (1); cantrips keep theirs.
+  const wiz2Name = `${TAG} Wizard Prepared`;
+  const wiz2 = await withNodeTimeout(
+    f.call('createPcActor', {
+      name: wiz2Name,
+      className: 'Wizard',
+      abilities: { str: 8, dex: 14, con: 14, int: 15, wis: 12, cha: 10 },
+      choices: wizChoices,
+      acceptDefaults: true,
+      spells: { cantrips: ['Fire Bolt'], prepared: ['Shield', 'Magic Missile'] },
+      level: 1,
+      defaultArt: false,
+    }),
+    180_000,
+    'wiz2Build'
+  );
+  createdNames.push(wiz2Name);
+  const wiz2Spells = await withNodeTimeout(
+    f.evaluate(
+      id =>
+        globalThis.game.actors
+          .get(id)
+          .items.filter(i => i.type === 'spell')
+          .map(i => [i.name, i.system?.level, i.system?.prepared]),
+      wiz2?.actor?.id
+    ),
+    60_000,
+    'wiz2Read'
+  );
+  const levelled = (wiz2Spells ?? []).filter(([, lvl]) => lvl > 0);
+  assert(
+    levelled.length === 2 && levelled.every(([, , p]) => p === 1),
+    `D3d: spells.prepared → each levelled pick prepared:1, issue #20 (${JSON.stringify(wiz2Spells)})`
+  );
   // restPcToFull: a freshly-CREATED PC comes out fully rested (full HP + full slots).
   assert(
     wizRead?.hpValue === wizRead?.hpMax && wizRead?.hpValue > 0,
