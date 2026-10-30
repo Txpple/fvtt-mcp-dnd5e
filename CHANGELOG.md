@@ -3,6 +3,40 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.7.1 — 2026-10-29 — a wrong key is refused, not read as the active scene
+
+- **The scene placeable functions refuse a key they do not take** (#22). `listSceneTokens` and its
+  siblings take the scene as `sceneIdentifier`; given `sceneId` (or `scene`, `sceneName`,
+  `identifier`) they ignored it and answered for the active scene, under that scene's name, so a
+  `run-script` sweep of every scene read "no tokens placed" while a hound sat on another map. Every
+  list, create (`placeSceneTokens` for tokens), update and delete for the eight kinds, plus
+  `updateSceneTokens` and `addRegionBehavior`, now throws before reading or writing:
+  `listSceneTokens: unknown key 'sceneId' — use sceneIdentifier (…); it takes sceneIdentifier`. No key
+  still means the active scene. The tools are unchanged: `manage-placeables` sends only these keys
+  (a test holds the token-update and add-behavior key lists to their schemas).
+- **A missing actor key names the call and what it got**: `exportActorData: identifier is required
+  (got 'actorId')`; likewise `updateActor`, `updateActorItem`, `addActorItems`, `removeActorItems`,
+  `addFreeCast` (`actorIdentifier`).
+- **The `run-script` skill names the parameters**: `sceneIdentifier`, `items` / `patches` / `ids`,
+  `doorsOnly`, and `identifier` on the actor reads vs `actorIdentifier` on the writes.
+- New live script `verify-unknown-keys` (the bug's own `run-script` call, every list and write, the
+  actor messages, and that the active scene gained nothing).
+
+**Budgets** (`npm test`): unchanged from 4.7.0: per prompt 14,103 (≤ 14,200), names ×2 6,133,
+skill descriptions 7,970 / 8,000, tools/list 209,542 (81 tools), always-on 1,702 (≤ 2,100).
+
+**Verified** (2026-10-29, the local sandbox: Foundry 14.369, dnd5e 6.0.6):
+- offline: biome · `tsc --noEmit` · vitest **115 files, 2,167 tests** (3 skipped) · build (page bundle
+  575.5 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 159 handlers, 0 `any` / `unknown`);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 · settings-calendar 52 ·
+  item-tooling 24 · actor-tooling 51 · pc-build 73 · teleporter-scene-fields 13 · placeables-tooling 87 ·
+  scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 · toolsets 19; and the new
+  **verify-unknown-keys 23 / 23**;
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.7.0);
+- the MCP smoke over a Claude Code restart: on `foundry-local5e`, `run-script`
+  `listSceneTokens({ sceneId })` refused naming `sceneIdentifier`, `{ sceneIdentifier }` listed the
+  requested scene, `exportActorData({ actorId })` named `identifier`. No tool schema changed.
+
 ## 4.7.0 — 2026-10-29 — clues, and create-pc's prepared spells
 
 - **`manage-clues`** (list / collect / uncollect, in the `journals` toolset): the party's record in house
