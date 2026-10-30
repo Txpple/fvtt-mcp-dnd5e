@@ -91,3 +91,5 @@ test-results/
 
 # Session scratch (extracted system source, probes) — never committed
 /scratch/
+# A one-off live probe beside the verify scripts (it imports ../dist and ./lib), named _*.mjs
+/scripts/_*.mjs
