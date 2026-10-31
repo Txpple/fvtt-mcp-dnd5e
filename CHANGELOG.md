@@ -3,6 +3,29 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.7.2 — 2026-10-31 — the sandbox mirrors a self-hosted instance over SSH
+
+- **`pull-prod-to-local.mjs --from <sshHost>:<remoteDataDir>`** mirrors a self-hosted Foundry that
+  has no WebDAV: one `find` on the box lists its `Data`, one `tar` stream brings the changed files
+  (mtimes kept, each checked by size), and the activity guard reads the instance's `/api/status`
+  through its registration env (`FOUNDRY_HOST=generic FVTT_MCP_ENV=<its env file>`). The guards, the
+  mirror's deletes and the world-DB integrity check are unchanged; the source is only read. The box
+  needs `ssh`, `find`, `tar` and read access to `Data`. Documented in `docs/local-sandbox.md`.
+- The README's family catalogue lists Clue Board and Card Catalogue; Scroll Case is retired.
+- No tool, schema or page function changed: nothing under `src/` differs from 4.7.1.
+
+**Budgets** (`npm test`): unchanged from 4.7.1: per prompt 14,103 (≤ 14,200), names ×2 6,133,
+skill descriptions 7,970 / 8,000, tools/list 209,542 (81 tools), always-on 1,702 (≤ 2,100).
+
+**Verified** (2026-10-31):
+- offline: biome · `tsc --noEmit` · vitest **115 files, 2,164 passed** (3 skipped) · build (page
+  bundle 575.5 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 159 handlers, 0 `any` /
+  `unknown`) · `verify-toolsets` **19 / 19**;
+- `--from` live: the first real pull from the self-hosted prod to the sandbox (29,698 files walked,
+  808 down, 166 deleted; the world DB's 15 collections intact; the world launched after);
+- the live release set and integration suite were not rerun: the server's code is 4.7.1's, whose
+  set was 14 / 14 and suite 85 passed / 2 skipped on Foundry 14.369, dnd5e 6.0.6.
+
 ## 4.7.1 — 2026-10-29 — a wrong key is refused, not read as the active scene
 
 - **The scene placeable functions refuse a key they do not take** (#22). `listSceneTokens` and its
