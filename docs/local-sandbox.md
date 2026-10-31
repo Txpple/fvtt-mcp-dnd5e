@@ -153,8 +153,21 @@ host's `FOUNDRY_WEBDAV_*`), and:
 5. **Verifies the world DB is openable** — every LevelDB collection must have exactly one
    `MANIFEST-*` and a `CURRENT` naming a manifest that exists.
 
+**A self-hosted instance over SSH** (no WebDAV on it): `--from <sshHost>:<remoteDataDir>`, with
+the instance's registration env so the guard reads its `/api/status`:
+
+```bash
+FOUNDRY_HOST=generic FVTT_MCP_ENV=<its env file> node scripts/pull-prod-to-local.mjs \
+  --from <sshHost>:<remoteDataDir> --to <local Data dir> --dry-run
+```
+
+The listing is one `find` on the box and the changed files come down as one `tar` stream (mtimes
+kept, each file then checked by size), so the box needs only `ssh`, `find`, `tar` and read access
+to its `Data`; there is no wake step. Everything else above holds: the guards, the mirror's
+deletes, the integrity check, read-only on the source.
+
 Flags: `--dry-run`, `--force` (override both activity guards), `--no-delete` (copy without
-mirroring), `--to <dataRoot>` (override `FOUNDRY_DATA_DIR`), explicit targets
+mirroring), `--to <dataRoot>` (override `FOUNDRY_DATA_DIR`), `--from` (above), explicit targets
 (`node scripts/pull-prod-to-local.mjs modules/<name>`). After a refresh: **restart** the local
 Foundry if it was running (Foundry scans the package registry at process boot — freshly pulled
 modules / systems won't register into a running process), re-deploy any module under test

@@ -38,6 +38,15 @@
 // the `local` host's FOUNDRY_DATA_DIR (what --to defaults to). First proven as a full clone
 // 2026-08-07 (world 444 MB + modules 3.0 GB, 10,959 files, 0 failures); incremental mirror since
 // 2026-08-19.
+//
+// A self-hosted prod reached over SSH instead of WebDAV: --from <sshHost>:<remoteDataDir>. The
+// guard's /api/status then comes from FOUNDRY_HOST's preset (generic: FOUNDRY_URL), the listing is
+// one `find` on the box and the changed files come down as one `tar` stream (mtimes kept), so the
+// box needs only ssh, find and tar, and read access to its Data. Read-only there too.
+//
+//   FOUNDRY_HOST=generic FVTT_MCP_ENV=.env.prod node scripts/pull-prod-to-local.mjs \
+//     --from <sshHost>:<remoteDataDir> --to <localDataRoot> [--dry-run]
+import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -51,12 +60,8 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
-import { resolveHostConfig } from '../dist/hosts/index.js';
+import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
 import { WebDavClient } from '../dist/hosts/webdav.js';
-
-const env = loadEnv();
-const PROD = resolveHostConfig(env, 'molten');
-const LOCAL = resolveHostConfig(env, 'local');
 
 // ---------------------------------------------------------------------------
 // Arguments
@@ -65,17 +70,37 @@ const rawArgs = process.argv.slice(2);
 const force = rawArgs.includes('--force');
 const noDelete = rawArgs.includes('--no-delete');
 const dryRun = rawArgs.includes('--dry-run');
-let localRoot = LOCAL.dataDir ?? '';
+let localRootArg = '';
+let fromArg = '';
 const positionals = [];
 for (let i = 0; i < rawArgs.length; i++) {
   const a = rawArgs[i];
   if (a === '--to') {
-    localRoot = rawArgs[++i] ?? '';
+    localRootArg = rawArgs[++i] ?? '';
+    continue;
+  }
+  if (a === '--from') {
+    fromArg = rawArgs[++i] ?? '';
     continue;
   }
   if (a.startsWith('--')) continue;
   positionals.push(a);
 }
+/** @type {{host: string, dir: string} | null} */
+let ssh = null;
+if (fromArg) {
+  const m = /^([^:/\s]+):(\/\S*)$/.exec(fromArg);
+  if (!m) {
+    console.error(`--from wants <sshHost>:<absoluteRemoteDataDir>, got "${fromArg}"`);
+    process.exit(2);
+  }
+  ssh = { host: m[1], dir: m[2].replace(/\/+$/, '') };
+}
+
+const env = loadEnv();
+const PROD = resolveHostConfig(env, ssh ? hostKindFromEnv(process.env) : 'molten');
+const LOCAL = resolveHostConfig(env, 'local');
+let localRoot = localRootArg || (LOCAL.dataDir ?? '');
 // Legacy form: an absolute path as the first positional is the local Data root.
 if (
   positionals.length &&
@@ -85,13 +110,13 @@ if (
 }
 if (!localRoot) {
   console.error(
-    'usage: node scripts/pull-prod-to-local.mjs [targets...] [--to <localDataRoot>] [--dry-run] [--force] [--no-delete]'
+    'usage: node scripts/pull-prod-to-local.mjs [targets...] [--from <sshHost>:<remoteDataDir>] [--to <localDataRoot>] [--dry-run] [--force] [--no-delete]'
   );
   console.error('No local Data root: pass --to or set FOUNDRY_DATA_DIR in .env');
   console.error('  e.g. FOUNDRY_DATA_DIR=C:\\Users\\me\\AppData\\Local\\FoundryVTT\\Data');
   process.exit(2);
 }
-if (!PROD.webdav) {
+if (!ssh && !PROD.webdav) {
   console.error(
     'FOUNDRY_WEBDAV_PASSWORD is not set in .env (the File Manager password from the Molten panel; ' +
       'the URL and user are derived from FOUNDRY_URL under FOUNDRY_HOST=molten).'
@@ -101,25 +126,41 @@ if (!PROD.webdav) {
 
 const noop = () => {};
 const silent = { info: noop, warn: noop, error: noop, debug: noop };
-const dav = new WebDavClient({
-  webdavUrl: PROD.webdav.url,
-  user: PROD.webdav.user,
-  password: PROD.webdav.password,
-  logger: silent,
-  timeoutMs: 60000,
-});
+const davClient = timeoutMs =>
+  new WebDavClient({
+    webdavUrl: PROD.webdav.url,
+    user: PROD.webdav.user,
+    password: PROD.webdav.password,
+    logger: silent,
+    timeoutMs,
+  });
+const dav = ssh ? null : davClient(60000);
 // Short-timeout twin for liveness probes (a sleeping box should fail fast, not hang 60s).
-const probe = new WebDavClient({
-  webdavUrl: PROD.webdav.url,
-  user: PROD.webdav.user,
-  password: PROD.webdav.password,
-  logger: silent,
-  timeoutMs: 8000,
-});
+const probe = ssh ? null : davClient(8000);
+
+/** A POSIX shell word for the remote side: single quotes, an embedded ' closed and escaped. */
+const sq = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
+const SSH_OPTS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15'];
+/** One command on the box; its stdout as a Buffer, or exit with its stderr. */
+function sshRun(command) {
+  const r = spawnSync('ssh', [...SSH_OPTS, ssh.host, command], {
+    maxBuffer: 512 * 1024 * 1024,
+  });
+  if (r.status !== 0) {
+    console.error(`ssh ${ssh.host} failed (${r.status ?? r.error?.message}): ${r.stderr}`);
+    process.exit(1);
+  }
+  return r.stdout;
+}
 
 // ---------------------------------------------------------------------------
-// 1. Box awake? WebDAV needs the VM live — wake it via the Magic URL if we can.
+// 1. Box awake? WebDAV needs the VM live — wake it via the Magic URL if we can. Over ssh the
+//    box doesn't sleep: one round trip proves the Data dir is there and readable.
 // ---------------------------------------------------------------------------
+if (ssh) {
+  sshRun(`test -r ${sq(`${ssh.dir}/worlds`)} -a -x ${sq(`${ssh.dir}/worlds`)}`);
+  console.error(`source: ${ssh.host}:${ssh.dir} over ssh`);
+}
 async function boxAwake() {
   try {
     await probe.propfind('', '0');
@@ -128,7 +169,7 @@ async function boxAwake() {
     return false;
   }
 }
-if (!(await boxAwake())) {
+if (!ssh && !(await boxAwake())) {
   if (!PROD.wakeUrl) {
     console.error('Molten box is unreachable over WebDAV and FOUNDRY_WAKE_URL is not set.');
     console.error('Wake the server from the Molten panel, then re-run.');
@@ -181,7 +222,9 @@ if (!(await boxAwake())) {
       console.error('prod status: world not active (setup screen) — files at rest, safe to copy.');
     }
   } catch {
-    console.error('prod status: Foundry process not answering (WebDAV is) — files at rest.');
+    console.error(
+      'prod status: Foundry process not answering (the file source is) — files at rest.'
+    );
   }
 }
 
@@ -227,8 +270,14 @@ try {
 // ---------------------------------------------------------------------------
 let targets = positionals.map(t => t.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''));
 if (!targets.length) {
-  const worldEntries = await dav.propfind('worlds', '1');
-  const worldIds = worldEntries.filter(e => e.isDirectory && e.path !== 'worlds').map(e => e.name);
+  const worldIds = ssh
+    ? sshRun(`find ${sq(`${ssh.dir}/worlds`)} -mindepth 1 -maxdepth 1 -type d -printf '%f\\n'`)
+        .toString('utf8')
+        .split('\n')
+        .filter(Boolean)
+    : (await dav.propfind('worlds', '1'))
+        .filter(e => e.isDirectory && e.path !== 'worlds')
+        .map(e => e.name);
   let worldId = PROD.worldId;
   if (worldId && !worldIds.includes(worldId)) {
     console.error(
@@ -259,7 +308,35 @@ console.error(`local:   ${localRoot}${dryRun ? '   (DRY RUN)' : ''}`);
 const remoteFiles = new Map();
 const remoteDirs = new Set();
 const perTargetRemote = new Map(targets.map(t => [t, 0]));
-for (const target of targets) {
+if (ssh) {
+  // One `find` for every target: "<type>\t<size>\t<mtime s>\t<path>" records, NUL-separated so
+  // any file name survives. A target missing on the box lists nothing (the tripwire below).
+  console.error(`walking remote ${targets.join(', ')} ...`);
+  const listing = sshRun(
+    `cd ${sq(ssh.dir)} && for t in ${targets.map(sq).join(' ')}; do ` +
+      `[ -e "$t" ] && find "$t" \\( -type d -printf 'd\\t0\\t0\\t%p\\0' \\) ` +
+      `-o \\( -type f -printf 'f\\t%s\\t%T@\\t%p\\0' \\); done; true`
+  ).toString('utf8');
+  for (const rec of listing.split('\0')) {
+    if (!rec) continue;
+    const [kind, size, mtime, ...rest] = rec.split('\t');
+    const path = rest.join('\t');
+    const target = targets.find(t => path === t || path.startsWith(`${t}/`));
+    if (!target) continue;
+    if (kind === 'd') {
+      remoteDirs.add(path);
+    } else {
+      remoteFiles.set(path, {
+        path,
+        size: Number(size),
+        lastModified: new Date(Number(mtime) * 1000).toISOString(),
+        target,
+      });
+      perTargetRemote.set(target, perTargetRemote.get(target) + 1);
+    }
+  }
+}
+for (const target of ssh ? [] : targets) {
   console.error(`walking remote ${target}/ ...`);
   remoteDirs.add(target);
   let dirs = [target];
@@ -420,7 +497,48 @@ async function worker() {
     }
   }
 }
-await Promise.all(Array.from({ length: 6 }, worker));
+/** Over ssh: the changed files as ONE tar stream, packed on the box from the list on stdin and
+ *  unpacked here with their mtimes, then each checked by size. */
+async function sshFetchAll() {
+  if (!toDownload.length) return;
+  const tarBin =
+    process.platform === 'win32'
+      ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
+      : 'tar';
+  mkdirSync(localRoot, { recursive: true });
+  const remote = spawn(
+    'ssh',
+    [...SSH_OPTS, ssh.host, `cd ${sq(ssh.dir)} && tar -cf - --null -T -`],
+    { stdio: ['pipe', 'pipe', 'pipe'] }
+  );
+  const local = spawn(tarBin, ['-xf', '-', '-C', localRoot], { stdio: ['pipe', 'ignore', 'pipe'] });
+  const errs = [];
+  remote.stderr.on('data', d => errs.push(`box: ${d}`));
+  local.stderr.on('data', d => errs.push(`local: ${d}`));
+  remote.stdout.pipe(local.stdin);
+  remote.stdin.end(`${toDownload.map(f => f.path).join('\0')}\0`);
+  const exit = p => new Promise(resolve => p.on('close', resolve));
+  const [remoteCode, localCode] = await Promise.all([exit(remote), exit(local)]);
+  // GNU tar exits 1 for "file changed as we read it"; the size check below decides those.
+  if ((remoteCode !== 0 && remoteCode !== 1) || localCode !== 0) {
+    failed.push({
+      path: 'tar stream',
+      err: `box tar ${remoteCode}, local tar ${localCode}: ${errs.join('').trim().slice(0, 2000)}`,
+    });
+  }
+  for (const f of toDownload) {
+    try {
+      const { size } = statSync(join(localRoot, ...f.path.split('/')));
+      if (size !== f.size) throw new Error(`size ${size} here, ${f.size} on the box`);
+      done++;
+      bytes += size;
+    } catch (err) {
+      failed.push({ path: f.path, err: String(err?.message ?? err) });
+    }
+  }
+}
+if (ssh) await sshFetchAll();
+else await Promise.all(Array.from({ length: 6 }, worker));
 
 let deletedFiles = 0;
 let deletedDirs = 0;
