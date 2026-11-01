@@ -25,8 +25,12 @@ skill descriptions 7,970 / 8,000, tools/list 209,542 (81 tools), always-on 1,702
   scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 · toolsets 19;
 - the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.7.2);
 - `listClues` live on the sandbox through the built bundle: 24 entries, each with `found`, none with
-  `scene`. The smoke over a Claude Code restart was not run here: the servers pick the bundle up on
-  their next start.
+  `scene`;
+- the MCP smoke over a Claude Code restart: `get-world-info` on the sandbox (bridge 4.7.3);
+  `manage-clues list` on the live world, 31 clues with `found` (the Lamp of 1391's Found at, no scene)
+  and the new `stamp` wording in the schema; a Fighter 2 / Wizard 1 built with `success`, zero
+  unresolved `@scale` and Shield `prepared: 1`; a bad subclass uuid an error, `[rolled-back]`, naming
+  the Subclass advancement, no actor created.
 
 ## 4.7.2 — 2026-10-31 — the sandbox mirrors a self-hosted instance over SSH
 
