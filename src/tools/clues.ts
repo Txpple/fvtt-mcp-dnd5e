@@ -24,12 +24,12 @@ const CollectCluesSchema = z.object({
   stamp: z
     .boolean()
     .optional()
-    .describe('false: no scene or date in the stamp, for a clue found earlier (Clue Board 1.2+).'),
+    .describe('false: no calendar date in the stamp, for a clue found earlier (Clue Board 1.2+).'),
 });
 const UncollectCluesSchema = z.object({ clues, party });
 
 /** The list columns (§3: a fixed, documented order). */
-const ENTRY_COLUMNS = ['id', 'name', 'kind', 'scene', 'readers', 'revision'] as const;
+const ENTRY_COLUMNS = ['id', 'name', 'kind', 'found', 'readers', 'revision'] as const;
 const names = (list: string[]): string => list.map(n => `"${n}"`).join(', ');
 
 export interface CluesToolsOptions {

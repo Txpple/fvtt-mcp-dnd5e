@@ -17,8 +17,8 @@ notes are `fvtt-mod-clueboard/README.md`. Two tools, in this order:
    `manage-items` `list` with that `type` shows each one's folder). A Clue of that name already in the
    world is reused, never made twice.
 2. **Collect it:** `manage-clues` `collect` with `clues` (exact ids or names) and, for anything not
-   found at the table this moment, `stamp: false` (no scene or date in the stamp; the Found at line
-   says where; Clue Board 1.2+). One already on the record is reported and skipped. `list` shows the
+   found at the table this moment, `stamp: false` (no calendar date in the stamp; Clue Board 1.2+).
+   Where is always the Found at line: the stamp never names a scene (Clue Board 1.2.4). One already on the record is reported and skipped. `list` shows the
    record and the world Clues not yet collected; `uncollect` takes one off (its readers and note go
    with it; the Clue stays in the world).
 

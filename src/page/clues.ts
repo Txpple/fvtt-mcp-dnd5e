@@ -57,7 +57,9 @@ const entryRow = (e: any) => ({
   id: e.id,
   name: e.snapshot?.name ?? e.source?.name ?? '',
   kind: e.kind,
-  scene: e.foundIn?.sceneName ?? '',
+  // Where is the Clue's own Found at: never the stamp's scene, the one the collecting client viewed
+  // (Clue Board 1.2.4 stopped recording it; an older entry still carries it).
+  found: e.snapshot?.foundAt ?? '',
   readers: Object.keys(e.readers ?? {}).length,
   revision: e.snapshot?.revision ?? 1,
 });
@@ -81,7 +83,7 @@ export async function listClues(args: ListCluesArgs = {}) {
 export interface CollectCluesArgs {
   clues: string[];
   party?: string | undefined;
-  /** false: no scene or calendar date in the stamp, for a clue found before it was collected. */
+  /** false: no calendar date in the stamp, for a clue found before it was collected. */
   stamp?: boolean | undefined;
 }
 

@@ -354,7 +354,7 @@ Collect world Clues on the party, each once; one already on the record is report
 args:
 - `clues: string[]`
 - `party?: string`
-- `stamp?: boolean` — false: no scene or calendar date in the stamp, for a clue found before it was collected.
+- `stamp?: boolean` — false: no calendar date in the stamp, for a clue found before it was collected.
 
 Returns `{ party: { id: any; name: any; }; collected: any[]; already: string[]; entries: any; }`
 
@@ -365,7 +365,7 @@ The party's collected clues, and the world Clues it has not been given.
 args (optional):
 - `party?: string`
 
-Returns `{ party: { id: any; name: any; }; entries: { id: any; name: any; kind: any; scene: any; readers: number; revision: any; }[]; uncollected: any; }`
+Returns `{ party: { id: any; name: any; }; entries: { id: any; name: any; kind: any; found: any; readers: number; revision: any; }[]; uncollected: any; }`
 
 ### `fvtt.uncollectClues(args)`
 

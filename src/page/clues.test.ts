@@ -130,6 +130,26 @@ describe('listClues and uncollectClues', () => {
     });
   });
 
+  it("lists where a clue was found from its Found at, never the stamp's scene", async () => {
+    const { records } = stubWorld();
+    records.get('g0')!.set('c1', {
+      id: 'c1',
+      kind: 'object',
+      snapshot: { name: 'Bloodaxe Signet Ring', foundAt: 'On the dais', revision: 2 },
+      foundIn: { sceneName: 'Townhouse 03 - Attic' },
+      readers: {},
+    });
+    const r = await listClues({});
+    expect(r.entries[0]).toEqual({
+      id: 'c1',
+      name: 'Bloodaxe Signet Ring',
+      kind: 'object',
+      found: 'On the dais',
+      readers: 0,
+      revision: 2,
+    });
+  });
+
   it('names the parties when a named one is missing', async () => {
     stubWorld({ parties: ['Party', 'Other'] });
     await expect(listClues({ party: 'Nobody' })).rejects.toThrow(/Parties: Party, Other/);
