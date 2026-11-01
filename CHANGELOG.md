@@ -3,6 +3,31 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.7.3 — 2026-10-31 — manage-clues lists where a clue was found, never a scene
+
+- **`manage-clues` `list` reads where from the Clue's own *Found at***: the `scene` column is now
+  `found`. It read the scene stamped at the collect, the one the collecting client viewed (the bridge's
+  page, parked on whatever scene), so a clue collected through the MCP listed the wrong place; Clue
+  Board 1.2.4 stopped recording it, and an older entry's stored scene is no longer reported.
+- **`stamp: false`** is described as what it leaves out now, the calendar date (Clue Board 1.2.4's
+  stamp has no scene). The clue-builder skill says where is always the Found at line.
+- A test pins the list row; `docs/run-script-api.md` regenerated.
+
+**Budgets** (`npm test`): unchanged from 4.7.2: per prompt 14,103 (≤ 14,200), names ×2 6,133,
+skill descriptions 7,970 / 8,000, tools/list 209,542 (81 tools), always-on 1,702 (≤ 2,100).
+
+**Verified** (2026-10-31, the local sandbox: Foundry 14.369, dnd5e 6.0.6, Clue Board 1.2.4):
+- offline: biome · `tsc --noEmit` · vitest **115 files, 2,165 passed** (3 skipped) · build (page
+  bundle 575.6 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 159 handlers, 0 `any` /
+  `unknown`);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 · settings-calendar 52 ·
+  item-tooling 24 · actor-tooling 51 · pc-build 73 · teleporter-scene-fields 13 · placeables-tooling 87 ·
+  scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 · toolsets 19;
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.7.2);
+- `listClues` live on the sandbox through the built bundle: 24 entries, each with `found`, none with
+  `scene`. The smoke over a Claude Code restart was not run here: the servers pick the bundle up on
+  their next start.
+
 ## 4.7.2 — 2026-10-31 — the sandbox mirrors a self-hosted instance over SSH
 
 - **`pull-prod-to-local.mjs --from <sshHost>:<remoteDataDir>`** mirrors a self-hosted Foundry that
