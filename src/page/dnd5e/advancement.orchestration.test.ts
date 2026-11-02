@@ -296,42 +296,46 @@ describe('levelUpPc orchestration', () => {
     expect(res.actor.hp).toBe(16);
   });
 
-  it('writes a subclass chosen at the new level with its own features', async () => {
-    const champion = 'Compendium.dnd-players-handbook.classes.Item.champion';
-    mock = installFoundryMock([
-      fighter({
-        advancements: [
-          hitPoints([1, 2, 3]),
-          {
-            id: 'sub',
-            type: 'Subclass',
-            title: 'Fighter Subclass',
-            levels: [3],
-            effect: (actor, _level, data) => {
-              if (data?.uuid !== champion) return;
-              actor.updateSource({
-                items: [
-                  {
-                    _id: 'champion-item',
-                    name: 'Champion',
-                    type: 'subclass',
-                    system: { classIdentifier: 'fighter' },
-                    __advKey: 'subclass:champion',
-                  },
-                ],
-              });
-            },
+  const champion = 'Compendium.dnd-players-handbook.classes.Item.champion';
+
+  /** A Fighter whose level-3 Subclass advancement embeds the Champion, and the Champion's own grant. */
+  const fighterAndChampion = (): FakeDocSpec[] => [
+    fighter({
+      advancements: [
+        hitPoints([1, 2, 3]),
+        {
+          id: 'sub',
+          type: 'Subclass',
+          title: 'Fighter Subclass',
+          levels: [3],
+          effect: (actor, _level, data) => {
+            if (data?.uuid !== champion) return;
+            actor.updateSource({
+              items: [
+                {
+                  _id: 'champion-item',
+                  name: 'Champion',
+                  type: 'subclass',
+                  system: { classIdentifier: 'fighter' },
+                  __advKey: 'subclass:champion',
+                },
+              ],
+            });
           },
-        ],
-      }),
-      {
-        name: 'Champion',
-        type: 'subclass',
-        identifier: 'champion',
-        packId: PACK,
-        advancements: [grant('crit', [3], 'Improved Critical')],
-      },
-    ]);
+        },
+      ],
+    }),
+    {
+      name: 'Champion',
+      type: 'subclass',
+      identifier: 'champion',
+      packId: PACK,
+      advancements: [grant('crit', [3], 'Improved Critical')],
+    },
+  ];
+
+  it('writes a subclass chosen at the new level with its own features', async () => {
+    mock = installFoundryMock(fighterAndChampion());
     const built: any = await createPcActor({
       name: 'Climber',
       className: 'Fighter',
@@ -355,6 +359,38 @@ describe('levelUpPc orchestration', () => {
     expect(byName('Champion')?.system.classIdentifier).toBe('fighter');
     expect(byName('Champion').system.advancement.crit.value['3']).toEqual({});
     expect(byName('Improved Critical')?.type).toBe('feat');
+  });
+
+  it("a multiclass level runs only its own class's subclass, never another class's", async () => {
+    mock = installFoundryMock([
+      ...fighterAndChampion(),
+      {
+        name: 'Wizard',
+        type: 'class',
+        identifier: 'wizard',
+        packId: PACK,
+        advancements: [hitPoints([1, 2, 3])],
+      },
+    ]);
+    const built: any = await createPcActor({
+      name: 'Climber',
+      className: 'Fighter',
+      level: 3,
+      folder: 'fixed-folder',
+      choices: { '3': { sub: { uuid: champion } } },
+    });
+    const id = built.actor.id;
+
+    let res: any;
+    for (let n = 0; n < 3; n++) res = await levelUpPc({ actorIdentifier: id, className: 'Wizard' });
+
+    // Wizard 3 is a level 3, as the Champion's grant is: it must not run for another class.
+    expect(res.actor.classLevel).toBe(3);
+    expect(res.applied.filter((r: any) => r.source === 'subclass')).toEqual([]);
+    const stored = mock.server(id);
+    expect(
+      stored.items.find((i: any) => i.name === 'Champion').system.advancement.crit.value
+    ).toEqual({ 3: {} });
   });
 
   it('writes nothing and throws rolled-back when the new level errors', async () => {

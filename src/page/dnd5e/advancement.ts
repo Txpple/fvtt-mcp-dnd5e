@@ -1370,8 +1370,12 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
       usedChoices
     );
 
-    // Subclass features fire AT the new level only (never re-grant lower-level subclass features).
-    const subclassItem = clone.items.find((i: any) => i.type === 'subclass');
+    // Subclass features fire AT the new level only (never re-grant lower-level subclass features),
+    // and only the leveled class's subclass: matched by classIdentifier, as embedClassAndApply does,
+    // so a multiclass level never runs another class's subclass at its own level number.
+    const subclassItem = clone.items.find(
+      (i: any) => i.type === 'subclass' && i.system?.classIdentifier === classIdentifier
+    );
     if (subclassItem) {
       await applyItemAdvancements(
         clone.items.get(subclassItem.id),
