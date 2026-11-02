@@ -3,6 +3,67 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## 4.7.4 — 2026-11-02 — level-up-pc writes the whole level, the species' and features' too
+
+- **`level-up-pc` writes the level it applies.** Only the class's level reached the server: every
+  advancement applies in memory, and the closing write of the actor's own source had nothing left to
+  send, so the subclass, its features, a level's granted items and the Hit Points advancement's value
+  were gone on the next page load while the call answered success (its receipt read 0 created,
+  1 updated). It now applies on a clone, as dnd5e's own level-up does, and writes the clone's
+  difference in one batch (`performBulkUpdate`, all or nothing); the receipt holds every item created
+  and every path changed. A refused level-up writes nothing (it wrote, then rolled back), and a level
+  the server does not show after the batch is an error, never success.
+- **`level-up-pc` is dnd5e's whole level change**, not the class's alone: the species advances at the
+  new character level (the PHB's Aasimar, Drow, High and Wood Elf and the Abyssal, Chthonic and
+  Infernal Tiefling at 3; those Elves and Tieflings, the Dragonborn and the Goliath at 5), so a High
+  Elf reaching 3 gets Detect Magic, through a multiclass level too; each feat or feature already on
+  the PC advances at its own level (Ritual Caster's pick at 5, 9, 13 and 17; a subclass feature's
+  spells at 3, 5, 7 and 9 in Heroes of Faerûn and Ravenloft), a class feature only with its own
+  class; and a feature the level grants runs its own advancements (Shadow Arts' Minor Illusion at
+  Monk 3). Their picks come back in `needsChoices` with the source `species` or `feature` and the
+  level to key them by, the leveled class's subclass's picks too; a granted feature's pick
+  (Blessed Warrior's two cantrips) comes back in a second round, still before anything is written.
+- **A multiclass level runs its own class's subclass.** A Paladin 3 (Oath of Glory) taking Warlock 3
+  re-ran Glory's level-3 grants and never the Fiend's; the subclass is now matched by its class.
+- **Every copy from a pack carries its compendium source** (`_stats.compendiumSource`, as Foundry's
+  own import stamps): `add-feature`, `add-spells`, `add-item` and its import,
+  `create-actor-from-compendium`, the roll-table import, and `create-pc`'s and `level-up-pc`'s class,
+  species and background. dnd5e finds an actor's items by that stamp, so a feature re-added by
+  `add-feature` could not be found as another item's consumption target (a Paladin's Channel
+  Divinity, spent by Inspiring Smite and Peerless Athlete).
+- The pc-builder skill says what a level-up applies and keys each pick by the level its
+  `needsChoices` entry names.
+- Known, not changed: a feature with a Cast activity (Shadow Arts' Darkness) gets dnd5e's cached
+  copy of its spell a moment after the level's batch, outside the call's receipt, as the sheet's own
+  level-up does.
+
+**Budgets** (`npm test`): unchanged from 4.7.3: per prompt 14,103 (≤ 14,200), names ×2 6,133,
+skill descriptions 7,970 / 8,000, tools/list 209,542 (81 tools), always-on 1,702 (≤ 2,100).
+
+**Verified** (2026-11-02, the local sandbox: Foundry 14.369, dnd5e 6.0.6):
+- offline: biome · `tsc --noEmit` · vitest **116 files, 2,182 passed** (3 skipped) · build (page
+  bundle 579.2 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 159 handlers, 0 `any` /
+  `unknown`);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 · settings-calendar 52 ·
+  item-tooling 24 · actor-tooling 51 · pc-build 83 · teleporter-scene-fields 13 · placeables-tooling 87 ·
+  scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 · toolsets 19;
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.7.3);
+- `verify-pc-build` reconnects mid-run and holds the page's copy of every PC it built and levelled
+  against the server's (Test M); a Paladin 2 → 3 (Oath of Glory) through a recorded call: its
+  receipt 7 created, 2 updated, the server holding the subclass, its 6 granted items and the Hit
+  Points value; a Paladin 3 → Warlock 3 (Fiend): Dark One's Blessing on the server; re-added
+  Channel Divinity found by Inspiring Smite and Peerless Athlete after a reconnect;
+- the level change on throwaway PCs, each read back after a reconnect: a High Elf Fighter 2 → 3 and
+  a High Elf Fighter 2 → Wizard 1 each hold Detect Magic; a Monk 2 → 3 (Warrior of Shadow) holds
+  Shadow Arts and Minor Illusion; a Fighter 4 holding Ritual Caster is asked for its level-5 pick
+  with nothing written, then holds the picked ritual; a Paladin 1 → 2 taking Blessed Warrior is
+  asked for its cantrips in a second round with nothing written, then holds Guidance and Sacred
+  Flame;
+- the MCP smoke over the stdio server of the release build: `get-world-info` on the sandbox
+  (bridge 4.7.4); a Fighter 2 / Wizard 1 built with success and zero unresolved `@scale`; a bad
+  subclass uuid an error, `[rolled-back]`, naming the Subclass advancement, no actor created; a High
+  Elf Fighter 2 levelled to 3 by `level-up-pc`, a fresh server reading Detect Magic on it.
+
 ## 4.7.3 — 2026-10-31 — manage-clues lists where a clue was found, never a scene
 
 - **`manage-clues` `list` reads where from the Clue's own *Found at***: the `scene` column is now
