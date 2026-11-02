@@ -173,6 +173,12 @@ Foundry if it was running (Foundry scans the package registry at process boot â€
 modules / systems won't register into a running process), re-deploy any module under test
 (`--local` again â€” the mirror overwrote it), then launch the world.
 
+**Crystal Ball after a refresh.** The sandbox Seer (`fvtt-mod-crystalball`, `npm run seer:dev`, port 30001) keeps a
+socket to the Foundry process the refresh stopped: restart it and check `GET /crystalball/healthz` reads
+`connected: true`. The refresh also copies prod's *Service URL* (`/crystalball`, which only prod's tunnel routes) into
+the sandbox world, so the ball reads dark until `node tools/sandbox-service-url.mjs` in `fvtt-mod-crystalball`
+(with `FOUNDRY_PROFILE=local FOUNDRY_HOST=local`) sets it back to `http://localhost:30001/crystalball`.
+
 ### Refreshing while Foundry is running
 
 The local Foundry must be **fully stopped**, not just returned to Setup. A running process keeps
