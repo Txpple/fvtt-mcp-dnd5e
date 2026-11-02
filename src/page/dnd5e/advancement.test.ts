@@ -18,6 +18,7 @@ import {
   unusedChoicesMessage,
   allowedForRole,
   planAdvancementApply,
+  advancementWrites,
   type AdvancementChoice,
   type AdvancementPlanInput,
   type PcChoiceMap,
@@ -464,5 +465,53 @@ describe('isChoiceSatisfied / computeMissingChoices', () => {
           'Choices are keyed by level → advancement id.'
       );
     });
+  });
+});
+
+describe('advancementWrites (what a level-up sends: the applied clone against the actor)', () => {
+  const fighter = {
+    _id: 'cls',
+    name: 'Fighter',
+    type: 'class',
+    system: { levels: 2, advancement: { hp: { value: { 1: 'max', 2: 'avg' } } } },
+  };
+  const before = {
+    _id: 'pc',
+    name: 'Climber',
+    type: 'character',
+    system: { attributes: { hp: { value: 16 } }, details: { originalClass: 'cls' } },
+    prototypeToken: { name: 'Climber' },
+    items: [fighter, { _id: 'surge', name: 'Action Surge', type: 'feat', system: {} }],
+  };
+
+  it('sends nothing when the clone holds what the actor holds', () => {
+    expect(advancementWrites(before, structuredClone(before))).toEqual({
+      actor: {},
+      create: [],
+      item: [],
+      delete: [],
+    });
+  });
+
+  it('creates what the applies embedded (with ids), updates what they changed, keeps the rest out', () => {
+    const after = structuredClone(before);
+    after.system.attributes.hp.value = 22;
+    after.items[0]!.system.levels = 3;
+    (after.items[0]!.system.advancement.hp.value as Record<string, string>)[3] = 'avg';
+    const champion = { _id: 'sub', name: 'Champion', type: 'subclass', system: {} };
+    const crit = { _id: 'crit', name: 'Improved Critical', type: 'feat', system: {} };
+    after.items.push(champion, crit);
+
+    const writes = advancementWrites(before, after);
+    expect(writes.actor).toEqual({ system: after.system });
+    expect(writes.create).toEqual([champion, crit]);
+    expect(writes.item).toEqual([after.items[0]]);
+    expect(writes.delete).toEqual([]);
+  });
+
+  it('deletes an item the clone no longer holds (an ItemChoice replacement)', () => {
+    const after = structuredClone(before);
+    after.items = [after.items[0]!];
+    expect(advancementWrites(before, after).delete).toEqual(['surge']);
   });
 });

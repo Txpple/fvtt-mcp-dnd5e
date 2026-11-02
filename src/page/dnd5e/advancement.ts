@@ -15,6 +15,11 @@
 //     initial: Trait → apply(lvl,{chosen:[keys]}); ItemChoice → apply(lvl,{selected:[uuids]}).
 //   • Persist is naive-safe: toObject()→Actor.create preserves embedded item _ids, so originalClass
 //     stays valid + HP is correct (defensive re-anchor kept as insurance).
+//   • apply() writes through updateSource — in memory only. A create sends the whole snapshot, so it
+//     carries them; a level-up must send them itself. It applies on a CLONE (as dnd5e's own
+//     AdvancementManager does) and writes the clone's difference from the actor (advancementWrites):
+//     applied to the actor itself, the source already held the level, so actor.update(actor.toObject())
+//     diffed empty and only the class bump ever reached the server.
 //   • Caster L1 spell slots AUTO-DERIVE from class spellcasting progression (no manual slot write).
 //   • disableAdvancements must be true during the build (prevents the auto-AdvancementManager render
 //     on class embed — which hangs headless); it is restored afterward.
@@ -32,7 +37,7 @@ import {
 import { addSpellsToActor } from './spells.js';
 import { readDarkvision, TOKEN_DISPOSITION, tokenDefaults } from './token-defaults.js';
 import { ambiguous, invalid, notFound, rolledBack, unsupported } from '../errors.js';
-import { UNRECORDED } from '../_receipts.js';
+import { sameData, UNRECORDED } from '../_receipts.js';
 
 /**
  * The build's own switch (`dnd5e.disableAdvancements`: on for the build, restored in `finally`) is
@@ -304,7 +309,7 @@ export interface PcBuildResult {
   /**
    * Best-effort notes. A CORRUPTING advancement failure (a forced grant, supplied pick, subclass
    * embed, or HP apply that threw) is not a warning: the PC would be silently incomplete, so the
-   * build does not persist (create) / rolls back (level-up) and the call throws `rolled-back`.
+   * build or level-up writes nothing and the call throws `rolled-back`.
    */
   warnings: string[];
 }
@@ -477,6 +482,45 @@ export function unusedChoicesMessage(unused: string[], specs: AdvancementChoice[
     (valid ? `; this build's picks: ${valid}` : '') +
     '.'
   );
+}
+
+/** What a level-up writes, in the shape of dnd5e's `Actor5e#performBulkUpdate`. */
+export interface AdvancementWrites {
+  /** The actor's root keys an apply changed, whole (Foundry narrows them to the changed leaves). */
+  actor: Record<string, unknown>;
+  /** Items the applies embedded (a new class, a subclass, granted features), with their ids. */
+  create: Array<Record<string, unknown>>;
+  /** Items the applies changed (the class's level and advancement values), whole. */
+  item: Array<Record<string, unknown>>;
+  /** Items the applies removed (an ItemChoice replacement). */
+  delete: string[];
+}
+
+/**
+ * The writes that carry an applied clone to the server: its source against the actor's, the way
+ * dnd5e's AdvancementManager completes a level. Every apply() writes through updateSource, so what
+ * the clone holds and the actor does not is exactly what the level changed: an item only the clone
+ * holds is created with its id (the class's advancement values name it), one that differs is
+ * updated, one only the actor holds is deleted, and each of the actor's root keys that differs is
+ * updated. PURE — both arguments are `toObject()` sources.
+ */
+export function advancementWrites(before: any, after: any): AdvancementWrites {
+  const { items: beforeItems = [], ...beforeActor } = before ?? {};
+  const { items: afterItems = [], ...afterActor } = after ?? {};
+  const actor: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(afterActor)) {
+    if (key !== '_id' && !sameData(beforeActor[key], value)) actor[key] = value;
+  }
+  const prior = new Map<string, unknown>(beforeItems.map((i: any) => [i._id, i]));
+  const create: AdvancementWrites['create'] = [];
+  const item: AdvancementWrites['item'] = [];
+  for (const data of afterItems) {
+    const was = prior.get(data._id);
+    prior.delete(data._id);
+    if (was === undefined) create.push(data);
+    else if (!sameData(was, data)) item.push(data);
+  }
+  return { actor, create, item, delete: [...prior.keys()] };
 }
 
 // =============================================================================
@@ -1203,11 +1247,12 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
 // levelUpPc — add ONE class level to an existing persisted PC (the page op behind level-up-pc).
 //
 // Same class as a current one → a single-class level-up; a class the PC doesn't have → a MULTICLASS
-// add. Mutates the actor IN PLACE (proven by the pc-v3 spike, 7436136): bump/embed the class, apply
+// add. Works on a CLONE of the actor, as dnd5e's AdvancementManager does: bump/embed the class, apply
 // ONLY the new level's advancements (prior value-state is preserved, so L1..N don't re-apply, and the
-// classRestriction filter gives a multiclass its 2024 proficiency subset), then persist via
-// actor.update(toObject). Ability-score increases at ASI tiers stay the skill's job (final scores +
-// update-actor); a feat is added with add-feature.
+// classRestriction filter gives a multiclass its 2024 proficiency subset), then write the clone's
+// difference from the actor in one batch (advancementWrites → performBulkUpdate). Nothing reaches the
+// server before that batch, so a refused level-up writes nothing. Ability-score increases at ASI tiers
+// stay the skill's job (final scores + update-actor); a feat is added with add-feature.
 // =============================================================================
 
 export interface LevelUpPlan {
@@ -1280,7 +1325,9 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     };
   }
 
-  // 5. Mutate IN PLACE. disableAdvancements true during the apply; restored in finally.
+  // 5. Apply on a CLONE (its items keep their ids): every apply() writes through updateSource, so the
+  //    clone collects the whole level while the actor's source stays what the server holds.
+  //    disableAdvancements true during the apply and the write; restored in finally.
   const applied: PcBuildResult['applied'] = [];
   const usedChoices = new Set<string>(); // every choices key an applied advancement read
   let priorDisable: unknown;
@@ -1296,24 +1343,23 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
       );
     }
 
+    const clone = actor.clone({}, { keepId: true });
     let classItemId: string;
     if (isNewClass) {
       const cdata = classRes.doc.toObject();
-      delete cdata._id;
+      cdata._id = foundry.utils.randomID();
       cdata.system = cdata.system ?? {};
       cdata.system.levels = 1;
-      const [added] = await actor.createEmbeddedDocuments('Item', [cdata]);
-      classItemId = added.id;
+      clone.updateSource({ items: [cdata] });
+      classItemId = cdata._id;
     } else {
-      await actor.updateEmbeddedDocuments('Item', [
-        { _id: existing.id, 'system.levels': newClassLevel },
-      ]);
+      clone.items.get(existing.id).updateSource({ 'system.levels': newClassLevel });
       classItemId = existing.id;
     }
-    actor.reset?.();
+    clone.reset?.();
 
     await applyItemAdvancements(
-      actor.items.get(classItemId),
+      clone.items.get(classItemId),
       'class',
       [newClassLevel],
       plan.choices,
@@ -1325,10 +1371,10 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     );
 
     // Subclass features fire AT the new level only (never re-grant lower-level subclass features).
-    const subclassItem = actor.items.find((i: any) => i.type === 'subclass');
+    const subclassItem = clone.items.find((i: any) => i.type === 'subclass');
     if (subclassItem) {
       await applyItemAdvancements(
-        actor.items.get(subclassItem.id),
+        clone.items.get(subclassItem.id),
         'subclass',
         [newClassLevel],
         plan.choices,
@@ -1340,14 +1386,11 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
       );
     }
 
-    // A corrupting advancement failed. Roll back the ONE persisted mutation (the class embed/bump) and
-    // skip the final persist, so the in-memory apply() updateSource changes evaporate on the next read —
-    // never leave a half-leveled PC. Symmetric with createPcActor's no-persist-on-error (design.md §2.1).
-    // A refused level-up is an error (design.md §3): `rolled-back` once the PC is back where it
-    // was; an incomplete rollback is not "nothing written", so it is its own words, uncoded, and the
-    // call's receipt names what stayed.
-    // A supplied pick no applied advancement read is refused the same way (it would be dropped, the
-    // advancement left to its default, and the answer silent).
+    // A corrupting advancement failed: the clone is dropped and nothing is written — never a
+    // half-leveled PC. Symmetric with createPcActor's no-persist-on-error (design.md §2.1); a refused
+    // level-up is an error, `rolled-back` (design.md §3). A supplied pick no applied advancement read
+    // is refused the same way (it would be dropped, the advancement left to its default, and the
+    // answer silent).
     const unusedChoices = unusedChoiceKeys(plan.choices, usedChoices);
     if (errors.length > 0 || unusedChoices.length > 0) {
       const failed = [
@@ -1356,46 +1399,47 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
           ? [`${errors.length} advancement(s) failed — ${errors.join('; ')}`]
           : []),
       ].join('; ');
-      try {
-        if (isNewClass) {
-          await actor.deleteEmbeddedDocuments('Item', [classItemId]);
-        } else {
-          await actor.updateEmbeddedDocuments('Item', [
-            { _id: existing.id, 'system.levels': newClassLevel - 1 },
-          ]);
-        }
-        game.actors.get(actor.id)?.reset?.();
-      } catch (e) {
-        throw new Error(
-          `"${actor.name}" was not leveled (${failed}), and the rollback was incomplete — inspect ` +
-            `"${actor.name}": ${e instanceof Error ? e.message : String(e)}`
-        );
-      }
       throw rolledBack(
-        `"${actor.name}" was not leveled: ${failed}. It was put back to its prior level; fix the ` +
-          'input (e.g. a bad subclass or choice uuid) and re-call level-up-pc.'
+        `"${actor.name}" was not leveled: ${failed}. Nothing was written; fix the input (e.g. a ` +
+          'bad subclass or choice uuid) and re-call level-up-pc.'
       );
     }
 
-    // 6. Persist the in-memory apply() mutations (apply uses updateSource — in-memory only).
-    await actor.update(actor.toObject());
-    const fresh = game.actors.get(actor.id);
-    fresh.reset?.();
-    const unresolvedScale = findGenuinelyUnresolvedScale(fresh);
+    // 6. Write the level: the clone's difference from the actor, in one batch (all or nothing), with
+    //    the options dnd5e's own level-up writes with. Each write fires its document hooks, so the
+    //    call's receipt holds every item created and every path changed.
+    const writes = advancementWrites(actor.toObject(), clone.toObject());
+    await actor.performBulkUpdate(writes, { isAdvancement: true });
+
+    // The actor now holds only what the server answered. A level it does not show was not written.
+    actor.reset?.();
+    const lost = [
+      ...writes.create.filter(i => !actor.items.get(i._id)).map(i => String(i.name)),
+      ...(actor.items.get(classItemId)?.system?.levels === newClassLevel
+        ? []
+        : [`${classRes.doc.name} level ${newClassLevel}`]),
+    ];
+    if (lost.length > 0) {
+      throw new Error(
+        `"${actor.name}" was not fully leveled: the server does not hold ${lost.join(', ')}. ` +
+          `Inspect "${actor.name}" before re-calling level-up-pc.`
+      );
+    }
+    const unresolvedScale = findGenuinelyUnresolvedScale(actor);
 
     return {
       success: true,
       actor: {
-        id: fresh.id,
-        name: fresh.name,
+        id: actor.id,
+        name: actor.name,
         className: classRes.doc.name,
         species: null,
         background: null,
-        level: fresh.system?.details?.level ?? currentCharLevel + 1,
-        hp: fresh.system?.attributes?.hp?.max ?? null,
-        folder: fresh.folder?.id ?? null,
+        level: actor.system?.details?.level ?? currentCharLevel + 1,
+        hp: actor.system?.attributes?.hp?.max ?? null,
+        folder: actor.folder?.id ?? null,
         classLevel: newClassLevel,
-        classes: fresh.items
+        classes: actor.items
           .filter((i: any) => i.type === 'class')
           .map((i: any) => ({ name: i.name, levels: i.system?.levels ?? 0 })),
       },

@@ -6,7 +6,12 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { createPcActor, levelUpPc } from './advancement.js';
-import { installFoundryMock, type FakeDocSpec, type MockHandle } from './foundry-doc-mock.js';
+import {
+  installFoundryMock,
+  type AdvBehaviorSpec,
+  type FakeDocSpec,
+  type MockHandle,
+} from './foundry-doc-mock.js';
 import { PageError } from '../errors.js';
 
 const PACK = 'dnd-players-handbook.classes';
@@ -237,7 +242,122 @@ describe('levelUpPc orchestration', () => {
     return res.actor.id;
   }
 
-  it('rolls back the class bump and throws rolled-back when the new level errors', async () => {
+  /** A Hit Points advancement at `levels`: +10 at level 1, +6 after, to value and max. */
+  const hitPoints = (levels: number[]): AdvBehaviorSpec => ({
+    id: 'hp',
+    type: 'HitPoints',
+    title: 'Hit Points',
+    levels,
+    effect: (actor, level) => {
+      const hp = actor.system.attributes?.hp ?? {};
+      const gain = level === 1 ? 10 : 6;
+      actor.updateSource({
+        'system.attributes.hp': { value: (hp.value ?? 0) + gain, max: (hp.max ?? 0) + gain },
+      });
+    },
+  });
+
+  /** An ItemGrant that embeds one feat, in memory, as dnd5e's apply does. */
+  const grant = (id: string, levels: number[], name: string): AdvBehaviorSpec => ({
+    id,
+    type: 'ItemGrant',
+    title: name,
+    levels,
+    effect: actor => {
+      actor.updateSource({ items: [{ _id: `${id}-item`, name, type: 'feat' }] });
+    },
+  });
+
+  /** Write calls that reached the server for `id` since call `from`. */
+  const writesSince = (from: number, id: string) =>
+    mock!
+      .calls()
+      .slice(from)
+      .filter(c => c.actor === id && c.op !== 'reset');
+
+  it('writes the level it applied: the granted feature, the advancement values and HP reach the server', async () => {
+    mock = installFoundryMock([
+      fighter({ advancements: [hitPoints([1, 2]), grant('surge', [2], 'Action Surge')] }),
+    ]);
+    const id = await buildL1();
+
+    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' });
+    expect(res.success).toBe(true);
+
+    // The page that applied the level holds its own copy; the server's record is the witness.
+    mock.reconnect();
+    const stored = mock.server(id);
+    const fighterItem = stored.items.find((i: any) => i.type === 'class');
+    expect(fighterItem.system.levels).toBe(2);
+    expect(fighterItem.system.advancement.hp.value['2']).toEqual({ 2: 'avg' });
+    expect(fighterItem.system.advancement.surge.value['2']).toEqual({});
+    expect(stored.items.map((i: any) => i.name)).toContain('Action Surge');
+    expect(stored.system.attributes.hp).toEqual({ value: 16, max: 16 });
+    expect(res.actor.hp).toBe(16);
+  });
+
+  it('writes a subclass chosen at the new level with its own features', async () => {
+    const champion = 'Compendium.dnd-players-handbook.classes.Item.champion';
+    mock = installFoundryMock([
+      fighter({
+        advancements: [
+          hitPoints([1, 2, 3]),
+          {
+            id: 'sub',
+            type: 'Subclass',
+            title: 'Fighter Subclass',
+            levels: [3],
+            effect: (actor, _level, data) => {
+              if (data?.uuid !== champion) return;
+              actor.updateSource({
+                items: [
+                  {
+                    _id: 'champion-item',
+                    name: 'Champion',
+                    type: 'subclass',
+                    system: { classIdentifier: 'fighter' },
+                    __advKey: 'subclass:champion',
+                  },
+                ],
+              });
+            },
+          },
+        ],
+      }),
+      {
+        name: 'Champion',
+        type: 'subclass',
+        identifier: 'champion',
+        packId: PACK,
+        advancements: [grant('crit', [3], 'Improved Critical')],
+      },
+    ]);
+    const built: any = await createPcActor({
+      name: 'Climber',
+      className: 'Fighter',
+      level: 2,
+      folder: 'fixed-folder',
+    });
+    const id = built.actor.id;
+
+    const res: any = await levelUpPc({
+      actorIdentifier: id,
+      className: 'Fighter',
+      choices: { '3': { sub: { uuid: champion } } },
+    });
+    expect(res.success).toBe(true);
+
+    mock.reconnect();
+    const stored = mock.server(id);
+    const byName = (name: string) => stored.items.find((i: any) => i.name === name);
+    expect(byName('Fighter').system.levels).toBe(3);
+    expect(byName('Fighter').system.advancement.sub.value['3']).toEqual({ uuid: champion });
+    expect(byName('Champion')?.system.classIdentifier).toBe('fighter');
+    expect(byName('Champion').system.advancement.crit.value['3']).toEqual({});
+    expect(byName('Improved Critical')?.type).toBe('feat');
+  });
+
+  it('writes nothing and throws rolled-back when the new level errors', async () => {
     // Fighter L2 advancement throws; L1 is clean so the initial build succeeds.
     mock = installFoundryMock([
       fighter({
@@ -256,23 +376,23 @@ describe('levelUpPc orchestration', () => {
       }),
     ]);
     const id = await buildL1();
+    const from = mock.calls().length;
 
     const err: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' }).catch(e => e);
 
     expect(err).toBeInstanceOf(PageError);
     expect(err.code).toBe('rolled-back');
     expect(err.message).toMatch(
-      /was not leveled: 1 advancement\(s\) failed — .*put back to its prior level/
+      /was not leveled: 1 advancement\(s\) failed — .*Nothing was written/
     );
-    // Rollback: the existing class level was reverted (updateEmbeddedDocuments back to level 1).
-    const reverted = mock.calls().some(c => c.op === 'updateEmbeddedDocuments' && c.actor === id);
-    expect(reverted).toBe(true);
+    // The level was applied on a clone: no write reached the server, the page's copy is untouched.
+    expect(writesSince(from, id)).toEqual([]);
+    expect(mock.server(id).items.find((i: any) => i.type === 'class').system.levels).toBe(1);
     const actor = [...mock.store.actors.values()].find(a => a.id === id);
-    const fighterItem = actor?.items.find((i: any) => i.type === 'class');
-    expect(fighterItem?.system.levels).toBe(1);
+    expect(actor?.items.find((i: any) => i.type === 'class')?.system.levels).toBe(1);
   });
 
-  it('rolls back and refuses a choices entry the new level never reads', async () => {
+  it('writes nothing and refuses a choices entry the new level never reads', async () => {
     mock = installFoundryMock([
       fighter({
         advancements: [
@@ -290,6 +410,7 @@ describe('levelUpPc orchestration', () => {
       }),
     ]);
     const id = await buildL1();
+    const from = mock.calls().length;
 
     const err: any = await levelUpPc({
       actorIdentifier: id,
@@ -299,13 +420,13 @@ describe('levelUpPc orchestration', () => {
 
     expect(err?.code).toBe('rolled-back');
     expect(err.message).toMatch(
-      /was not leveled: 1 choices entry names no advancement this build applies: choices\["3"\]\["subclass"\]\..*put back to its prior level/
+      /was not leveled: 1 choices entry names no advancement this build applies: choices\["3"\]\["subclass"\]\..*Nothing was written/
     );
-    const actor = [...mock.store.actors.values()].find(a => a.id === id);
-    expect(actor?.items.find((i: any) => i.type === 'class')?.system.levels).toBe(1);
+    expect(writesSince(from, id)).toEqual([]);
+    expect(mock.server(id).items.find((i: any) => i.type === 'class').system.levels).toBe(1);
   });
 
-  it('rolls back by deleting a newly-embedded multiclass class when its first level errors', async () => {
+  it('writes nothing when a multiclass first level errors (the new class never reaches the server)', async () => {
     mock = installFoundryMock([
       fighter(),
       {
@@ -319,15 +440,49 @@ describe('levelUpPc orchestration', () => {
       },
     ]);
     const id = await buildL1();
+    const from = mock.calls().length;
 
     const err: any = await levelUpPc({ actorIdentifier: id, className: 'Wizard' }).catch(e => e);
 
     expect(err?.code).toBe('rolled-back');
-    // Rollback of a multiclass add deletes the just-embedded class item.
-    const deleted = mock.calls().some(c => c.op === 'deleteEmbeddedDocuments' && c.actor === id);
-    expect(deleted).toBe(true);
+    expect(writesSince(from, id)).toEqual([]);
+    const stored = mock.server(id);
+    expect(stored.items.filter((i: any) => i.type === 'class').length).toBe(1); // the Fighter only
     const actor = [...mock.store.actors.values()].find(a => a.id === id);
-    const classCount = actor?.items.filter((i: any) => i.type === 'class').length;
-    expect(classCount).toBe(1); // only the original Fighter remains
+    expect(actor?.items.filter((i: any) => i.type === 'class').length).toBe(1);
+  });
+
+  it('a multiclass add writes the new class with its first level in one batch', async () => {
+    mock = installFoundryMock([
+      fighter(),
+      {
+        name: 'Wizard',
+        type: 'class',
+        identifier: 'wizard',
+        packId: PACK,
+        advancements: [hitPoints([1]), grant('arcane', [1], 'Arcane Recovery')],
+      },
+    ]);
+    const id = await buildL1();
+    const from = mock.calls().length;
+
+    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Wizard' });
+    expect(res.success).toBe(true);
+    expect(res.actor.classes).toEqual([
+      { name: 'Fighter', levels: 1 },
+      { name: 'Wizard', levels: 1 },
+    ]);
+
+    // One batch, with the option dnd5e's own level-up writes with.
+    const batches = writesSince(from, id).filter(c => c.op === 'performBulkUpdate');
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.options).toEqual({ isAdvancement: true });
+
+    mock.reconnect();
+    const stored = mock.server(id);
+    const wizard = stored.items.find((i: any) => i.name === 'Wizard');
+    expect(wizard.system.levels).toBe(1);
+    expect(wizard.system.advancement.arcane.value['1']).toEqual({});
+    expect(stored.items.map((i: any) => i.name)).toContain('Arcane Recovery');
   });
 });

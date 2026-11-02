@@ -2,8 +2,15 @@
 // (advancement.ts) drives, so its ORCHESTRATION can be unit-tested with NO browser/live world. It does
 // NOT simulate real dnd5e advancement math — advancement behaviors are injected per test (an `apply`
 // that mutates the mock actor, or one that throws) — so assertions target control flow: persist-once,
-// no-persist-on-error, level-up rollback, and the rest-to-full top-off. The real dnd5e math is gated
-// live by tests/integration/pc.int.test.ts.
+// no-persist-on-error, a refused level-up writing nothing, and the rest-to-full top-off. The real dnd5e
+// math is gated live by tests/integration/pc.int.test.ts.
+//
+// It keeps the page apart from the server the way Foundry does, because that is where a level-up lost
+// its advancements: `updateSource` (what every advancement.apply() writes through) changes only the
+// page's copy; the database calls (`Actor.create`, `update`, the embedded create/update/delete,
+// dnd5e's `performBulkUpdate`) change the server's record too, and `update` sends only what differs
+// from the page's source, so an update the page already holds sends nothing. `server(id)` reads the
+// record; `reconnect()` rebuilds every page document from it, as a fresh page would.
 //
 // Test-only (not imported by src/page/index.ts, so it never enters the page bundle). Co-located as a
 // normal .ts — typechecked by the gate, like src/tools/test-helpers.ts — and installs onto globalThis,
@@ -16,7 +23,11 @@ export interface AdvBehaviorSpec {
   title: string;
   levels: number[];
   classRestriction?: string | undefined;
-  /** Mutate the owning actor when applied (e.g. bump HP, add an item, set spell slots). */
+  /**
+   * Mutate the owning actor when applied (e.g. bump HP, add an item with `actor.updateSource({ items })`,
+   * set spell slots), in memory as dnd5e's apply does. The apply also records `data` as the
+   * advancement's value on its item (`system.advancement.<id>.value.<level>`), as dnd5e's does.
+   */
   effect?: (actor: MockActor, level: number, data: any, opts: any) => void;
   /** When true, apply() throws — to exercise the corrupting-failure path. */
   throws?: boolean | undefined;
@@ -26,6 +37,7 @@ export interface AdvBehaviorSpec {
 export interface FakeDocSpec {
   name: string;
   type: 'class' | 'race' | 'background' | 'subclass';
+  /** A subclass's key is `subclass:<identifier>`: the data a Subclass effect embeds carries it as `__advKey`. */
   identifier: string;
   packId: string;
   advancements?: AdvBehaviorSpec[] | undefined;
@@ -41,6 +53,25 @@ function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v ?? null));
 }
 
+function getPath(obj: any, path: string): unknown {
+  let cur = obj;
+  for (const key of path.split('.')) {
+    if (cur === null || typeof cur !== 'object') return undefined;
+    cur = cur[key];
+  }
+  return cur;
+}
+
+/** Structural equality of plain data (key order aside), the test Foundry's diff applies. */
+function equal(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every(k => Object.hasOwn(b, k) && equal((a as any)[k], (b as any)[k]));
+}
+
 function setPath(obj: any, path: string, value: unknown): void {
   const keys = path.split('.');
   let cur = obj;
@@ -51,8 +82,8 @@ function setPath(obj: any, path: string, value: unknown): void {
   cur[keys[keys.length - 1]] = value;
 }
 
-/** A live advancement bound to its owning actor — what extractAdvancements lifts and calls .apply on. */
-function buildAdvancement(spec: AdvBehaviorSpec, actor: MockActor): any {
+/** A live advancement bound to its owning item — what extractAdvancements lifts and calls .apply on. */
+function buildAdvancement(spec: AdvBehaviorSpec, item: MockItem, actor: MockActor): any {
   return {
     id: spec.id,
     name: spec.title, // dnd5e 6.0 field (title is the deprecated getter)
@@ -63,6 +94,7 @@ function buildAdvancement(spec: AdvBehaviorSpec, actor: MockActor): any {
     apply: async (level: number, data: any, opts: any) => {
       if (spec.throws) throw new Error(`mock advancement "${spec.title}" rejected`);
       spec.effect?.(actor, level, data, opts);
+      item.updateSource({ [`system.advancement.${spec.id}.value.${level}`]: clone(data ?? {}) });
     },
   };
 }
@@ -95,9 +127,14 @@ export class MockItem {
     const byType: Record<string, any[]> = {};
     for (const b of this.behaviors) {
       byType[b.type] = byType[b.type] ?? [];
-      byType[b.type].push(buildAdvancement(b, this.actor));
+      byType[b.type].push(buildAdvancement(b, this, this.actor));
     }
     return { byType };
+  }
+
+  /** In memory only, as Foundry's: the server never hears of it. */
+  updateSource(update: Record<string, unknown>): void {
+    for (const [k, v] of Object.entries(update)) setPath(this, k, clone(v));
   }
 
   toObject(): any {
@@ -123,6 +160,8 @@ export class MockActor {
   /** The portrait — what createPcActor's default-art step writes from the class pregen. */
   img: string | undefined;
   folder: { id: string } | null = null;
+  /** A copy made by `clone()`: it is in no database, so a write through it throws. */
+  isClone = false;
   private _items: MockItem[] = [];
   private store: MockStore;
 
@@ -136,10 +175,7 @@ export class MockActor {
     this.store = store;
     // Rehydrate persisted items, re-attaching advancement behaviors via the preserved __advKey so a
     // later level-up on this re-read actor can still apply them (mirrors Foundry reconstructing them).
-    for (const it of data.items ?? []) {
-      const behaviors = it.__advKey ? (store.behaviors[it.__advKey] ?? []) : [];
-      this._items.push(new MockItem(it, this, behaviors));
-    }
+    for (const it of data.items ?? []) this._items.push(this.itemFrom(it, it._id ?? genId()));
   }
 
   /** Array-like items collection with the get/find/filter the engine uses. */
@@ -165,55 +201,119 @@ export class MockActor {
     return {};
   }
 
+  /** In memory only, as Foundry's: the server never hears of it. `items` merges by `_id`. */
   updateSource(update: Record<string, unknown>): void {
-    for (const [k, v] of Object.entries(update)) setPath(this, k, v);
-  }
-
-  async update(update: Record<string, unknown>): Promise<void> {
-    this.store.calls.push({ op: 'update', actor: this.id });
     for (const [k, v] of Object.entries(update)) {
-      // `items` is a getter-backed embedded collection (already mutated in place) and `_id` is
-      // immutable — the engine's `actor.update(actor.toObject())` persist includes both; skip them.
-      if (k === 'items' || k === '_id') continue;
-      setPath(this, k, v);
+      if (k === 'items') {
+        for (const data of v as any[]) {
+          const existing = this._items.find(i => i.id === data._id);
+          if (existing) existing.updateSource(data);
+          else this._items.push(this.itemFrom(data, data._id));
+        }
+        continue;
+      }
+      setPath(this, k, clone(v));
     }
   }
 
-  async createEmbeddedDocuments(_type: string, dataArr: any[]): Promise<MockItem[]> {
+  /** A copy of this actor, its items with their ids, in no database (Foundry's `clone`). */
+  clone(): MockActor {
+    const copy = new MockActor(this.toObject(), this.store);
+    copy.isClone = true;
+    return copy;
+  }
+
+  /** The server's record, for a database call; a clone has none. */
+  private record(): any {
+    if (this.isClone) throw new Error(`mock: a clone of "${this.name}" is in no database`);
+    const rec = this.store.server.get(this.id);
+    if (!rec) throw new Error(`mock: "${this.name}" is not on the server`);
+    return rec;
+  }
+
+  private itemFrom(data: any, id: string): MockItem {
+    const behaviors = data.__advKey ? (this.store.behaviors[data.__advKey] ?? []) : [];
+    return new MockItem({ ...data, _id: id }, this, behaviors);
+  }
+
+  /**
+   * Foundry's update: only what differs from the page's source is sent (nothing, when the page
+   * already holds it), and an embedded collection is never written through its parent's update.
+   */
+  async update(update: Record<string, unknown>): Promise<void> {
+    const rec = this.record();
+    this.store.calls.push({ op: 'update', actor: this.id });
+    const source = this.toObject();
+    for (const [k, v] of Object.entries(update)) {
+      if (k === 'items' || k === '_id' || equal(getPath(source, k), v)) continue;
+      setPath(this, k, clone(v));
+      setPath(rec, k, clone(v));
+    }
+  }
+
+  async createEmbeddedDocuments(
+    _type: string,
+    dataArr: any[],
+    opts: { keepId?: boolean } = {}
+  ): Promise<MockItem[]> {
+    const rec = this.record();
     this.store.calls.push({ op: 'createEmbeddedDocuments', actor: this.id, count: dataArr.length });
     const created: MockItem[] = [];
     for (const data of dataArr) {
-      const behaviors = data.__advKey ? (this.store.behaviors[data.__advKey] ?? []) : [];
-      const item = new MockItem(data, this, behaviors);
+      // Foundry assigns a new id unless asked to keep the given one.
+      const item = this.itemFrom(data, opts.keepId && data._id ? data._id : genId());
       this._items.push(item);
+      rec.items.push(item.toObject());
       created.push(item);
     }
     return created;
   }
 
   async updateEmbeddedDocuments(_type: string, updates: any[]): Promise<void> {
+    const rec = this.record();
     this.store.calls.push({ op: 'updateEmbeddedDocuments', actor: this.id, count: updates.length });
     for (const u of updates) {
       const item = this._items.find(i => i.id === u._id);
-      if (!item) continue;
+      const stored = rec.items.find((i: any) => i._id === u._id);
+      if (!item || !stored) continue;
+      const source = item.toObject();
       for (const [k, v] of Object.entries(u)) {
-        if (k === '_id') continue;
-        setPath(item, k, v);
+        if (k === '_id' || equal(getPath(source, k), v)) continue;
+        setPath(item, k, clone(v));
+        setPath(stored, k, clone(v));
       }
     }
   }
 
   async deleteEmbeddedDocuments(_type: string, ids: string[]): Promise<void> {
+    const rec = this.record();
     this.store.calls.push({ op: 'deleteEmbeddedDocuments', actor: this.id, ids });
     this._items = this._items.filter(i => !ids.includes(i.id));
+    rec.items = rec.items.filter((i: any) => !ids.includes(i._id));
+  }
+
+  /** dnd5e's Actor5e#performBulkUpdate: the actor's update, then the item creates, deletes, updates. */
+  async performBulkUpdate(
+    updates: { actor?: any; create?: any[]; delete?: string[]; item?: any[] },
+    options: Record<string, unknown> = {}
+  ): Promise<void> {
+    this.record();
+    this.store.calls.push({ op: 'performBulkUpdate', actor: this.id, options });
+    if (updates.actor && Object.keys(updates.actor).length > 0) await this.update(updates.actor);
+    if (updates.create?.length) {
+      await this.createEmbeddedDocuments('Item', updates.create, { keepId: true });
+    }
+    if (updates.delete?.length) await this.deleteEmbeddedDocuments('Item', updates.delete);
+    if (updates.item?.length) await this.updateEmbeddedDocuments('Item', updates.item);
   }
 
   async delete(): Promise<void> {
+    this.record();
     this.store.actors.delete(this.id);
+    this.store.server.delete(this.id);
   }
 
   toObject(): any {
-    // Persisted items are data-only — no advancements re-run after the build, so we don't carry __advKey.
     return {
       _id: this.id,
       name: this.name,
@@ -235,7 +335,10 @@ export interface FakePregenSpec {
 }
 
 interface MockStore {
+  /** The page's documents (`game.actors`). */
   actors: Map<string, MockActor>;
+  /** What the server holds per actor: written by the database calls only, never by `updateSource`. */
+  server: Map<string, any>;
   settings: Map<string, unknown>;
   behaviors: Record<string, AdvBehaviorSpec[]>;
   calls: Array<{ op: string; [k: string]: unknown }>;
@@ -247,6 +350,10 @@ export interface MockHandle {
   persistedActorCount(): number;
   /** the calls recorded against actors, for asserting orchestration (persist/rollback/etc.). */
   calls(): Array<{ op: string; [k: string]: unknown }>;
+  /** the server's record of an actor (plain data, items included), or undefined once deleted. */
+  server(id: string): any;
+  /** rebuild every page document from the server's records, as a fresh page would. */
+  reconnect(): void;
   uninstall(): void;
 }
 
@@ -260,6 +367,7 @@ export function installFoundryMock(
 ): MockHandle {
   const store: MockStore = {
     actors: new Map(),
+    server: new Map(),
     settings: new Map([['dnd5e.disableAdvancements', false]]),
     behaviors: {},
     calls: [],
@@ -328,7 +436,13 @@ export function installFoundryMock(
   (packs as any).get = (id: string) => packs.find(p => p.metadata.id === id);
 
   const g = globalThis as any;
-  const saved = { game: g.game, Actor: g.Actor, Roll: g.Roll, fromUuid: g.fromUuid };
+  const saved = {
+    game: g.game,
+    Actor: g.Actor,
+    Roll: g.Roll,
+    fromUuid: g.fromUuid,
+    foundry: g.foundry,
+  };
 
   g.game = {
     system: { id: 'dnd5e' },
@@ -345,22 +459,30 @@ export function installFoundryMock(
     create: async (data: any) => {
       const actor = new MockActor(data, store);
       store.actors.set(actor.id, actor);
+      store.server.set(actor.id, actor.toObject());
       return actor;
     },
   };
   g.Roll = { replaceFormulaData: (formula: string) => formula };
   g.fromUuid = async () => null;
+  g.foundry = { utils: { randomID: genId } };
 
   return {
     store,
     persistedActorCount: () =>
-      [...store.actors.values()].filter(a => !a.name.startsWith('__mcp_pc_build_')).length,
+      [...store.server.values()].filter(a => !String(a.name).startsWith('__mcp_pc_build_')).length,
     calls: () => store.calls,
+    server: (id: string) => store.server.get(id),
+    reconnect: () => {
+      store.actors.clear();
+      for (const [id, rec] of store.server) store.actors.set(id, new MockActor(clone(rec), store));
+    },
     uninstall: () => {
       g.game = saved.game;
       g.Actor = saved.Actor;
       g.Roll = saved.Roll;
       g.fromUuid = saved.fromUuid;
+      g.foundry = saved.foundry;
     },
   };
 }

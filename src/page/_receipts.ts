@@ -194,8 +194,8 @@ function propertyAt(source: unknown, path: string): unknown {
   return target;
 }
 
-/** Structural equality of plain data. */
-function same(a: unknown, b: unknown): boolean {
+/** Structural equality of plain data (key order aside). */
+export function sameData(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
@@ -204,7 +204,7 @@ function same(a: unknown, b: unknown): boolean {
   return keys.every(
     k =>
       Object.hasOwn(b, k) &&
-      same((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])
+      sameData((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])
   );
 }
 
@@ -237,7 +237,7 @@ export function updatePreImage(
       if (value !== undefined) absent.push(path);
       continue;
     }
-    if (same(prior, value)) continue;
+    if (sameData(prior, value)) continue;
     // merging an empty object into an object writes nothing
     if (how === 'set' && isPlain(value) && isPlain(prior) && Object.keys(value).length === 0) {
       continue;

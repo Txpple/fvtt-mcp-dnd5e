@@ -431,8 +431,8 @@ export class DnD5ePcTools {
   }
 
   private formatLevelUpResponse(result: any, params: any): any {
-    // A corrupting advancement failure never reaches here: the page rolls the PC back and throws
-    // `rolled-back` (or, when the rollback was incomplete, its own words), answered as an error.
+    // A corrupting advancement failure never reaches here: the page writes nothing and throws
+    // `rolled-back` (or, when the server did not take the level, its own words), answered as an error.
 
     // Under-specified (e.g. a subclass pick missing at level 3): nothing was changed.
     if (result?.success === false && Array.isArray(result?.needsChoices)) {

@@ -2,7 +2,8 @@
 // inspectAdvancementChoices). Drives the FRESH dist/ against the sandbox world, so it exercises the
 // new page code WITHOUT a CC restart (the MCP tool layer is a thin wrapper — proven separately by
 // pc.test.ts). Mirrors scripts/verify-scale-report.mjs: connect → exercise → assert → clean up in
-// `finally`. TAG-namespaced actors are deleted whatever happens.
+// `finally`. TAG-namespaced actors are deleted whatever happens. Test M reconnects mid-run (a fresh
+// page) and reads every PC back, so a write that stayed in the bridge page's memory fails there.
 //
 // Build first: npm run build. Run: node scripts/verify-pc-build.mjs   (needs the world up + .env)
 import { loadEnv } from '../dist/env.js';
@@ -676,6 +677,11 @@ try {
     h3?.success === true && h3?.actor?.level === 3,
     `H4: leveled to 3 with a subclass (level ${h3?.actor?.level})`
   );
+  const h3Applied = (h3?.applied ?? []).filter(r => r.level === 3);
+  assert(
+    h3Applied.some(r => r.source === 'subclass'),
+    `H5: the subclass's own level-3 advancements ran (${h3Applied.map(r => `${r.source}:${r.title}`).join(', ')})`
+  );
 
   // ---- Test I (v4): ONE-SHOT MULTICLASS from create-pc — Fighter 1 / Wizard 1 in a single call ----
   const mcName = `${TAG} MC Fighter-Wizard`;
@@ -871,6 +877,82 @@ try {
     srdRefused = /non-premium|SRD|premium/i.test(e?.message || '');
   }
   assert(srdRefused, 'K1: copying from an SRD pack (dnd5e.heroes) is refused (premium-only guard)');
+
+  // ---- Test M: what the server holds — reconnect on a fresh page and read every PC back ----
+  // The bridge page that built or leveled a PC is no witness: an advancement's apply() writes in
+  // memory, so that page can show a level the server never took (level-up-pc did exactly that until
+  // it applied on a clone: a fresh page found no subclass, no granted features, no HP value). Each PC
+  // is read here, again after a reconnect, and the two must match.
+  console.log('\n--- Test M: reconnect and read back from the server ---');
+  const pcs = [
+    { tag: 'B create-pc L1', id: built.actor.id },
+    { tag: 'E-G create-pc L5 → level-up 6 → multiclass 7', id: e5.actor.id },
+    { tag: 'H level-up 2 → 3 with a subclass', id: h2.actor.id },
+    { tag: 'I one-shot multiclass', id: i.actor.id },
+    { tag: 'J prefab', id: jr.actor.id },
+  ];
+  const readPc = ids =>
+    f.evaluate(ids => {
+      const out = {};
+      for (const id of ids) {
+        const a = globalThis.game.actors.get(id);
+        if (!a) {
+          out[id] = null;
+          continue;
+        }
+        const src = a.toObject();
+        const advValues = item =>
+          Object.values(item.system?.advancement ?? {})
+            .filter(adv => adv?.value && Object.keys(adv.value).length > 0)
+            .map(adv => `${adv.type}:${JSON.stringify(adv.value)}`)
+            .sort();
+        out[id] = {
+          level: a.system?.details?.level,
+          hpValue: src.system?.attributes?.hp?.value,
+          hpMax: a.system?.attributes?.hp?.max,
+          items: src.items.map(it => `${it.type}:${it.name}`).sort(),
+          advancement: src.items
+            .filter(it => ['class', 'subclass', 'race', 'background'].includes(it.type))
+            .map(it => ({ item: it.name, values: advValues(it) })),
+        };
+      }
+      return out;
+    }, ids);
+  const ids = pcs.map(p => p.id);
+  const onPage = await withNodeTimeout(readPc(ids), 60_000, 'pageRead');
+  await f.dispose();
+  await withNodeTimeout(f.connect(), 300_000, 'reconnect');
+  const onServer = await withNodeTimeout(readPc(ids), 60_000, 'serverRead');
+  for (const p of pcs) {
+    const page = JSON.stringify(onPage[p.id]);
+    const server = JSON.stringify(onServer[p.id]);
+    assert(
+      onServer[p.id] !== null && page === server,
+      `M: ${p.tag}: the server holds what the page showed` +
+        (page === server ? '' : `\n    page:   ${page}\n    server: ${server}`)
+    );
+  }
+  const rogue = onServer[h2.actor.id];
+  console.log(JSON.stringify(rogue, null, 2));
+  assert(
+    rogue?.items?.some(n => n.startsWith('subclass:')),
+    `M-H1: the Rogue's subclass is on the server (${rogue?.items?.filter(n => n.startsWith('subclass:')).join(', ')})`
+  );
+  const rogueClass = rogue?.advancement?.find(a => a.item === 'Rogue');
+  assert(
+    rogueClass?.values?.some(v => /^HitPoints:.*"3"/.test(v)),
+    `M-H2: the Rogue's level-3 Hit Points value is on the server (${rogueClass?.values?.join(' | ')})`
+  );
+  const fighter7 = onServer[e5.actor.id];
+  assert(
+    fighter7?.level === 7 && fighter7?.hpMax === 58,
+    `M-G1: the multiclassed Fighter is level 7 with 58 HP on the server (level ${fighter7?.level}, HP ${fighter7?.hpMax})`
+  );
+  assert(
+    fighter7?.items?.includes('class:Wizard') &&
+      fighter7?.items?.some(n => n.startsWith('subclass:')),
+    'M-G2: the Wizard class and the Champion subclass are on the server'
+  );
 
   // ---- Test L: dnd5e 6.0 ModifyItem advancement is applied by the engine's FORCED step ----
   // No premium book on disk carries a ModifyItem yet (5.x builds), so the fixture is authored here on
