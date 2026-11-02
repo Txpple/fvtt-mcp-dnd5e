@@ -256,7 +256,11 @@ so there's nothing to hand-patch.
 ## Levelling up & multiclassing (`level-up-pc`)
 
 `level-up-pc` adds **one class level** to an existing PC and applies just that level's advancement in
-place. It's the "ding, you levelled" workflow AND the way to multiclass.
+place, the way the sheet's own level-up does. That covers the class and its subclass at the new class
+level, the **species at the new character level** (an Elf's or a Tiefling's lineage at 3 and 5,
+Draconic Flight at 5), each feat or class feature already on the PC at the level it advances at, and
+any feature the level grants, through its own grants. It's the "ding, you levelled" workflow AND the
+way to multiclass.
 
 - **Single-class level-up** — `level-up-pc` `{ actorIdentifier, className: <a class the PC already has> }`.
   HP grows by `hpMode` (avg|max), new features land, and the subclass is asked for when that class hits
@@ -279,8 +283,11 @@ place. It's the "ding, you levelled" workflow AND the way to multiclass.
     at a time (the in-play path: "I'm dipping a level of Wizard at level 6").
 - **Choices on level-up** — same as `create-pc`: call with no/partial `choices` to get a `needsChoices[]`
   dry-run (e.g. the subclass options when the class reaches level 3) — **the PC is NOT changed** — then
-  fill `choices` (keyed by the **class** level → advancement-id) and re-call. Ask the player for the
-  meaningful picks.
+  fill `choices` and re-call. Key each pick by the `level` its needsChoices entry names: the class level
+  for the class and subclass, the character level for the species and a feat, a granted feature's
+  own level (often `"0"`). A feature the level grants can ask for its pick only once the level is
+  applied, so a second needsChoices round may follow the first: add those picks to the same map. Ask
+  the player for the meaningful picks.
 - **Ability scores & feats on level-up** — `level-up-pc` does NOT apply ASI ability bumps. When the
   player takes an **ASI** at 4/8/12/16/19, raise the final scores yourself with `manage-actors` `update`; when they
   take a **feat**, add it with `add-feature` (compendium-features). HP re-derives from the new CON.
@@ -310,7 +317,7 @@ place. It's the "ding, you levelled" workflow AND the way to multiclass.
   every choice the build will ask for.
 - **Levelling:** `create-pc` builds at any `level` 1–20 in one shot; **`level-up-pc`** adds one level to
   an existing PC (same class or a multiclass). See "Levelling up & multiclassing" above. The choices map
-  is the same shape for both, keyed by the **class** level.
+  is the same shape for both, each pick keyed by the level its needsChoices entry names.
 - The skill owns judgment (which class/species/background/subclass, the ability math, the picks, the
   gear); the tools own correctness (name→uuid, advancement sequencing, persist, @scale, the multiclass
   proficiency subset). Don't reach past that line — e.g. don't try to set proficiencies or HP directly;

@@ -167,10 +167,14 @@ export async function findClassPregenArt(
   return null;
 }
 
-/** One choice point a class/species/background/subclass advancement exposes (descriptive — never auto-picked). */
+/**
+ * One choice point an advancement exposes (descriptive — never auto-picked): a class's, species',
+ * background's or subclass's, or a `feature`'s (any other item: a feat, a class feature with its own
+ * grants), which only a level-up runs.
+ */
 export interface AdvancementChoice {
   id: string;
-  source: 'class' | 'species' | 'background' | 'subclass';
+  source: 'class' | 'species' | 'background' | 'subclass' | 'feature';
   level: number;
   type: string; // 'Trait' | 'ItemChoice' | 'Subclass'
   title: string;
@@ -645,7 +649,7 @@ export async function collectAdvancementChoices(
  */
 async function applyItemAdvancements(
   item: any,
-  source: 'class' | 'species' | 'background' | 'subclass',
+  source: AdvancementChoice['source'],
   levels: number[],
   choices: PcChoiceMap | undefined,
   applied: PcBuildResult['applied'],
@@ -694,6 +698,38 @@ async function applyItemAdvancements(
     applied?.push(rec);
   }
 }
+
+/**
+ * The level an item other than a class, subclass or species advances at when the class
+ * `classItemId` gains a level, as dnd5e's createLevelChangeSteps reads it: a feature a class or
+ * subclass granted (class-linked) advances with that class only, at its new class level, and not at
+ * all for another class's level (null); anything else (a background, a feat) at the new character
+ * level. LIVE (reads the item's dnd5e getters).
+ */
+function levelUpLevelFor(
+  item: any,
+  classItemId: string | undefined,
+  classLevel: number,
+  charLevel: number
+): number | null {
+  const root = item.system?.advancementRootItem;
+  if (
+    (root?.type === 'class' || root?.type === 'subclass') &&
+    item.system?.advancementClassLinked
+  ) {
+    const rootClass = root.class ?? root;
+    return rootClass?.id === classItemId ? classLevel : null;
+  }
+  return charLevel;
+}
+
+/** The choice source a level-up names an item other than a class, subclass or species by. */
+const itemSource = (item: any): AdvancementChoice['source'] =>
+  item.type === 'background' ? 'background' : 'feature';
+
+/** The actor's items whose ids `seen` does not hold. */
+const newItems = (actor: any, seen: Set<string>): any[] =>
+  actor.items.filter((i: any) => !seen.has(i.id));
 
 /**
  * Scan a built actor's items for @scale.* tokens that DON'T resolve against the actor's roll data.
@@ -1248,9 +1284,12 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
 // add. Works on a CLONE of the actor, as dnd5e's AdvancementManager does: bump/embed the class, apply
 // ONLY the new level's advancements (prior value-state is preserved, so L1..N don't re-apply, and the
 // classRestriction filter gives a multiclass its 2024 proficiency subset), then write the clone's
-// difference from the actor in one batch (advancementWrites → performBulkUpdate). Nothing reaches the
-// server before that batch, so a refused level-up writes nothing. Ability-score increases at ASI tiers
-// stay the skill's job (final scores + update-actor); a feat is added with add-feature.
+// difference from the actor in one batch (advancementWrites → performBulkUpdate). The level is dnd5e's
+// level change (createLevelChangeSteps): the species at the new character level, the class and its
+// subclass at the new class level, every other item at its own (levelUpLevelFor), and what those grant
+// through its own advancements. Nothing reaches the server before that batch, so a refused level-up
+// writes nothing. Ability-score increases at ASI tiers stay the skill's job (final scores +
+// update-actor); a feat is added with add-feature.
 // =============================================================================
 
 export interface LevelUpPlan {
@@ -1303,13 +1342,40 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
   if (currentCharLevel >= 20) {
     throw invalid(`"${actor.name}" is already character level 20.`);
   }
+  const charLevel = currentCharLevel + 1;
   const originalClassId = actor.system?.details?.originalClass;
   const role: 'primary' | 'secondary' =
     !isNewClass && existing.id === originalClassId ? 'primary' : 'secondary';
 
-  // 4. Required choices at the NEW level (from the source doc, BEFORE mutating) — a dry-run / under-
+  // What else advances at this level, as dnd5e's level change runs it: the species at the new
+  // CHARACTER level (an Elf's or a Tiefling's lineage at 3 and 5), the leveled class's subclass at the
+  // new class level, and every other item at the level levelUpLevelFor names (a feat's pick at 5, a
+  // subclass feature's spells at 5, 7, 9). The clone keeps these ids.
+  const speciesItem = actor.items.find((i: any) => i.type === 'race');
+  const ownSubclass = isNewClass
+    ? undefined
+    : actor.items.find(
+        (i: any) => i.type === 'subclass' && i.system?.classIdentifier === classIdentifier
+      );
+  const levelItems: Array<{ id: string; item: any; level: number }> = [];
+  for (const item of actor.items) {
+    if (['class', 'subclass', 'race'].includes(item.type)) continue;
+    const level = levelUpLevelFor(item, existing?.id, newClassLevel, charLevel);
+    if (level !== null) levelItems.push({ id: item.id, item, level });
+  }
+
+  // 4. Required choices at the NEW level (from the source docs, BEFORE mutating) — a dry-run / under-
   //    specified call returns needsChoices and does NOT touch the actor.
-  const specs = await collectAdvancementChoices(classRes.doc, [newClassLevel], 'class', role);
+  const specs = [
+    ...(speciesItem ? await collectAdvancementChoices(speciesItem, [charLevel], 'species') : []),
+    ...(await collectAdvancementChoices(classRes.doc, [newClassLevel], 'class', role)),
+    ...(ownSubclass
+      ? await collectAdvancementChoices(ownSubclass, [newClassLevel], 'subclass')
+      : []),
+  ];
+  for (const e of levelItems) {
+    specs.push(...(await collectAdvancementChoices(e.item, [e.level], itemSource(e.item))));
+  }
   const missing = computeMissingChoices(specs, plan.choices);
   if (missing.length > 0 && !plan.acceptDefaults) {
     return {
@@ -1355,18 +1421,28 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
       classItemId = existing.id;
     }
     clone.reset?.();
+    const before = new Set<string>(clone.items.map((i: any) => i.id));
+    const apply = (
+      id: string,
+      source: AdvancementChoice['source'],
+      levels: number[],
+      classRole?: 'primary' | 'secondary'
+    ) =>
+      applyItemAdvancements(
+        clone.items.get(id),
+        source,
+        levels,
+        plan.choices,
+        applied,
+        errors,
+        hpMode,
+        classRole,
+        usedChoices
+      );
 
-    await applyItemAdvancements(
-      clone.items.get(classItemId),
-      'class',
-      [newClassLevel],
-      plan.choices,
-      applied,
-      errors,
-      hpMode,
-      role,
-      usedChoices
-    );
+    // In dnd5e's order: the species, the class, its subclass, then every other item.
+    if (speciesItem) await apply(speciesItem.id, 'species', [charLevel]);
+    await apply(classItemId, 'class', [newClassLevel], role);
 
     // Subclass features fire AT the new level only (never re-grant lower-level subclass features),
     // and only the leveled class's subclass: matched by classIdentifier, as embedClassAndApply does,
@@ -1374,18 +1450,23 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     const subclassItem = clone.items.find(
       (i: any) => i.type === 'subclass' && i.system?.classIdentifier === classIdentifier
     );
-    if (subclassItem) {
-      await applyItemAdvancements(
-        clone.items.get(subclassItem.id),
-        'subclass',
-        [newClassLevel],
-        plan.choices,
-        applied,
-        errors,
-        hpMode,
-        undefined,
-        usedChoices
-      );
+    if (subclassItem) await apply(subclassItem.id, 'subclass', [newClassLevel]);
+    for (const e of levelItems) await apply(e.id, itemSource(e.item), [e.level]);
+
+    // An item this level granted that has advancements of its own (a subclass feature carrying its
+    // spells) runs them up to the level it advances at, as dnd5e's AdvancementManager adds its steps;
+    // what that grants in turn runs the same way. Its picks are only known now, so a missing one is
+    // reported once the applies are done.
+    const lateSpecs: AdvancementChoice[] = [];
+    for (let added = newItems(clone, before); added.length > 0; added = newItems(clone, before)) {
+      for (const item of added) {
+        before.add(item.id);
+        const level = levelUpLevelFor(item, classItemId, newClassLevel, charLevel);
+        if (level === null || ['class', 'subclass', 'race'].includes(item.type)) continue;
+        const levels = levelsUpTo(level);
+        lateSpecs.push(...(await collectAdvancementChoices(item, levels, itemSource(item))));
+        await apply(item.id, itemSource(item), levels);
+      }
     }
 
     // A corrupting advancement failed: the clone is dropped and nothing is written — never a
@@ -1396,7 +1477,9 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     const unusedChoices = unusedChoiceKeys(plan.choices, usedChoices);
     if (errors.length > 0 || unusedChoices.length > 0) {
       const failed = [
-        ...(unusedChoices.length > 0 ? [unusedChoicesMessage(unusedChoices, specs)] : []),
+        ...(unusedChoices.length > 0
+          ? [unusedChoicesMessage(unusedChoices, [...specs, ...lateSpecs])]
+          : []),
         ...(errors.length > 0
           ? [`${errors.length} advancement(s) failed — ${errors.join('; ')}`]
           : []),
@@ -1405,6 +1488,21 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
         `"${actor.name}" was not leveled: ${failed}. Nothing was written; fix the input (e.g. a ` +
           'bad subclass or choice uuid) and re-call level-up-pc.'
       );
+    }
+
+    // A pick an item granted this level asks for, unsupplied: the clone is dropped, as a pick missing
+    // before the applies is answered (the choices from the first round go back in with these).
+    const lateMissing = computeMissingChoices(lateSpecs, plan.choices);
+    if (lateMissing.length > 0 && !plan.acceptDefaults) {
+      return {
+        success: false,
+        needsChoices: lateMissing,
+        warnings: [
+          `${classRes.doc.name} level ${newClassLevel} grants features that need ` +
+            `${lateMissing.length} choice(s), known only once the level is applied. Nothing was ` +
+            'written: add them to the same `choices` map and re-call, or pass acceptDefaults:true.',
+        ],
+      };
     }
 
     // 6. Write the level: the clone's difference from the actor, in one batch (all or nothing), with

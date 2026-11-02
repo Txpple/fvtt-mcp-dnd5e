@@ -23,6 +23,8 @@ export interface AdvBehaviorSpec {
   title: string;
   levels: number[];
   classRestriction?: string | undefined;
+  /** The advancement's configuration (an ItemChoice's `choices` and `pool`, a Trait's `choices`). */
+  configuration?: Record<string, any> | undefined;
   /**
    * Mutate the owning actor when applied (e.g. bump HP, add an item with `actor.updateSource({ items })`,
    * set spell slots), in memory as dnd5e's apply does. The apply also records `data` as the
@@ -33,10 +35,10 @@ export interface AdvBehaviorSpec {
   throws?: boolean | undefined;
 }
 
-/** A fake premium-book class/species/background document. */
+/** A fake premium-book class/species/background/subclass document, or a feature (`feat`) a grant embeds. */
 export interface FakeDocSpec {
   name: string;
-  type: 'class' | 'race' | 'background' | 'subclass';
+  type: 'class' | 'race' | 'background' | 'subclass' | 'feat';
   /** A subclass's key is `subclass:<identifier>`: the data a Subclass effect embeds carries it as `__advKey`. */
   identifier: string;
   packId: string;
@@ -90,7 +92,7 @@ function buildAdvancement(spec: AdvBehaviorSpec, item: MockItem, actor: MockActo
     title: spec.title,
     levels: spec.levels,
     classRestriction: spec.classRestriction ?? '',
-    configuration: {},
+    configuration: spec.configuration ?? {},
     apply: async (level: number, data: any, opts: any) => {
       if (spec.throws) throw new Error(`mock advancement "${spec.title}" rejected`);
       spec.effect?.(actor, level, data, opts);
@@ -110,6 +112,8 @@ export class MockItem {
   advKey?: string | undefined;
   /** Foundry's document stats; only `compendiumSource` matters here (a pack copy's stamp). */
   _stats: any;
+  /** The item's flags; `dnd5e.advancementRoot` names the class or subclass whose grant embedded it. */
+  flags: any;
   /** the advancement behaviors this item carries (a class/species/background) — bound when embedded. */
   private behaviors: AdvBehaviorSpec[];
   private actor: MockActor;
@@ -123,6 +127,38 @@ export class MockItem {
     this.actor = actor;
     if (data.__advKey) this.advKey = data.__advKey;
     this._stats = clone(data._stats ?? {});
+    this.flags = clone(data.flags ?? {});
+    this.bindDerived();
+  }
+
+  /**
+   * dnd5e's derived item getters a level-up reads, kept off the source (toObject skips them):
+   * `advancementRootItem` (the item its advancementRoot flag names) and `advancementClassLinked`
+   * (false only for a feat whose type is `feat`).
+   */
+  private bindDerived(): void {
+    const item = this;
+    Object.defineProperties(this.system, {
+      advancementRootItem: {
+        configurable: true,
+        get: () =>
+          item.actor.items.get(String(item.flags?.dnd5e?.advancementRoot ?? '').split('.')[0]),
+      },
+      advancementClassLinked: {
+        configurable: true,
+        get: () => !(item.type === 'feat' && item.system?.type?.value === 'feat'),
+      },
+    });
+  }
+
+  /** A subclass's class on the same actor (dnd5e's Item5e#class); null for any other item. */
+  get class(): MockItem | null {
+    if (this.type !== 'subclass') return null;
+    return (
+      this.actor.items.find(
+        (i: MockItem) => i.type === 'class' && i.system?.identifier === this.system?.classIdentifier
+      ) ?? null
+    );
   }
 
   /** byType map the engine reads via extractAdvancements; apply() closes over the owning actor. */
@@ -138,6 +174,7 @@ export class MockItem {
   /** In memory only, as Foundry's: the server never hears of it. */
   updateSource(update: Record<string, unknown>): void {
     for (const [k, v] of Object.entries(update)) setPath(this, k, clone(v));
+    if (!Object.hasOwn(this.system, 'advancementRootItem')) this.bindDerived();
   }
 
   toObject(): any {
@@ -147,6 +184,7 @@ export class MockItem {
       type: this.type,
       system: clone(this.system),
       _stats: clone(this._stats),
+      flags: clone(this.flags),
       ...(this.advKey ? { __advKey: this.advKey } : {}),
     };
   }

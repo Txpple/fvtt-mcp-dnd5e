@@ -536,4 +536,223 @@ describe('levelUpPc orchestration', () => {
     expect(wizard.system.advancement.arcane.value['1']).toEqual({});
     expect(stored.items.map((i: any) => i.name)).toContain('Arcane Recovery');
   });
+
+  /** A Wizard whose levels only gain HP: a multiclass level whose class level is 1. */
+  const wizard = (): FakeDocSpec => ({
+    name: 'Wizard',
+    type: 'class',
+    identifier: 'wizard',
+    packId: PACK,
+    advancements: [hitPoints([1, 2, 3])],
+  });
+
+  /** An Elf whose lineage grants a spell at character level 3. */
+  const elf = (
+    advancements: AdvBehaviorSpec[] = [grant('lineage', [3], 'Lineage Spell')]
+  ): FakeDocSpec => ({ name: 'Elf', type: 'race', identifier: 'elf', packId: PACK, advancements });
+
+  /** The item named `name` on the server's record of `id`. */
+  const stored = (id: string, name: string) =>
+    mock!.server(id).items.find((i: any) => i.name === name);
+
+  it("runs the species at the new character level: an Elf's level-3 lineage on a multiclass level", async () => {
+    mock = installFoundryMock([fighter({ advancements: [hitPoints([1, 2])] }), wizard(), elf()]);
+    const built: any = await createPcActor({
+      name: 'Climber',
+      className: 'Fighter',
+      species: 'Elf',
+      level: 2,
+      folder: 'fixed-folder',
+    });
+    const id = built.actor.id;
+    expect(stored(id, 'Lineage Spell')).toBeUndefined();
+
+    // Wizard 1 is character level 3: the species advances at 3, though the class is at 1.
+    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Wizard' });
+    expect(res.success).toBe(true);
+    expect(res.applied).toContainEqual(
+      expect.objectContaining({ source: 'species', level: 3, title: 'Lineage Spell' })
+    );
+    mock.reconnect();
+    expect(stored(id, 'Lineage Spell')?.type).toBe('feat');
+    expect(stored(id, 'Elf').system.advancement.lineage.value['3']).toEqual({});
+  });
+
+  it("asks for a species' pick at the new character level before writing anything", async () => {
+    const pick: AdvBehaviorSpec = {
+      id: 'lineage-pick',
+      type: 'ItemChoice',
+      title: 'Lineage Spell Choice',
+      levels: [3],
+      configuration: { choices: { 3: { count: 1 } }, pool: [{ uuid: 'Compendium.x.Item.a' }] },
+    };
+    mock = installFoundryMock([fighter({ advancements: [hitPoints([1, 2, 3])] }), elf([pick])]);
+    const built: any = await createPcActor({
+      name: 'Climber',
+      className: 'Fighter',
+      species: 'Elf',
+      level: 2,
+      folder: 'fixed-folder',
+    });
+    const id = built.actor.id;
+    const from = mock.calls().length;
+
+    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' });
+    expect(res.success).toBe(false);
+    expect(res.needsChoices).toEqual([
+      expect.objectContaining({ id: 'lineage-pick', source: 'species', level: 3, count: 1 }),
+    ]);
+    expect(writesSince(from, id)).toEqual([]);
+  });
+
+  /** A Cleric whose first level embeds Domain Spells, a class feature with a grant at class level 2. */
+  const clericAndDomainSpells = (): FakeDocSpec[] => [
+    {
+      name: 'Cleric',
+      type: 'class',
+      identifier: 'cleric',
+      packId: PACK,
+      advancements: [
+        hitPoints([1, 2, 3]),
+        {
+          id: 'domain',
+          type: 'ItemGrant',
+          title: 'Domain Spells',
+          levels: [1],
+          effect: actor => {
+            const cleric = actor.items.find((i: any) => i.system?.identifier === 'cleric');
+            actor.updateSource({
+              items: [
+                {
+                  _id: 'domain-item',
+                  name: 'Domain Spells',
+                  type: 'feat',
+                  system: { type: { value: 'class' } },
+                  flags: { dnd5e: { advancementRoot: `${cleric.id}.domain` } },
+                  __advKey: 'feat:domain-spells',
+                },
+              ],
+            });
+          },
+        },
+      ],
+    },
+    {
+      name: 'Domain Spells',
+      type: 'feat',
+      identifier: 'domain-spells',
+      packId: PACK,
+      advancements: [grant('ds2', [2], 'Spiritual Weapon')],
+    },
+  ];
+
+  it('advances a class feature already on the actor with its own class only, at the class level', async () => {
+    mock = installFoundryMock([...clericAndDomainSpells(), wizard()]);
+    const built: any = await createPcActor({
+      name: 'Climber',
+      className: 'Cleric',
+      level: 1,
+      folder: 'fixed-folder',
+    });
+    const id = built.actor.id;
+
+    // Wizard 1 (character level 2) is not the Cleric's level: Domain Spells does not advance.
+    await levelUpPc({ actorIdentifier: id, className: 'Wizard' });
+    expect(stored(id, 'Spiritual Weapon')).toBeUndefined();
+
+    // Cleric 2 (character level 3): Domain Spells advances at the class level, 2.
+    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Cleric' });
+    expect(res.success).toBe(true);
+    expect(res.applied).toContainEqual(
+      expect.objectContaining({ source: 'feature', level: 2, title: 'Spiritual Weapon' })
+    );
+    mock.reconnect();
+    expect(stored(id, 'Spiritual Weapon')?.type).toBe('feat');
+    expect(stored(id, 'Domain Spells').system.advancement.ds2.value['2']).toEqual({});
+  });
+
+  /** A Fighter whose level 2 embeds Shadow Arts, a feature with its own grant (and a pick) at 2. */
+  const fighterAndShadowArts = (pick?: AdvBehaviorSpec): FakeDocSpec[] => [
+    fighter({
+      advancements: [
+        hitPoints([1, 2]),
+        {
+          id: 'arts',
+          type: 'ItemGrant',
+          title: 'Shadow Arts',
+          levels: [2],
+          effect: actor => {
+            const ftr = actor.items.find((i: any) => i.system?.identifier === 'fighter');
+            actor.updateSource({
+              items: [
+                {
+                  _id: 'arts-item',
+                  name: 'Shadow Arts',
+                  type: 'feat',
+                  system: { type: { value: 'class' } },
+                  flags: { dnd5e: { advancementRoot: `${ftr.id}.arts` } },
+                  __advKey: 'feat:shadow-arts',
+                },
+              ],
+            });
+          },
+        },
+      ],
+    }),
+    {
+      name: 'Shadow Arts',
+      type: 'feat',
+      identifier: 'shadow-arts',
+      packId: PACK,
+      advancements: [
+        grant('figments', [2], 'Shadowy Figments'),
+        grant('later', [5], 'Not Yet'),
+        ...(pick ? [pick] : []),
+      ],
+    },
+  ];
+
+  it('runs the advancements of a feature the level grants, up to the level it advances at', async () => {
+    mock = installFoundryMock(fighterAndShadowArts());
+    const id = await buildL1();
+
+    const res: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' });
+    expect(res.success).toBe(true);
+    mock.reconnect();
+    expect(stored(id, 'Shadow Arts')?.system.advancement.figments.value['2']).toEqual({});
+    expect(stored(id, 'Shadowy Figments')?.type).toBe('feat');
+    expect(stored(id, 'Not Yet')).toBeUndefined();
+  });
+
+  it("answers a granted feature's pick as needsChoices, writing nothing, then applies it when supplied", async () => {
+    const uuid = 'Compendium.x.Item.cantrip';
+    const pick: AdvBehaviorSpec = {
+      id: 'cantrips',
+      type: 'ItemChoice',
+      title: 'Cantrips',
+      levels: [0],
+      configuration: { choices: { 0: { count: 1 } }, pool: [{ uuid }] },
+    };
+    mock = installFoundryMock(fighterAndShadowArts(pick));
+    const id = await buildL1();
+    const from = mock.calls().length;
+
+    const asked: any = await levelUpPc({ actorIdentifier: id, className: 'Fighter' });
+    expect(asked.success).toBe(false);
+    expect(asked.needsChoices).toEqual([
+      expect.objectContaining({ id: 'cantrips', source: 'feature', level: 0, count: 1 }),
+    ]);
+    expect(writesSince(from, id)).toEqual([]);
+
+    const res: any = await levelUpPc({
+      actorIdentifier: id,
+      className: 'Fighter',
+      choices: { '0': { cantrips: { selected: [uuid] } } },
+    });
+    expect(res.success).toBe(true);
+    mock.reconnect();
+    expect(stored(id, 'Shadow Arts').system.advancement.cantrips.value['0']).toEqual({
+      selected: [uuid],
+    });
+  });
 });
