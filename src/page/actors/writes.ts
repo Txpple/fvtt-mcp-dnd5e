@@ -9,6 +9,7 @@ import {
   resolveActorFuzzy,
   getOrCreateFolder as getOrCreateFolderShared,
   importFromCompendium,
+  compendiumCopy,
   findUnresolvedScaleTokens,
   scaleTokensResolveFor,
   MCP_FLAG_SCOPE,
@@ -302,7 +303,7 @@ export async function createActorFromCompendium(request: {
   // Resolve + fetch through the shared whole-document copy primitive (validates
   // inputs, resolves the pack, fetches the document). Actor-specific validation
   // runs below on the live `source`; the per-quantity loop re-derives an
-  // independent copy via sourceActor.toObject().
+  // independent copy via compendiumCopy(sourceActor).
   const { pack, source: sourceActor } = await importFromCompendium(packId, itemId);
 
   // Validate that the document is an Actor.
@@ -354,9 +355,10 @@ export async function createActorFromCompendium(request: {
       const customName = names[i] || `${sourceActor.name} ${i + 1}`;
 
       // Build actor data from the source's full system, items, and effects.
-      const sourceData = sourceActor.toObject();
+      const sourceData = compendiumCopy(sourceActor);
       const actorData = {
         name: customName,
+        _stats: { compendiumSource: sourceData._stats?.compendiumSource ?? null },
         type: sourceData.type,
         img: sourceData.img,
         system: sourceData.system || sourceData.data || {},
@@ -785,7 +787,7 @@ export async function addActorItems(params: {
       if (source.documentName !== 'Item') {
         throw invalid(`items[${idx}]: uuid "${uuid}" is a ${source.documentName}, not an Item.`);
       }
-      const { doc, warnings: w } = prepareUuidItemCopy(source.toObject(), it, `items[${idx}]`);
+      const { doc, warnings: w } = prepareUuidItemCopy(compendiumCopy(source), it, `items[${idx}]`);
       warnings.push(...w);
       payload.push(doc);
       continue;

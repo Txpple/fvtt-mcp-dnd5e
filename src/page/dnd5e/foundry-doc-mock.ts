@@ -108,6 +108,8 @@ export class MockItem {
   /** the registry key for this item's advancement behaviors — preserved through persist so a level-up
    *  on a re-read actor can still apply them (real Foundry reconstructs advancements from stored data). */
   advKey?: string | undefined;
+  /** Foundry's document stats; only `compendiumSource` matters here (a pack copy's stamp). */
+  _stats: any;
   /** the advancement behaviors this item carries (a class/species/background) — bound when embedded. */
   private behaviors: AdvBehaviorSpec[];
   private actor: MockActor;
@@ -120,6 +122,7 @@ export class MockItem {
     this.behaviors = behaviors;
     this.actor = actor;
     if (data.__advKey) this.advKey = data.__advKey;
+    this._stats = clone(data._stats ?? {});
   }
 
   /** byType map the engine reads via extractAdvancements; apply() closes over the owning actor. */
@@ -143,6 +146,7 @@ export class MockItem {
       name: this.name,
       type: this.type,
       system: clone(this.system),
+      _stats: clone(this._stats),
       ...(this.advKey ? { __advKey: this.advKey } : {}),
     };
   }
@@ -398,6 +402,8 @@ export function installFoundryMock(
         if (!d) return null;
         // A live source doc: toObject() carries the __advKey so an embedded copy rehydrates behaviors.
         return {
+          pack: packId,
+          uuid: `Compendium.${packId}.Item.${_id}`,
           name: d.name,
           type: d.type,
           system: { identifier: d.identifier, ...(d.system ?? {}) },

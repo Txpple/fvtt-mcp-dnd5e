@@ -8,7 +8,7 @@
 // dnd5e system-data shape + return shape the Node tools + tests expect. No module
 // scaffolding (validateFoundryState / auditLog / permissions / sockets).
 
-import { resolveActorFuzzy } from '../_shared.js';
+import { compendiumCopy, resolveActorFuzzy } from '../_shared.js';
 import { buildActivity } from './activities.js';
 import { resolveAuthoredIcon } from './icons.js';
 import { DEFAULT_SPELL_PACKS } from '../../utils/compendium-sources.js';
@@ -408,8 +408,7 @@ export async function addSpellsToActor(data: AddSpellsArgs) {
     }
 
     // 4. Prepare data for embedding
-    const spellData = document.toObject() as Record<string, any>;
-    delete spellData._id; // Let Foundry assign a new local id; prevents id clash
+    const spellData = compendiumCopy(document) as Record<string, any>; // fresh id, source stamped
     const state = preparedStateFor(spellData.system?.level, stateOpts);
     if (state !== null) spellData.system = { ...(spellData.system ?? {}), prepared: state };
 

@@ -225,19 +225,36 @@ export function unmaskedName(item: any): string | undefined {
 }
 
 /**
+ * A pack document as data for a copy: its source (a deep copy) without `_id`, so Foundry assigns
+ * a fresh local id, and stamped `_stats.compendiumSource` with its uuid, as Foundry's own
+ * `fromCompendium` stamps an import. dnd5e finds an actor's items by that stamp
+ * (`actor.sourcedItems`): an activity that consumes or casts another item by its pack uuid (Inspiring
+ * Smite spending Channel Divinity) finds it only on a stamped copy. A document from no pack (a world
+ * item reached by uuid) is copied as it is. Every copy from a pack goes through here.
+ */
+export function compendiumCopy(doc: any): any {
+  const data: any = doc.toObject();
+  delete data._id;
+  if (doc.pack && typeof doc.uuid === 'string') {
+    data._stats = { ...(data._stats ?? {}), compendiumSource: doc.uuid };
+  }
+  return data;
+}
+
+/**
  * Resolve a single document from a compendium pack and return a fresh, copy-ready
  * plain data object. The spine of every WHOLE-DOCUMENT compendium-first copy
  * (design.md §2.3): `createActorFromCompendium` and `importItemFromCompendium` both
  * fetch through here. It performs the universal sequence —
- *   game.packs.get(packId) → pack.getDocument(docId) → toObject() → strip `_id`
+ *   game.packs.get(packId) → pack.getDocument(docId) → compendiumCopy
  * — and returns `{ pack, source, data }`, so each caller still does its own
- * document-type validation (on `source`) and curates/overrides/creates from `data`
- * (a deep copy with the source `_id` removed so Foundry assigns a fresh local id).
+ * document-type validation (on `source`) and curates/overrides/creates from `data`.
  * A caller that creates MANY copies of one source (the actor path's `quantity`)
- * re-derives an independent copy per item via `source.toObject()`.
+ * re-derives an independent copy per item via `compendiumCopy(source)`.
  *
  * Embedded-item copy (add-feature spells / compendium-features) keeps its own
- * best-effort, name-indexed hand-roll and intentionally does NOT route through here.
+ * best-effort, name-indexed lookup and does NOT route through here; its copies are
+ * `compendiumCopy` too.
  *
  * `opts.requirePackType` enforces a pack DocumentName (e.g. 'Item') BEFORE the
  * fetch — mirroring `importItemFromCompendium`'s pre-fetch guard.
@@ -268,9 +285,7 @@ export async function importFromCompendium(
         'Use search-compendium / get-compendium-entry to find the exact packId + itemId.'
     );
   }
-  const data: any = source.toObject();
-  delete data._id; // let Foundry assign a fresh local id (prevents id clash)
-  return { pack, source, data };
+  return { pack, source, data: compendiumCopy(source) };
 }
 
 /**

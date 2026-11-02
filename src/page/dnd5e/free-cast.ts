@@ -222,7 +222,7 @@ export async function addFreeCast(params: {
   }
 
   // Resolve the spell: an embedded repertoire copy (its compendium source is the link — falling
-  // back to a premium-pack name lookup, since raw toObject() imports carry no compendiumSource),
+  // back to a premium-pack name lookup for a copy made before compendiumCopy stamped one),
   // or a premium compendium uuid directly (the repertoire copy is then imported).
   const embedded = resolveActorItem(actor, spellIdentifier, 'write', 'spell');
   let uuid: string | null = embedded

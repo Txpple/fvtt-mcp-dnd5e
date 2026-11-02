@@ -3,7 +3,12 @@
 // source documents, and createEmbeddedDocuments('Item', ...) onto the resolved actor.
 // Faithful port of data-access.ts addFeaturesFromCompendium (oracle 6603-6793, v0.9.3).
 
-import { resolveActorFuzzy, toSource, findUnresolvedScaleTokens } from '../_shared.js';
+import {
+  compendiumCopy,
+  resolveActorFuzzy,
+  toSource,
+  findUnresolvedScaleTokens,
+} from '../_shared.js';
 import { DEFAULT_FEATURE_PACKS } from '../../utils/compendium-sources.js';
 import { invalid, notFound as notFoundError, unsupported } from '../errors.js';
 
@@ -142,9 +147,8 @@ export async function addFeaturesFromCompendium(args: {
       continue;
     }
 
-    // 4. Prepare data for embedding
-    const featureData = document.toObject() as Record<string, unknown>;
-    delete featureData._id; // Let Foundry assign a new local id; prevents id clash
+    // 4. Prepare data for embedding: a fresh id, stamped with its compendium source.
+    const featureData = compendiumCopy(document) as Record<string, unknown>;
 
     // 5. Embed individually — per-feature error isolation
     try {

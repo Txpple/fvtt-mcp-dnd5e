@@ -81,7 +81,8 @@ export async function resolveCastSpell(spellUuid: string | undefined): Promise<C
 
 /**
  * Resolve a premium-pack spell uuid by exact name (case-insensitive) — the fallback when an
- * embedded spell copy carries no `_stats.compendiumSource` (raw toObject() imports don't set it).
+ * embedded spell copy carries no `_stats.compendiumSource` (a copy made before `compendiumCopy`
+ * stamped one, or by hand).
  */
 export async function resolveSpellUuidByName(name: string): Promise<string | null> {
   const wanted = String(name ?? '')

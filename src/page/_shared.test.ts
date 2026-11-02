@@ -19,6 +19,7 @@ import {
   unmaskedName,
   sanitizeDocData,
   importFromCompendium,
+  compendiumCopy,
   findUnresolvedScaleTokens,
   assertPlainSerializable,
   guardSerialization,
@@ -355,6 +356,57 @@ describe('importFromCompendium', () => {
       },
     });
     await expect(importFromCompendium('pack.id', 'missing')).rejects.toThrow(/not found in pack/);
+  });
+
+  it("stamps the copy's compendium source, as Foundry's own import does", async () => {
+    const doc = {
+      ...mockDoc(),
+      pack: 'pack.id',
+      uuid: 'Compendium.pack.id.Item.src123',
+    };
+    stubGame(mockPack('Item', doc));
+
+    const { data } = await importFromCompendium('pack.id', 'src123');
+    expect(data._stats).toEqual({ compendiumSource: 'Compendium.pack.id.Item.src123' });
+  });
+});
+
+describe('compendiumCopy', () => {
+  const channelDivinity = {
+    pack: 'dnd-players-handbook.classes',
+    uuid: 'Compendium.dnd-players-handbook.classes.Item.phbpdnChannelDiv',
+    toObject: () => ({
+      _id: 'phbpdnChannelDiv',
+      name: 'Channel Divinity',
+      _stats: { compendiumSource: null, coreVersion: '14.369' },
+    }),
+  };
+
+  it('drops the id and stamps the pack uuid, keeping the rest of _stats', () => {
+    // dnd5e keys actor.sourcedItems by this stamp: Inspiring Smite spends Channel Divinity by it.
+    expect(compendiumCopy(channelDivinity)).toEqual({
+      name: 'Channel Divinity',
+      _stats: {
+        compendiumSource: 'Compendium.dnd-players-handbook.classes.Item.phbpdnChannelDiv',
+        coreVersion: '14.369',
+      },
+    });
+  });
+
+  it('copies a document from no pack (a world item) as it is', () => {
+    const world = {
+      pack: null,
+      uuid: 'Item.abc',
+      toObject: () => ({
+        _id: 'abc',
+        name: 'Rope',
+        _stats: { compendiumSource: 'Compendium.x.Item.y' },
+      }),
+    };
+    expect(compendiumCopy(world)).toEqual({
+      name: 'Rope',
+      _stats: { compendiumSource: 'Compendium.x.Item.y' },
+    });
   });
 });
 

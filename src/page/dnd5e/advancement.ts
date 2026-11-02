@@ -29,6 +29,7 @@ import { isPremiumBookPack } from '../../utils/compendium-sources.js';
 import { updateActor } from '../actors/update.js';
 import {
   findUnresolvedScaleTokens,
+  compendiumCopy,
   getOrCreateFolder,
   importFromCompendium,
   resolveActorFuzzy,
@@ -739,8 +740,7 @@ async function embedClassAndApply(
   used: Set<string>
 ): Promise<string> {
   const classLevels = levelsUpTo(classLevel);
-  const classData = classDoc.toObject();
-  delete classData._id;
+  const classData = compendiumCopy(classDoc);
   classData.system = classData.system ?? {};
   classData.system.levels = classLevel;
   const [classItem] = await tmp.createEmbeddedDocuments('Item', [classData]);
@@ -1035,8 +1035,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
 
     // Species — level-0 racial features (incl. the ItemChoice that yields racial @scale).
     if (speciesRes) {
-      const sData = speciesRes.doc.toObject();
-      delete sData._id;
+      const sData = compendiumCopy(speciesRes.doc);
       const [sItem] = await tmp.createEmbeddedDocuments('Item', [sData]);
       await applyItemAdvancements(
         tmp.items.get(sItem.id),
@@ -1053,8 +1052,7 @@ export async function createPcActor(plan: PcBuildPlan): Promise<PcBuildResult> {
 
     // Background — level-0 feat + skill/tool/language traits (ASI skipped: skill owns scores).
     if (backgroundRes) {
-      const bData = backgroundRes.doc.toObject();
-      delete bData._id;
+      const bData = compendiumCopy(backgroundRes.doc);
       const [bItem] = await tmp.createEmbeddedDocuments('Item', [bData]);
       await applyItemAdvancements(
         tmp.items.get(bItem.id),
@@ -1346,7 +1344,7 @@ export async function levelUpPc(plan: LevelUpPlan): Promise<PcBuildResult> {
     const clone = actor.clone({}, { keepId: true });
     let classItemId: string;
     if (isNewClass) {
-      const cdata = classRes.doc.toObject();
+      const cdata = compendiumCopy(classRes.doc);
       cdata._id = foundry.utils.randomID();
       cdata.system = cdata.system ?? {};
       cdata.system.levels = 1;

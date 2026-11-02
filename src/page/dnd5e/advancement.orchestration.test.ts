@@ -216,6 +216,21 @@ describe('createPcActor orchestration', () => {
     expect(mock.persistedActorCount()).toBe(0);
   });
 
+  it('embeds the class stamped with its compendium source (dnd5e finds items by it)', async () => {
+    mock = installFoundryMock([fighter()]);
+    const res: any = await createPcActor({
+      name: 'Aria',
+      className: 'Fighter',
+      level: 1,
+      folder: 'fixed-folder',
+    });
+    const stored = mock.server(res.actor.id);
+    const cls = stored.items.find((i: any) => i.type === 'class');
+    expect(cls._stats.compendiumSource).toMatch(
+      /^Compendium\.dnd-players-handbook\.classes\.Item\./
+    );
+  });
+
   it('a build whose every choices entry is read persists as before', async () => {
     mock = installFoundryMock([fighter()]);
     const res: any = await createPcActor({
