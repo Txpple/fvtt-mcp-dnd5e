@@ -126,7 +126,7 @@ offline gate alone:
 1. Read the release notes and list every item touching: HTTP routes / auth / CSRF, the `/join`
    and `/setup` pages, document schemas (ActiveEffect, Region, Scene placeables, Combat, Calendar,
    ChatMessage), uuid handling, Levels.
-2. Sandbox launch: `node scripts/local-foundry.mjs start` (`FOUNDRY_HOST=local`).
+2. Sandbox launch: `node scripts/local-foundry.mjs start` (`FOUNDRY_HOST=local`; it starts Crystal Ball's Seer beside Foundry when the module clone's `seer/.env` is there).
    For a Foundry release, save its rendered `/join` page as `test/fixtures/join/<version>.html`
    (the DOM after the form draws, trimmed to the form and the version watermark, world title and
    user names replaced; see the 14.369 file) and run `npm test`. A red `src/join-form.test.ts`

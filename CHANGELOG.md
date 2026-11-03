@@ -14,6 +14,12 @@ What changed for a user of the tools and skills, release by release. The measure
   its host) and takes that one user off the count when the Seer says it is connected to that world;
   the refusal line says what was counted and what was discounted. A person connected still refuses.
   `.env.example` documents `FOUNDRY_SEER_URL`.
+- **`local-foundry.mjs` runs Crystal Ball's Seer beside the sandbox's Foundry.** When the module clone
+  sits beside this repo with its `seer/.env` filled in, `start` also starts the Seer as it starts
+  Foundry (detached, windowless, its lines in the module's `seer/data/seer.log`, its pid in
+  `Logs/seer.pid`), `stop` ends it before Foundry, `restart` does both and `status` shows it; one
+  already answering is left alone. Nothing restarts it on its own: a crash or a reboot needs a
+  `start`, as Foundry does. No `seer/.env` there, Foundry runs alone and one line says so.
 
 ## 4.7.4 — 2026-11-02 — level-up-pc writes the whole level, the species' and features' too
 

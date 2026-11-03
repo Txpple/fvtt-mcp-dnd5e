@@ -7,9 +7,9 @@
 //
 // Where healthz is: FOUNDRY_SEER_URL from the .env when set (the Seer's base, e.g. the public
 // origin's `/crystalball` route for a box whose Seer binds 127.0.0.1 and is reached only through
-// its tunnel), else, as Crystal Ball's window looks for it, Foundry's own origin under
-// `/crystalball` (a proxy or tunnel route) and then the companion port, 30001 of Foundry's host (a
-// sandbox). No Seer answering discounts nothing: the count stands as Foundry gave it.
+// its tunnel), else Foundry's own origin under `/crystalball` (a proxy or tunnel route) and then
+// the companion port, 30001 of Foundry's host (a sandbox; the module's window looks there too, on
+// a plain-http page). No Seer answering discounts nothing: the count stands as Foundry gave it.
 
 /** The Seer's default port beside a Foundry with no proxy, as the module's window has it. */
 export const COMPANION_PORT = 30001;

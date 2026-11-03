@@ -19,6 +19,14 @@
 // else Foundry's origin under /crystalball, else port 30001 of its host) and discounts that one.
 // Server console output appends to <dataPath>/Logs/headless-console.log.
 //
+// Crystal Ball's Seer rides along: when the module clone sits beside this repo with its seer/.env
+// filled in (the suite's layout, ../fvtt-mod-crystalball/seer/.env), `start` also starts the Seer,
+// exactly as it starts Foundry (a detached, windowless process, its lines in the module's
+// seer/data/seer.log, its pid in <dataPath>/Logs/seer.pid), `stop` ends it before Foundry,
+// `restart` does both and `status` shows it. One already answering healthz is left alone and said
+// so. Nothing restarts it by itself: a crash or a reboot needs a `start`, as Foundry does. No
+// seer/.env there: one line says so and Foundry runs alone. The same code runs on Linux.
+//
 // The v14 admin API contract (read from resources/app/dist, 2026-08-21 — do not "improve" this
 // back to cookies):
 //   - sessions.authenticateAdmin reads `adminPassword` from the REQUEST BODY on every route it
@@ -50,15 +58,18 @@
 // and the installed hash can never drift from .env.
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadEnv } from '../dist/env.js';
 import { resolveHostConfig } from '../dist/hosts/index.js';
 import { foundryApp } from './lib/foundry-app.mjs';
@@ -112,9 +123,9 @@ const logsDir = join(dataPath, 'Logs');
 const consoleLog = join(logsDir, 'headless-console.log');
 const pidFile = join(logsDir, 'headless.pid');
 
-function readPid() {
+function readPid(file = pidFile) {
   try {
-    const pid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10);
+    const pid = Number.parseInt(readFileSync(file, 'utf8').trim(), 10);
     return Number.isInteger(pid) && pid > 0 ? pid : null;
   } catch {
     return null;
@@ -131,10 +142,159 @@ function pidAlive(pid) {
   }
 }
 
-function clearPid() {
+function clearPid(file = pidFile) {
   try {
-    unlinkSync(pidFile);
+    unlinkSync(file);
   } catch {}
+}
+
+// ---------------------------------------------------------------------------------------------
+// Crystal Ball's Seer beside Foundry (see the header): the module clone next to this repo.
+// ---------------------------------------------------------------------------------------------
+const seerRepo = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'fvtt-mod-crystalball'
+);
+const seerEnvFile = join(seerRepo, 'seer', '.env');
+const seerLog = join(seerRepo, 'seer', 'data', 'seer.log');
+const seerPidFile = join(logsDir, 'seer.pid');
+
+/** Where the Seer beside this Foundry answers healthz, from its own .env (PORT, BASE_PATH). */
+function seerHealthz() {
+  const e = loadEnv(seerEnvFile);
+  const port = Number(e.PORT || 30001);
+  const base = (e.BASE_PATH ?? '/crystalball').replace(/\/+$/, '');
+  return `http://127.0.0.1:${port}${base}/healthz`;
+}
+
+/** The Seer's healthz body, or null when nothing answers there. */
+async function seerHealth(timeoutMs = 3000) {
+  try {
+    const res = await fetch(seerHealthz(), { signal: AbortSignal.timeout(timeoutMs) });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The Seer's recorded pid while that process is alive; a dead pid is a stale file, and goes. */
+function seerPid() {
+  const pid = readPid(seerPidFile);
+  if (!pid) return null;
+  if (pidAlive(pid)) return pid;
+  clearPid(seerPidFile);
+  return null;
+}
+
+function seerLogTail(lines = 12) {
+  try {
+    return readFileSync(seerLog, 'utf8').split(/\r?\n/).filter(Boolean).slice(-lines).join('\n');
+  } catch {
+    return '(no seer log)';
+  }
+}
+
+/** One line on the Seer for `status` and after `start`. */
+async function printSeerStatus() {
+  if (!existsSync(seerEnvFile)) {
+    console.log('seer:    none (no fvtt-mod-crystalball/seer/.env beside this repo)');
+    return;
+  }
+  const pid = seerPid();
+  const up = await seerHealth();
+  const who = pid ? ` (pid ${pid})` : ' (started outside this launcher)';
+  console.log(
+    up
+      ? `seer:    up, ${up.version} at ${seerHealthz()}, foundry ${up.foundry?.connected ? `connected to ${up.foundry.world}` : 'not connected'}${who}`
+      : `seer:    down${pid ? ` (pid ${pid} alive, not answering)` : ''}`
+  );
+}
+
+/** Start the Seer as Foundry is started: detached, windowless, its lines to its log, its pid kept. */
+async function startSeer() {
+  if (!existsSync(seerEnvFile)) {
+    console.log(
+      'seer:    none (no fvtt-mod-crystalball/seer/.env beside this repo) — Foundry runs alone.'
+    );
+    return;
+  }
+  if (await seerHealth()) {
+    await printSeerStatus();
+    return;
+  }
+  mkdirSync(dirname(seerLog), { recursive: true });
+  // One log per start; the last run's is kept as .1.
+  if (existsSync(seerLog)) {
+    try {
+      renameSync(seerLog, `${seerLog}.1`);
+    } catch {}
+  }
+  const fd = openSync(seerLog, 'a');
+  writeFileSync(
+    fd,
+    `${new Date().toISOString()} INFO launcher: starting the Seer from ${seerRepo}\n`
+  );
+  const child = spawn(process.execPath, ['--env-file=seer/.env', 'seer/src/main.js'], {
+    cwd: seerRepo,
+    detached: true,
+    stdio: ['ignore', fd, fd],
+    windowsHide: true,
+  });
+  child.unref();
+  closeSync(fd);
+  writeFileSync(seerPidFile, String(child.pid));
+  console.log(`spawned the Seer (pid ${child.pid}), waiting for ${seerHealthz()}…`);
+  const health = await poll(() => seerHealth(1500), 20_000, 1000);
+  if (!health) {
+    const hint = pidAlive(child.pid) ? 'process is alive but not answering' : 'process exited';
+    clearPid(seerPidFile);
+    die(`the Seer did not answer within 20s (${hint}) — tail of its log:\n${seerLogTail()}`);
+  }
+  await printSeerStatus();
+}
+
+/**
+ * End the Seer this launcher started: only a recorded pid that is alive while healthz answers, and
+ * only that process. One started elsewhere (a terminal's `npm run seer:dev`) is left alone and named.
+ */
+async function stopSeer() {
+  if (!existsSync(seerEnvFile)) return;
+  const pid = seerPid();
+  const up = await seerHealth();
+  if (!pid) {
+    if (up)
+      console.log(
+        `seer:    answering at ${seerHealthz()} but not started by this launcher — leaving it.`
+      );
+    else console.log('seer:    not running.');
+    return;
+  }
+  if (!up) {
+    console.log(
+      `seer:    pid ${pid} is alive but ${seerHealthz()} does not answer — leaving it; see ${seerLog}`
+    );
+    return;
+  }
+  console.log(`ending the Seer (pid ${pid})…`);
+  try {
+    process.kill(pid);
+  } catch {}
+  const gone = await poll(
+    async () => (!pidAlive(pid) && (await seerHealth(1000)) === null ? true : null),
+    15_000,
+    1000
+  );
+  if (!gone) {
+    die(
+      pidAlive(pid)
+        ? `the Seer (pid ${pid}) would not exit — investigate`
+        : `pid ${pid} is gone but ${seerHealthz()} still answers — another Seer is up; investigate`
+    );
+  }
+  clearPid(seerPidFile);
+  console.log('seer:    stopped.');
 }
 
 function logTail(lines = 25) {
@@ -283,12 +443,14 @@ async function start() {
   await printStatus(status);
   // `start` promises a live world (unless --no-world): anything less is a failure for the caller.
   if (!status?.active && !noWorld) die('the world is not active — see the lines above');
+  await startSeer();
 }
 
 async function stop() {
   const status = await apiStatus();
   const pid = readPid();
   if (!status) {
+    await stopSeer();
     if (pidAlive(pid)) console.log(`port quiet but pid ${pid} alive — leaving it; check manually.`);
     else {
       clearPid();
@@ -300,6 +462,9 @@ async function stop() {
     const { users, note } = await connected(status);
     if (users > 0 && !force)
       die(`${note} — disconnect-bridge / check no human is mid-session, or --force`);
+  }
+  await stopSeer();
+  if (status.active) {
     requireAdminKey();
     console.log('deactivating world…');
     const {
@@ -371,6 +536,7 @@ try {
       await printStatus(status);
       const pid = readPid();
       if (pid) console.log(`pid:     ${pid}${pidAlive(pid) ? '' : ' (stale)'}`);
+      await printSeerStatus();
       break;
     }
     default:
