@@ -93,6 +93,7 @@ params:
 - `swarmSize?: "" | "tiny" | "sm" | "med" | "lg" | "huge" | "grg"`
 - `alignment?: string`
 - `biography?: string`
+- `biographyPublic?: string`
 - `source?: { book?: string | undefined; page?: string | undefined; rules?: "2014" | "2024" | undefined; }`
 - `abilities?: { str?: number | undefined; dex?: number | undefined; con?: number | undefined; int?: number | undefined; wis?: number | undefined; cha?: number | undefined; }`
 - `savingThrows?: ("str" | "dex" | "con" | "int" | "wis" | "cha")[]`

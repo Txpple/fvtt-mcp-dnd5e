@@ -5,6 +5,10 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **`manage-actors update` writes the public biography.** `biographyPublic` (HTML) is dnd5e's
+  `biography.public`: the text a player with Limited ownership sees on the sheet, and what Card
+  Catalogue shows on a shared card. A field of its own beside `biography` (the GM's), so either is
+  written without touching the other.
 - **The guards that wait for an empty table discount Crystal Ball's Seer.** `local-foundry.mjs`
   `stop`/`restart` and `pull-prod-to-local.mjs`'s prod-side snapshot guard read `/api/status`'s
   user count, which includes the Seer's own Player-role user for as long as the Seer runs; with a

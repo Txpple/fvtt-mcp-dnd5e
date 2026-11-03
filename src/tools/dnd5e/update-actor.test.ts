@@ -87,6 +87,31 @@ describe('handleUpdateActor', () => {
     expect(call?.[1].tokenName).toBe('Morgash');
   });
 
+  it('forwards the public biography (biographyPublic) beside the GM biography', async () => {
+    const { tool, calls } = makeTool({
+      success: true,
+      actor: { id: 'a1', name: 'Osric the Bartender', type: 'npc' },
+      applied: ['biography', 'biographyPublic'],
+      warnings: [],
+    });
+    const res = await tool.handleUpdateActor({
+      actorIdentifier: 'Osric the Bartender',
+      biography: '<p>GM: he waters the ale.</p>',
+      biographyPublic: '<p>Keeps the Gilded Tankard.</p>',
+    });
+    const call = calls.find(([n]) => n === 'updateActor');
+    expect(call?.[1].biography).toBe('<p>GM: he waters the ale.</p>');
+    expect(call?.[1].biographyPublic).toBe('<p>Keeps the Gilded Tankard.</p>');
+    expect(res).toBe('Updated "Osric the Bartender" (a1, npc): biography, biographyPublic');
+  });
+
+  it('rejects a non-string biographyPublic', async () => {
+    const { tool } = makeTool();
+    await expect(
+      tool.handleUpdateActor({ actorIdentifier: 'X', biographyPublic: 42 })
+    ).rejects.toThrow();
+  });
+
   it('rejects an empty tokenName', async () => {
     const { tool } = makeTool();
     await expect(tool.handleUpdateActor({ actorIdentifier: 'X', tokenName: '' })).rejects.toThrow();

@@ -73,6 +73,8 @@ describe('ActorTools.getToolDefinitions', () => {
     expect(byAction.get.properties.actorIdentifier).toEqual({ type: 'string' });
     expect(byAction.get.required).toEqual(['action', 'actorIdentifier']);
     expect(byAction.update.properties.actorIdentifier).toEqual({ type: 'string' });
+    // the update member rides update-actor.ts's schema whole: a field added there is advertised here
+    expect(byAction.update.properties.biographyPublic).toMatchObject({ type: 'string' });
     expect(byAction['get-entity'].required).toEqual([
       'action',
       'actorIdentifier',

@@ -115,6 +115,12 @@ export const UpdateActorSchema = z.object({
     .describe('[NPC] Swarm member size, or "" if the creature is not a swarm.'),
   alignment: z.string().optional().describe('Alignment free text (e.g. "Lawful Evil").'),
   biography: z.string().optional().describe('Biography / description (HTML).'),
+  biographyPublic: z
+    .string()
+    .optional()
+    .describe(
+      'Public biography (HTML): what Limited ownership shows on the sheet, and what Card Catalogue shows on a shared card.'
+    ),
   source: z
     .object({
       book: z.string().optional(),

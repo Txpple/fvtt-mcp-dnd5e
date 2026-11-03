@@ -345,6 +345,8 @@ defer item judgment to [[physical-item-builder]]:
 ## Step 9 — Biography
 
 If not set in Step 3, `manage-actors` `update` `biography` (HTML) — lore, tactics, appearance, roleplay notes.
+`biographyPublic` (HTML) is what a player with Limited ownership reads on the sheet (and what a shared
+card shows): write it when the actor is shared with the players, and keep every secret out of it.
 
 ## Step 10 — Finishing pass
 

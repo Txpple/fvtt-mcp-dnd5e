@@ -41,7 +41,8 @@ const TOKEN_DISPLAY_MODES: Record<string, number> = {
  *  - identity:   name, tokenName (prototype nameplate ≠ actor name), img, disposition,
  *                tokenAutoRotate (= !lockRotation), tokenRing (ring.enabled), tokenScale,
  *                tokenRotation, tokenDisplayName / tokenDisplayBars (nameplate / HP-bar visibility)
- *  - details:    size, cr*, creatureType*, creatureSubtype*, swarmSize*, alignment, biography, source
+ *  - details:    size, cr*, creatureType*, creatureSubtype*, swarmSize*, alignment, biography,
+ *                biographyPublic (what Limited ownership and a shared card show), source
  *  - abilities:  abilities.<ab>, savingThrows (replace), skills (merge)
  *  - vitals:     hp, ac, initiative
  *  - movement / senses (senses uses the modern `senses.ranges.*` path)
@@ -229,6 +230,13 @@ export async function updateActor(params: UpdateActorArgs) {
   if (typeof params.biography === 'string') {
     update['system.details.biography.value'] = params.biography;
     applied.push('biography');
+  }
+  // The public biography (dnd5e's `biography.public`): the text a player with Limited ownership
+  // sees on the sheet, and what Card Catalogue shows on a shared card. A field of its own, so the
+  // GM's biography stays as it is when only this one is written, and the other way round.
+  if (typeof params.biographyPublic === 'string') {
+    update['system.details.biography.public'] = params.biographyPublic;
+    applied.push('biographyPublic');
   }
   // system.source exists on npc (and vehicle) data only — a character has no source stamp, so the
   // write would be pruned silently; gate it like the other NPC-only fields.

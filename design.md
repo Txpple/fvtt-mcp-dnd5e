@@ -422,6 +422,9 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   advertised tool list is derived from it so the two can't drift.
 - **Generated schemas.** Every tool's input schema is generated from one hoisted zod (`io: 'input'`)
   via `src/utils/schema.ts` — never hand-written JSON schema.
+- **The players' view of an actor.** `manage-actors update` writes both biographies, `biography`
+  (the GM's) and `biographyPublic` (dnd5e's `biography.public`: what Limited ownership shows on the
+  sheet, and a shared card).
 - **Skills ship in-repo.** `.claude/skills/**` is a tracked deliverable, committed alongside the
   tools. Current skills: `start-session`, `scene-builder`, `stat-block-builder`,
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,
