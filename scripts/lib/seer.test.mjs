@@ -39,17 +39,37 @@ describe("the Seer's word", () => {
       if (url.startsWith('http://localhost:30000/')) return answer(404, null);
       return answer(200, {
         version: '1.0.4',
-        foundry: { connected: true, worldOpen: true, world: 'w1', ballUser: 'Crystal Ball' },
+        foundry: {
+          connected: true,
+          worldOpen: true,
+          counted: true,
+          world: 'w1',
+          ballUser: 'Crystal Ball',
+        },
       });
     };
     const seer = await seerUser('http://localhost:30000', undefined, { fetchFn });
     expect(seer).toEqual({
       connected: true,
+      counted: true,
       world: 'w1',
       ballUser: 'Crystal Ball',
       at: 'http://localhost:30001/crystalball/healthz',
     });
     expect(calls).toHaveLength(2);
+  });
+
+  it("reads Foundry's count as the Seer gives it, and as unsaid from a Seer that does not", async () => {
+    const said = counted =>
+      seerUser('http://localhost:30000', 'http://seer.test/crystalball', {
+        fetchFn: async () =>
+          answer(200, {
+            foundry: { connected: true, world: 'w1', ballUser: 'Crystal Ball', counted },
+          }),
+      });
+    expect((await said(false)).counted).toBe(false);
+    expect((await said(undefined)).counted).toBeNull();
+    expect((await said('yes')).counted).toBeNull();
   });
 
   it('is null when nothing answers, or what answers is not a Seer', async () => {
@@ -69,9 +89,9 @@ describe("the Seer's word", () => {
 });
 
 describe('the discount', () => {
-  const seer = { connected: true, world: 'w1', ballUser: 'Crystal Ball' };
+  const seer = { connected: true, counted: true, world: 'w1', ballUser: 'Crystal Ball' };
 
-  it("takes the Seer's user off the count when it is connected to this world", () => {
+  it("takes the Seer's user off the count when Foundry counts it in this world", () => {
     expect(discountSeer({ users: 1, world: 'w1' }, seer)).toMatchObject({
       users: 0,
       counted: 1,
@@ -94,6 +114,21 @@ describe('the discount', () => {
     });
     expect(discountSeer({ users: 2, world: 'w1' }, { ...seer, world: 'w2' }).users).toBe(2);
     expect(discountSeer({ users: 2, world: 'w1' }, null).note).toBe('2 connected');
+  });
+
+  it("discounts nothing while Foundry does not count the Seer's user, or the Seer does not say", () => {
+    expect(discountSeer({ users: 1, world: 'w1' }, { ...seer, counted: false })).toMatchObject({
+      users: 1,
+      discounted: 0,
+      note: `1 connected (Crystal Ball's Seer is connected, but Foundry does not count "Crystal Ball": nothing discounted)`,
+    });
+    expect(discountSeer({ users: 1, world: 'w1' }, { ...seer, counted: null })).toMatchObject({
+      users: 1,
+      discounted: 0,
+      note: "1 connected (Crystal Ball's Seer does not say whether Foundry counts its user: nothing discounted)",
+    });
+    const { counted: _, ...older } = seer;
+    expect(discountSeer({ users: 1, world: 'w1' }, older).users).toBe(1);
   });
 
   it('never goes below zero, and reads a missing count as none', () => {

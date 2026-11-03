@@ -22,9 +22,12 @@ What changed for a user of the tools and skills, release by release. The measure
   Seer beside prod and beside the sandbox, the restart needed `--force` every time and a mirror
   would have refused for ever. Each guard now asks the Seer's `healthz` (`scripts/lib/seer.mjs`:
   `FOUNDRY_SEER_URL` from the .env, else Foundry's origin under `/crystalball`, else port 30001 of
-  its host) and takes that one user off the count when the Seer says it is connected to that world;
-  the refusal line says what was counted and what was discounted. A person connected still refuses.
-  `.env.example` documents `FOUNDRY_SEER_URL`.
+  its host) and takes that one user off the count only while the Seer says Foundry counts it in that
+  world (`healthz`'s `foundry.counted`, Foundry's own word, which the Seer asks from Crystal Ball
+  1.0.12 on). A socket can be open yet uncounted (one that outlived a world's close was, before
+  Crystal Ball 1.0.11), and discounting it then hid one real user; a Seer that does not say discounts
+  nothing. The refusal line says what was counted and what was discounted, or why nothing was. A
+  person connected still refuses. `.env.example` documents `FOUNDRY_SEER_URL`.
 - **`local-foundry.mjs` runs Crystal Ball's Seer beside the sandbox's Foundry.** When the module clone
   sits beside this repo with its `seer/.env` filled in, `start` also starts the Seer as it starts
   Foundry (detached, windowless, its lines in the module's `seer/data/seer.log`, its pid in
