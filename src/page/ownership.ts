@@ -17,6 +17,12 @@ const PERMISSION_NAMES: Record<number, string> = {
   3: 'OWNER',
 };
 
+// The document default — Foundry's ownership dialog calls it All Players — is written through the
+// same path as a user's entry, as the `userId` "default" (src/tools/ownership.ts hands it over
+// under the same literal): the level every player without an entry of their own gets.
+const ALL_PLAYERS_ID = 'default';
+const ALL_PLAYERS = { id: ALL_PLAYERS_ID, name: 'All Players (the default)' };
+
 /** A non-GM user's effective level: the explicit entry when there is one, else the actor default. */
 function effectiveLevel(actor: any, user: any): number {
   return actor.testUserPermission(user, 'OWNER')
@@ -130,7 +136,8 @@ function tokenRef(token: any): { id: string; scene: string; linked: boolean } {
 
 /**
  * Set a single user's ownership permission on an actor, or (permission === null)
- * remove the user's entry so the actor's `ownership.default` applies again.
+ * remove the user's entry so the actor's `ownership.default` applies again. `userId: "default"`
+ * sets that default itself (All Players in Foundry's ownership dialog), where null is NONE.
  *
  * The distinction matters: an explicit 0 is NOT the same as an absent key. On an
  * actor whose default is permissive (a shared party stash defaulting to OWNER),
@@ -153,26 +160,47 @@ function tokenRef(token: any): { id: string; scene: string; linked: boolean } {
  */
 export async function setActorOwnership(args: {
   actorId: string;
+  /** A user id, or "default": the document default, the level every player without an entry gets. */
   userId: string;
+  /** A level, or null for INHERIT (the entry removed); the default has nothing to inherit: null is NONE. */
   permission: number | null;
   /** With `tokenId`: the scene of a placed token whose own ownership is written. */
   sceneId?: string | undefined;
   /** A placed token: unlinked, its own ownership (its ActorDelta's); linked, its base actor's. */
   tokenId?: string | undefined;
 }): Promise<{ success: boolean; message: string; target: 'actor' | 'token' }> {
-  const user = game.users?.get(args.userId);
+  const isDefault = args.userId === ALL_PLAYERS_ID;
+  const user = isDefault ? ALL_PLAYERS : game.users?.get(args.userId);
   if (!user) throw notFound(`User not found: ${args.userId}`);
 
+  // INHERIT removes an entry so the default applies; the default has nothing to fall back to, so
+  // for it null is NONE (the level Foundry gives a missing default), and the answer says so.
+  const permission = isDefault && args.permission === null ? 0 : args.permission;
+  const out = await writeOwnership(args, user, permission);
+  return isDefault && args.permission === null
+    ? {
+        ...out,
+        message: `${out.message}; INHERIT has no meaning for the default, so it was written as NONE`,
+      }
+    : out;
+}
+
+/** The write itself: a placed token's own map, a linked token's base actor, or the actor. */
+async function writeOwnership(
+  args: { actorId: string; sceneId?: string | undefined; tokenId?: string | undefined },
+  user: { id: string; name: string },
+  permission: number | null
+): Promise<{ success: boolean; message: string; target: 'actor' | 'token' }> {
   if (args.tokenId) {
     const scene = game.scenes?.get(args.sceneId ?? '');
     const token = scene?.tokens?.get(args.tokenId);
     if (!token) {
       throw notFound(`Token not found: ${args.tokenId} on scene ${args.sceneId ?? '(none named)'}`);
     }
-    if (!token.actorLink) return setTokenOwnership(token, user, args.permission);
+    if (!token.actorLink) return setTokenOwnership(token, user, permission);
     const base = game.actors?.get(token.actorId ?? args.actorId);
     if (!base) throw notFound(`Actor not found: the base actor of token "${token.name}"`);
-    const out = await setOwnershipOn(base, user, args.permission);
+    const out = await setOwnershipOn(base, user, permission);
     return {
       ...out,
       message:
@@ -183,7 +211,7 @@ export async function setActorOwnership(args: {
 
   const actor = game.actors?.get(args.actorId);
   if (!actor) throw notFound(`Actor not found: ${args.actorId}`);
-  return setOwnershipOn(actor, user, args.permission);
+  return setOwnershipOn(actor, user, permission);
 }
 
 /** A world actor's ownership map, written whole (the module comment above says why). */
@@ -225,9 +253,11 @@ async function setOwnershipOn(
     target: 'actor',
     message:
       `Set ${actor.name} ownership to ${permissionName} for ${user.name}` +
-      (permission === 0
-        ? ` (explicit deny — overrides the actor default; use INHERIT to fall back to it)`
-        : ''),
+      (permission !== 0
+        ? ''
+        : user.id === ALL_PLAYERS_ID
+          ? ' — a player without an entry of their own now sees nothing'
+          : ' (explicit deny — overrides the actor default; use INHERIT to fall back to it)'),
   };
 }
 
@@ -244,7 +274,8 @@ async function setOwnershipOn(
  * token's map is written whole: the base actor's entries, the token's others over them, and this
  * user's base entry or none (the default). Every client's token actor then equals what Foundry
  * re-derives; the base actor's entries are copied onto the token, as the dialog copies them. The
- * result is read back: a removal Foundry did not make is an error, never a success.
+ * result is read back: a removal Foundry did not make is an error, never a success. All Players
+ * is the token's own `default`, merged in as that one entry.
  */
 async function setTokenOwnership(
   token: any,
@@ -299,7 +330,7 @@ async function setTokenOwnership(
 
   const change: Record<string, number> = { [`ownership.${user.id}`]: permission };
   // the token's effective default now (its own, else the base actor's): kept through the write
-  if (typeof own.default !== 'number') {
+  if (user.id !== ALL_PLAYERS_ID && typeof own.default !== 'number') {
     const current = token.actor?.ownership?.default;
     change['ownership.default'] = typeof current === 'number' ? current : baseDefault;
   }
@@ -310,7 +341,11 @@ async function setTokenOwnership(
     message:
       `Set ${where} ownership to ${levelName(permission)} for ${user.name}; its base actor ` +
       `${base ? `"${base.name}" ` : ''}and the other tokens keep theirs` +
-      (permission === 0 ? ' (an explicit deny on this token; INHERIT falls back)' : ''),
+      (permission !== 0
+        ? ''
+        : user.id === ALL_PLAYERS_ID
+          ? ' (a player without an entry of their own on this token now sees nothing of it)'
+          : ' (an explicit deny on this token; INHERIT falls back)'),
   };
 }
 

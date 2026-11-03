@@ -9,6 +9,13 @@ What changed for a user of the tools and skills, release by release. The measure
   `biography.public`: the text a player with Limited ownership sees on the sheet, and what Card
   Catalogue shows on a shared card. A field of its own beside `biography` (the GM's), so either is
   written without touching the other.
+- **`set-actor-ownership` takes All Players.** `playerIdentifier` `"all players"` (or `"default"`)
+  writes the document default (`ownership.default`, what Foundry's ownership dialog calls All
+  Players): the level every player without an entry of their own gets, so a folder of NPCs is
+  shared at Limited in one write per actor, with no per-user entry. It is one entry, so one player
+  to the bulk guard; INHERIT has no meaning for the default and is written as NONE, and the answer
+  says so. On an unlinked token it is the token's own default. `list-actor-ownership` reports it as
+  `default`, as before.
 - **The guards that wait for an empty table discount Crystal Ball's Seer.** `local-foundry.mjs`
   `stop`/`restart` and `pull-prod-to-local.mjs`'s prod-side snapshot guard read `/api/status`'s
   user count, which includes the Seer's own Player-role user for as long as the Seer runs; with a

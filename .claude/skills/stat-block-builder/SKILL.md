@@ -361,7 +361,8 @@ card shows): write it when the actor is shared with the players, and keep every 
   `assets/tokens/<kind>/<slug>.png`, the portrait to `assets/portraits/<slug>.png`. Recipe and lessons:
   the imagegen `illustration-builder` skill.
 - **Ownership** → `set-actor-ownership` (most NPCs stay GM-only; grant the party observer access to a
-  visible ally if wanted).
+  visible ally if wanted; `playerIdentifier: "all players"` sets the document default, and Limited
+  there shows every player the public biography).
 - **Folder** → `move-documents` to file the finished NPC somewhere findable.
 - **Audit (do this before declaring done)** → run `content-audit` (`actorIdentifiers: [<npc>]`, plus any
   loot `itemFolders`). It flags placeholder icons (rule 8), GM-fudge language (rule 7), and magic items

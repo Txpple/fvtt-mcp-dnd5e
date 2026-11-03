@@ -374,6 +374,85 @@ describe('set-actor-ownership refuses a fuzzy name that names several (a write i
   });
 });
 
+describe('set-actor-ownership for All Players (the document default)', () => {
+  const viaDefault = (method: string) => {
+    if (method === 'findActor') return { id: 'actor1', name: 'Aragorn' };
+    if (method === 'setActorOwnership')
+      return {
+        success: true,
+        target: 'actor',
+        message: 'Set Aragorn ownership to LIMITED for All Players (the default)',
+      };
+    return {};
+  };
+
+  it.each([
+    'all players',
+    'All Players',
+    ' default ',
+  ])('"%s" is the default: userId "default" to the page, no player lookup, one write', async phrase => {
+    const { tools, calls } = build(viaDefault);
+    const out = await tools.handleToolCall('set-actor-ownership', {
+      actorIdentifier: 'Aragorn',
+      playerIdentifier: phrase,
+      permissionLevel: 'LIMITED',
+    });
+    expect(calls.some(c => c[0] === 'findPlayers')).toBe(false);
+    expect(calls.filter(c => c[0] === 'setActorOwnership')).toEqual([
+      ['setActorOwnership', { actorId: 'actor1', userId: 'default', permission: 1 }],
+    ]);
+    expect(out.message).toBe('1 ownership assignments completed');
+    expect(out.results[0]).toMatchObject({
+      actor: 'Aragorn',
+      player: 'All Players',
+      permission: 'LIMITED',
+      target: 'actor',
+      success: true,
+    });
+  });
+
+  it('INHERIT travels as null; the page writes NONE for the default', async () => {
+    const { tools, calls } = build(viaDefault);
+    await tools.handleToolCall('set-actor-ownership', {
+      actorIdentifier: 'Aragorn',
+      playerIdentifier: 'all players',
+      permissionLevel: 'INHERIT',
+    });
+    expect(calls.find(c => c[0] === 'setActorOwnership')![1]).toEqual({
+      actorId: 'actor1',
+      userId: 'default',
+      permission: null,
+    });
+  });
+
+  it('is one player to the bulk guard: one actor needs no confirmBulkOperation; several still do', async () => {
+    const { tools, calls } = build((method: string) => {
+      if (method === 'getFriendlyNPCs')
+        return [
+          { id: 'n1', name: 'Guard' },
+          { id: 'n2', name: 'Merchant' },
+        ];
+      return {};
+    });
+    await expect(
+      tools.handleToolCall('set-actor-ownership', {
+        actorIdentifier: 'all friendly npcs',
+        playerIdentifier: 'all players',
+        permissionLevel: 'LIMITED',
+      })
+    ).rejects.toThrow(/Bulk operation detected: 2 actors × 1 players = 2/);
+    expect(calls.some(c => c[0] === 'setActorOwnership')).toBe(false);
+  });
+
+  it('the playerIdentifier leaf and the description say so', () => {
+    const { tools } = build();
+    const def = tools.getToolDefinitions().find(t => t.name === 'set-actor-ownership')!;
+    const leaf = (def.inputSchema.properties as any).playerIdentifier.description as string;
+    expect(leaf).toMatch(/"all players" = the default/);
+    expect(def.description).toMatch(/"all players" \(the default itself, one entry\)/);
+  });
+});
+
 describe('list-actor-ownership (listActorOwnership)', () => {
   it('forwards identifiers to getActorOwnership and summarises the compact result', async () => {
     const ownership = [{ id: 'a1', name: 'Aragorn', default: 'NONE', explicit: { John: 'OWNER' } }];

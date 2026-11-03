@@ -113,6 +113,53 @@ describe('setActorOwnership — explicit levels', () => {
   });
 });
 
+describe('setActorOwnership — All Players (userId: "default")', () => {
+  it('writes the document default, the level every player without an entry of their own gets', async () => {
+    const { actor, updates } = stubWorld({ default: 0, u2: 3 });
+
+    const out = await setActorOwnership({ actorId: 'actor1', userId: 'default', permission: 1 });
+
+    expect(out).toEqual({
+      success: true,
+      target: 'actor',
+      message: 'Set The Party ownership to LIMITED for All Players (the default)',
+    });
+    // the map written whole, the other entries kept — and no user "default" was looked up (the
+    // stub's users know none)
+    expect(updates).toEqual([
+      { data: { ownership: { default: 1, u2: 3 } }, options: { diff: false, recursive: false } },
+    ]);
+    expect(actor.ownership).toEqual({ default: 1, u2: 3 });
+  });
+
+  it('NONE on the default says what it does: a player without an entry sees nothing', async () => {
+    const { actor } = stubWorld({ default: 2, u1: 3 });
+    const out = await setActorOwnership({ actorId: 'actor1', userId: 'default', permission: 0 });
+    expect(actor.ownership).toEqual({ default: 0, u1: 3 });
+    expect(out.message).toBe(
+      'Set The Party ownership to NONE for All Players (the default) — a player without an entry ' +
+        'of their own now sees nothing'
+    );
+  });
+
+  it('INHERIT has no meaning for the default: null is written as NONE, and the answer says so', async () => {
+    const { actor, updates } = stubWorld({ default: 2, u1: 3 });
+    const out = await setActorOwnership({
+      actorId: 'actor1',
+      userId: 'default',
+      permission: null,
+    });
+    // never the INHERIT path, which would drop the `default` key and leave Foundry to fill it
+    expect(updates).toHaveLength(1);
+    expect(Object.hasOwn(updates[0].data.ownership, 'default')).toBe(true);
+    expect(actor.ownership).toEqual({ default: 0, u1: 3 });
+    expect(out.message).toMatch(/^Set The Party ownership to NONE for All Players \(the default\)/);
+    expect(out.message).toMatch(
+      /INHERIT has no meaning for the default, so it was written as NONE$/
+    );
+  });
+});
+
 /**
  * Install a fake `game` for the READ path: one actor carrying `ownership`, plus a
  * player and a GM. `testUserPermission` mirrors Foundry's cascade — GMs are always
@@ -446,6 +493,28 @@ describe('setActorOwnership — a placed token (issue #19)', () => {
     });
     expect(out.message).toMatch(/had no entry of its own/);
     expect(writes).toEqual([]);
+  });
+
+  it("All Players on an unlinked token: the token's own default, merged in as that one entry", async () => {
+    const { base, delta, writes, token } = stubTokenWorld({ linked: false });
+    const out = await setActorOwnership({
+      actorId: 'base1',
+      userId: 'default',
+      permission: 1,
+      sceneId: 's1',
+      tokenId: 't1',
+    });
+    expect(out).toMatchObject({ success: true, target: 'token' });
+    expect(out.message).toMatch(
+      /Set token "Goblin Sentry" \(t1, scene s1\) ownership to LIMITED for All Players \(the default\)/
+    );
+    // the one entry — not the base actor's default copied over the write
+    expect(writes).toEqual([
+      { doc: 'delta', data: { 'ownership.default': 1 }, options: undefined },
+    ]);
+    expect(delta.ownership).toEqual({ default: 1 });
+    expect(token.actor.ownership).toEqual({ default: 1, u2: 2 });
+    expect(base.ownership).toEqual({ default: 3, u2: 2 });
   });
 
   it('a linked token has no ownership of its own: the base actor is written, and the answer says so', async () => {

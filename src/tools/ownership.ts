@@ -24,13 +24,21 @@ const OwnershipLevels = {
 // different thing: it OVERRIDES a permissive default and actively denies the user.
 const ownershipLevelSchema = z.enum(['NONE', 'LIMITED', 'OBSERVER', 'OWNER', 'INHERIT']);
 
+// The document default — Foundry's ownership dialog calls it All Players — is one entry
+// (`ownership.default`), so one player to the bulk guard. It travels to the page as the `userId`
+// "default" (src/page/ownership.ts reads the same literal), where INHERIT is written as NONE.
+const ALL_PLAYERS = { id: 'default', name: 'All Players' };
+const ALL_PLAYERS_PHRASES = new Set(['all players', 'default']);
+
 // Single source of truth for each tool's input contract: the handler parses with these
 // schemas and getToolDefinitions() advertises toInputSchema(...) of the same schema.
 const SetActorOwnershipSchema = z.object({
   actorIdentifier: actorTarget.describe(`${ACTOR_TARGET} Or a bulk phrase.`),
   playerIdentifier: z
     .string()
-    .describe('Player or character name (substring ok), or "party" for every connected player.'),
+    .describe(
+      'Player or character name (substring ok); "party" = every connected player; "all players" = the default.'
+    ),
   permissionLevel: ownershipLevelSchema.describe(
     "NONE stores a level-0 deny that overrides the actor's default; INHERIT removes the entry."
   ),
@@ -68,8 +76,8 @@ export class OwnershipTools {
         description:
           "Set a player's permission on an actor. NONE is a stored deny that overrides a permissive " +
           'default; INHERIT removes the entry so the default applies. actorIdentifier also takes the ' +
-          'bulk phrases "all friendly NPCs" / "party characters", playerIdentifier "party" — bulk ' +
-          'writes need confirmBulkOperation.',
+          'bulk phrases "all friendly NPCs" / "party characters", playerIdentifier "party" (bulk ' +
+          'writes need confirmBulkOperation) or "all players" (the default itself, one entry).',
         inputSchema: toInputSchema(SetActorOwnershipSchema),
       },
       {
@@ -248,13 +256,16 @@ export class OwnershipTools {
   }
 
   /**
-   * Resolve players from identifier: "party" is every connected player; anything else is one
-   * player (or a character's owner) by name, and a name that matches several is refused, naming
-   * them, never written to all of them.
+   * Resolve players from identifier: "party" is every connected player; "all players" (or
+   * "default") the document default, one entry; anything else is one player (or a character's
+   * owner) by name, and a name that matches several is refused, naming them, never written to
+   * all of them.
    */
   private async resolvePlayers(identifier: string): Promise<Array<{ id: string; name: string }>> {
     this.logger.debug(`Resolving players for identifier: ${identifier}`);
-    if (identifier.toLowerCase() === 'party') {
+    const phrase = identifier.trim().toLowerCase();
+    if (ALL_PLAYERS_PHRASES.has(phrase)) return [ALL_PLAYERS];
+    if (phrase === 'party') {
       const players = await this.foundry.call('getConnectedPlayers');
       if (!players.length) {
         throw new ToolError(

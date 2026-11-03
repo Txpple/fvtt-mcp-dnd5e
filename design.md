@@ -424,7 +424,9 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
   via `src/utils/schema.ts` — never hand-written JSON schema.
 - **The players' view of an actor.** `manage-actors update` writes both biographies, `biography`
   (the GM's) and `biographyPublic` (dnd5e's `biography.public`: what Limited ownership shows on the
-  sheet, and a shared card).
+  sheet, and a shared card); `set-actor-ownership` writes the document default as `"all players"`
+  (`ownership.default`: one entry, so one player to the bulk guard; INHERIT written as NONE) beside
+  a player's own entry.
 - **Skills ship in-repo.** `.claude/skills/**` is a tracked deliverable, committed alongside the
   tools. Current skills: `start-session`, `scene-builder`, `stat-block-builder`,
   `physical-item-builder`, `pc-builder`, `journal-builder`, `table-builder`, `cards-builder`,

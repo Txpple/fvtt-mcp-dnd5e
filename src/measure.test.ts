@@ -76,7 +76,7 @@ const TOOLSET_CEILINGS: Record<ToolsetName, number> = {
   // every row: the 2026-10-15 measurement (4.6.0 plus the vetoed-delete fix), rounded up
   session: 1_800, // 1,778
   settings: 6_900, // 6,809
-  actors: 75_900, // 74,911; 75,594 with add-feature's uuid copies (2026-10-28); 75,862 with update's biographyPublic (2026-11-03)
+  actors: 76_000, // 74,911; 75,594 with add-feature's uuid copies (2026-10-28); 75,862 with update's biographyPublic and 75,939 with set-actor-ownership's "all players" (2026-11-03)
   items: 4_700, // 4,615
   compendium: 6_700, // 6,541; 6,662 once the four searches share one `limit` leaf (2026-10-15)
   scenes: 64_700, // 62,106; 62,398 with manage-placeables' per-kind keys (2026-10-15); 64,656 with the token light (2026-10-28)

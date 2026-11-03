@@ -1425,12 +1425,12 @@ Returns `{ id: string; name: string; }[]`
 
 ### `fvtt.setActorOwnership(args)`
 
-Set a single user's ownership permission on an actor, or (permission === null) remove the user's entry so the actor's `ownership.default` applies again.
+Set a single user's ownership permission on an actor, or (permission === null) remove the user's entry so the actor's `ownership.default` applies again. `userId: "default"` sets that default itself (All Players in Foundry's ownership dialog), where null is NONE.
 
 args:
 - `actorId: string`
-- `userId: string`
-- `permission: number | null`
+- `userId: string` — A user id, or "default": the document default, the level every player without an entry gets.
+- `permission: number | null` — A level, or null for INHERIT (the entry removed); the default has nothing to inherit: null is NONE.
 - `sceneId?: string` — With `tokenId`: the scene of a placed token whose own ownership is written.
 - `tokenId?: string` — A placed token: unlinked, its own ownership (its ActorDelta's); linked, its base actor's.
 
