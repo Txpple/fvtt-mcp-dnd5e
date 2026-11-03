@@ -5,6 +5,10 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **The seat marker is cleared without Foundry 14's deprecation warning.** A bridge leaving the
+  seat removed `flags.world.fvttMcpBridge` with the legacy `-=` key, which Foundry 14 warns about on
+  every page that cleans the update (support goes in 16); it now writes v14's `ForcedDeletion`, the
+  legacy key only where Foundry has no data operators, as the receipts' undo already did.
 - **`manage-actors update` writes the public biography.** `biographyPublic` (HTML) is dnd5e's
   `biography.public`: the text a player with Limited ownership sees on the sheet, and what Card
   Catalogue shows on a shared card. A field of its own beside `biography` (the GM's), so either is

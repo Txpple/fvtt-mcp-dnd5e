@@ -455,7 +455,15 @@ export class Foundry implements FoundryBridge {
       page
         .evaluate(async unrecorded => {
           const user = (globalThis as any).game?.user;
-          await user?.update({ 'flags.world.-=fvttMcpBridge': null }, { [unrecorded]: true });
+          // v14's data operator; the legacy `-=` key (deprecated on 14, gone on 16) where Foundry
+          // has no operators, as the receipts' undo does.
+          const Deletion = (globalThis as any).foundry?.data?.operators?.ForcedDeletion;
+          await user?.update(
+            typeof Deletion === 'function'
+              ? { 'flags.world.fvttMcpBridge': new Deletion() }
+              : { 'flags.world.-=fvttMcpBridge': null },
+            { [unrecorded]: true }
+          );
         }, UNRECORDED)
         .catch(() => {}),
       new Promise<void>(r => {
