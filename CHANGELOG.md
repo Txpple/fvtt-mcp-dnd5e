@@ -3,6 +3,18 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **The guards that wait for an empty table discount Crystal Ball's Seer.** `local-foundry.mjs`
+  `stop`/`restart` and `pull-prod-to-local.mjs`'s prod-side snapshot guard read `/api/status`'s
+  user count, which includes the Seer's own Player-role user for as long as the Seer runs; with a
+  Seer beside prod and beside the sandbox, the restart needed `--force` every time and a mirror
+  would have refused for ever. Each guard now asks the Seer's `healthz` (`scripts/lib/seer.mjs`:
+  `FOUNDRY_SEER_URL` from the .env, else Foundry's origin under `/crystalball`, else port 30001 of
+  its host) and takes that one user off the count when the Seer says it is connected to that world;
+  the refusal line says what was counted and what was discounted. A person connected still refuses.
+  `.env.example` documents `FOUNDRY_SEER_URL`.
+
 ## 4.7.4 — 2026-11-02 — level-up-pc writes the whole level, the species' and features' too
 
 - **`level-up-pc` writes the level it applies.** Only the class's level reached the server: every

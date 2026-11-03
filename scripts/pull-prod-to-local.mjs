@@ -62,6 +62,7 @@ import { dirname, join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
 import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
 import { WebDavClient } from '../dist/hosts/webdav.js';
+import { discountSeer, seerUser } from './lib/seer.mjs';
 
 // ---------------------------------------------------------------------------
 // Arguments
@@ -199,7 +200,10 @@ if (!ssh && !(await boxAwake())) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Prod-side LevelDB guard: never snapshot a world that is being actively played.
+// 2. Prod-side LevelDB guard: never snapshot a world that is being actively played. Crystal
+//    Ball's Seer, logged in as its own user for as long as it runs, is not play: its healthz
+//    (FOUNDRY_SEER_URL in the .env, the public origin's /crystalball route for a box whose Seer
+//    binds 127.0.0.1) says whether it is connected, and that one user is discounted.
 // ---------------------------------------------------------------------------
 {
   try {
@@ -208,10 +212,10 @@ if (!ssh && !(await boxAwake())) {
     });
     const status = res.ok ? await res.json() : null;
     if (status?.active) {
-      console.error(
-        `prod status: world "${status.world}" ACTIVE, ${status.users} user(s) connected`
-      );
-      if (status.users > 0 && !force) {
+      const seer = await seerUser(PROD.serverUrl, env.FOUNDRY_SEER_URL, { timeoutMs: 8000 });
+      const { users, note } = discountSeer(status, seer);
+      console.error(`prod status: world "${status.world}" ACTIVE, ${note}`);
+      if (users > 0 && !force) {
         console.error(
           'Refusing to copy while users are connected (mid-write LevelDB snapshot risk).'
         );

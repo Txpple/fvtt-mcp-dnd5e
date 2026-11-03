@@ -76,8 +76,8 @@ tool proofs:
 
 | script | does |
 | --- | --- |
-| `local-foundry` | run the LOCAL install as a headless server: `start` / `stop` / `restart` / `status` (the `local` host's launcher; `FOUNDRY_DATA_DIR`, `FOUNDRY_ADMIN_KEY`; the world id from `FOUNDRY_WORLD_ID` or the one world under `Data/worlds`) |
-| `pull-prod-to-local` | re-image the sandbox from a hosted world (a byte copy, hosted → local, the only direction content flows; it wakes the source first, even under `--dry-run`) |
+| `local-foundry` | run the LOCAL install as a headless server: `start` / `stop` / `restart` / `status` (the `local` host's launcher; `FOUNDRY_DATA_DIR`, `FOUNDRY_ADMIN_KEY`; the world id from `FOUNDRY_WORLD_ID` or the one world under `Data/worlds`; `stop` and `restart` wait for an empty table, Crystal Ball's Seer's own user discounted through its `healthz`, `lib/seer.mjs`) |
+| `pull-prod-to-local` | re-image the sandbox from a hosted world (a byte copy, hosted → local, the only direction content flows; it wakes the source first, even under `--dry-run`; it refuses while the table is in play, Crystal Ball's Seer's own user discounted, `FOUNDRY_SEER_URL` naming the Seer a box reaches only through its public origin) |
 | `deploy-house-module` | copy a built house module into a host's `Data/modules` through its file plane and byte-verify it (`--local` for the sandbox, `--check` to compare only) |
 | `register-module` | install a module on the running server through Foundry's own `/setup` package installer (the box scans `Data/modules` at process start only) |
 | `configure-modules` | enable / disable world modules (`core.moduleConfiguration`) through the bridge |

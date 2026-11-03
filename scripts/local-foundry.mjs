@@ -14,6 +14,9 @@
 //
 // start is idempotent: already-up just reports (and still launches the world if it's sitting at
 // Setup). stop refuses while users are connected (disconnect-bridge first); --force overrides.
+// Crystal Ball's Seer, logged in as its own Player-role user for as long as it runs, is not a
+// user to wait for: the guard asks the Seer's healthz (scripts/lib/seer.mjs; FOUNDRY_SEER_URL,
+// else Foundry's origin under /crystalball, else port 30001 of its host) and discounts that one.
 // Server console output appends to <dataPath>/Logs/headless-console.log.
 //
 // The v14 admin API contract (read from resources/app/dist, 2026-08-21 — do not "improve" this
@@ -59,6 +62,7 @@ import { dirname, join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
 import { resolveHostConfig } from '../dist/hosts/index.js';
 import { foundryApp } from './lib/foundry-app.mjs';
+import { discountSeer, seerUser } from './lib/seer.mjs';
 
 const env = loadEnv();
 const HOST = resolveHostConfig(env, 'local');
@@ -151,6 +155,16 @@ async function apiStatus(timeoutMs = 3000) {
   }
 }
 
+/** The users to wait for, Crystal Ball's Seer discounted: `{ users, note }`. */
+async function connected(status) {
+  const seer = await seerUser(baseUrl, env.FOUNDRY_SEER_URL);
+  return discountSeer(status, seer);
+}
+
+async function connectedNote(status) {
+  return (await connected(status)).note;
+}
+
 async function poll(check, deadlineMs, intervalMs = 2000) {
   const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
@@ -183,7 +197,7 @@ function requireAdminKey() {
   if (!adminKey) die('FOUNDRY_ADMIN_KEY missing from .env — launch/stop are admin-gated');
 }
 
-function printStatus(status) {
+async function printStatus(status) {
   if (!status) {
     console.log(`server:  down (${baseUrl})`);
     return;
@@ -194,7 +208,7 @@ function printStatus(status) {
       ? `world:   ACTIVE — ${status.world ?? worldId} (${status.system ?? '?'} ${status.systemVersion ?? ''})`.trimEnd()
       : 'world:   none (Setup screen)'
   );
-  if (status.users !== undefined) console.log(`users:   ${status.users} connected`);
+  if (status.users !== undefined) console.log(`users:   ${await connectedNote(status)}`);
 }
 
 async function launchWorld() {
@@ -266,7 +280,7 @@ async function start() {
     }
   }
   if (!status.active && !noWorld) status = await launchWorld();
-  printStatus(status);
+  await printStatus(status);
   // `start` promises a live world (unless --no-world): anything less is a failure for the caller.
   if (!status?.active && !noWorld) die('the world is not active — see the lines above');
 }
@@ -283,10 +297,9 @@ async function stop() {
     return;
   }
   if (status.active) {
-    if (status.users > 0 && !force)
-      die(
-        `${status.users} user(s) still connected — disconnect-bridge / check no human is mid-session, or --force`
-      );
+    const { users, note } = await connected(status);
+    if (users > 0 && !force)
+      die(`${note} — disconnect-bridge / check no human is mid-session, or --force`);
     requireAdminKey();
     console.log('deactivating world…');
     const {
@@ -355,7 +368,7 @@ try {
       break;
     case 'status': {
       const status = await apiStatus();
-      printStatus(status);
+      await printStatus(status);
       const pid = readPid();
       if (pid) console.log(`pid:     ${pid}${pidAlive(pid) ? '' : ' (stale)'}`);
       break;
