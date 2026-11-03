@@ -59,7 +59,9 @@ asks, it does not invent one.
     "pdf": true,
     "skewSeconds": 0,
     "illustrations": true,
-    "speakers": { "112233445566778899": "Aldric Stone", "dm_username": "DM" }
+    "speakers": { "112233445566778899": "Aldric Stone", "dm_username": "DM" },
+    "vocabulary": ["Phandalin", "Gundren Rockseeker", "Wave Echo Cave", "the Black Spider"],
+    "soundsLike": { "Aldric": ["Al Drick", "Aldrich"], "Phandalin": ["Fandaline"] }
   },
   "snapshots": { "dir": "party-snapshots" },
   "scenePacks": { "mode": "pack-faithful", "bornExplored": false }
@@ -79,6 +81,8 @@ asks, it does not invent one.
 | `sessions.pdf` | session-scribe | also render each HTML output to PDF |
 | `sessions.skewSeconds` | session-scribe | the measured Craig ↔ Foundry clock skew in seconds, 0 until measured |
 | `sessions.speakers` | session-scribe | Discord id (or username) → the transcript's speaker label, usually the character's name. The recording's track order differs from one recording to the next, so the id is the key. Optional; an unmapped speaker keeps their Discord name |
+| `sessions.vocabulary` | session-scribe | the proper nouns said at the table (NPCs, places, gods, factions) for the transcriber to spell right; the title, party and speaker labels are added on their own. Most-said first: whisper keeps 223 tokens of it, about 40 names with the party (the transcription log says when it is cut), so leave out a surname the party already carries and a word whisper knows (Toril). Optional |
+| `sessions.soundsLike` | session-scribe | the sound-alike guide: a name as the campaign spells it → what the transcriber writes when it hears it the way the table says it (`"Aldric": ["Aldrich"]`). The transcript is respelled with it, whole words, any case, possessives kept. List only a form that is never meant as itself at this table (never "Well" for Vell). Optional |
 | `sessions.illustrations` | session-scribe | illustrate the player recap (key scenes across the session, via illustration-builder); absent = false. How many and in what taste is `STYLE.md`'s call |
 | `scenePacks` | tom-cartos-import | the standing import mode — `mode`: `pack-faithful` (default) or `maps-only`; `bornExplored`: stamp town maps for the autoexplore module (optional; absent = ask) |
 
