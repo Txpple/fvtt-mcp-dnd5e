@@ -16,7 +16,8 @@ install it, make the world, and create the user the bridge joins as.
 | `molten` | [Molten Hosting](https://moltenhosting.com) | the panel's "Server Startup / Magic URL" (`FOUNDRY_WAKE_URL`) | WebDAV, its URL and user derived from `FOUNDRY_URL`; only `FOUNDRY_WEBDAV_PASSWORD` is needed. Never a filesystem plane |
 | `local` | a Foundry install on this machine ([local-sandbox.md](local-sandbox.md)) | none — a local process does not sleep; if it is down the error names the launcher | `FOUNDRY_DATA_DIR` (the install's `Data/`). Never WebDAV. `FOUNDRY_URL` defaults to `http://localhost:30000` |
 
-`get-world-info` reports the host it is on: `host: { kind, label, files }` — `files` is the plane
+`get-world-info` reports the host it is on: `host: { kind, label, url, files }` — `url` is the base
+URL this session went through (`FOUNDRY_URL_FALLBACK` adds `fallbackUrl` and `onFallback`), `files` the plane
 the asset tools are using (`local filesystem`, `WebDAV`, or `bridge (FilePicker)`). Its `bridge`
 block reports the bridge itself: this server's version, since when it holds the seat (the join user
 is `bridgeUser`), whether the call had to wake or launch the world (`woken`), Chromium's renderer
@@ -30,6 +31,15 @@ is `bridgeUser`), whether the call had to wake or launch the world (`woken`), Ch
 Every host reads the same names; a preset only changes the defaults and which ones apply.
 
 - **`FOUNDRY_URL`** — required; the placeholder in `.env.example` is refused at startup.
+- **`FOUNDRY_URL_FALLBACK`** — optional: a second base URL of the same instance, another network
+  path to it (the public tunnel beside a VPN name). When the primary times out on the way to
+  `game.ready` — the join form never drawn, or the ready budget run out with the world still
+  downloading — the connect tries the fallback once on a fresh page; a refusal (a missing user, a
+  rejected admin key, an error banner) is never retried, it is the same on every path. The join's
+  wait is logged at debug every few seconds (requests in flight, bytes received, the loading bar)
+  and a budget run out says what it saw and what that reads as (the link, the server, or the
+  world's own load). `get-world-info`'s `host` block carries `url`, the base the session is on,
+  and `fallbackUrl` / `onFallback` when one is set; the seat record stays keyed on `FOUNDRY_URL`.
 - **`FOUNDRY_USER`** / **`FOUNDRY_PASSWORD`** — the dedicated user the bridge joins as (create it in
   Foundry: Users → Create User, role Gamemaster or Assistant GM; default name `MCP-Claude`). A
   lower role is warned about at connect and every write fails. A `readonly` registration (below)

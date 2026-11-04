@@ -16,7 +16,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { type Browser, type BrowserContext, chromium, type Page, type Request } from 'playwright';
 import type { PageApi, PageArgs, PageResult } from './page/index.js';
 
 // The seam's types, re-exported so a tool (or a sibling) names a handler's argument or result
@@ -46,6 +46,8 @@ import {
   exeOf,
   type Holder,
   holderRecord,
+  isAlive,
+  killBrowser,
   listHolders,
   removeHolder,
   writeHolder,
@@ -126,9 +128,11 @@ export interface FoundryBridge {
    * Tear down the live session: close the headless browser so the bridge user leaves the world
    * (goes inactive). Idempotent and safe while disconnected. The bridge stays usable — the next
    * `call()` reconnects lazily (wake -> join -> game.ready -> inject), which is what lets the
-   * disconnect-bridge tool log out without ending the MCP process.
+   * disconnect-bridge tool log out without ending the MCP process. Answers what it ended: a
+   * browser this process launched, and whether a connect was still under way (a join that had not
+   * reached game.ready), so disconnect-bridge can say so instead of "already disconnected".
    */
-  dispose(): Promise<void>;
+  dispose(): Promise<Disposed>;
   /**
    * Every process on this machine holding this bridge's seat (same server URL and user), this one
    * included — the records src/holders.ts keeps while a session is open. Offline: reads files.
@@ -145,16 +149,57 @@ export interface FoundryBridge {
   evictOtherHolders(): Promise<Eviction[]>;
   /**
    * The bridge's own facts, without a page call (get-world-info's bridge block): the server URL and
-   * the join user it was configured with, when this connection took the seat (the seat record's
-   * `since`; null while disconnected), and whether this connect's first `/join` probe found no
-   * joinable world (a sleeping box, a world it launched, or one still booting).
+   * the join user it was configured with, the base URL this session reaches the world through
+   * (`url`: FOUNDRY_URL, or FOUNDRY_URL_FALLBACK once the primary timed out; `fallbackUrl` is the
+   * configured fallback or null), when this connection took the seat (the seat record's `since`;
+   * null while disconnected), and whether this connect's first `/join` probe found no joinable
+   * world (a sleeping box, a world it launched, or one still booting).
    */
-  info(): { serverUrl: string; user: string; since: string | null; woken: boolean };
+  info(): BridgeInfo;
+}
+
+export interface BridgeInfo {
+  serverUrl: string;
+  fallbackUrl: string | null;
+  /** The base URL the live (or last) session went through: the primary, or the fallback. */
+  url: string;
+  user: string;
+  since: string | null;
+  woken: boolean;
+}
+
+/** What `dispose()` ended. */
+export interface Disposed {
+  /** A browser this process launched was open and has been ended (live, idle, or still joining). */
+  endedBrowser: boolean;
+  /** A connect was under way when dispose ran: a join that had not reached game.ready was cut short. */
+  wasConnecting: boolean;
+}
+
+/**
+ * A connect step that ran out of time with the server never refusing anything: the path to
+ * FOUNDRY_URL, not the world or the config, is the likely cause (the join form never drawn, the
+ * world's data still trickling in when the ready budget ran out). The cue for FOUNDRY_URL_FALLBACK;
+ * a refusal (a missing user, a rejected admin key, an error banner) is the same on every path and
+ * never one of these.
+ */
+export class TransportProblem extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TransportProblem';
+  }
 }
 
 export interface FoundryConfig {
   /** Base world URL (FOUNDRY_URL), e.g. https://your-box.moltenhosting.com or http://localhost:30000. */
   serverUrl: string;
+  /**
+   * A second base URL of the SAME instance (FOUNDRY_URL_FALLBACK): another network path to it (a
+   * tunnel beside a VPN name). Tried once, with a fresh page, when the primary times out on the way
+   * to game.ready (a `TransportProblem`); never on a refusal. The seat record and the receipts stay
+   * keyed on `serverUrl`: it is one world either way.
+   */
+  fallbackUrl?: string;
   /**
    * Where this Foundry runs (src/hosts). Supplies the optional wake step before /join is probed
    * and secret redaction for logs. Omitted = a host that never sleeps.
@@ -272,6 +317,15 @@ export class Foundry implements FoundryBridge {
   private woken = false;
   /** The tail of this bridge's write queue (`queued`); undefined while no write has been made. */
   private writeTail: Promise<void> | undefined;
+  /** The base URL the current connect went (or is going) through; undefined = the primary. */
+  private activeUrl: string | undefined;
+  /**
+   * Bumped by every dispose(). A connect reads it when it starts and after every resource it opens:
+   * one opened after a dispose is closed on the spot, never kept (the orphaned shell of 2026-11-04).
+   */
+  private generation = 0;
+  /** How dispose() reaches the OS for a browser process that outlives browser.close(); a test injects it. */
+  private readonly os = { alive: isAlive, exe: exeOf, kill: killBrowser };
 
   constructor(
     private readonly cfg: FoundryConfig,
@@ -284,9 +338,11 @@ export class Foundry implements FoundryBridge {
     return this.ready && !!this.page && !this.page.isClosed();
   }
 
-  info(): { serverUrl: string; user: string; since: string | null; woken: boolean } {
+  info(): BridgeInfo {
     return {
       serverUrl: this.cfg.serverUrl,
+      fallbackUrl: this.cfg.fallbackUrl ?? null,
+      url: this.base,
       user: this.cfg.user,
       since: this.seatSince,
       woken: this.woken,
@@ -323,35 +379,73 @@ export class Foundry implements FoundryBridge {
     // world, so drop the process-lifetime system-detection cache — it must re-detect, not trust a stale
     // answer (harmless no-op on the first connect).
     clearSystemCache();
-    // A browser that died under us (ended by another session's disconnect-bridge { all }, or a
-    // crash) is dropped, so this connect launches a new one instead of asking a dead context for a
-    // page, which fails on every call after.
+    // A dispose() under this connect bumps the generation and closes what it finds; a resource this
+    // connect opens after that is closed here and the connect fails, so nothing is kept open that
+    // no dispose will reach (on 2026-11-04 a headless shell launched by a join that never reached
+    // game.ready outlived disconnect-bridge and held a GM socket on the server).
+    const gen = this.generation;
+    const disposed = () => gen !== this.generation;
+    const abandoned = () => new Error('the bridge was disposed while it was connecting');
+    // A browser that lost its connection under us (ended by another session's disconnect-bridge
+    // { all }, or a crash) is dropped, so this connect launches a new one instead of asking a dead
+    // context for a page, which fails on every call after. Its process, if still there, is ended.
     if (this.browser && !this.browser.isConnected()) {
+      const lost = this.browser;
+      const pid = this.ownBrowserPid;
       this.browser = undefined;
       this.context = undefined;
       this.ownBrowserPid = null;
+      await this.endBrowser(lost, pid);
     }
-    this.browser ??= await chromium.launch({
-      headless: this.cfg.headless ?? true,
-      args: GPU_ARGS,
-    });
-    this.context ??= await this.browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    if (!this.browser) {
+      const browser = await this.launchBrowser();
+      if (disposed()) {
+        await browser.close().catch(() => {});
+        throw abandoned();
+      }
+      this.browser = browser;
+      // The pid now, not at the seat: a dispose during the join has it to check against.
+      this.ownBrowserPid = await this.browserPid();
+    }
+    if (!this.context) {
+      const context = await this.browser.newContext({ viewport: { width: 1920, height: 1080 } });
+      if (disposed()) {
+        await context.close().catch(() => {});
+        throw abandoned();
+      }
+      this.context = context;
+    }
+    const page = await this.context.newPage();
+    if (disposed()) {
+      await page.close().catch(() => {});
+      throw abandoned();
+    }
+    this.page = page;
+    page.setDefaultTimeout(this.readyTimeout);
 
-    this.page = await this.context.newPage();
-    this.page.setDefaultTimeout(this.readyTimeout);
-
-    await this.wake();
-    await this.ensureWorldReady(this.page);
-    await this.joinWorld(this.page);
-    await this.injectBundle(this.page);
-    const who = await this.page.evaluate(() => {
-      const g = (globalThis as { game?: { world?: { id?: string }; user?: { role?: number } } })
-        .game;
-      return { worldId: g?.world?.id ?? '', role: Number(g?.user?.role ?? 0) };
-    });
+    let who: { worldId: string; role: number };
+    try {
+      const joined = await this.reachWorld(page);
+      await this.injectBundle(joined);
+      who = await joined.evaluate(() => {
+        const g = (globalThis as { game?: { world?: { id?: string }; user?: { role?: number } } })
+          .game;
+        return { worldId: g?.world?.id ?? '', role: Number(g?.user?.role ?? 0) };
+      });
+    } catch (err) {
+      // A page that never reached game.ready still holds its socket (a seat on the server) while
+      // it loads: it goes with the failure, never kept for a reconnect to open another beside it.
+      await this.page?.close().catch(() => {});
+      this.page = undefined;
+      throw disposed() ? abandoned() : err;
+    }
     this.liveWorldId = who.worldId;
     this.ready = true;
-    this.log.info(`connected as "${this.cfg.user}" — game.ready (world "${this.liveWorldId}")`);
+    this.log.info(
+      `connected as "${this.cfg.user}" — game.ready (world "${this.liveWorldId}" through ${this.base}${
+        this.activeUrl ? ', FOUNDRY_URL_FALLBACK' : ''
+      })`
+    );
     // Nearly every tool writes as a GM; a lower role fails call by call with Foundry's own
     // permission errors, so say it once here (CONST.USER_ROLES: ASSISTANT = 3, GAMEMASTER = 4).
     // A read-only registration is the reverse: it wants a Player or Trusted Player, because the
@@ -375,6 +469,58 @@ export class Foundry implements FoundryBridge {
     this.armIdle();
   }
 
+  /** The one Playwright launch; a test stubs it. */
+  private launchBrowser(): Promise<Browser> {
+    return chromium.launch({ headless: this.cfg.headless ?? true, args: GPU_ARGS });
+  }
+
+  /**
+   * Wake, bring the world up and join it through FOUNDRY_URL; when that times out on the way (a
+   * `TransportProblem`: the join form never drawn, the ready budget run out with the world still
+   * downloading — never a refusal, which is the same on every path) and FOUNDRY_URL_FALLBACK names
+   * another path to the instance, once more through it on a fresh page. Answers the page that
+   * joined; `base` names the URL it went through from then on.
+   */
+  private async reachWorld(page: Page): Promise<Page> {
+    this.activeUrl = undefined;
+    try {
+      await this.wake();
+      await this.ensureWorldReady(page);
+      await this.joinWorld(page);
+      return page;
+    } catch (err) {
+      const fallback = this.cfg.fallbackUrl?.replace(/\/$/, '');
+      if (!fallback || fallback === this.base || !(err instanceof TransportProblem)) throw err;
+      const primary = this.base;
+      const first = err.message;
+      this.log.warn(
+        `${primary} timed out before game.ready — trying FOUNDRY_URL_FALLBACK ${fallback} once. ${first}`
+      );
+      await page.close().catch(() => {});
+      this.page = undefined;
+      if (!this.context) throw err;
+      const second = await this.context.newPage();
+      this.page = second;
+      second.setDefaultTimeout(this.readyTimeout);
+      this.activeUrl = fallback;
+      try {
+        await this.wake();
+        await this.ensureWorldReady(second);
+        await this.joinWorld(second);
+      } catch (again) {
+        if (again instanceof ConnectProblem) throw again;
+        throw new Error(
+          `${(again as Error).message} (on FOUNDRY_URL_FALLBACK ${fallback}; FOUNDRY_URL ${primary} ` +
+            `failed first: ${first})`
+        );
+      }
+      this.log.info(
+        `joined through FOUNDRY_URL_FALLBACK ${fallback}: FOUNDRY_URL ${primary} timed out`
+      );
+      return second;
+    }
+  }
+
   /**
    * Leave the record of who holds this seat: a file on this machine (src/holders.ts) and the same
    * facts on the User document (`flags.world.fvttMcpBridge`, readable from any client — the suites'
@@ -387,7 +533,7 @@ export class Foundry implements FoundryBridge {
     // The browser by pid and path, so another session's disconnect-bridge { all } can end it and
     // nothing else (issue #17). The path lookup is asynchronous: on Windows it is a PowerShell
     // start, which a synchronous spawn made every connect wait out with the event loop held.
-    rec.browserPid = await this.browserPid();
+    rec.browserPid = this.ownBrowserPid ?? (await this.browserPid());
     rec.browserExe = rec.browserPid === null ? null : await exeOf(rec.browserPid);
     this.ownBrowserPid = rec.browserPid;
     this.seatSince = rec.since;
@@ -772,8 +918,9 @@ export class Foundry implements FoundryBridge {
     );
   }
 
+  /** The base URL this connect goes through: the primary, or the fallback once it is in use. */
   private get base(): string {
-    return this.cfg.serverUrl.replace(/\/$/, '');
+    return (this.activeUrl ?? this.cfg.serverUrl).replace(/\/$/, '');
   }
 
   private get readyTimeout(): number {
@@ -803,8 +950,10 @@ export class Foundry implements FoundryBridge {
       }
     }
     if (!formReady) {
-      throw new Error(
-        'Foundry /join form never appeared — world may be inactive (check /setup) or box asleep.'
+      throw new TransportProblem(
+        `Foundry /join form never appeared on ${this.base} in ${Math.round((perTryMs * tries) / 1000)} s ` +
+          '— the world may be inactive (check /setup), the box asleep, or the path to it too slow ' +
+          'to load the join page.'
       );
     }
 
@@ -837,33 +986,55 @@ export class Foundry implements FoundryBridge {
       await page.fill(JOIN_PASSWORD, this.cfg.password);
     }
 
-    await page.locator(JOIN_SUBMIT).first().click();
+    // The traffic watch is on before the submit: the join POST and the /game load are its first
+    // requests.
+    const traffic = watchTraffic(page);
+    try {
+      await page.locator(JOIN_SUBMIT).first().click();
+      await this.awaitReady(page, traffic);
+    } finally {
+      traffic.stop();
+    }
+  }
 
+  /**
+   * Wait for game.ready after the join submit, watching the page load: the requests still in
+   * flight and the bytes received (Playwright's request events), document.readyState, whether the
+   * world data has arrived (`game.world`), `canvas.loading` and the loading bar's label, each look
+   * logged at debug. A real error banner fails at once, as before. The budget run out fails with
+   * what was seen, and a wait that reads as the path (bytes still arriving, requests pending, or
+   * nothing answering the join) is a TransportProblem, the fallback's cue; a client stalled with
+   * nothing in flight is the world's, not the link's. On 2026-11-04 the 300 s budget passed in
+   * silence on a path that lost 10–18% of its packets, and "did not reach game.ready" could not
+   * tell that from a wedged world.
+   */
+  private async awaitReady(page: Page, traffic: TrafficWatch): Promise<void> {
     const timeout = this.readyTimeout;
-    const outcome = await Promise.race([
-      page
-        .waitForFunction(
-          () => (globalThis as { game?: { ready?: boolean } }).game?.ready === true,
-          null,
-          { timeout }
-        )
-        .then(() => 'ready' as const),
-      (async () => {
-        for (let i = 0; i < Math.ceil(timeout / 2000); i++) {
-          const errs = await page
-            .evaluate(() =>
-              [...document.querySelectorAll('.notification.error, p.error')]
-                .map(e => e.textContent?.trim())
-                .filter(Boolean)
-            )
-            .catch(() => [] as string[]);
-          if (errs.length) return `error: ${errs.join(' | ')}`;
-          await page.waitForTimeout(2000);
-        }
-        return 'timeout';
-      })(),
-    ]);
-    if (outcome !== 'ready') throw new Error(`Join did not reach game.ready (${outcome}).`);
+    const started = Date.now();
+    const samples: JoinSample[] = [];
+    let lastLogged = Number.NEGATIVE_INFINITY;
+    for (;;) {
+      if (page.isClosed()) throw new Error('the page closed while the join waited for game.ready');
+      const look = await page.evaluate(readJoinState).catch(() => null);
+      const sample: JoinSample = {
+        at: Date.now() - started,
+        ...(look ?? BLIND),
+        ...traffic.counts(),
+      };
+      samples.push(sample);
+      if (sample.errors.length) {
+        throw new Error(`Join did not reach game.ready (error: ${sample.errors.join(' | ')}).`);
+      }
+      if (sample.ready) return;
+      if (sample.at - lastLogged >= JOIN_LOG_EVERY_MS) {
+        this.log.debug(`join wait ${describeSample(sample)}`);
+        lastLogged = sample.at;
+      }
+      if (sample.at >= timeout) break;
+      await page.waitForTimeout(Math.min(JOIN_POLL_MS, timeout - sample.at));
+    }
+    const verdict = joinWaitVerdict(samples, timeout, this.base);
+    throw verdict.transport ? new TransportProblem(verdict.message) : new Error(verdict.message);
   }
 
   /** Inject the bundled page-side domain library, defining window.__fvtt and window.__fvttCall. */
@@ -1073,8 +1244,15 @@ export class Foundry implements FoundryBridge {
       if (await this.bridgeAlive()) return;
     }
     this.ready = false;
-    this.page = undefined;
+    await this.dropPage();
     await this.connect();
+  }
+
+  /** Drop the current page, closed: a page left open keeps its socket (a seat) on the server. */
+  private async dropPage(): Promise<void> {
+    const page = this.page;
+    this.page = undefined;
+    if (page && !page.isClosed()) await page.close().catch(() => {});
   }
 
   /**
@@ -1109,26 +1287,74 @@ export class Foundry implements FoundryBridge {
     if (!this.connecting) {
       this.log.warn('page not ready — reconnecting');
       this.ready = false;
-      this.page = undefined;
+      await this.dropPage();
     }
     await this.connect();
   }
 
-  async dispose(): Promise<void> {
-    // A dispose racing an in-flight connect (e.g. disconnect-bridge fired while the first tool
-    // call is still joining) must not tear down half a session and leave a freshly-opened browser
-    // orphaned: let the connect settle either way, then close everything it opened.
-    await this.connecting?.catch(() => {});
+  async dispose(): Promise<Disposed> {
+    // Ends what this process launched NOW, a connect in flight included: closing the browser fails
+    // that connect at its next step. It used to wait for the connect to settle first, which on
+    // 2026-11-04 meant the whole ready budget while the join's shell kept a GM socket open on the
+    // server (disconnect-bridge, asked meanwhile, had nothing it could end). A resource the connect
+    // opens after this point is closed by the connect itself (the generation check in doConnect),
+    // so nothing is left to a dispose that already ran.
+    this.generation++;
+    const connecting = this.connecting;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = undefined;
     await this.clearSeat();
     this.ready = false;
-    await this.context?.close().catch(() => {});
-    await this.browser?.close().catch(() => {});
+    const browser = this.browser;
+    const context = this.context;
+    const pid = this.ownBrowserPid;
+    this.page = undefined;
     this.context = undefined;
     this.browser = undefined;
     this.ownBrowserPid = null;
-    this.page = undefined;
+    await context?.close().catch(() => {});
+    const endedBrowser = browser ? await this.endBrowser(browser, pid) : false;
+    // The connect this cut short fails at its next Playwright call; give it that long to settle, so
+    // the next connect() starts fresh instead of joining a dying one, but never wait a budget out.
+    if (connecting) {
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        connecting.catch(() => {}),
+        new Promise<void>(r => {
+          timer = setTimeout(r, DISPOSE_SETTLE_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    }
+    return { endedBrowser, wasConnecting: connecting !== undefined };
+  }
+
+  /**
+   * Close a browser this bridge launched and make sure its process is gone: Playwright's close
+   * first; when the pid it launched under is still running a browser executable after that (a
+   * shell that ignored the close, a pipe that broke before it), it is ended by pid, the way
+   * disconnect-bridge { all } ends another session's. Answers whether anything was ended.
+   */
+  private async endBrowser(browser: Browser, pid: number | null): Promise<boolean> {
+    let ended = false;
+    await browser
+      .close()
+      .then(() => {
+        ended = true;
+      })
+      .catch((err: Error) => this.log.debug(`browser.close() failed — ${err.message}`));
+    if (pid === null) return ended;
+    // The process may need a moment to go after the close answers.
+    const until = Date.now() + BROWSER_EXIT_GRACE_MS;
+    while (this.os.alive(pid) && Date.now() < until) await sleep(100);
+    if (!this.os.alive(pid)) return ended;
+    const exe = await this.os.exe(pid);
+    if (exe && isBrowserExe(exe)) {
+      this.os.kill(pid);
+      this.log.warn(`browser pid ${pid} outlived browser.close() — ended it`);
+      return true;
+    }
+    return ended;
   }
 
   /**
@@ -1137,9 +1363,197 @@ export class Foundry implements FoundryBridge {
    * hung up (found 2026-08-23 by the hook ledger, which needed a teardown seam). One teardown,
    * both names.
    */
-  async disconnect(): Promise<void> {
+  async disconnect(): Promise<Disposed> {
     return this.dispose();
   }
+}
+
+/** Ms between looks at the page while the join waits for game.ready, and between debug lines. */
+const JOIN_POLL_MS = 1_000;
+const JOIN_LOG_EVERY_MS = 5_000;
+/** How long dispose() gives a connect it cut short to settle before answering. */
+const DISPOSE_SETTLE_MS = 15_000;
+/** How long a browser process gets to exit after browser.close() answered before it is ended by pid. */
+const BROWSER_EXIT_GRACE_MS = 3_000;
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+/** The basename of a Chromium Playwright launches: the headless shell, or the full build. */
+function isBrowserExe(exe: string): boolean {
+  const name = exe.replace(/\\/g, '/').split('/').pop() ?? '';
+  return /^(chrome|chromium|chrome-headless-shell|headless_shell)(\.exe)?$/i.test(name);
+}
+
+/** One look at the page while the join waits for game.ready. */
+export interface JoinSample {
+  /** Ms since the join was submitted. */
+  at: number;
+  ready: boolean;
+  readyState: string;
+  /** `game.world.id` once the world data has arrived over the socket; null before. */
+  worldId: string | null;
+  /** `canvas.loading`; null while there is no canvas. */
+  canvasLoading: boolean | null;
+  /** The loading bar's label while it shows (`#loading`); null otherwise. */
+  loading: string | null;
+  /** Error banners on the page. */
+  errors: string[];
+  /** Requests the page started since the submit, those not yet answered, and the bytes received. */
+  requests: number;
+  inflight: number;
+  bytes: number;
+}
+
+/** What a page that could not be read (mid-navigation) counts as. */
+const BLIND: Omit<JoinSample, 'at' | 'requests' | 'inflight' | 'bytes'> = {
+  ready: false,
+  readyState: '?',
+  worldId: null,
+  canvasLoading: null,
+  loading: null,
+  errors: [],
+};
+
+/** Runs IN the page: the join's progress as the client shows it. */
+function readJoinState(): Omit<JoinSample, 'at' | 'requests' | 'inflight' | 'bytes'> {
+  const g = (globalThis as { game?: { ready?: boolean; world?: { id?: string } } }).game;
+  const c = (globalThis as { canvas?: { loading?: boolean } }).canvas;
+  const bar = document.querySelector<HTMLElement>('#loading');
+  const label = bar?.querySelector('label')?.textContent?.trim() ?? '';
+  const shown = !!bar && bar.style.display !== 'none' && label !== '';
+  return {
+    ready: g?.ready === true,
+    readyState: document.readyState,
+    worldId: typeof g?.world?.id === 'string' ? g.world.id : null,
+    canvasLoading: typeof c?.loading === 'boolean' ? c.loading : null,
+    loading: shown ? label : null,
+    errors: [...document.querySelectorAll('.notification.error, p.error')]
+      .map(e => e.textContent?.trim() ?? '')
+      .filter(Boolean),
+  };
+}
+
+interface TrafficWatch {
+  counts(): { requests: number; inflight: number; bytes: number };
+  stop(): void;
+}
+
+/**
+ * Count the page's requests from now: started, still unanswered, and the bytes that came back
+ * (each finished request's sizes, best effort). Playwright's request events, so a slow link shows
+ * as bytes still arriving while the budget runs out.
+ */
+function watchTraffic(page: Page): TrafficWatch {
+  let requests = 0;
+  let done = 0;
+  let bytes = 0;
+  const onRequest = () => {
+    requests++;
+  };
+  const onFinished = (req: Request) => {
+    done++;
+    req
+      .sizes()
+      .then(s => {
+        bytes += s.responseBodySize + s.responseHeadersSize;
+      })
+      .catch(() => {});
+  };
+  const onFailed = () => {
+    done++;
+  };
+  page.on('request', onRequest);
+  page.on('requestfinished', onFinished);
+  page.on('requestfailed', onFailed);
+  return {
+    counts: () => ({ requests, inflight: requests - done, bytes }),
+    stop: () => {
+      page.off('request', onRequest);
+      page.off('requestfinished', onFinished);
+      page.off('requestfailed', onFailed);
+    },
+  };
+}
+
+const mmss = (ms: number): string => {
+  const s = Math.round(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+};
+const mb = (bytes: number): string => `${(bytes / 1_048_576).toFixed(1)} MB`;
+
+/** One debug line per look. */
+function describeSample(s: JoinSample): string {
+  const state = [
+    s.worldId ? 'world data in' : 'no world data yet',
+    `${s.inflight} in flight`,
+    `${mb(s.bytes)} received`,
+    `document ${s.readyState}`,
+    ...(s.canvasLoading ? ['canvas loading'] : []),
+    ...(s.loading ? [`"${s.loading}"`] : []),
+  ];
+  return `${mmss(s.at)}: ${state.join(', ')}`;
+}
+
+/**
+ * What a join that ran out its budget looked like, and what that reads as: the link (bytes still
+ * arriving, requests pending — `transport`, the fallback's cue), nothing answering the join (also
+ * the path's, until the fallback says otherwise), or a client stalled with nothing in flight (the
+ * world's: a module failing on load, a script error — not the link). Pure, for the test.
+ */
+export function joinWaitVerdict(
+  samples: JoinSample[],
+  budgetMs: number,
+  url: string
+): { message: string; transport: boolean } {
+  const head = `Join did not reach game.ready within ${Math.round(budgetMs / 1000)} s on ${url}`;
+  const last = samples[samples.length - 1];
+  if (!last) return { message: `${head}: nothing was seen of the page.`, transport: true };
+  const vended = samples.find(s => s.worldId !== null);
+  // The rate over the last minute (or the whole wait when it was shorter).
+  const windowStart = samples.find(s => s.at >= last.at - 60_000) ?? samples[0]!;
+  const span = Math.max(last.at - windowStart.at, 1);
+  const recent = last.bytes - windowStart.bytes;
+  const rate =
+    span >= 5_000 ? (recent / span) * 60_000 : (last.bytes / Math.max(last.at, 1)) * 60_000;
+  const flowing = rate >= 50 * 1024; // 50 KB/min: something still arrives
+  const where = [
+    `document ${last.readyState}`,
+    ...(last.canvasLoading ? ['canvas loading'] : []),
+    ...(last.loading ? [`the loading bar at "${last.loading}"`] : []),
+  ].join(', ');
+  const seen =
+    `${vended ? `world data vended at ${mmss(vended.at)}` : 'no world data arrived'}, ` +
+    `${last.inflight} request${last.inflight === 1 ? '' : 's'} still in flight, ` +
+    `${mb(rate)}/min over the last minute (${mb(last.bytes)} in ${last.requests} requests in all); ${where}`;
+  const fallbackNote = 'Another path to the instance (FOUNDRY_URL_FALLBACK) is tried when set.';
+  if (last.inflight > 0 && flowing) {
+    return {
+      transport: true,
+      message:
+        `${head}: ${seen}: the link is slow, not the server — the world was still downloading when ` +
+        `the budget ran out. ${fallbackNote}`,
+    };
+  }
+  if (!vended) {
+    return {
+      transport: true,
+      message:
+        `${head}: ${seen}: the server never answered the join — the path to it, or the server itself, ` +
+        `not this client. ${fallbackNote}`,
+    };
+  }
+  if (last.inflight > 0) {
+    return {
+      transport: true,
+      message: `${head}: ${seen}: requests pending with nothing arriving — the path stalled. ${fallbackNote}`,
+    };
+  }
+  return {
+    transport: false,
+    message:
+      `${head}: ${seen}: nothing in flight and nothing arriving — the client is stuck in the world's ` +
+      'own load (a module or script failing on load?), not the link. Look at the world in a browser.',
+  };
 }
 
 function loadPageBundle(): string {

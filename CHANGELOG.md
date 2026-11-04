@@ -5,6 +5,45 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **The wait for `game.ready` is watched, and a budget run out says what it saw.** The join used
+  to race `game.ready` against the error banners for 300 s and then say "did not reach game.ready
+  (timeout)", which could not tell a slow path from a wedged world: on 2026-11-04 every prod login
+  hung that way for hours on a VPN path that dropped 10–18% of its packets, while the server had
+  vended the world in half a second each time. The bridge now looks at the page every second while
+  it waits — the requests still in flight and the bytes received (Playwright's request events),
+  `document.readyState`, whether the world data has arrived, `canvas.loading`, the loading bar's
+  label — logs a line at debug every 5 s, and when the budget runs out throws what it saw and what
+  that reads as: "world data vended at 00:15, 38 requests still in flight, 2.0 MB/min over the
+  last minute (10.0 MB in 100 requests in all); document complete, canvas loading, the loading bar
+  at "Loading Scene Assets": the link is slow, not the server", or "the server never answered the
+  join", or "requests pending with nothing arriving — the path stalled", or, with nothing in flight
+  and nothing arriving, "the client is stuck in the world's own load, not the link". A real error
+  banner still fails at once. The first three are a `TransportProblem`, the cue below.
+- **`FOUNDRY_URL_FALLBACK`: a second path to the same instance.** When the join on `FOUNDRY_URL`
+  times out on the way to `game.ready` (the join form never drawn, or the ready budget run out
+  with the world still downloading — never a refusal, which is the same on every path) and the
+  fallback is set, the connect closes that page and tries once more through the fallback on a
+  fresh one; a timeout there too names both. Read like `FOUNDRY_URL` on every host
+  (`src/hosts/env.ts`), documented in `.env.example`, the README's host section and
+  `docs/hosts.md`. `get-world-info`'s `host` block now carries `url`, the base the session is on,
+  and `fallbackUrl` / `onFallback` when one is set; the seat record and the receipts stay keyed on
+  `FOUNDRY_URL`. The connect's own log line names the URL it joined through.
+- **`disconnect-bridge` ends a browser left by a join that never finished.** On 2026-11-04 it
+  answered "already disconnected" while a headless shell this server had launched for a join that
+  never reached `game.ready` was still alive and holding a GM socket on prod: `dispose()` waited
+  for the connect in flight to settle before closing anything (the whole ready budget, with the
+  shell open meanwhile), a join that failed left its page open in the context for the next connect
+  to open another beside, and the tool's answer looked only at `isReady()`. Now `dispose()` ends the
+  context and the browser at once — the connect under way fails at its next step with "the bridge
+  was disposed while it was connecting" — and gives it 15 s to settle, never a budget; a connect
+  that fails closes the page it opened; a browser launched after a dispose began is closed, never
+  kept (a generation count checked after every resource the connect opens); the browser's pid is
+  read at launch, not at the seat, and a process that outlives `browser.close()` under a browser
+  executable is ended by pid, as `{ all: true }` ends another session's. `dispose()` answers
+  `{ endedBrowser, wasConnecting }` and the tool says "no live session was open, but a browser this
+  server launched was still running (a join that had not reached game.ready) — ended it". A page
+  the bridge drops on a reconnect is closed too. Tests in `src/foundry.test.ts` and
+  `src/tools/bridge.test.ts`.
 - **`scripts/call.mjs`: one tool in a fresh process.** `FVTT_MCP_ENV=.env.prod FOUNDRY_HOST=generic node scripts/call.mjs <tool> '<json args>'` (or `@args.json`) starts `dist/index.js` as its own stdio server, calls the tool, prints the text result and exits, the scribe's `call.mjs` shape. A registered server reads its `.env` once at start, so this is how a changed `FOUNDRY_URL` (or another host) is used without restarting the session's servers; `TOOL_RESPONSE_MAX_CHARS` in the environment lifts the cap for a long read-back. Added during the session 03 wrap of 2026-11-04, when the registered prod bridge was still bound to a Tailscale URL whose path had collapsed and the fix in `.env.prod` had to be used at once.
 - **The seat marker is cleared without Foundry 14's deprecation warning.** A bridge leaving the
   seat removed `flags.world.fvttMcpBridge` with the legacy `-=` key, which Foundry 14 warns about on

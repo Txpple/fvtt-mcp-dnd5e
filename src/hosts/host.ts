@@ -22,6 +22,11 @@ import { WebDavClient } from './webdav.js';
 export interface HostConfig {
   kind: HostKind;
   serverUrl: string;
+  /**
+   * FOUNDRY_URL_FALLBACK — a second base URL of the same instance (another network path to it),
+   * tried once when the first times out before game.ready (src/foundry.ts). Optional.
+   */
+  fallbackUrl?: string | undefined;
   user: string;
   password?: string | undefined;
   adminKey?: string | undefined;

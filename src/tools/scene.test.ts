@@ -537,6 +537,39 @@ describe('get-world-info: the bridge block (issue #9)', () => {
     });
   });
 
+  it('reports the host, the URL the session is on and the fallback when one is set', async () => {
+    const { foundry } = makeFoundry(world());
+    const host: any = {
+      kind: 'generic',
+      label: 'generic',
+      files: { label: 'local filesystem' },
+      publicUrl: (p: string) => p,
+    };
+    const tools = new SceneTools({ foundry, logger: makeLogger(), host });
+    expect((await tools.handleGetWorldInfo({})).host).toEqual({
+      kind: 'generic',
+      label: 'generic',
+      url: 'http://localhost:30000',
+      files: 'local filesystem',
+    });
+    foundry.info = () => ({
+      serverUrl: 'https://tunnel.example.org',
+      fallbackUrl: 'http://box:30000',
+      url: 'http://box:30000',
+      user: 'MCP-Claude',
+      since: null,
+      woken: false,
+    });
+    expect((await tools.handleGetWorldInfo({})).host).toEqual({
+      kind: 'generic',
+      label: 'generic',
+      url: 'http://box:30000',
+      fallbackUrl: 'http://box:30000',
+      onFallback: true,
+      files: 'local filesystem',
+    });
+  });
+
   it('warns about a software renderer', async () => {
     const out = await run(
       world({ bridge: facts({ renderer: { name: 'Google SwiftShader', gpu: false } }) })

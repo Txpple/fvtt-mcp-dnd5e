@@ -53,6 +53,7 @@ export function filePlaneFor(host: Host, bridge: PageCaller): FilePlane {
 /** The connection half of a HostConfig — what `new Foundry(...)` takes, minus the host itself. */
 export function bridgeConfigOf(cfg: HostConfig): {
   serverUrl: string;
+  fallbackUrl?: string;
   user: string;
   password?: string;
   adminKey?: string;
@@ -60,6 +61,7 @@ export function bridgeConfigOf(cfg: HostConfig): {
 } {
   return {
     serverUrl: cfg.serverUrl,
+    ...(cfg.fallbackUrl ? { fallbackUrl: cfg.fallbackUrl } : {}),
     user: cfg.user,
     ...(cfg.password ? { password: cfg.password } : {}),
     ...(cfg.adminKey ? { adminKey: cfg.adminKey } : {}),

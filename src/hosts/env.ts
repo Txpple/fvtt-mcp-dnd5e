@@ -12,6 +12,8 @@ import type { HostKind } from './types.js';
  * The contract is the FOUNDRY_* set, the same on every host:
  *
  *   FOUNDRY_URL          the instance's base URL (required — the placeholder is refused at startup)
+ *   FOUNDRY_URL_FALLBACK a second base URL of the SAME instance (another path to it: a tunnel beside
+ *                        a VPN name), tried once when the first one times out on the way to game.ready
  *   FOUNDRY_USER         the user the bridge joins as (default MCP-Claude); FOUNDRY_PASSWORD if it has one
  *   FOUNDRY_ADMIN_KEY    the admin access key — lets the bridge launch a world from /setup
  *   FOUNDRY_WORLD_ID     which world to launch; unset = the only world on /setup is launched
@@ -89,6 +91,7 @@ export function hostKindFromEnv(env: Env, warn?: AliasWarn): HostKind {
 const HostConfigSchema = z.object({
   kind: z.enum(['molten', 'local', 'generic']),
   serverUrl: z.string().url(),
+  fallbackUrl: z.string().url().optional(),
   user: z.string().min(1),
   password: z.string().optional(),
   adminKey: z.string().optional(),
@@ -203,6 +206,7 @@ export function resolveHostConfig(
       raw = {
         kind: host,
         serverUrl: p('FOUNDRY_URL') ?? 'http://localhost:30000',
+        fallbackUrl: p('FOUNDRY_URL_FALLBACK'),
         user: p('FOUNDRY_USER') ?? 'MCP-Claude',
         password: p('FOUNDRY_PASSWORD'),
         adminKey: p('FOUNDRY_ADMIN_KEY'), // unset -> manual world launch
@@ -220,6 +224,7 @@ export function resolveHostConfig(
       raw = {
         kind: host,
         serverUrl,
+        fallbackUrl: p('FOUNDRY_URL_FALLBACK'),
         user: p('FOUNDRY_USER') ?? 'MCP-Claude',
         password: p('FOUNDRY_PASSWORD'),
         adminKey: p('FOUNDRY_ADMIN_KEY'),
@@ -240,6 +245,7 @@ export function resolveHostConfig(
       raw = {
         kind: 'generic',
         serverUrl: p('FOUNDRY_URL') ?? PLACEHOLDER_URL,
+        fallbackUrl: p('FOUNDRY_URL_FALLBACK'),
         user: p('FOUNDRY_USER') ?? 'MCP-Claude',
         password: p('FOUNDRY_PASSWORD'),
         adminKey: p('FOUNDRY_ADMIN_KEY'),

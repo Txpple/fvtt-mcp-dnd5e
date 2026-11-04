@@ -188,6 +188,7 @@ export function foundryConfig(
   const base = bridgeConfigOf(hostConfig);
   return {
     serverUrl: base.serverUrl,
+    ...(base.fallbackUrl ? { fallbackUrl: base.fallbackUrl } : {}),
     user: who.user,
     ...(who.password ? { password: who.password } : {}),
     // A player never launches the world (and is not allowed to): the world is up by the time a

@@ -45,7 +45,7 @@ export function makeFoundry(response: any = {}): {
     // Session lifecycle (used by disconnect-bridge): a "connected" default so the logout path is
     // the one exercised; override isReady per-test for the already-disconnected branch.
     isReady: vi.fn(() => true),
-    dispose: vi.fn(async () => {}),
+    dispose: vi.fn(async () => ({ endedBrowser: true, wasConnecting: false })),
     // The live world's id (world-scoped default paths, e.g. send-chat-message's image folder), and
     // the same id as of the last connect, read without connecting (the receipt store's key).
     worldId: vi.fn(async () => 'w'),
@@ -56,6 +56,8 @@ export function makeFoundry(response: any = {}): {
     // The bridge's own facts (get-world-info's bridge block): joined, and the world was up.
     info: vi.fn(() => ({
       serverUrl: 'http://localhost:30000',
+      fallbackUrl: null,
+      url: 'http://localhost:30000',
       user: 'MCP-Claude',
       since: '2026-10-11T12:00:00.000Z',
       woken: false,

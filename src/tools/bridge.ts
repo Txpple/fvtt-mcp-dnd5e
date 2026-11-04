@@ -46,7 +46,8 @@ export class BridgeTools {
         description:
           'Log the bridge user out of the live world: closes the headless browser session so the ' +
           'user drops off the active-player list. The world keeps running and the server stays up; ' +
-          'the next tool call reconnects. Already disconnected is a no-op. Names any other session ' +
+          'the next tool call reconnects; a browser left by a join that never finished is ended too. ' +
+          'Already disconnected is a no-op. Names any other session ' +
           'holding the same seat on this machine; `all` ends those too.',
         inputSchema: toInputSchema(DisconnectBridgeSchema),
       },
@@ -60,7 +61,7 @@ export class BridgeTools {
     // half-open session is torn down too rather than quietly finishing the login.
     const wasConnected = this.foundry.isReady();
     this.logger.info('Disconnecting the bridge session', { wasConnected, all });
-    await this.foundry.dispose();
+    const ended = await this.foundry.dispose();
 
     // The other holders of this seat on this machine (src/holders.ts): named always, ended on `all`.
     // The seat the preflight finds taken is almost always one of these, not ours (issue #12). A
@@ -97,6 +98,16 @@ export class BridgeTools {
     }
 
     if (!wasConnected) {
+      // No session was open, but a browser could be: a join that never reached game.ready (and was
+      // waited out or abandoned) keeps its shell, and its socket on the server, until it is ended
+      // here. On 2026-11-04 this answered "already disconnected" over exactly that shell.
+      if (ended.endedBrowser) {
+        return (
+          '✅ No live Foundry session was open, but a browser this server launched was still ' +
+          `running${ended.wasConnecting ? ' (a join that had not reached game.ready)' : ''} — ended ` +
+          `it, and the bridge user's socket with it. The next tool call will connect fresh.${others}`
+        );
+      }
       return (
         'ℹ️ Bridge already disconnected — no live Foundry session was open. ' +
         `The next tool call will connect fresh.${others}`

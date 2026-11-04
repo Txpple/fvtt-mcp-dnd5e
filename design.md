@@ -101,8 +101,9 @@ These are not aspirations; they are the rules we hold each other to.
    tool surface works against *any* Foundry instance. Everything that depends on **where** the
    instance runs — how a sleeping box is woken, how a file reaches its `Data/` directory — lives
    behind one seam, `src/hosts/**`, and is configured by **one variable set on every host**,
-   `FOUNDRY_*` (`FOUNDRY_URL`, `_USER`, `_PASSWORD`, `_ADMIN_KEY`, `_WORLD_ID`, `_WAKE_URL`, and
-   the plane extras `_DATA_DIR` / `_WEBDAV_*`). A **host** is a *preset* over those facts, chosen
+   `FOUNDRY_*` (`FOUNDRY_URL`, `_URL_FALLBACK` — a second path to the same instance, tried once
+   when the first times out before `game.ready` —, `_USER`, `_PASSWORD`, `_ADMIN_KEY`, `_WORLD_ID`,
+   `_WAKE_URL`, and the plane extras `_DATA_DIR` / `_WEBDAV_*`). A **host** is a *preset* over those facts, chosen
    per registration by `FOUNDRY_HOST`: `generic` (the default — any Foundry at a URL; reads every
    variable), `molten` (Molten Hosting: the WebDAV plane derived from the URL, never a filesystem
    plane), `local` (an install on this machine: no wake, never WebDAV, the launcher's hints).

@@ -132,6 +132,18 @@ describe('resolveHostConfig — generic (the default)', () => {
     expect(resolveHostConfig({ FOUNDRY_URL: '  ' }).serverUrl).toBe(PLACEHOLDER_URL);
   });
 
+  it('reads FOUNDRY_URL_FALLBACK on every host, a URL or nothing', () => {
+    const env = { ...canonicalEnv, FOUNDRY_URL_FALLBACK: 'http://box:30000' };
+    for (const kind of ['generic', 'molten', 'local'] as const) {
+      expect(resolveHostConfig(env, kind).fallbackUrl).toBe('http://box:30000');
+    }
+    expect(resolveHostConfig(canonicalEnv).fallbackUrl).toBeUndefined();
+    expect(
+      resolveHostConfig({ ...canonicalEnv, FOUNDRY_URL_FALLBACK: ' ' }).fallbackUrl
+    ).toBeUndefined();
+    expect(() => resolveHostConfig({ ...canonicalEnv, FOUNDRY_URL_FALLBACK: 'box' })).toThrow();
+  });
+
   it('rejects a non-URL server value', () => {
     expect(() => resolveHostConfig({ FOUNDRY_URL: 'not a url' })).toThrow();
   });

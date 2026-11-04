@@ -132,6 +132,9 @@ Where the world runs is a preset chosen per registration with `FOUNDRY_HOST`
 | `local` | an install on this machine, its `Data/` as the file plane ([`docs/local-sandbox.md`](docs/local-sandbox.md)) |
 
 One `.env` serves every registration; [`.env.example`](.env.example) explains each variable.
+`FOUNDRY_URL_FALLBACK` names a second path to the same instance (a tunnel beside a VPN name), tried
+once when `FOUNDRY_URL` times out on the way to `game.ready`; `get-world-info`'s `host` block says
+which one the session is on.
 
 ## How it works
 

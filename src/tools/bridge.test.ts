@@ -7,7 +7,7 @@
  * flight, and dispose() is what tears that half-open session down too); only the message varies.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BridgeTools } from './bridge.js';
 import { makeFoundry, makeLogger } from './test-helpers.js';
 
@@ -125,11 +125,32 @@ describe('BridgeTools', () => {
   it('still disposes when not connected, but reports the no-op', async () => {
     const { tools, foundry } = build(f => {
       f.isReady = () => false;
+      f.dispose = vi.fn(async () => ({ endedBrowser: false, wasConnecting: false }));
     });
     const result = await tools.handleDisconnectBridge({});
-    // Unconditional dispose: isReady() is false mid-connect, and dispose() (which awaits the
-    // in-flight connect) is the only way to guarantee that session is torn down too.
+    // Unconditional dispose: isReady() is false mid-connect, and dispose() (which ends the
+    // in-flight connect's browser) is the only way to guarantee that session is torn down too.
     expect(foundry.dispose).toHaveBeenCalledTimes(1);
     expect(result).toContain('already disconnected');
+  });
+
+  it('says so when no session was open but a browser of a join that never finished was ended (2026-11-04)', async () => {
+    const { tools } = build(f => {
+      f.isReady = () => false;
+      f.dispose = vi.fn(async () => ({ endedBrowser: true, wasConnecting: true }));
+    });
+    const result = await tools.handleDisconnectBridge({});
+    expect(result).not.toContain('already disconnected');
+    expect(result).toContain('a browser this server launched was still running');
+    expect(result).toContain('a join that had not reached game.ready');
+    expect(result).toContain("the bridge user's socket with it");
+    // an idle browser of a session that had been dropped, not a join: no join clause
+    const idle = build(f => {
+      f.isReady = () => false;
+      f.dispose = vi.fn(async () => ({ endedBrowser: true, wasConnecting: false }));
+    });
+    const again = await idle.tools.handleDisconnectBridge({});
+    expect(again).toContain('a browser this server launched was still running — ended it');
+    expect(again).not.toContain('game.ready');
   });
 });

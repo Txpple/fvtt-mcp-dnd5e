@@ -830,17 +830,11 @@ export class SceneTools {
       foundry: {
         version: worldData.foundryVersion,
       },
-      // Where this instance runs (src/hosts) and which file plane the asset file tools use here
-      // (the host's direct plane, else Foundry's own FilePicker through the bridge).
-      ...(this.host
-        ? {
-            host: {
-              kind: this.host.kind,
-              label: this.host.label,
-              files: filePlaneFor(this.host, this.foundry).label,
-            },
-          }
-        : {}),
+      // Where this instance runs (src/hosts), the base URL this session reaches it through (FOUNDRY_URL,
+      // or FOUNDRY_URL_FALLBACK once the primary timed out on the way to game.ready) and which file
+      // plane the asset file tools use here (the host's direct plane, else Foundry's own FilePicker
+      // through the bridge).
+      ...(this.host ? { host: this.hostBlock() } : {}),
       bridge: this.bridgeBlock(worldData),
       users: {
         total: worldData.users?.length || 0,
@@ -863,6 +857,20 @@ export class SceneTools {
       ...(worldData.library ? { library: worldData.library } : {}),
       // dnd5e 6.0 automation switches + the calendar (configure-dnd5e-settings / manage-calendar)
       ...(worldData.automation ? { automation: worldData.automation } : {}),
+    };
+  }
+
+  private hostBlock(): Record<string, unknown> {
+    const host = this.host!;
+    const seat = this.foundry.info();
+    return {
+      kind: host.kind,
+      label: host.label,
+      url: seat.url,
+      ...(seat.fallbackUrl
+        ? { fallbackUrl: seat.fallbackUrl, onFallback: seat.url === seat.fallbackUrl }
+        : {}),
+      files: filePlaneFor(host, this.foundry).label,
     };
   }
 
