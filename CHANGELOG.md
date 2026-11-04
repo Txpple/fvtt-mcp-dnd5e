@@ -5,6 +5,7 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **`scripts/call.mjs`: one tool in a fresh process.** `FVTT_MCP_ENV=.env.prod FOUNDRY_HOST=generic node scripts/call.mjs <tool> '<json args>'` (or `@args.json`) starts `dist/index.js` as its own stdio server, calls the tool, prints the text result and exits, the scribe's `call.mjs` shape. A registered server reads its `.env` once at start, so this is how a changed `FOUNDRY_URL` (or another host) is used without restarting the session's servers; `TOOL_RESPONSE_MAX_CHARS` in the environment lifts the cap for a long read-back. Added during the session 03 wrap of 2026-11-04, when the registered prod bridge was still bound to a Tailscale URL whose path had collapsed and the fix in `.env.prod` had to be used at once.
 - **The seat marker is cleared without Foundry 14's deprecation warning.** A bridge leaving the
   seat removed `flags.world.fvttMcpBridge` with the legacy `-=` key, which Foundry 14 warns about on
   every page that cleans the update (support goes in 16); it now writes v14's `ForcedDeletion`, the
