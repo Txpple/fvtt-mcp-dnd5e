@@ -38,6 +38,7 @@ import { createHash } from 'node:crypto';
 import { loadEnv } from '../dist/env.js';
 import { createHost, hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
 import { quietLogger, targetLabel } from '../dist/client.js';
+import { seatGuard } from './lib/seat-lock.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -113,6 +114,17 @@ if (!plane) {
 if (kind === 'local' && hostCfg.dataDir && !existsSync(hostCfg.dataDir)) {
   console.error(`FOUNDRY_DATA_DIR does not exist: ${hostCfg.dataDir}`);
   process.exit(2);
+}
+// The seat lock (scripts/lib/seat-lock.mjs): a deploy changes the code a running battery loads
+// suite by suite, so a battery or a suite holding the instance's seat refuses it, naming the
+// holder; `--check` reads only and passes.
+if (!checkOnly) {
+  const seat = await seatGuard(hostCfg.serverUrl, { who: `the deploy of ${moduleId}` });
+  if (!seat.ok) {
+    console.error(seat.refusal);
+    process.exit(2);
+  }
+  if (seat.over) console.warn(`⚠ --force=${seat.over.pid}: deploying over the seat's holder`);
 }
 const target = {
   label: `${targetLabel(kind)} (${plane.label}${hostCfg.dataDir ? `: ${hostCfg.dataDir}` : ''})`,

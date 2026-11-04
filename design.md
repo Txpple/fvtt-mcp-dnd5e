@@ -413,7 +413,13 @@ This is *how* the contract in §3 is realized today. (Mechanism, not mission —
 - **The seat.** `src/holders.ts` keeps one record per bridge process (a file on this machine and a
   flag on its User), so a second bridge on the seat names the first and `disconnect-bridge
   { "all": true }` ends only a browser a record names; `src/op-cap.ts` caps a page op and asks a
-  slow page whether it still answers before it closes it.
+  slow page whether it still answers before it closes it. `src/seat-lock.ts` is the lock a run
+  takes on a whole instance (a sibling's battery or suite: one file per server URL, naming the
+  process, the session, the command and the suite it is on): `Foundry#connect` refuses to join
+  while another process holds it, with no override, and the sandbox scripts
+  (`scripts/lib/seat-lock.mjs`) refuse too unless `--force=<pid>` names the holder; the file is
+  the status `local-foundry.mjs status` prints, so a run in another session's background is seen
+  before it is joined.
 - **The budgets.** `src/measure.test.ts` prints and ratchets three context budgets, each with the
   client that pays it: per prompt (the names once per registration plus the skill descriptions),
   per fetch (the largest tool as a deferred client flattens it, and no lossy key), and the eager

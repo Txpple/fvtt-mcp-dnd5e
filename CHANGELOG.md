@@ -5,6 +5,25 @@ What changed for a user of the tools and skills, release by release. The measure
 
 ## Unreleased
 
+- **The seat lock: one run at a time on an instance, and the file that says who.** On 2026-11-04
+  a sibling session's bridge joined the sandbox for one call while a By the Books battery ran, the
+  suites' preflight refused every suite after it, and ~45 suites were rerun; the seat records named
+  who held the bridge user, but nothing said "a battery owns this instance" and a battery in another
+  session's background looked like nothing. Now a battery or a suite takes a lock on the instance
+  (`src/seat-lock.ts`: one file per server URL under the OS temp dir, naming the process, its
+  program, the Claude Code session, the command line and, kept current, the suite it is on, row n
+  of m, and its run directory), and everything that would join refuses while it is held, naming
+  the holder and where it is: the bridge's connect (`Foundry#connect`, so every session's MCP
+  server, the scribe and the verify scripts; a `ConnectProblem`, printed alone, with no override),
+  `local-foundry.mjs start` / `stop` / `restart` (and so the Seer `start` brings up), the
+  installer, the deploy (not `--check`) and the mirror (not `--dry-run`), each through
+  `scripts/lib/seat-lock.mjs` and each taking `--force=<pid>` only with the holder's pid. A process
+  the holder spawned rides along (`FVTT_SEAT_HOLDER`, the holder's pid in its children's env); a
+  lock whose pid is dead or runs another program is stale and taken over. `local-foundry.mjs
+  status` prints the seat (`seat: held by …` / `seat: free`) without touching Foundry: the line a
+  session reads before any sandbox call. On `fvtt-mcp-dnd5e/client` for the siblings
+  (`takeSeatLock`, `updateSeatLock`, `seatHeldBy`, `listSeatLocks`, `describeSeatLock`,
+  `seatRefusal`, `forceOf`); By the Books' battery and harness take it.
 - **The wait for `game.ready` is watched, and a budget run out says what it saw.** The join used
   to race `game.ready` against the error banners for 300 s and then say "did not reach game.ready
   (timeout)", which could not tell a slow path from a wedged world: on 2026-11-04 every prod login

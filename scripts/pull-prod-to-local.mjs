@@ -62,6 +62,7 @@ import { dirname, join } from 'node:path';
 import { loadEnv } from '../dist/env.js';
 import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
 import { WebDavClient } from '../dist/hosts/webdav.js';
+import { seatGuard } from './lib/seat-lock.mjs';
 import { discountSeer, seerUser } from './lib/seer.mjs';
 
 // ---------------------------------------------------------------------------
@@ -152,6 +153,21 @@ function sshRun(command) {
     process.exit(1);
   }
   return r.stdout;
+}
+
+// ---------------------------------------------------------------------------
+// 0. The seat lock, before prod is woken or read: the local world is replaced by this run, so a
+//    battery or a suite holding the sandbox's seat refuses it (scripts/lib/seat-lock.mjs; a dry
+//    run changes nothing and passes). The bare --force is this script's own; the seat takes
+//    --force=<pid>.
+// ---------------------------------------------------------------------------
+if (!dryRun) {
+  const seat = await seatGuard(LOCAL.serverUrl, { who: 'the mirror (pull-prod-to-local.mjs)' });
+  if (!seat.ok) {
+    console.error(seat.refusal);
+    process.exit(2);
+  }
+  if (seat.over) console.error(`⚠ --force=${seat.over.pid}: mirroring over the seat's holder`);
 }
 
 // ---------------------------------------------------------------------------

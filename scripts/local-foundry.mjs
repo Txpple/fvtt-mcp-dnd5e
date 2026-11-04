@@ -19,6 +19,12 @@
 // else Foundry's origin under /crystalball, else port 30001 of its host) and discounts that one.
 // Server console output appends to <dataPath>/Logs/headless-console.log.
 //
+// THE SEAT LOCK (src/seat-lock.ts, scripts/lib/seat-lock.mjs): start, stop and restart refuse
+// while a battery or a suite holds the sandbox's GM seat, naming the holder and the suite it is
+// on; `status` prints the seat (`seat: held by …` or `seat: free`) without touching Foundry, and
+// is the line a session reads before any sandbox call. `--force=<pid>` goes ahead only by naming
+// the holder; the bare `--force` below is stop's own flag and never this override.
+//
 // Crystal Ball's Seer rides along: when the module clone sits beside this repo with its seer/.env
 // filled in (the suite's layout, ../fvtt-mod-crystalball/seer/.env), `start` also starts the Seer,
 // exactly as it starts Foundry (a detached, windowless process, its lines in the module's
@@ -73,6 +79,7 @@ import { fileURLToPath } from 'node:url';
 import { loadEnv } from '../dist/env.js';
 import { resolveHostConfig } from '../dist/hosts/index.js';
 import { foundryApp } from './lib/foundry-app.mjs';
+import { seatGuard, seatStatusLines } from './lib/seat-lock.mjs';
 import { discountSeer, seerUser } from './lib/seer.mjs';
 
 const env = loadEnv();
@@ -519,15 +526,29 @@ async function stop() {
   console.log('stopped.');
 }
 
+/** The seat lock, before anything that joins or bounces the sandbox: a refusal names the holder. */
+async function requireSeat() {
+  const seat = await seatGuard(baseUrl, { who: `local-foundry ${command}` });
+  if (!seat.ok) die(seat.refusal);
+  if (seat.over) {
+    console.warn(
+      `⚠ --force=${seat.over.pid}: going ahead over the seat's holder (${seat.over.kind} ${seat.over.name}, since ${seat.over.since})`
+    );
+  }
+}
+
 try {
   switch (command) {
     case 'start':
+      await requireSeat();
       await start();
       break;
     case 'stop':
+      await requireSeat();
       await stop();
       break;
     case 'restart':
+      await requireSeat();
       await stop();
       await start();
       break;
@@ -537,11 +558,12 @@ try {
       const pid = readPid();
       if (pid) console.log(`pid:     ${pid}${pidAlive(pid) ? '' : ' (stale)'}`);
       await printSeerStatus();
+      for (const line of seatStatusLines(baseUrl)) console.log(line);
       break;
     }
     default:
       console.error(
-        'usage: node scripts/local-foundry.mjs <start [--no-world] | stop [--force] | restart | status>'
+        'usage: node scripts/local-foundry.mjs <start [--no-world] | stop [--force] | restart | status> [--force=<pid of the seat holder>]'
       );
       process.exitCode = 1;
   }

@@ -65,6 +65,22 @@ export { Logger } from './logger.js';
 // Who holds a bridge seat on this machine (issue #12): the suites' preflight names the holder.
 export { describeHolder, listHolders, seatKey } from './holders.js';
 export type { Holder } from './holders.js';
+// The seat lock (src/seat-lock.ts): a battery or a suite owns an instance for its length; the
+// bridge's connect and the sandbox scripts refuse while it does, naming the holder, and the lock
+// file is the status another session reads. By the Books' battery and harness take it.
+export {
+  describeSeatLock,
+  forceOf,
+  listSeatLocks,
+  readSeatLock,
+  SEAT_HOLDER_ENV,
+  SeatHeldError,
+  seatHeldBy,
+  seatRefusal,
+  takeSeatLock,
+  updateSeatLock,
+} from './seat-lock.js';
+export type { SeatLock, SeatLockRecord, SeatStatus, SeatTaken } from './seat-lock.js';
 
 /**
  * Who the client joins as.

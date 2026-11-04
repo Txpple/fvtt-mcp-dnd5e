@@ -52,6 +52,7 @@ import {
   removeHolder,
   writeHolder,
 } from './holders.js';
+import { seatHeldBy, seatRefusal } from './seat-lock.js';
 
 /**
  * Chromium flags that put the page's WebGL on the GPU. Headless Chromium defaults to software
@@ -374,6 +375,17 @@ export class Foundry implements FoundryBridge {
     // covers a script or test that built the config by hand).
     const problem = hostConfigProblem({ serverUrl: this.cfg.serverUrl });
     if (problem) throw new Error(problem);
+    // THE SEAT LOCK (src/seat-lock.ts): a battery or a suite that owns this instance refuses the
+    // join here, before a browser is launched, naming who holds it and what it is running. A
+    // client of the holder's own process, or of one it spawned (FVTT_SEAT_HOLDER), passes. There
+    // is no override on the bridge: a client that joins mid-run is what the lock exists to stop
+    // (2026-11-04, a sibling session's one call and ~45 suites rerun).
+    const held = await seatHeldBy(this.cfg.serverUrl);
+    if (held) {
+      const refusal = seatRefusal(held, { who: `the bridge "${this.cfg.user}"` });
+      this.log.warn(refusal);
+      throw new ConnectProblem(refusal);
+    }
     this.ready = false;
     // A reconnect (after a "Return to Setup" / box relaunch) could in principle bring up a different
     // world, so drop the process-lifetime system-detection cache — it must re-detect, not trust a stale

@@ -179,6 +179,32 @@ socket to the Foundry process the refresh stopped: restart it and check `GET /cr
 the sandbox world, so the ball reads dark until `node tools/sandbox-service-url.mjs` in `fvtt-mod-crystalball`
 (with `FOUNDRY_PROFILE=local FOUNDRY_HOST=local`) sets it back to `http://localhost:30001/crystalball`.
 
+### The seat lock: one run at a time
+
+The sandbox has one GM seat in practice: a battery or a suite is one GM-capable client for its
+whole length, and its preflight demands exactly one. Anything else that joins mid-run — a bridge
+another session opens for one call, the Seer, a deploy, the installer — reds the rest of the run
+from the outside (2026-11-04: one call, ~45 suites rerun). So a battery or a suite takes **the seat
+lock** (`src/seat-lock.ts`: one file per instance under the OS temp dir, `fvtt-mcp-dnd5e/seat-lock/`,
+naming the process, the Claude Code session, the command line and, kept current, the suite it is
+on, row n of m, with its run directory), and everything that would join checks it first and
+refuses while it is held, naming the holder:
+
+- the bridge's connect (`Foundry#connect`: every session's MCP server, the scribe, a verify
+  script) — a `[connection]` error whose text is the holder; there is no override;
+- `local-foundry.mjs start` / `stop` / `restart` (and so the Seer `start` brings up),
+  `register-module.mjs`, `deploy-house-module.mjs` (not `--check`) and `pull-prod-to-local.mjs`
+  (not `--dry-run`) — refused with the holder named; `--force=<pid>` goes ahead only when it names
+  that pid (a bare `--force` stays each script's own flag).
+
+**Before any sandbox call, read the seat:** `node scripts/local-foundry.mjs status` prints
+`seat: held by a battery — pid … — Claude Code session … — now running smoke-drop (row 36 of 50, run …)`
+or `seat: free`, touching nothing; By the Books' `node tools/battery-status.mjs` draws the same
+lock above its bar. A held seat means wait, or end that process; never a second client. A lock
+whose pid is dead, or now runs another program, is stale: the next taker takes it over and says
+so. A process the holder spawned (a suite under the battery, the snapshot's bounce) rides along:
+the holder's pid is in its children's `FVTT_SEAT_HOLDER`.
+
 ### Refreshing while Foundry is running
 
 The local Foundry must be **fully stopped**, not just returned to Setup. A running process keeps

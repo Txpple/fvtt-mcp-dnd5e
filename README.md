@@ -147,7 +147,10 @@ modules' live suites drive a world through the same bridge as a library:
 While connected the bridge leaves a seat record (a file on the machine, a marker on its User
 document) naming the session that holds it; `disconnect-bridge` names any other holder and ends
 them with `{ "all": true }`, and a bridge idle for 20 minutes logs itself out
-(`FOUNDRY_IDLE_LOGOUT_MIN`) — [`docs/hosts.md`](docs/hosts.md).
+(`FOUNDRY_IDLE_LOGOUT_MIN`) — [`docs/hosts.md`](docs/hosts.md). A companion's live test run
+(By the Books' battery) takes a lock on the whole instance for its length; the bridge refuses to
+join while one is held, naming the run and the suite it is on, and `local-foundry.mjs status`
+shows the seat — [`docs/local-sandbox.md`](docs/local-sandbox.md), *The seat lock*.
 
 ## Development
 

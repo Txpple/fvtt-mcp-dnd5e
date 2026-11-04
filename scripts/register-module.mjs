@@ -25,6 +25,7 @@ import { chromium } from 'playwright';
 import { loadEnv } from '../dist/env.js';
 import { hostKindFromEnv, resolveHostConfig } from '../dist/hosts/index.js';
 import { JOIN_USER_FIELD } from '../dist/join-form.js';
+import { seatGuard } from './lib/seat-lock.mjs';
 
 const env = loadEnv();
 const HOST = resolveHostConfig(env, hostKindFromEnv(process.env));
@@ -46,6 +47,17 @@ if (!HOST.adminKey) {
 const BASE = HOST.serverUrl.replace(/\/$/, '');
 console.log(`[register] target: ${HOST.kind} (${BASE})`);
 console.log(`[register] module=${MODULE_ID}\n[register] manifest=${MANIFEST}`);
+// The seat lock (scripts/lib/seat-lock.mjs): the installer returns the world to setup, which ends
+// every suite on it; a battery or a suite holding the seat refuses it here, naming the holder.
+{
+  const seat = await seatGuard(BASE, { who: 'the installer (register-module.mjs)' });
+  if (!seat.ok) {
+    console.error(seat.refusal);
+    process.exit(2);
+  }
+  if (seat.over)
+    console.warn(`[register] ⚠ --force=${seat.over.pid}: going ahead over the seat's holder`);
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /**
