@@ -26,7 +26,7 @@ const page = (version: string) =>
 
 describe('the /join form selectors', () => {
   it('hold a fixture for every Foundry build the bridge has been verified on', () => {
-    expect(versions).toEqual(expect.arrayContaining(['14.365', '14.367', '14.369']));
+    expect(versions).toEqual(expect.arrayContaining(['14.365', '14.367', '14.369', '14.370']));
   });
 
   describe.each(versions)('Foundry %s', version => {
