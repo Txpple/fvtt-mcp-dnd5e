@@ -425,7 +425,10 @@ try {
   }
   for (const [kind, columns] of Object.entries(gColumns)) {
     const out = await mp(kind, 'list');
-    const [head, ...rows] = String(out).split('\n');
+    const [rawHead, ...rows] = String(out).split('\n');
+    // From 14.370 Foundry names a new tile after its image, and a named tile lists its name
+    // column after the id; 14.369 leaves it unnamed. Either build passes.
+    const head = kind === 'tiles' ? rawHead.replace(': id name x ', ': id x ') : rawHead;
     assert(
       head.startsWith(
         `${rows.length} ${kind.slice(0, -1)}(s) on "${TAG} Scene" (${sceneId}): ${columns}`
@@ -467,7 +470,10 @@ try {
     );
   }
   const tileAfter = String(await mp('tiles', 'list')).split('\n')[1];
-  assert(/^\w+ 100 100 250 200 /.test(tileAfter), `G — the tile update landed (${tileAfter})`);
+  assert(
+    /^\w+ (?:"[^"]*" |\S+ )?100 100 250 200 /.test(tileAfter),
+    `G — the tile update landed (${tileAfter})`
+  );
   // regions: the CRUD round trip + the three specials, all through dispatch
   {
     const created = String(

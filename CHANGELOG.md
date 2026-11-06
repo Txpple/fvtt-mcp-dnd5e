@@ -3,7 +3,7 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
-## Unreleased
+## 4.7.5 — 2026-11-06 — the seat lock: one run at a time on an instance, and who holds it
 
 - **The seat lock: one run at a time on an instance, and the file that says who.** On 2026-11-04
   a sibling session's bridge joined the sandbox for one call while a By the Books battery ran, the
@@ -97,6 +97,24 @@ What changed for a user of the tools and skills, release by release. The measure
   `Logs/seer.pid`), `stop` ends it before Foundry, `restart` does both and `status` shows it; one
   already answering is left alone. Nothing restarts it on its own: a crash or a reboot needs a
   `start`, as Foundry does. No `seer/.env` there, Foundry runs alone and one line says so.
+- **Foundry 14.370 joins.** Its `/join` page is in the fixtures (`test/fixtures/join/14.370.html`),
+  and the bridge joined the updated sandbox in 7.9 s. From 14.370 Foundry names a new tile after its
+  image, so `manage-placeables` tiles `list` shows a `name` column for it, as it always did for a
+  named tile; `verify-placeables-tooling` accepts either build.
+
+**Verified** (2026-11-06, the local sandbox: Foundry 14.370, dnd5e 6.0.6):
+- offline: biome · `tsc --noEmit` · vitest **119 files, 2,251 passed** (3 skipped) · build (page
+  bundle 580.2 kB) · knip · `npm run measure` (0 unresolved, 0 stale; seam 159 handlers, 0 `any` /
+  `unknown`); tools/list 209,846 chars (81 tools);
+- the release set **14 / 14**: effects-6 51 · region-effects 37 · activities-6 37 · settings-calendar 52 ·
+  item-tooling 24 · actor-tooling 51 · pc-build 83 · teleporter-scene-fields 13 · placeables-tooling 87 ·
+  scene-tools 24 · cast-activity 25 · region-tooling 22 · receipts 30 · toolsets 19 (the same set
+  green on 14.369 the same morning, before the sandbox's upgrade);
+- the live integration suite **7 suites ran, 85 passed / 2 skipped** (the same two as 4.7.4);
+- the MCP smoke over the stdio server of the release build (`scripts/call.mjs`): `get-world-info` on
+  the sandbox (Foundry 14.370); a Fighter 2 / Wizard 1 built with success and zero unresolved
+  `@scale`, then reversed by its receipt; a bad subclass uuid an error, `[rolled-back]`, naming the
+  Subclass advancement, no actor created.
 
 ## 4.7.4 — 2026-11-02 — level-up-pc writes the whole level, the species' and features' too
 
