@@ -1,9 +1,10 @@
 ---
 name: plot-drift-check
 description: >-
-  Audit the live Foundry world against the campaign's plot document and report DRIFT — stale names
-  after a rename, contradictions, dropped plot elements still referenced, GM-only canon on
-  player-visible pages; READ-ONLY unless told to fix. Use when the user wants to "check for plot
+  Audit the live Foundry world against the campaign's plot document and report DRIFT on either
+  side — stale names after a rename, contradictions, dropped plot elements still referenced,
+  GM-only canon on player-visible pages, repo entries behind what the world now shows; READ-ONLY
+  unless told to fix. Use when the user wants to "check for plot
   drift", "audit the world against the plot doc", "did the rename propagate", "find stale references
   to <name>", "consistency-check the campaign", "sync the world with the plot", or after any
   plot-doc revision.
@@ -21,9 +22,16 @@ the user approves findings — then fix each with the narrowest tool available.
 
 ## Step 1 — establish canon
 
+**Canon is split by what it holds.** The campaign repo's plot doc (and its `world/` entries) is
+canon for the **story**: the hidden truth, arcs and endgame, lore not yet revealed, the DM's notes
+and rulings. The **live world** is canon for what has **happened** and what players can **see**:
+NPC bios, handouts, PC backstories, the session diary, scenes, anything played at the table. A
+mismatch is fixed on whichever side is *not* canon for that fact: the world when it contradicts
+the story, the repo when it is behind the world on a bio, a handout or an event.
+
 1. **Get the current plot document.** Look in the campaign repo first
    ([`_shared/campaign-repo.md`](../_shared/campaign-repo.md)): its `plot/` directory holds the
-   authoritative doc — the newest draft there is canon — and its `campaign.json` names the world
+   story doc — the newest draft there — and its `campaign.json` names the world
    it describes (refuse to audit another). Only ask the user for a path if no campaign repo is
    known. Read the file itself — never work from a memory summary or condensed
    plot reference; the whole point is that summaries and worlds go stale.
@@ -63,11 +71,13 @@ Each hit becomes one of:
 - **Stale name** — the old term where the new one belongs. *Caveat:* an old name can be
   legitimate **in-fiction history** ("the fey once called the Sleeper…"). If the surrounding text
   reads as deliberate lore, file it under *deliberate? confirm* instead of *stale*.
-- **Contradiction** — world text asserts what the doc denies (wrong hair color, wrong quest
-  giver, wrong count). Quote both sides.
-- **Orphan** — the world references a plot element the doc no longer contains. The fix may be
-  deletion, rewrite, or updating the DOC — if the world looks *more* current than the doc, say so:
-  the doc may be the stale side (fix the source of truth first, then the world).
+- **Contradiction** — world text asserts what the doc denies, or the reverse. Quote both sides,
+  then say which side is canon for that fact (Step 1): a story fact (who the villain is, what the
+  spell does) is the doc's, so the world is wrong; a played or player-visible fact (how an NPC
+  greets, what a handout says, what happened in session 3) is the world's, so the repo is wrong.
+- **Orphan** — one side references an element the other no longer contains. A plot element the
+  doc dropped but the world still shows is a world fix; a bio detail or event the world has and
+  the repo lacks is a repo fix. Say which.
 - **Leak** — a secret readable by players (page ownership/visibility). Always top severity.
 - **Gap** *(reported separately, not drift)* — doc canon with no world presence at all. Useful
   prep signal, but absence isn't an error.
@@ -82,7 +92,9 @@ folder) if the user wants it in-world.
 
 ## Step 5 — fixes (only on go-ahead)
 
-Narrowest write wins; never rebuild a document to change a phrase:
+Fix the side that is not canon for the fact (Step 1). A repo fix is an edit to the `world/` entry,
+plan or plot doc, committed with a message naming the world document it was read from. A world
+fix is below. Narrowest write wins; never rebuild a document to change a phrase:
 
 - Journal page text → `manage-journals { action: "update" }` (the affected page only).
 - Roll-table entry → `manage-rolltables { action: "update" }` with `editResults` (surgical per-entry; siblings untouched).

@@ -27,7 +27,11 @@ across machines, **pull before reading and push after writing** — the skills a
   campaign.json          the facts the skills need — see below (session-scribe, bestiary-builder,
                          session-audit)
   STYLE.md               the house style session-scribe applies (optional — its defaults otherwise)
-  plot/<doc>.md          THE plot document, canon (plot-drift-check, session-audit); the newest file
+  plot/<doc>.md          THE plot document (plot-drift-check, session-audit); the newest file
+                         when there are several. Canon for the STORY: the hidden truth, arcs,
+                         unrevealed lore, the DM's notes. The live world is canon for what has
+                         HAPPENED and what players can see (bios, handouts, the diary, scenes);
+                         where the repo describes those, it follows the world
                          when there are several
   plans/                 run-of-show for an upcoming session, one file each (session-audit)
   sessions/YYYY-MM-DD/   the session record: transcript, recap, GM notes … (session-scribe writes;
