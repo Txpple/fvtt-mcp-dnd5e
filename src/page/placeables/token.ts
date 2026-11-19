@@ -15,6 +15,7 @@ import {
   crudDelete,
   crudList,
   type CreateDocResult,
+  type PlaceableCtx,
   type PlaceableDescriptor,
 } from '../_placeables.js';
 import { normalizeAssetPath } from '../_shared.js';
@@ -156,13 +157,54 @@ export function tokenPlacementOverrides(input: TokenPlaceInput): {
   return { overrides };
 }
 
+/** The `levels` of a scene as a list of ids, from the live collection or the raw source array. */
+function sceneLevelIds(scene: any): string[] {
+  const src = scene?._source?.levels ?? scene?.levels;
+  const list: any[] = Array.isArray(src)
+    ? src
+    : Array.isArray(src?.contents)
+      ? src.contents
+      : src && typeof src[Symbol.iterator] === 'function'
+        ? [...src]
+        : [];
+  return list.map(l => l?._id ?? l?.id).filter((id): id is string => typeof id === 'string');
+}
+
+/**
+ * PURE: the Foundry v14 level a token placed on `scene` belongs on — the TARGET scene's initial
+ * level (`_source.initialLevel` when it names one of the scene's levels, else its first level, the
+ * same fallback as core's `Scene#initialLevel`). `undefined` on a scene with no levels (pre-v14):
+ * the caller then writes no `level` at all.
+ *
+ * Why it exists: core's `Actor#getTokenDocument` defaults its parent to `canvas.scene`, and
+ * `TokenDocument#_initializeSource` fills `level` from that parent — so a token placed on a scene
+ * that is NOT the one on the canvas carried the canvas scene's level id, matched no level of its
+ * own scene and was invisible (2026-11-18: 88 tokens on 13 inactive village scenes).
+ */
+export function sceneTokenLevel(scene: any): string | undefined {
+  const ids = sceneLevelIds(scene);
+  if (ids.length === 0) return undefined;
+  const initial = scene?._source?.initialLevel ?? scene?.initialLevel?.id ?? scene?.initialLevel;
+  return typeof initial === 'string' && ids.includes(initial) ? initial : ids[0];
+}
+
+/**
+ * PURE: true when a placed token's `level` names no level of the scene it sits on (it renders on
+ * no level, so nobody sees it). False on a scene with no levels, or a token with no level field.
+ */
+export function isStrayLevel(level: unknown, scene: any): boolean {
+  if (typeof level !== 'string' || level === '') return false;
+  const ids = sceneLevelIds(scene);
+  return ids.length > 0 && !ids.includes(level);
+}
+
 /**
  * Resolve the actor (id or EXACT name) and build the token create-doc from its prototype with the
  * placement overrides applied. Prefers `actor.getTokenDocument()` (core's own drag-drop machinery —
  * handles wildcard art and prototype merge); falls back to a manual prototype spread if a future
  * core drops it.
  */
-async function toCreateDoc(input: TokenPlaceInput): Promise<CreateDocResult> {
+async function toCreateDoc(input: TokenPlaceInput, ctx?: PlaceableCtx): Promise<CreateDocResult> {
   if (!input?.actor || typeof input.actor !== 'string') {
     return { error: 'actor is required (actor id or exact name)' };
   }
@@ -175,7 +217,12 @@ async function toCreateDoc(input: TokenPlaceInput): Promise<CreateDocResult> {
 
   let doc: Record<string, unknown>;
   if (typeof (actor as any).getTokenDocument === 'function') {
-    const td = await (actor as any).getTokenDocument(overrides);
+    // parent = the TARGET scene, never core's default `canvas.scene`: the parent fills `level` and
+    // numbers an appendNumber name ("Bandit (3)") from that scene's own tokens.
+    const td = await (actor as any).getTokenDocument(
+      overrides,
+      ctx?.scene ? { parent: ctx.scene } : {}
+    );
     doc = td.toObject();
     delete doc._id; // the create path mints a fresh id
   } else {
@@ -193,6 +240,10 @@ async function toCreateDoc(input: TokenPlaceInput): Promise<CreateDocResult> {
     }
     delete doc.randomImg; // prototype-only field — not part of the TokenDocument schema
   }
+  // Belt and braces over the parent: the level is ALWAYS the target scene's, whatever a core or
+  // module default filled in. A scene with no levels (pre-v14) keeps whatever the doc carries.
+  const level = sceneTokenLevel(ctx?.scene);
+  if (level) doc.level = level;
   return { doc };
 }
 
@@ -227,6 +278,9 @@ function dump(doc: any): Record<string, unknown> {
     sort: doc.sort,
     lightDim: Number(doc.light?.dim ?? 0),
     lightBright: Number(doc.light?.bright ?? 0),
+    level: stored<string>(doc, 'level') ?? null,
+    // Only when it is wrong: a level id the token's scene does not have (the token is invisible).
+    ...(isStrayLevel(stored<string>(doc, 'level'), doc.parent) ? { strayLevel: true } : {}),
   };
 }
 

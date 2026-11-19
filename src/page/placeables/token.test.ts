@@ -5,12 +5,14 @@
  * paths are live-verified by convention.
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   buildHpPatch,
   buildLightPatch,
   buildTokenUpdate,
   expandLightPatch,
+  isStrayLevel,
+  sceneTokenLevel,
   tokenDescriptor,
   tokenPlacementOverrides,
 } from './token.js';
@@ -364,5 +366,92 @@ describe('buildHpPatch — the pure per-token HP patch builder (update-token hp)
     const patch = buildHpPatch({ value: 16 });
     expect(patch).not.toBeNull();
     expect(patch).not.toHaveProperty('system.attributes.hp.max');
+  });
+});
+
+describe("the token level — a placed token lands on its TARGET scene's level (v14)", () => {
+  // Raw source shape (`_source.levels` / `_source.initialLevel`) and the live client shape
+  // (`levels` collection, `initialLevel` a Level document) both resolve.
+  const village = {
+    _source: { initialLevel: 'lvlVillage', levels: [{ _id: 'lvlVillage' }] },
+  };
+  const twoLevels = {
+    _source: { initialLevel: 'lvlUpper', levels: [{ _id: 'lvlGround' }, { _id: 'lvlUpper' }] },
+  };
+
+  it("sceneTokenLevel is the scene's initialLevel", () => {
+    expect(sceneTokenLevel(village)).toBe('lvlVillage');
+    expect(sceneTokenLevel(twoLevels)).toBe('lvlUpper');
+  });
+
+  it('falls back to the first level when initialLevel is unset or names no level (core does too)', () => {
+    expect(sceneTokenLevel({ _source: { levels: [{ _id: 'a' }, { _id: 'b' }] } })).toBe('a');
+    expect(
+      sceneTokenLevel({ _source: { initialLevel: 'gone', levels: [{ _id: 'a' }, { _id: 'b' }] } })
+    ).toBe('a');
+  });
+
+  it('reads the live client shape (a levels collection, initialLevel a Level doc)', () => {
+    const live = { levels: { contents: [{ id: 'x1' }, { id: 'x2' }] }, initialLevel: { id: 'x2' } };
+    expect(sceneTokenLevel(live)).toBe('x2');
+  });
+
+  it('is undefined on a scene with no levels (pre-v14): no level is written', () => {
+    expect(sceneTokenLevel({ _source: {} })).toBeUndefined();
+    expect(sceneTokenLevel(undefined)).toBeUndefined();
+  });
+
+  it("isStrayLevel flags a level id the token's scene does not have — the 2026-11-18 Lirrin bug", () => {
+    expect(isStrayLevel('AB0fZ26lPlAtie3z', village)).toBe(true);
+    expect(isStrayLevel('lvlVillage', village)).toBe(false);
+    expect(isStrayLevel(undefined, village)).toBe(false);
+    expect(isStrayLevel('anything', { _source: {} })).toBe(false); // no levels → nothing to miss
+  });
+
+  it('dump shows the level, and strayLevel only when it is wrong', () => {
+    const tok = (level: string) => ({ id: 't', texture: {}, level, parent: village });
+    expect(tokenDescriptor.dump(tok('lvlVillage'))).toMatchObject({ level: 'lvlVillage' });
+    expect(tokenDescriptor.dump(tok('lvlVillage'))).not.toHaveProperty('strayLevel');
+    expect(tokenDescriptor.dump(tok('AB0fZ26lPlAtie3z'))).toMatchObject({ strayLevel: true });
+  });
+});
+
+describe('toCreateDoc — places on the target scene, not the canvas scene', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("passes the target scene as parent and writes the target scene's level over the canvas one", async () => {
+    const target = { id: 'sceneB', _source: { initialLevel: 'lvlB', levels: [{ _id: 'lvlB' }] } };
+    const getTokenDocument = vi.fn(async (data: Record<string, unknown>, _options: any) => ({
+      // core fills level from canvas.scene when no parent is given — simulate the bad default
+      toObject: () => ({ _id: 'tmp', actorId: 'a1', level: 'lvlActiveScene', ...data }),
+    }));
+    const actor = { id: 'a1', name: 'Hearth Citizen', getTokenDocument };
+    vi.stubGlobal('game', {
+      actors: { get: (id: string) => (id === 'a1' ? actor : undefined), find: () => undefined },
+    });
+
+    const r = await tokenDescriptor.toCreateDoc!(
+      { actor: 'a1', x: 100, y: 200 },
+      { scene: target }
+    );
+    expect(r.error).toBeUndefined();
+    expect(getTokenDocument.mock.calls[0]![1]).toEqual({ parent: target });
+    expect(r.doc).toMatchObject({ actorId: 'a1', x: 100, y: 200, level: 'lvlB' });
+    expect(r.doc).not.toHaveProperty('_id');
+  });
+
+  it('leaves the level alone on a scene with no levels (pre-v14)', async () => {
+    const actor = {
+      id: 'a1',
+      getTokenDocument: async (data: Record<string, unknown>) => ({
+        toObject: () => ({ ...data }),
+      }),
+    };
+    vi.stubGlobal('game', { actors: { get: () => actor, find: () => undefined } });
+    const r = await tokenDescriptor.toCreateDoc!(
+      { actor: 'a1', x: 0, y: 0 },
+      { scene: { _source: {} } }
+    );
+    expect(r.doc).not.toHaveProperty('level');
   });
 });

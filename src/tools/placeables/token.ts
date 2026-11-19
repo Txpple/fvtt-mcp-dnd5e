@@ -179,7 +179,8 @@ export const tokenKindModule: PlaceableKindFactory = foundry => ({
       action: 'list',
       description:
         'Every placed token on a scene: id, name, x / y, size, rotation, elevation, hidden, ' +
-        'disposition, actorId, art + scale, lockRotation, light radii. A token id is also an actor target for the ' +
+        'disposition, actorId, art + scale, lockRotation, light radii, level (strayLevel: on no level ' +
+        'of this scene, so unseen). A token id is also an actor target for the ' +
         "actor tools (that token's own delta, not the base actor).",
       schema: ListTokensSchema,
       handler: async parsed => {

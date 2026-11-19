@@ -3,6 +3,18 @@
 What changed for a user of the tools and skills, release by release. The measured numbers
 (`npm test` budgets, `npm run measure`) ride each entry from 3.0 on. Dates are tag dates.
 
+## Unreleased
+
+- **A token placed on a scene that is not on the canvas lands on that scene's level.** On Foundry
+  v14 `manage-placeables tokens create` gave every token the level of the scene on the bridge's
+  canvas, not its own: core's `Actor#getTokenDocument` defaults its parent to `canvas.scene`, and
+  the token fills `level` from its parent. On a scene whose one level has another id the token sat
+  on no level and nobody saw it (2026-11-18: 88 tokens on 13 inactive village scenes). Now the
+  place path passes the target scene as the parent (which also numbers an `appendNumber` name from
+  that scene's own tokens) and writes the target scene's initial level (`sceneTokenLevel`, the
+  first level when `initialLevel` names none, nothing on a scene without levels). `tokens list`
+  shows each token's `level`, and `strayLevel: true` on one whose level the scene does not have.
+
 ## 4.7.5 — 2026-11-06 — the seat lock: one run at a time on an instance, and who holds it
 
 - **The seat lock: one run at a time on an instance, and the file that says who.** On 2026-11-04
